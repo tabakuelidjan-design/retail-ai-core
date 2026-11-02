@@ -66,7 +66,7 @@ function fakeEngines() {
     name: { render: 'fake render', compose: 'fake compose' },
     examine: async () => ({ status: 'CUT_OUT' }),
     render: async ({ outPath }) => { writeFileSync(outPath, 'x'); return { resolution: [10, 10], foreground_props: 0 }; },
-    compose: async ({ outPath, stagePath }) => { writeFileSync(outPath, Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(stagePath)])); return { fidelity: { max_level_difference_after_removing_layers: 1 }, technical: { defects: [], text_contrast_ratio: 12, product_height_share: 0.5 }, text_used: { facts_lines: ['x'] } }; },
+    compose: async ({ outPath, stagePath }) => { writeFileSync(outPath, Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.from(stagePath)])); return { fidelity: { max_level_difference_after_removing_layers: 1, checked_pixels: 5000, minimum_checked_pixels: 100, scene_mode: false }, technical: { defects: [], text_contrast_ratio: 12, product_height_share: 0.5 }, text_used: { facts_lines: ['x'] } }; },
   };
 }
 

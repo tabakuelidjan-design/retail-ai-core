@@ -6,7 +6,7 @@ import { deepFreeze } from './validation.js';
 //   USER_CONTRADICTION    the brief says two incompatible things (two different headlines, two different prices): the answer is a question, not a choice
 // Nothing here judges creative quality, translates, or repairs the brief's meaning; the model is not involved, so it costs nothing.
 
-export const BRIEF_STATUS = Object.freeze({ PROCEED: 'PROCEED', NEEDS_CLARIFICATION: 'NEEDS_CLARIFICATION', USER_CONTRADICTION: 'USER_CONTRADICTION' });
+export const BRIEF_STATUS = Object.freeze({ PROCEED: 'PROCEED', NEEDS_CLARIFICATION: 'NEEDS_CLARIFICATION', USER_CONTRADICTION: 'USER_CONTRADICTION' , BLOCKED_INTERNAL_MEDIA: 'BLOCKED_INTERNAL_MEDIA' });
 
 const NULL_LIKE = new Set(['', 'null', 'undefined', 'n/a', 'na', 'none', 'nil', '-', '?', 'tbd', 'todo', 'unknown', 'aucun', 'geen']);
 const clean = (v) => (typeof v === 'string' ? v.normalize('NFC').replace(/[​⁠﻿]/g, '').replace(/\s+/g, ' ').trim() : '');
@@ -27,7 +27,13 @@ export function assessBrief({ brief }) {
   if (!present(brief?.public_facts?.product)) missing.push({ code: 'PRODUCT_NOT_STATED', kind: 'MISSING', field: 'public_facts.product', question: 'What is the product to show? Please describe it in a few words.' });
   if (!(brief?.approved_copy?.length) && !(brief?.claims?.length)) missing.push({ code: 'NOTHING_APPROVED_TO_SAY', kind: 'MISSING', field: 'approved_copy', question: 'What may the visual say? Please give at least one approved headline, line or claim.' });
   if (!brief?.format?.aspect_ratio) missing.push({ code: 'FORMAT_NOT_STATED', kind: 'MISSING', field: 'format', question: 'Where will the visual be published (format or channel)?' });
-  if (!brief?.asset?.ref || !brief?.ids?.product_ref) missing.push({ code: 'PRODUCT_ASSET_NOT_PROVIDED', kind: 'MISSING', field: 'asset', question: 'Which photograph of the real product should be used?' });
+  // The product photograph is sourced and verified by Nordla's media pipeline, never asked of the customer (owner rule, 2026-11-02):
+  // a missing asset is an INTERNAL block with an action for the media pipeline, and carries no question.
+  const internal = !brief?.asset?.ref
+    ? [{ code: 'PRODUCT_ASSET_NOT_PROVIDED', kind: 'INTERNAL', field: 'asset', audience: 'INTERNAL', question: null, action: 'MEDIA_PIPELINE_MUST_SUPPLY_A_VERIFIED_PRODUCT_IMAGE' }]
+    : [];
+  // choosing the product IS the customer's act; a missing catalog reference is asked as such (never as a photo question)
+  if (brief?.asset?.ref && !brief?.ids?.product_ref) missing.push({ code: 'PRODUCT_REFERENCE_NOT_PROVIDED', kind: 'MISSING', field: 'ids.product_ref', question: 'Which product of your catalog should the visual show?' });
   const contradictions = [
     ...conflicts(brief?.approved_copy, (c) => c.role, (c) => c.content, 'APPROVED_COPY_CONTRADICTS_ITSELF', 'approved_copy', (role) => `Two different texts are approved as the ${role}. Which one is the right one?`),
     ...conflicts(brief?.claims, (c) => c.role, (c) => c.wording, 'CLAIMS_CONTRADICT_EACH_OTHER', 'claims', (role) => `Two different claims are given as the ${role}. Which one is the right one?`),
@@ -38,7 +44,8 @@ export function assessBrief({ brief }) {
   if (!present(brief?.public_facts?.occasion)) unknowns.push('OCCASION_NOT_STATED');
   if (!(brief?.claims ?? []).some((c) => c.role === 'PRICE')) unknowns.push('PRICE_NOT_STATED');
   // a missing fact is asked first; contradictions are asked when nothing is missing
-  const issues = missing.length ? missing : contradictions;
-  const status = missing.length ? BRIEF_STATUS.NEEDS_CLARIFICATION : contradictions.length ? BRIEF_STATUS.USER_CONTRADICTION : BRIEF_STATUS.PROCEED;
+  // an internal media block stops first and is never turned into a customer question
+  const issues = internal.length ? internal : missing.length ? missing : contradictions;
+  const status = internal.length ? BRIEF_STATUS.BLOCKED_INTERNAL_MEDIA : missing.length ? BRIEF_STATUS.NEEDS_CLARIFICATION : contradictions.length ? BRIEF_STATUS.USER_CONTRADICTION : BRIEF_STATUS.PROCEED;
   return deepFreeze({ status, issues, unknowns });
 }

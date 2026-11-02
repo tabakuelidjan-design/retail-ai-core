@@ -103,6 +103,7 @@ export function localEngines({ python = process.env.NORDLA_PYTHON || (process.pl
   const py = async (bin, args) => (await run$(bin, args, { maxBuffer: 1 << 24, timeout: 900_000 })).stdout;
   return {
     name: { examine: 'examine_product.py', render: 'render_stage.py (Blender Cycles)', compose: 'compose_stage.py' },
+    binding: Object.freeze({ transmits_source_media: false, source_sha256: null }), // local only: nothing leaves the machine
     async examine({ photoPath, outDir }) {
       const out = await py(python, [join(SCRIPTS, 'examine_product.py'), photoPath, outDir]);
       return JSON.parse(out.trim().split('\n').pop());
@@ -150,12 +151,12 @@ function technicalQuality(report) {
   const fid = report.fidelity;
   // A missing or unmeasurable fidelity sample must never be treated as success.
   // The visible RGB pixels (not only a reversible relight layer) decide fidelity in scene mode.
+  // Fail closed: a report without per-pixel counters or without an explicit scene_mode proves nothing.
   const measurable = Number.isInteger(fid.checked_pixels) && Number.isInteger(fid.minimum_checked_pixels)
-    ? fid.checked_pixels >= fid.minimum_checked_pixels
-    : true; // legacy mocked reports have no per-pixel counters
+    && fid.checked_pixels >= fid.minimum_checked_pixels;
   const visibleColorPass = fid.scene_mode === true
     ? Number.isFinite(fid.max_visible_level_difference) && fid.max_visible_level_difference <= 2
-    : true;
+    : fid.scene_mode === false;
   const fidelityPass = Number.isFinite(fid.max_level_difference_after_removing_layers)
     && fid.max_level_difference_after_removing_layers <= 2 && measurable && visibleColorPass;
   return {

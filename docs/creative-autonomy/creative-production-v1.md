@@ -8,7 +8,7 @@ Updated 2026-11-02 (branch `feature/creative-production-v1-scene`, based on PR #
 
 - The client selects a product and requests creation. Nordla's media integration chooses an image matching the exact product/variant from the verified catalog and validates image suitability internally. **Never ask the client to approve or confirm that source image before generating.**
 - If the chosen image is missing, unusable or inconsistent with the selected product, try another verified image **of the same variant**, if available; otherwise stop with an internal media diagnostic. Do not substitute another color, size or product; do not publish unsupported claims.
-- The existing `runAutonomous` engine accepts a `photoPath`; the present trial CLI also needs `--photo`. These are **internal integration inputs**, not a customer approval workflow. Automatic Shopify media fetching/selection is an integration requirement, **not implemented by this change**.
+- The existing `runAutonomous` engine accepts a `photoPath`; the present trial CLI also needs `--photo`. These are **internal integration inputs**, not a customer approval workflow. Automatic Shopify media selection exists as an internal adapter (`src/creative-autonomy/product-media.js`, see the last section); it is **not yet wired to the customer-facing app nor to the `--scene` trial CLI**.
 - **After creation**, show the actual finished output for the client's acceptance, revision or rejection. No automatic publication.
 - External provider data clearance and approved financial caps are background **operator/security controls**, not customer-facing prompts. For customer-uploaded/personal images, do not bypass actual consent/privacy requirements.
 - HABB confirms a direct commercial relationship with TYESO and does not want a supplier-permission message as a prerequisite to this trial. This does not grant a blanket license to other companies' assets.
@@ -56,3 +56,23 @@ Restoring authentic pixels is not proof of realism. The measured shadow, reflect
 **Safety:** incomplete gallery or conflicting/ambiguous metadata ⇒ `NO_VERIFIED_SOURCE_IMAGE`, with no image download or generation. For TYESO **750 ml**, the HABB Shopify file `Black_20oz.webp` conflicts with the product size even if its alt claims 750 ml: reject instead of quietly creating an advertisement with the smaller bottle. A correctly labeled `Black_25oz` / `750ml` media may be selected. This is a strong metadata gate, **not a computer-vision proof** of the physical product: visual recognition and suitable cut-out still require the downstream checks.
 
 **Integration scope:** the standalone `creative-autonomy-trial.mjs --scene` still requires an **internal** `--photo` path so its authorized plan is bound to exact bytes, and the customer-facing app has not yet been wired to call this adapter. This module is reusable by the verified Shopify connector integration; do not claim that any live storefront workflow has already been deployed. No Shopify mutation, Alibaba call, client prompt, budget authorization, merge or publication is done here.
+
+## Audit corrections (Claude, 2026-11-02, on PR #37 head `2bcd3f5`; branch `fix/creative-production-v1-audit-20261102`)
+
+**Media selection** (`src/creative-autonomy/product-media.js`)
+- One read-only query by **immutable product + variant IDs**: product facts, variant list, product gallery (50), the variant (options, own media, 10). Requested cost **183** by Shopify's published rules (single-query limit 1000; the previous shape cost about 4500 and would have been refused). Every connection's `pageInfo.hasNextPage` must be `false`; an absent flag is incomplete.
+- Evidence order: (1) the variant's own media in Shopify; (2) a product **without options** (`hasOnlyDefaultVariant`) — a single variant WITH an option (e.g. `XL`) no longer inherits every product image; (3) otherwise every option value (colour, capacity) proven by the metadata. Unknown values are refused. Contradictions exclude even a linked image.
+- Identity: the variant must belong to the product and be in its variant list; a renamed title is recorded (`variant_title_changed`), another ID is refused. Fallback only across images of the same variant.
+- Bytes: full Pillow decode (≤ 36 MP) and dimensions equal to Shopify's. Tenant: connector of `src/connectors/shopify.js`, `merchantId` equal to the request, state `CONFIGURED` now.
+
+**Production entrypoint** (`runAutonomousWithShopifyMedia`)
+- Order: select → SHA-256 → standing tenant policy → journal → build the critic, then the scene engine, **from the selected bytes** → verify both declare a binding to that SHA → run. Preconstructed `ports` / `engines` are refused. Price, stock and description come from the same read. `published: false`.
+- The real critic (`connectProviders`) and scene engine (`createSceneEngine`) now expose `binding`; local engines declare they transmit nothing.
+
+**Authorization**: `src/creative-autonomy/media-processing-policy.js`, see ADR 0007 (PROPOSED). The per-photo files of the `--scene` trial remain an operator control for the trial only.
+
+**Brief**: a missing product photo is `BLOCKED_INTERNAL_MEDIA` (kind `INTERNAL`, no question), never a customer question.
+
+**Evidence**: `test/creative-product-media.test.js` (17 tests, adversarial), `test/creative-shopify-e2e.test.js` (3 tests: the whole customer chain through the real Python engines, the real critic port and the real scene engine, against a fetch double). Simulated success is not production readiness: no real image model, Shopify call or visual judgement ran.
+
+**Still open**: TYESO 750 ml source photo (see `tyeso-750ml-media-remediation.md`); NDR-D02 exception (ADR 0007 Part B); the customer-facing route/UI that calls the entrypoint; the tenant policy acceptance flow and storage.
