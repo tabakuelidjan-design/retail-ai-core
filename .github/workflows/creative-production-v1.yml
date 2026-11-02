@@ -9,6 +9,7 @@ on:
       - 'scripts/creative-autonomy-trial.mjs'
       - 'scripts/creative-autonomy-report.mjs'
       - 'test/creative-scene.test.js'
+      - 'test/creative-product-media.test.js'
       - 'test/helpers/scene_fixtures.py'
       - '.github/workflows/creative-production-v1.yml'
   push:
@@ -38,6 +39,6 @@ jobs:
       - name: Scene path end to end with the real Python engines and a simulated provider (no credentials, no network, no cost)
         env:
           NORDLA_PYTHON: python
-        run: node --test test/creative-scene.test.js test/creative-autonomy.test.js test/creative-autonomy-trial2.test.js test/creative-autonomy-reliability.test.js test/creative-autonomy-eu-model.test.js test/marketing-creative-alibaba.test.js test/marketing-creative-alibaba-image-edit.test.js test/marketing-creative-alibaba-scoped-authorization.test.js test/marketing-creative-alibaba-environment.test.js
+        run: node --test test/creative-product-media.test.js test/creative-scene.test.js test/creative-autonomy.test.js test/creative-autonomy-trial2.test.js test/creative-autonomy-reliability.test.js test/creative-autonomy-eu-model.test.js test/marketing-creative-alibaba.test.js test/marketing-creative-alibaba-image-edit.test.js test/marketing-creative-alibaba-scoped-authorization.test.js test/marketing-creative-alibaba-environment.test.js
       - name: Python source syntax
         run: python -m py_compile scripts/creative-autonomy/compose_stage.py scripts/creative-autonomy/scene_plate.py scripts/creative-autonomy/scene_check.py

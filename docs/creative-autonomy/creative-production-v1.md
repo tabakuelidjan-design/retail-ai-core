@@ -48,3 +48,11 @@ Restoring authentic pixels is not proof of realism. The measured shadow, reflect
 - No real image has been generated: the provider is simulated in every test. Whether Qwen keeps the product in place well enough is the open question the first paid run answers.
 - The thresholds (contour correlation 0.30, ghost 20 %, duplicate 0.75 / 0.45, search radius 28 px) are calibrated on simulated scenes only.
 - Nothing has run on Windows on this branch.
+
+## Automatic product-image selection — client rule implemented in internal adapter (2026-11-02)
+
+`src/creative-autonomy/product-media.js` implements an internal read-only Shopify catalog media selector and the `runAutonomousWithShopifyMedia` entrypoint. It receives an already **tenant-verified** Shopify connector (it never reads credentials or bypasses `src/connectors/shopify.js`), obtains product media, matches the exact variant and product size from catalog metadata, fetches only CDN-hosted images over HTTPS, validates actual PNG/JPEG/WebP bytes/dimensions and stages the source privately. The creative engine is called with the selected media automatically. There is **no customer prompt for confirming the photo before creation**. Owner/customer review remains after rendering.
+
+**Safety:** incomplete gallery or conflicting/ambiguous metadata ⇒ `NO_VERIFIED_SOURCE_IMAGE`, with no image download or generation. For TYESO **750 ml**, the HABB Shopify file `Black_20oz.webp` conflicts with the product size even if its alt claims 750 ml: reject instead of quietly creating an advertisement with the smaller bottle. A correctly labeled `Black_25oz` / `750ml` media may be selected. This is a strong metadata gate, **not a computer-vision proof** of the physical product: visual recognition and suitable cut-out still require the downstream checks.
+
+**Integration scope:** the standalone `creative-autonomy-trial.mjs --scene` still requires an **internal** `--photo` path so its authorized plan is bound to exact bytes, and the customer-facing app has not yet been wired to call this adapter. This module is reusable by the verified Shopify connector integration; do not claim that any live storefront workflow has already been deployed. No Shopify mutation, Alibaba call, client prompt, budget authorization, merge or publication is done here.
