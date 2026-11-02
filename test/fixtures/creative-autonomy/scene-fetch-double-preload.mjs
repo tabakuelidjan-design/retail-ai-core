@@ -10,6 +10,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { frameAnswer, CONCEPTS, artDirectionAnswer, evaluationsAnswer } from '../../creative-brain-world.js';
 import { normalizeConceptSet } from '../../../src/creative-brain/concept.js';
+import { CONCEPT_DIMENSIONS } from '../../../src/creative-brain/concept-critic.js';
 
 const LOG = process.env.NORDLA_FETCH_DOUBLE_LOG;
 const OUT = process.env.NORDLA_SCENE_DOUBLE_DIR;
@@ -43,7 +44,10 @@ globalThis.fetch = async (url, init = {}) => {
   }
   const system = body.messages[0].content; const user = body.messages[1].content;
   let answer;
-  if (system.includes('problem framer')) answer = frameAnswer();
+  if (Array.isArray(user)) answer = { dimensions: CONCEPT_DIMENSIONS.map((dimension) => ({
+    dimension, outcome: 'PASS', evidence: 'The real product is the focus of a cohesive editorial composition with clear space and considered lighting.'
+  })) };
+  else if (system.includes('problem framer')) answer = frameAnswer();
   else if (system.includes('concept director')) answer = { concepts: CONCEPTS };
   else if (system.includes('concept selector')) answer = evaluationsAnswer(normalizeConceptSet(CONCEPTS), [{ DISTINCTIVENESS: 'PARTIAL' }, {}, { CONCEPT_STRENGTH: 'PARTIAL' }]);
   else if (system.includes('art director')) { const c = JSON.parse(user).concept; answer = artDirectionAnswer({ narrative_elements: [{ element: 'one element of the set', reason: c.visual_metaphor, zone: 'BACKGROUND' }, { element: 'a second element', reason: c.story, zone: 'FOREGROUND' }] }); }

@@ -273,6 +273,8 @@ test('trial --execute --scene end to end against a fetch double: gates, free che
   assert.equal(plan.money.CEILING_application_eur, 0.5); assert.equal(plan.money.CEILING_provable_max_fits, true);
   // the template is REVOKED: as written, it authorises nothing
   const templatePath = join(planDir, 'scene-media-authorization.TEMPLATE.json');
+  const criticTemplatePath = join(planDir, 'scene-critic-authorization.TEMPLATE.json');
+  assert.ok(existsSync(criticTemplatePath), 'the EU critic needs a separate revoked consent template');
   const run = (dir, env) => spawnSync(process.execPath, ['--import', preload, script, '--execute', '--scene', '--out', dir, '--product', 'gourde-noire', '--photo', photo.path], { env: { ...base, NORDLA_TRIAL_AUTHORIZATION: plan.plan_id, NORDLA_SCENE_DOUBLE_DIR: dir, ...env } });
   const revoked = run(join(out, 'revoked'), { NORDLA_SCENE_MEDIA_AUTHORIZATION_FILE: templatePath });
   assert.equal(revoked.status, 2, revoked.stderr.toString()); assert.match(revoked.stderr.toString(), /AUTHORIZATION_REVOKED/);
@@ -280,22 +282,32 @@ test('trial --execute --scene end to end against a fetch double: gates, free che
   // the owner's act: reads the record and sets revoked to false
   const granted = join(out, 'scene-media-authorization.json');
   const rec = JSON.parse(readFileSync(templatePath, 'utf8')); rec.authorization.revoked = false; writeFileSync(granted, JSON.stringify(rec));
+  // A scene-media grant alone does not authorise a VISUAL CRITIQUE transmission.
+  const withoutCritic = run(join(out, 'without-critic'), { NORDLA_SCENE_MEDIA_AUTHORIZATION_FILE: granted });
+  assert.equal(withoutCritic.status, 2, withoutCritic.stderr.toString());
+  assert.match(withoutCritic.stderr.toString(), /critique visuelle/);
+  assert.ok(!existsSync(log), 'no network calls when critic consent is missing');
+  const criticGranted = join(out, 'scene-critic-authorization.json');
+  const criticRec = JSON.parse(readFileSync(criticTemplatePath, 'utf8'));
+  assert.equal(criticRec.authorization.revoked, true);
+  criticRec.authorization.revoked = false; writeFileSync(criticGranted, JSON.stringify(criticRec));
   // an image workspace that does not serve the model (an EU workspace answers 403): refused after the FREE check, attempt NOT consumed
-  const forbidden = run(join(out, 'forbidden'), { NORDLA_SCENE_MEDIA_AUTHORIZATION_FILE: granted, NORDLA_SCENE_DOUBLE_IMAGE_LIST: 'FORBIDDEN' });
+  const forbidden = run(join(out, 'forbidden'), { NORDLA_SCENE_MEDIA_AUTHORIZATION_FILE: granted, NORDLA_MEDIA_AUTHORIZATION_FILE: criticGranted, NORDLA_SCENE_DOUBLE_IMAGE_LIST: 'FORBIDDEN' });
   assert.equal(forbidden.status, 3, forbidden.stderr.toString()); assert.match(forbidden.stderr.toString(), /IMAGE_MODEL_NOT_CONFIRMED_BY_PROVIDER/);
   assert.ok(!existsSync(registry), 'the refused free check did not consume the attempt');
   const okDir = join(out, 'ok');
-  const ok = run(okDir, { NORDLA_SCENE_MEDIA_AUTHORIZATION_FILE: granted });
+  const ok = run(okDir, { NORDLA_SCENE_MEDIA_AUTHORIZATION_FILE: granted, NORDLA_MEDIA_AUTHORIZATION_FILE: criticGranted });
   assert.equal(ok.status, 0, ok.stderr.toString());
   assert.match(ok.stdout.toString(), /"status": "PROPOSALS_READY_FOR_OWNER"/);
   const calls = readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l)).filter((c) => !c.host.startsWith('dashscope-result-test') || true);
   const okCalls = calls.slice(calls.findLastIndex((c) => c.path === '/api/v1/models' && c.query === '?model=qwen3-vl-plus'));
   assert.deepEqual(okCalls.slice(0, 2).map((c) => `${c.host} ${c.query}`), ['ws-test-text-eu.eu-central-1.maas.aliyuncs.com ?model=qwen3-vl-plus', 'ws-test-image-global.eu-central-1.maas.aliyuncs.com ?model=qwen-image-3.0-pro']);
-  assert.equal(okCalls.filter((c) => c.path === '/compatible-mode/v1/chat/completions').length, 5, 'FRAME, IDEATE, SELECT, ART_DIRECT, STAGE');
+  assert.equal(okCalls.filter((c) => c.path === '/compatible-mode/v1/chat/completions').length, 6, 'five text calls and one EU visual critique');
   const edits = okCalls.filter((c) => c.path === '/api/v1/services/aigc/multimodal-generation/generation');
   assert.equal(edits.length, 1); assert.equal(edits[0].host, 'ws-test-image-global.eu-central-1.maas.aliyuncs.com'); assert.equal(edits[0].n, 3);
   const props = JSON.parse(readFileSync(join(okDir, 'gourde-noire', 'propositions.json'), 'utf8'));
   assert.equal(props.length, 1); assert.equal(props[0].scene.chosen_variant, 1); assert.equal(props[0].technical_quality.product_fidelity.pass, true);
+  assert.equal(props[0].creative_quality.state, 'CREATIVELY_SUFFICIENT_AWAITING_OWNER');
   assert.deepEqual(pngSize(readFileSync(props[0].image)), { w: 1080, h: 1350 });
   const result = JSON.parse(readFileSync(join(okDir, `${plan.plan_id}.result.json`), 'utf8'));
   assert.ok(result.money.CEILING_ledger.settled_eur <= 0.5); assert.equal(result.money.CEILING_ledger.images, 3);
@@ -304,6 +316,6 @@ test('trial --execute --scene end to end against a fetch double: gates, free che
   assert.ok(!journal.includes('sk-test') && !journal.includes('base64'), 'no key, no image bytes in the journal');
   // a second attempt of the same plan: refused before any request
   const before = readFileSync(log, 'utf8').trim().split('\n').length;
-  const second = run(join(out, 'again'), { NORDLA_SCENE_MEDIA_AUTHORIZATION_FILE: granted });
+  const second = run(join(out, 'again'), { NORDLA_SCENE_MEDIA_AUTHORIZATION_FILE: granted, NORDLA_MEDIA_AUTHORIZATION_FILE: criticGranted });
   assert.equal(second.status, 2); assert.equal(readFileSync(log, 'utf8').trim().split('\n').length, before);
 });
