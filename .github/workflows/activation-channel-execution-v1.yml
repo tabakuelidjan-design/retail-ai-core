@@ -55,7 +55,8 @@ jobs:
       - name: Marketing tests (ActivationManifest / M4 receipt contracts)
         run: node --test test/marketing*.test.js
       - name: Full suite (cross-domain non-regression)
-        run: npm test
+        # Node 20 cannot run China Sourcing (requires Node 24, owner decision 2026-10-12): the runner excludes it and says so; on Node 24 it is exactly npm test.
+        run: npm run test:supported
 
   postgres-migration-smoke:
     # A REAL PostgreSQL 17 (Docker): every migration of the repository in order, then the constraints, triggers and a two-session

@@ -20,7 +20,9 @@ import { smallStore } from './fixtures/growth-priorities-sample.js';
 const CANDIDATES = [process.env.CHROME_PATH, 'C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
   '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].filter(Boolean);
 const CHROME = CANDIDATES.find((p) => existsSync(p));
-const skip = CHROME ? false : 'no Chrome/Chromium found (set CHROME_PATH)';
+// The CDP client uses the global WebSocket (Node >= 22). On Node 20 it does not exist: an UNSUPPORTED combination, skipped and said so
+// (it used to throw after Chrome was spawned, and the live Chrome child kept this file - and the whole Node 20 job - from ever finishing).
+const skip = !CHROME ? 'no Chrome/Chromium found (set CHROME_PATH)' : typeof WebSocket === 'undefined' ? `no global WebSocket on Node ${process.versions.node} (needs Node >= 22)` : false;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const WIDTHS = [1440, 1280, 1024, 768, 390, 375, 320];
 const PAGES = ['', 'opportunities', 'potential', 'audience', 'content', 'storeGrowth'];
@@ -36,10 +38,11 @@ async function browser() {
   const dir = mkdtempSync(path.join(tmpdir(), 'growth-cdp-'));
   const port = 9400 + Math.floor(Math.random() * 400);
   const proc = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-first-run', `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, 'about:blank'], { stdio: 'ignore' });
+  try { // any setup failure kills Chrome: a spawned child must never keep the test file alive
   let targets = [];
   for (let i = 0; i < 100 && !targets.length; i += 1) { try { targets = (await (await fetch(`http://127.0.0.1:${port}/json`)).json()).filter((t) => t.type === 'page'); } catch { /* not up yet */ } if (!targets.length) await sleep(100); }
   const ws = new WebSocket(targets[0].webSocketDebuggerUrl);
-  await new Promise((r) => ws.addEventListener('open', r));
+  await new Promise((r, j) => { ws.addEventListener('open', r); ws.addEventListener('error', () => j(new Error('CDP WebSocket failed to open'))); });
   let id = 0; const pending = new Map();
   ws.addEventListener('message', (e) => { const m = JSON.parse(e.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } });
   const send = (method, params = {}) => new Promise((r) => { id += 1; pending.set(id, r); ws.send(JSON.stringify({ id, method, params })); });
@@ -72,6 +75,7 @@ async function browser() {
     async close() { ws.close(); proc.kill(); await sleep(200); try { rmSync(dir, { recursive: true, force: true }); } catch { /* locked on Windows: temp dir */ } },
   };
   return b;
+  } catch (e) { proc.kill(); try { rmSync(dir, { recursive: true, force: true }); } catch { /* locked on Windows: temp dir */ } throw e; }
 }
 
 const sources = () => ({
