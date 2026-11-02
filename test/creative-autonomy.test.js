@@ -55,7 +55,7 @@ function fakeEngines({ examStatus = 'CUT_OUT', defectsByRound = [[]] } = {}) {
     async compose({ stagePath, outPath }) {
       calls.compose += 1; const key = basename(dirname(stagePath)); /* the concept's own folder, on every platform */ calls.composedFor = [...(calls.composedFor ?? []), key]; const r = rounds.get(key) ?? 0; rounds.set(key, r + 1);
       writeFileSync(outPath, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]));
-      return { fidelity: { max_level_difference_after_removing_layers: 1 }, technical: { defects: defectsByRound[r] ?? [], text_contrast_ratio: 12, product_height_share: 0.5 }, text_used: { facts_lines: ['x'] } };
+      return { fidelity: { max_level_difference_after_removing_layers: 1, checked_pixels: 5000, minimum_checked_pixels: 100, scene_mode: false }, technical: { defects: defectsByRound[r] ?? [], text_contrast_ratio: 12, product_height_share: 0.5 }, text_used: { facts_lines: ['x'] } };
     },
   };
 }
@@ -230,4 +230,14 @@ test('per-image critic: a render is critiqued only through a clearance built for
   assert.equal(asked.length, 3);
   assert.ok(asked.every((a) => a.ref.startsWith('render://') && a.n > 0));
   assert.ok(r.proposals.every((p) => p.creative_quality.state === 'CREATIVELY_SUFFICIENT_AWAITING_OWNER' && p.status === 'PROPOSED_FOR_OWNER_VALIDATION'));
+});
+
+test('audit: a compose report without pixel counters or scene_mode can never pass product fidelity', async () => {
+  const engines = fakeEngines({});
+  const realCompose = engines.compose;
+  engines.compose = async (a) => { const r = await realCompose(a); return { ...r, fidelity: { max_level_difference_after_removing_layers: 0 } }; };
+  const r = await runAutonomous({ input: input(COQUE), ports: tdPorts(doublePort()), engines, workdir: mkdtempSync(join(tmpdir(), 'na-')) });
+  const rendered = r.proposals.filter((p) => p.technical_quality);
+  assert.ok(rendered.length > 0);
+  assert.ok(rendered.every((p) => p.technical_quality.product_fidelity.pass === false && p.technical_quality.state === 'FAIL'));
 });

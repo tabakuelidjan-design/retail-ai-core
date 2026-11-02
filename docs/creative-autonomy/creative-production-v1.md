@@ -8,7 +8,7 @@ Updated 2026-11-02 (branch `feature/creative-production-v1-scene`, based on PR #
 
 - The client selects a product and requests creation. Nordla's media integration chooses an image matching the exact product/variant from the verified catalog and validates image suitability internally. **Never ask the client to approve or confirm that source image before generating.**
 - If the chosen image is missing, unusable or inconsistent with the selected product, try another verified image **of the same variant**, if available; otherwise stop with an internal media diagnostic. Do not substitute another color, size or product; do not publish unsupported claims.
-- The existing `runAutonomous` engine accepts a `photoPath`; the present trial CLI also needs `--photo`. These are **internal integration inputs**, not a customer approval workflow. Automatic Shopify media fetching/selection is an integration requirement, **not implemented by this change**.
+- The existing `runAutonomous` engine accepts a `photoPath`; the present trial CLI also needs `--photo`. These are **internal integration inputs**, not a customer approval workflow. Automatic Shopify media selection exists as an internal adapter (`src/creative-autonomy/product-media.js`, see the last section); it is **not yet wired to the customer-facing app nor to the `--scene` trial CLI**.
 - **After creation**, show the actual finished output for the client's acceptance, revision or rejection. No automatic publication.
 - External provider data clearance and approved financial caps are background **operator/security controls**, not customer-facing prompts. For customer-uploaded/personal images, do not bypass actual consent/privacy requirements.
 - HABB confirms a direct commercial relationship with TYESO and does not want a supplier-permission message as a prerequisite to this trial. This does not grant a blanket license to other companies' assets.
@@ -56,3 +56,14 @@ Restoring authentic pixels is not proof of realism. The measured shadow, reflect
 **Safety:** incomplete gallery or conflicting/ambiguous metadata ⇒ `NO_VERIFIED_SOURCE_IMAGE`, with no image download or generation. For TYESO **750 ml**, the HABB Shopify file `Black_20oz.webp` conflicts with the product size even if its alt claims 750 ml: reject instead of quietly creating an advertisement with the smaller bottle. A correctly labeled `Black_25oz` / `750ml` media may be selected. This is a strong metadata gate, **not a computer-vision proof** of the physical product: visual recognition and suitable cut-out still require the downstream checks.
 
 **Integration scope:** the standalone `creative-autonomy-trial.mjs --scene` still requires an **internal** `--photo` path so its authorized plan is bound to exact bytes, and the customer-facing app has not yet been wired to call this adapter. This module is reusable by the verified Shopify connector integration; do not claim that any live storefront workflow has already been deployed. No Shopify mutation, Alibaba call, client prompt, budget authorization, merge or publication is done here.
+
+## Audit corrections (Claude, 2026-11-02, on PR #37 head `2bcd3f5`)
+
+- **Variant evidence.** Order: (1) the variant's own media in Shopify (`ProductVariant.media`); (2) a single-variant product; (3) otherwise EVERY option value (colour, capacity) positively evidenced in the image metadata. An option the metadata cannot prove (size `XL`, colour `Bordeaux`, `128 Go`) is refused with `NO_VERIFIED_SOURCE_IMAGE` and the fix is to link the image to the variant in Shopify, never a guess and never a question to the client. Before this correction `Noir / 500 ml`, `XL` or `Bordeaux` accepted any image of the product.
+- **Bytes.** An image is accepted only if Pillow decodes it completely (bounded to 36 MP); a valid header is not an image.
+- **Fallback.** Every eligible image of the same variant is tried in order; the rejected ones are recorded (`rejected_before`).
+- **Tenant.** Only a connector of `src/connectors/shopify.js` in state `CONFIGURED` (shop verified as belonging to this tenant) is accepted.
+- **Freshness.** Price, stock and description given to the engine come from the same read as the media, not from an older snapshot.
+- **Binding.** Ports and engines that transmit the photo are built by `portsFor` / `enginesFor` AFTER the selection, bound to the selected bytes.
+- **Fidelity.** A compose report without pixel counters or an explicit `scene_mode` can no longer pass.
+- **Still open:** the per-photo SHA authorization records of the `--scene` trial are an operator control for the trial only; a production flow needs a standing per-tenant processing policy (see the audit) so that no per-photo approval is ever required before creation.
