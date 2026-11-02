@@ -142,13 +142,14 @@ test('a critic hint makes the Brain re-stage the concept (bounded to two rounds)
   for (const p of r.proposals) assert.equal(p.creative_quality.state, 'CREATIVELY_INSUFFICIENT'); // said, not hidden
 });
 
-test('an unusable photo: concepts may still be thought, but nothing is rendered and the owner is asked for a clean asset', async () => {
+test('an unusable photo: concepts may still be thought, but nothing is rendered and the system reports an internal media problem', async () => {
   const engines = fakeEngines({ examStatus: 'NEEDS_CLEAN_ASSET' });
   const r = await runAutonomous({ input: input(COQUE), ports: tdPorts(doublePort()), engines, workdir: mkdtempSync(join(tmpdir(), 'na-')) });
   assert.equal(r.status, RUN_STATUS.CONCEPTS_ONLY_ASSET_NOT_USABLE);
   assert.equal(engines.calls.render, 0);
   assert.ok(r.proposals.every((p) => p.status === 'CONCEPT_ONLY' && p.image === null));
-  assert.ok(r.human_interventions.some((h) => /photo exploitable/.test(h.what)));
+  assert.ok(r.human_interventions.some((h) => h.who === 'système médias' && h.when === 'diagnostic interne' && /source média inexploitable/.test(h.what)));
+  assert.ok(r.human_interventions.every((h) => h.who !== 'client'), 'the client is never asked to confirm the source photo');
 });
 
 test('stage contract: HABB rules refuse forbidden decor, invented claims and a personalisation that is not offered', () => {
