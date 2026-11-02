@@ -11,10 +11,14 @@ Mis à jour : 2026-11-02. Périmètre : PR #36 et correctifs en brouillon PR #37
 
 ## Point de vigilance sur la photo — BLOQUANT pour autorisation
 Le média noir trouvé dans Shopify est une image WEBP de **2000 × 2000 px**, dont le nom de fichier finit par `Black_20oz.webp`. La référence produit TS-8771C est **750 ml / environ 25 oz**. Le nom du fichier ne prouve pas que l'image présente la mauvaise taille ; sa correspondance visuelle avec la variante HABB est **NON VÉRIFIÉE**.
-- **Décision recommandée** : choisir une photo originale prise par HABB de la gourde noire **750 ml**, physiquement vérifiée, sans visage ni données personnelles, montrant le produit entier, sans obstruction.
-- Ne pas envoyer automatiquement la photo fournisseur / Shopify à Alibaba. La présence sur Shopify ne prouve pas le droit d'utilisation par un modèle externe.
-- Après sélection de la véritable photo et vérification des droits, figer ses octets et son SHA-256. Ne pas modifier la photo entre le plan et l'essai.
-- Source de comparaison produit : https://sg.theplanettraveller.com/products/tyeso-wander-lockable-one-press-straw-flip-lid-s-s-vacuum-insulated-bottle-with-handle-750ml-white (750 ml / 25 oz).
+- **Photo candidate identifiée le 2 novembre 2026** : vue entière du flacon noir sur le site officiel TYESO, alt **« WANDER Lockable Straw Bottle in Black, 25 oz – straw detail »**, sur la fiche produit qui confirme « 25 oz / 750 mL ».
+- Photo exacte (URL externe, **ne pas commiter le binaire**) : https://tyeso.com/cdn/shop/files/tyeso-wander-lockseal-stainless-steel-sports-bottle-with-straw-black-25-oz-straw-detail-30.jpg?v=1784195930&width=2000
+- Fiche officielle : https://tyeso.com/products/wander-lockseal-stainless-steel-sports-bottle-with-straw
+- La photo est **visuellement identifiée**, mais son fichier original n'a **pas encore été récupéré localement** ; dimension binaire, empreinte SHA-256 et essai `--plan` sur cette photo **NON EFFECTUÉS**. Le téléchargement direct depuis l'environnement de travail a échoué (connexion réseau), ne pas inventer de hash.
+- **Droits encore NON CONFIRMÉS** : demander au contact TYESO une permission écrite d'utiliser cette photo précise pour des créations marketing HABB réalisées au moyen d'outils d'IA externes, comprenant envoi de la photo/plaque dérivée à Alibaba Cloud (périmètre Global, traitement potentiellement hors de l'UE) et analyse du rendu par le modèle EU. La présence sur un site public n'est pas une licence pour cet usage.
+- Si TYESO n'accorde pas cette permission, utiliser une photo originale prise par HABB du produit noir 750 ml, ou une photo dont les droits pour cet usage sont établis. Contrôler l'absence de visage et de données personnelles.
+- Après sélection du fichier et preuve des droits, figer ses octets, calculer SHA-256 et utiliser exactement ce fichier pour `--plan` puis, si autorisé, `--execute`. Ne pas changer les pixels entre plan et essai.
+- **NO-GO** pour l'appel image en attendant la photo locale et l'autorisation.
 
 ## Exécution prévue — PAS ENCORE LANCÉE
 1. Fournir la photo correcte et son autorisation explicite pour l'édition externe d'une **plaque dérivée** par Alibaba en périmètre **GLOBAL** (traitement potentiellement hors UE).
@@ -36,5 +40,5 @@ Le média noir trouvé dans Shopify est une image WEBP de **2000 × 2000 px**, d
 ## Ce qui est vérifié / ne l'est pas
 - PR #37, à la date de rédaction : le workflow spécifique « Nordla creative production — offline verification » a réussi au commit `774e7dcb4086d1364e8dd1205ebae46de23649f5`. PR #36 reste inchangée, les deux PR restent en brouillon.
 - L'API Qwen Image 3.0 Pro prend en charge `n=3`, `negative_prompt`, `prompt_extend: false` et le format 1080 × 1350 ; voir https://www.alibabacloud.com/help/en/model-studio/qwen-image-edit-guide
-- **NON VÉRIFIÉ** : droits exacts de la photo du test, concordance du média Shopify « 20oz » avec le produit 750 ml, clé/espace de travail image GLOBAL, qualité et coût effectifs d'une image réellement générée.
+- **NON VÉRIFIÉ** : autorisation commerciale/IA pour l'image TYESO officielle ; fichier local, empreinte et plan ; concordance du média Shopify « 20oz » avec le produit 750 ml ; clé/espace de travail image GLOBAL ; qualité et coût effectifs d'une image réellement générée.
 - **NO-GO** pour `--execute` à ce stade. Aucune modification Shopify, aucun appel fournisseur ni facturation.
