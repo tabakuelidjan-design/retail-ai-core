@@ -5,6 +5,7 @@
 //   NORDLA_MERCHANT_ID -> tenant resolver -> merchant -> its shopify connector -> shop identity check -> sync (guarded writes)
 
 import { createShopifyClient, loadShopifyConfigFromEnv } from '../shopify/client.js';
+import { resolveCostPolicy } from './cost-policy.js';
 import { SHOP_QUERY } from '../shopify/queries.js';
 import { resolveTenant, readMerchantIdFromEnv, isLegacyShopifyLookupEnabled } from '../tenant/index.js';
 import { createConnectorRepository } from '../tenant/connectors.js';
@@ -63,6 +64,6 @@ export async function prepareShopifySync({ env = process.env, supabase, tenant, 
     const owner = await connectors.findMerchantByExternal('shopify', shop.id).catch(() => null);
     return out('MISCONFIGURED', owner && owner.merchantId !== merchantId ? 'SHOP_LINKED_TO_ANOTHER_MERCHANT' : 'SHOP_NOT_LINKED_TO_TENANT');
   }
-  const context = Object.freeze({ merchantId, connectorId: connector.id, kind: 'shopify', externalId: connector.externalId, shop: Object.freeze({ id: shop.id, name: shop.name ?? null, domain: shop.myshopifyDomain ?? null }) });
+  const context = Object.freeze({ merchantId, connectorId: connector.id, kind: 'shopify', externalId: connector.externalId, costPolicy: resolveCostPolicy(connector.config), shop: Object.freeze({ id: shop.id, name: shop.name ?? null, domain: shop.myshopifyDomain ?? null }) });
   return { state: 'CONFIGURED', reason: null, merchantId, shopify, context };
 }

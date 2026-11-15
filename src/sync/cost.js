@@ -9,6 +9,7 @@
 import { VARIANT_INVENTORY_COST_PAGE_QUERY } from '../shopify/queries.js';
 import { normalizeProductCost, costHasChanged } from './normalize.js';
 import { insertInChunks } from './batch.js';
+import { COST_POLICY } from './cost-policy.js';
 
 /**
  * The most recent product_costs row per variant (greatest effective_from), from the merchant's whole history.
@@ -30,7 +31,8 @@ export async function loadLatestCosts(supabase, merchantId) {
 /**
  * @param {{graphql: Function}} shopify
  * @param {ReturnType<import('../supabase/client.js').createSupabaseClient>} supabase
- * @param {{merchantId: string, now?: Date}} opts
+ * @param {{merchantId: string, now?: Date, costPolicy?: string}} opts  costPolicy: the merchant's policy (cost-policy.js); unknown = default, so every merchant
+ *   that did not configure MERCHANT_DECLARED keeps today's behaviour exactly.
  */
 export async function syncProductCosts({ shopify, supabase }, opts) {
   const now = opts.now ?? new Date();
@@ -46,6 +48,9 @@ export async function syncProductCosts({ shopify, supabase }, opts) {
   const variantIdBySourceId = new Map(localVariants.map((v) => [v.source_id, v.id]));
   const latestByVariantId = await loadLatestCosts(supabase, opts.merchantId);
   const newRows = [];
+  const policy = opts.costPolicy === COST_POLICY.MERCHANT_DECLARED ? COST_POLICY.MERCHANT_DECLARED : COST_POLICY.DEFAULT;
+  if (policy === COST_POLICY.MERCHANT_DECLARED) { summary.acceptedAsDeclared = 0; summary.promotedToDeclared = 0; } // counters exist only under the declared policy: other merchants' summary is unchanged
+  const promote = []; // ids of rows whose amount is unchanged but which are now the merchant's declared cost: re-labelled in place, history kept
 
   let cursor = null;
   let hasNextPage = true;
@@ -67,7 +72,7 @@ export async function syncProductCosts({ shopify, supabase }, opts) {
         continue;
       }
 
-      const candidate = normalizeProductCost(variantId, opts.merchantId, node.inventoryItem.unitCost, now);
+      const candidate = normalizeProductCost(variantId, opts.merchantId, node.inventoryItem.unitCost, now, { policy });
       if (!candidate) {
         summary.withoutCost += 1;
         continue; // UNCLASSIFIED: no row, never a fabricated cost.
@@ -75,6 +80,17 @@ export async function syncProductCosts({ shopify, supabase }, opts) {
       summary.withCost += 1;
 
       const latest = latestByVariantId.get(variantId);
+      if (candidate.validation_status === 'verified') summary.acceptedAsDeclared += 1;
+      // Same amount and currency, same source, only the trust label differs (an earlier UNVERIFIED import of the same Shopify value): the amount is
+      // not new, so no new cost row (that would date the declaration today and leave every earlier sale on the unverified label) - the existing
+      // row is re-labelled. A changed amount is a real change and still writes one new row.
+      if (latest && policy === COST_POLICY.MERCHANT_DECLARED && candidate.validation_status === 'verified' && latest.validation_status === 'unverified'
+        && latest.source === candidate.source && Number(latest.unit_cost) === candidate.unit_cost && latest.currency === candidate.currency && latest.id) {
+        promote.push(latest.id);
+        latestByVariantId.set(variantId, { ...latest, validation_status: 'verified' });
+        summary.promotedToDeclared += 1;
+        continue;
+      }
       if (latest && !costHasChanged(latest, candidate)) {
         summary.unchangedSkipped += 1;
         continue;
@@ -91,5 +107,9 @@ export async function syncProductCosts({ shopify, supabase }, opts) {
 
   // Also after a failed page fetch: the rows decided before the failure are written, as they were one by one.
   await insertInChunks(supabase, 'product_costs', newRows);
+  for (let i = 0; i < promote.length; i += 100) {
+    const ids = promote.slice(i, i + 100);
+    try { await supabase.update('product_costs', { merchant_id: `eq.${opts.merchantId}`, id: `in.(${ids.join(',')})` }, { validation_status: 'verified' }); } catch (err) { summary.errors.push(`promote: ${err.message}`); }
+  }
   return summary;
 }

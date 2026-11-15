@@ -2,6 +2,7 @@
 // purpose - this is the part unit tests exercise directly, without a live
 // Shopify or Supabase connection.
 
+import { COST_POLICY } from './cost-policy.js';
 import { normalizeOrderChannel } from '../marketing/adapters/shopify.js';
 import { pseudonymizeCustomerId } from '../customers/pseudonym.js';
 
@@ -127,8 +128,11 @@ export function extractAvailableQuantity(inventoryItem, locationSourceId) {
  * @returns {object | null} a product_costs row, or null when there's no
  *   Shopify cost - the caller must NOT create a row in that case (UNCLASSIFIED).
  */
-export function normalizeProductCost(variantId, merchantId, unitCost, effectiveFrom) {
-  if (!unitCost) return null;
+export function normalizeProductCost(variantId, merchantId, unitCost, effectiveFrom, { policy = COST_POLICY.DEFAULT } = {}) {
+  if (!unitCost) return null; // an empty Shopify cost is a MISSING cost: no row, never a zero
+  const amount = Number(unitCost.amount);
+  // MERCHANT_DECLARED (cost-policy.js): a positive amount is the merchant's declared cost; a zero cannot be told from a default, so it stays to verify.
+  const declared = policy === COST_POLICY.MERCHANT_DECLARED && Number.isFinite(amount) && amount > 0;
   return {
     variant_id: variantId,
     merchant_id: merchantId,
@@ -136,7 +140,7 @@ export function normalizeProductCost(variantId, merchantId, unitCost, effectiveF
     currency: unitCost.currencyCode,
     effective_from: effectiveFrom.toISOString(),
     source: 'shopify_unit_cost',
-    validation_status: 'unverified',
+    validation_status: declared ? 'verified' : 'unverified',
   };
 }
 

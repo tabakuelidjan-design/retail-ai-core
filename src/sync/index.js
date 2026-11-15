@@ -81,7 +81,7 @@ export async function runSync({
     }
 
     if (mode === 'cost' || mode === 'all') {
-      const summary = await syncProductCosts({ shopify, supabase: db }, { merchantId });
+      const summary = await syncProductCosts({ shopify, supabase: db }, { merchantId, costPolicy: prep.context.costPolicy });
       log('cost sync summary:', JSON.stringify(summary, null, 2));
       record('cost', summary);
     }
