@@ -25,18 +25,36 @@ export function createSupabaseClient(config) {
     'Content-Type': 'application/json',
   };
 
+  // Transient failures (gateway 502/503/504, 429, network reset) are retried a few times with a growing pause. Everything the client sends is safe to repeat
+  // (GET, DELETE, upserts, insert-ignoring-duplicates) except the plain append-only insert and RPCs, which opt out with { retry: false }.
+  const RETRY_STATUS = new Set([429, 502, 503, 504]);
+  const retries = Number.isInteger(config.retries) ? config.retries : 3;
+  const baseDelayMs = config.retryBaseDelayMs ?? 500;
+  const sleep = config.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
+
   async function request(path, options) {
-    const res = await fetch(`${config.url}/rest/v1${path}`, {
-      ...options,
-      headers: { ...baseHeaders, ...(options?.headers || {}) },
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw new Error(`Supabase REST ${options?.method || 'GET'} ${path} -> HTTP ${res.status}: ${body.slice(0, 500)}`);
+    const { retry = true, ...fetchOptions } = options || {};
+    for (let attempt = 0; ; attempt += 1) {
+      const canRetry = retry && attempt < retries;
+      let res;
+      try {
+        res = await fetch(`${config.url}/rest/v1${path}`, {
+          ...fetchOptions,
+          headers: { ...baseHeaders, ...(fetchOptions.headers || {}) },
+        });
+      } catch (e) {
+        if (canRetry) { await sleep(baseDelayMs * 2 ** attempt); continue; }
+        throw e;
+      }
+      if (!res.ok) {
+        if (canRetry && RETRY_STATUS.has(res.status)) { await res.text().catch(() => ''); await sleep(baseDelayMs * 2 ** attempt); continue; }
+        const body = await res.text().catch(() => '');
+        throw new Error(`Supabase REST ${fetchOptions.method || 'GET'} ${path} -> HTTP ${res.status}: ${body.slice(0, 500)}`);
+      }
+      if (res.status === 204) return null;
+      const text = await res.text();
+      return text ? JSON.parse(text) : null;
     }
-    if (res.status === 204) return null;
-    const text = await res.text();
-    return text ? JSON.parse(text) : null;
   }
 
   return {
@@ -50,6 +68,19 @@ export function createSupabaseClient(config) {
       });
     },
 
+    /**
+     * ONE INSERT statement for the whole batch (a single HTTP request = a single database transaction: all rows or none), rows that already exist
+     * (same `onConflict` key) are skipped, and only the rows really inserted are returned.
+     */
+    async insertIgnoringDuplicates(table, rows, { onConflict }) {
+      if (rows.length === 0) return [];
+      return request(`/${table}?on_conflict=${encodeURIComponent(onConflict)}`, {
+        method: 'POST',
+        headers: { Prefer: 'resolution=ignore-duplicates,return=representation' },
+        body: JSON.stringify(rows),
+      });
+    },
+
     /** Plain insert, never merges - used for append-only tables like inventory_snapshots. */
     async insert(table, rows) {
       if (rows.length === 0) return [];
@@ -57,6 +88,7 @@ export function createSupabaseClient(config) {
         method: 'POST',
         headers: { Prefer: 'return=representation' },
         body: JSON.stringify(rows),
+        retry: false, // not idempotent: a repeated request could add the rows twice
       });
     },
 
@@ -82,8 +114,10 @@ export function createSupabaseClient(config) {
     },
 
     /** Call a Postgres function (RPC), e.g. rpc('fin_next_number', { p_merchant, p_type, p_year }). */
-    async rpc(fn, args) {
-      return request(`/rpc/${encodeURIComponent(fn)}`, { method: 'POST', body: JSON.stringify(args ?? {}) });
+    async rpc(fn, args, { retry = false } = {}) {
+      // Never retried unless the caller opts in with { retry: true }: a function may have run before the response was lost (e.g. fin_next_number would burn a number).
+      // Only rpcs made idempotent by an explicit key (fin_record_payment, fin_reverse_allocations, fin_void_payment) opt in.
+      return request(`/rpc/${encodeURIComponent(fn)}`, { method: 'POST', body: JSON.stringify(args ?? {}), retry });
     },
 
     /** DELETE rows matching raw PostgREST filters. Database triggers may refuse (e.g. locked finance documents). */

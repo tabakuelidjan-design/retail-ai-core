@@ -1,0 +1,63 @@
+/* Nordla module bridge — maps the variable names the modules already use onto the ONE Nordla Design System
+   (src/shared/nordla-ds.css, tokens --nd-*). This file holds NO colour value of its own: every line points at a --nd-* token,
+   so a change in nordla-ds.css reaches Finance, Analytics, Growth, Stock & Achats and China Sourcing at once.
+   Load order in every module page: /nordla-ds.css, then /nordla-tokens.css, then the module's own stylesheet.
+   Replaces the two former copies (src/finance/ui/nordla-tokens.css, src/analytics-premium/ui/nordla-tokens.css: navy / terracotta,
+   Lora serif, one dark menu colour per module), retired by the 2026-10-17 visual unification. */
+
+/* Typography: Montserrat only (the editorial serif is retired). --font-display is kept as a name so existing rules need no edit. */
+:root {
+  --font-display: var(--nd-font);
+  --font-ui: var(--nd-font);
+}
+
+/* Charts: bronze is the accent, navy the brand's analytical colour, slate / grey for secondary data and guides.
+   Green / red only for a genuine, verified positive / negative comparison. */
+:root {
+  --chart-navy: var(--nd-navy);
+  --chart-terracotta: var(--nd-bronze);
+  --chart-slate: var(--nd-text-2);
+  --chart-soft-gray: var(--nd-border);
+  --chart-surface: var(--nd-card);
+  --chart-positive: var(--nd-success);
+  --chart-negative: var(--nd-error);
+}
+
+/* Navigation: ONE light navigation for every module (Design System sidebar): light surface, dark text, bronze active state.
+   The former per-module dark menu colours are gone; data-module stays on <html> for module identity, not for colour. */
+:root {
+  --nordla-menu-bg: var(--nd-nav);
+  --nordla-menu-border: var(--nd-border);
+  --nordla-menu-icon-bg: var(--nd-neutral-tint);
+  --nordla-menu-icon-bg-hover: var(--nd-card);
+  --nordla-menu-active: var(--nd-bronze);
+  --nordla-menu-text-active: var(--nd-bronze-strong);
+  --nordla-menu-text: var(--nd-text);
+  --nordla-menu-text-secondary: var(--nd-text-2);
+  --nordla-menu-active-row: var(--nd-bronze-tint);
+  --nordla-menu-hover-row: var(--nd-neutral-tint);
+  --nordla-menu-mark-bg: transparent;
+}
+
+/* Navigation dimensions (unchanged: one set for every module). */
+:root {
+  --nordla-nav-width: 84px;
+  --nordla-nav-pad-y: 16px;
+  --nordla-nav-gap: 6px;
+  --nordla-nav-item-h: 54px;
+  --nordla-nav-tile: 32px;
+  --nordla-nav-icon: 22px;
+  --nordla-nav-label: 9px;
+  --nordla-nav-mark: 38px;
+  --nordla-nav-mark-gap: 14px;
+  --nordla-nav-radius: 12px;
+  --nordla-nav-tile-radius: 9px;
+  --nordla-nav-bottom-h: 68px;
+  --nordla-nav-bottom-tile: 30px;
+  --nordla-nav-item-pad: 4px;
+  --nordla-nav-item-gap: 4px;
+  --nordla-nav-utility-gap: 6px;
+}
+
+/* The official Nordla monogram for every module's brand slot (CSS only: no module markup changes). >= 32 px on light grounds. */
+.nordla-brand-monogram { background: url('/nordla-assets/brand/nordla-monogram.svg') center / contain no-repeat; }

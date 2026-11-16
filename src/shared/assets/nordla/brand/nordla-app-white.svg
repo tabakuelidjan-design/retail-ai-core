@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs>
+ <linearGradient id="left" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF0D0"/><stop offset=".18" stop-color="#DFA666"/><stop offset=".49" stop-color="#8B4C22"/><stop offset=".75" stop-color="#C88D4E"/><stop offset="1" stop-color="#6C391A"/></linearGradient>
+ <linearGradient id="ribbon" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8D4B23"/><stop offset=".17" stop-color="#E0AB73"/><stop offset=".37" stop-color="#FFE0A8"/><stop offset=".54" stop-color="#BD7A3D"/><stop offset=".8" stop-color="#76401F"/><stop offset="1" stop-color="#DCA167"/></linearGradient>
+ <linearGradient id="right" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F3C083"/><stop offset=".3" stop-color="#C27E43"/><stop offset=".7" stop-color="#8C4927"/><stop offset="1" stop-color="#F0B979"/></linearGradient>
+ <linearGradient id="edge" x1="0" y1="0" x2=".8" y2="1"><stop offset="0" stop-color="#5D2E1A"/><stop offset=".5" stop-color="#B97842"/><stop offset="1" stop-color="#F4C48A"/></linearGradient>
+ </defs><rect x="0" y="0" width="1024" height="1024" rx="216" fill="#FFFFFF"/><g transform="translate(49 46) scale(1.98)"><path d="M74 394 V130 C74 92 91 76 119 76 C139 76 156 86 170 104 L340 329 V133 C340 104 357 85 389 76 V381 C389 411 369 434 341 434 C322 434 306 426 293 410 L125 190 V351 C125 378 108 395 74 410 Z" fill="url(#edge)"/>
+<path d="M74 394 V127 C74 94 89 77 117 77 C135 77 154 87 169 107 L340 331 V132 C340 103 356 85 389 76 V376 C389 409 373 426 345 425 C325 424 310 414 297 398 L125 169 V350 C125 376 108 394 74 394 Z" fill="url(#left)"/>
+<path d="M117 77 C136 77 154 88 169 107 L340 331 V378 C340 402 343 417 354 424 C330 427 309 413 296 395 L126 167 C110 145 93 132 74 133 V127 C74 94 89 77 117 77 Z" fill="url(#ribbon)"/>
+<path d="M340 331 V130 C340 102 357 84 389 76 V376 C389 404 374 422 351 425 C344 415 340 399 340 378 Z" fill="url(#right)"/>
+<path d="M74 394 C98 390 115 375 125 351 C124 382 108 398 74 410 Z" fill="#6F3B20" opacity=".72"/>
+<path d="M340 331 C350 345 365 349 389 342 V376 C389 404 374 422 351 425 C344 415 340 399 340 378 Z" fill="#6B391E" opacity=".42"/>
+<path d="M80 117 C87 91 100 81 117 81 C136 81 152 91 165 110" stroke="#FFE9C3" stroke-width="3" fill="none" opacity=".7"/>
+<path d="M349 127 C350 107 366 90 384 85" stroke="#FFE1AD" stroke-width="3" fill="none" opacity=".65"/></g></svg>

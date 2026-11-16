@@ -99,18 +99,69 @@ export function aggregate(lineFacts, refundFacts, config) {
   };
 }
 
+// Level 1 serving optimization (Analyses Phase 0 benchmark). windowFacts keeps its exact contract - the elements whose instant is in the half-open
+// window [start, end), in their ORIGINAL order - but no longer rescans every array for every window: each array is indexed ONCE by time (sorted
+// instants + original positions, kept in a WeakMap and rebuilt if the array length changes) and a window is a binary-searched slice.
+const timeIndexes = new WeakMap();
+const instantMs = (x) => (x instanceof Date ? x.getTime() : new Date(x).getTime());
+function timeIndex(items, timeOf) {
+  const cached = timeIndexes.get(items);
+  if (cached && cached.length === items.length) return cached;
+  const entries = [];
+  for (let i = 0; i < items.length; i += 1) { const t = instantMs(timeOf(items[i])); if (!Number.isNaN(t)) entries.push([t, i]); }
+  entries.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const built = { length: items.length, times: Float64Array.from(entries, (e) => e[0]), positions: Int32Array.from(entries, (e) => e[1]) };
+  timeIndexes.set(items, built);
+  return built;
+}
+const firstAtOrAfter = (times, t) => { let lo = 0; let hi = times.length; while (lo < hi) { const mid = (lo + hi) >>> 1; if (times[mid] < t) lo = mid + 1; else hi = mid; } return lo; };
+function within(items, timeOf, window) {
+  if (!items.length) return [];
+  const { times, positions } = timeIndex(items, timeOf);
+  const lo = firstAtOrAfter(times, window.start.getTime()); const hi = firstAtOrAfter(times, window.end.getTime());
+  if (hi <= lo) return [];
+  const picked = Array.from(positions.subarray(lo, hi)).sort((a, b) => a - b); // back to the original order
+  return picked.map((i) => items[i]);
+}
+
 export function windowFacts(ledger, window) {
   return {
-    orders: ledger.orders.filter((o) => inWindow(o.orderedAt, window)),
-    lines: ledger.lineFacts.filter((l) => inWindow(l.orderedAt, window)),
-    refunds: ledger.refundFacts.filter((r) => inWindow(r.refundedAt, window)),
-    refundTotals: ledger.refundTotals.filter((r) => inWindow(r.refundedAt, window)),
+    shipping: within(ledger.shippingFacts ?? [], (x) => x.orderedAt, window),
+    shippingRefunds: within(ledger.shippingRefundFacts ?? [], (x) => x.refundedAt, window),
+    orders: within(ledger.orders, (o) => o.orderedAt, window),
+    lines: within(ledger.lineFacts, (l) => l.orderedAt, window),
+    refunds: within(ledger.refundFacts, (r) => r.refundedAt, window),
+    refundTotals: within(ledger.refundTotals, (r) => r.refundedAt, window),
+  };
+}
+
+/**
+ * Shipping, kept apart from product revenue on purpose (product metrics intentionally represent product lines only).
+ * Amounts follow the same convention as product lines: `charged` is what the customer paid for shipping after shipping discounts
+ * (VAT-inclusive when the source prices include VAT), `net_ex_tax` is without VAT.
+ */
+export function aggregateShipping(shippingFacts, shippingRefundFacts) {
+  const S = (xs, f) => round2(sum(xs, f));
+  const refundsExTax = S(shippingRefundFacts, (r) => r.exTax);
+  const refundsTax = S(shippingRefundFacts, (r) => r.tax);
+  const chargedIncl = S(shippingFacts, (x) => x.inclTax);
+  const chargedExTax = S(shippingFacts, (x) => x.exTax);
+  return {
+    orders_with_shipping: shippingFacts.filter((x) => x.charged > 0).length,
+    gross: S(shippingFacts, (x) => x.gross), discounts: S(shippingFacts, (x) => x.discount),
+    charged_incl_tax: chargedIncl, tax: S(shippingFacts, (x) => x.tax), net_ex_tax: chargedExTax,
+    refunds_incl_tax: S(shippingRefundFacts, (r) => r.inclTax), refunds_ex_tax: refundsExTax, refunds_tax: refundsTax,
+    net_incl_tax_after_refunds: round2(chargedIncl - sum(shippingRefundFacts, (r) => r.inclTax)),
+    net_ex_tax_after_refunds: round2(chargedExTax - refundsExTax), tax_after_refunds: round2(sum(shippingFacts, (x) => x.tax) - refundsTax),
   };
 }
 
 export function computeSalesMetrics(ledger, window) {
-  const { orders, lines, refunds, refundTotals } = windowFacts(ledger, window);
+  const { orders, lines, refunds, refundTotals, shipping: shippingFacts, shippingRefunds } = windowFacts(ledger, window);
   const m = aggregate(lines, refunds, ledger.config);
+  const ship = aggregateShipping(shippingFacts, shippingRefunds);
+  const cov = ledger.shippingCoverage ?? { orders: 0, captured: 0, uncaptured: 0 };
+  const uncapturedInWindow = cov.uncaptured === 0 ? 0 : orders.length - shippingFacts.length;
   const orderCount = orders.length;
   return {
     metrics_version: METRICS_VERSION,
@@ -121,6 +172,17 @@ export function computeSalesMetrics(ledger, window) {
     aov: orderCount > 0 ? round2(m.net_sales / orderCount) : null,
     aov_ex_tax: orderCount > 0 ? round2(m.net_sales_ex_tax / orderCount) : null,
     refunds_non_product: round2(sum(refundTotals, (r) => r.otherAmount)),
+    // Shipping and reconciled totals. Product fields above are unchanged (product lines only); these add the shipping side explicitly.
+    shipping: { ...ship, orders_without_shipping_data: uncapturedInWindow, coverage: uncapturedInWindow > 0 ? 'PARTIAL' : 'COMPLETE' },
+    refunds_breakdown: {
+      product: m.refunds, shipping: ship.refunds_incl_tax, other: round2(sum(refundTotals, (r) => r.otherAmount)),
+      total: round2(m.refunds + ship.refunds_incl_tax + sum(refundTotals, (r) => r.otherAmount)),
+    },
+    totals_with_shipping: {
+      net_sales_incl_tax: round2(m.net_sales + ship.net_incl_tax_after_refunds),
+      net_sales_ex_tax: round2(m.net_sales_ex_tax + ship.net_ex_tax_after_refunds),
+      tax: round2(m.tax + ship.tax_after_refunds),
+    },
     payment_fees: {
       value: null,
       status: 'UNAVAILABLE',

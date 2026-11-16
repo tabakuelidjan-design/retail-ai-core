@@ -1,0 +1,16 @@
+/* SIMULATION ONLY: the guide of scripts/growth-sim.mjs (never part of the product). Neutral Nordla tones. */
+.simg-toggle { position: fixed; top: 10px; right: 12px; z-index: 9000; padding: 6px 12px; border-radius: 999px; border: 1px solid #c9b8a4; background: #fbf8f3; color: #183247; font: 600 12px/1 inherit; cursor: pointer; }
+.simg-panel { position: fixed; top: 46px; right: 12px; z-index: 9000; width: min(440px, calc(100vw - 24px)); max-height: calc(100vh - 64px); overflow-y: auto; overflow-x: hidden; overflow-wrap: anywhere; padding: 14px 16px; border-radius: 12px; border: 1px solid #c9b8a4; background: #fbf8f3; color: #183247; box-shadow: 0 2px 10px rgba(24, 50, 71, .12); font-size: 13px; line-height: 1.45; }
+.simg-panel[hidden] { display: none; }
+.simg-panel h2 { margin: 14px 0 6px; font-size: 13px; }
+.simg-banner { padding: 8px 10px; border-radius: 8px; background: #efe9e1; }
+.simg-steps { margin: 0; padding-left: 18px; }
+.simg-steps li { margin-bottom: 6px; }
+.simg-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
+.simg-sw { padding: 3px 9px; border-radius: 999px; border: 1px solid #c9b8a4; background: #fff; color: #183247; font-size: 12px; cursor: pointer; }
+.simg-reset { border-color: #c0392b; color: #c0392b; }
+.simg-links { display: flex; flex-wrap: wrap; gap: 10px; margin: 4px 0; }
+.simg-link { color: #183247; font-weight: 600; }
+.simg-off { color: #6b7280; }
+.simg-todo { margin: 0; padding-left: 18px; }
+@media (max-width: 480px) { .simg-panel { top: 44px; right: 8px; left: 8px; width: auto; } }

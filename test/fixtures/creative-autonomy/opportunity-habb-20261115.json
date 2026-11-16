@@ -1,0 +1,168 @@
+{
+ "source": "Nordla dataset retail-ai-core-dev (Supabase, read-only SQL), orders of the last 120 days not flagged test, latest inventory snapshot per variant (2026-11-14); 6 products of the top of the ranking, 2026-11-15",
+ "now": "2026-11-15",
+ "rows": [
+  {
+   "product_id": "gid://shopify/Product/15500510986588",
+   "title": "Batterie externe Mini 10 000 mAh – 22,5W",
+   "variant_id": "gid://shopify/ProductVariant/57117887136092",
+   "variant_title": "Bleu / 10000mAh",
+   "units": 4,
+   "last_sale": "2026-10-27",
+   "stock": 11
+  },
+  {
+   "product_id": "gid://shopify/Product/15500510986588",
+   "title": "Batterie externe Mini 10 000 mAh – 22,5W",
+   "variant_id": "gid://shopify/ProductVariant/57117887201628",
+   "variant_title": "Violet / 10000mAh",
+   "units": 2,
+   "last_sale": "2026-10-08",
+   "stock": 13
+  },
+  {
+   "product_id": "gid://shopify/Product/15500510986588",
+   "title": "Batterie externe Mini 10 000 mAh – 22,5W",
+   "variant_id": "gid://shopify/ProductVariant/57117887103324",
+   "variant_title": "Blanc / 10000mAh",
+   "units": 1,
+   "last_sale": "2026-07-18",
+   "stock": 13
+  },
+  {
+   "product_id": "gid://shopify/Product/15500510986588",
+   "title": "Batterie externe Mini 10 000 mAh – 22,5W",
+   "variant_id": "gid://shopify/ProductVariant/57117887168860",
+   "variant_title": "Noir / 10000mAh",
+   "units": 0,
+   "last_sale": null,
+   "stock": 13
+  },
+  {
+   "product_id": "gid://shopify/Product/15517247701340",
+   "title": "Boîte cadeau en cuir PU",
+   "variant_id": "gid://shopify/ProductVariant/57219079766364",
+   "variant_title": "Rose",
+   "units": 3,
+   "last_sale": "2026-09-24",
+   "stock": 193
+  },
+  {
+   "product_id": "gid://shopify/Product/15517247701340",
+   "title": "Boîte cadeau en cuir PU",
+   "variant_id": "gid://shopify/ProductVariant/57219079930204",
+   "variant_title": "Vert",
+   "units": 1,
+   "last_sale": "2026-10-08",
+   "stock": 199
+  },
+  {
+   "product_id": "gid://shopify/Product/15500205523292",
+   "title": "Casque Bluetooth Remax RB-300HB pliable",
+   "variant_id": "gid://shopify/ProductVariant/57206416703836",
+   "variant_title": "Mauve",
+   "units": 8,
+   "last_sale": "2026-11-04",
+   "stock": 2
+  },
+  {
+   "product_id": "gid://shopify/Product/15500205523292",
+   "title": "Casque Bluetooth Remax RB-300HB pliable",
+   "variant_id": "gid://shopify/ProductVariant/57206453109084",
+   "variant_title": "Bleu",
+   "units": 4,
+   "last_sale": "2026-10-26",
+   "stock": 6
+  },
+  {
+   "product_id": "gid://shopify/Product/15547355627868",
+   "title": "Coffret cadeau cœur classique – 3 tailles",
+   "variant_id": "gid://shopify/ProductVariant/57410735898972",
+   "variant_title": "Rouge / L",
+   "units": 1,
+   "last_sale": "2026-11-10",
+   "stock": 7
+  },
+  {
+   "product_id": "gid://shopify/Product/15547355627868",
+   "title": "Coffret cadeau cœur classique – 3 tailles",
+   "variant_id": "gid://shopify/ProductVariant/57410735669596",
+   "variant_title": "Rose / M",
+   "units": 1,
+   "last_sale": "2026-10-13",
+   "stock": 8
+  },
+  {
+   "product_id": "gid://shopify/Product/15547355627868",
+   "title": "Coffret cadeau cœur classique – 3 tailles",
+   "variant_id": "gid://shopify/ProductVariant/57410735702364",
+   "variant_title": "Rose / L",
+   "units": 1,
+   "last_sale": "2026-11-10",
+   "stock": 8
+  },
+  {
+   "product_id": "gid://shopify/Product/15547355627868",
+   "title": "Coffret cadeau cœur classique – 3 tailles",
+   "variant_id": "gid://shopify/ProductVariant/57410735997276",
+   "variant_title": "Noir / L",
+   "units": 1,
+   "last_sale": "2026-10-13",
+   "stock": 8
+  },
+  {
+   "product_id": "gid://shopify/Product/15500363170140",
+   "title": "Écouteurs True Wireless pour musique et appels",
+   "variant_id": "gid://shopify/ProductVariant/57116365554012",
+   "variant_title": "Default Title",
+   "units": 7,
+   "last_sale": "2026-10-10",
+   "stock": 38
+  },
+  {
+   "product_id": "gid://shopify/Product/15520803684700",
+   "title": "Gourde Sitarayuri ZF-028 – 560 ml",
+   "variant_id": "gid://shopify/ProductVariant/57236035535196",
+   "variant_title": "Rose Violet",
+   "units": 1,
+   "last_sale": "2026-11-05",
+   "stock": 6
+  },
+  {
+   "product_id": "gid://shopify/Product/15520803684700",
+   "title": "Gourde Sitarayuri ZF-028 – 560 ml",
+   "variant_id": "gid://shopify/ProductVariant/57236035567964",
+   "variant_title": "Bleu Ciel",
+   "units": 1,
+   "last_sale": "2026-10-20",
+   "stock": 5
+  },
+  {
+   "product_id": "gid://shopify/Product/15520803684700",
+   "title": "Gourde Sitarayuri ZF-028 – 560 ml",
+   "variant_id": "gid://shopify/ProductVariant/57236035633500",
+   "variant_title": "Vert",
+   "units": 1,
+   "last_sale": "2026-07-20",
+   "stock": 6
+  },
+  {
+   "product_id": "gid://shopify/Product/15520803684700",
+   "title": "Gourde Sitarayuri ZF-028 – 560 ml",
+   "variant_id": "gid://shopify/ProductVariant/57236035666268",
+   "variant_title": "Noir",
+   "units": 1,
+   "last_sale": "2026-08-01",
+   "stock": 6
+  },
+  {
+   "product_id": "gid://shopify/Product/15520803684700",
+   "title": "Gourde Sitarayuri ZF-028 – 560 ml",
+   "variant_id": "gid://shopify/ProductVariant/57236035699036",
+   "variant_title": "Blanc",
+   "units": 1,
+   "last_sale": "2026-07-20",
+   "stock": 6
+  }
+ ]
+}

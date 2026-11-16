@@ -1,0 +1,86 @@
+/* Nordla Chart System v1.0 - styles for shared/nordla-charts.js. Colours ONLY from the chart tokens
+   (nordla-tokens.css). Everything is namespaced .nc-* so it can never leak into unrelated components. */
+.nc-chart { width: 100%; min-width: 0; }
+.nc-chart svg { display: block; overflow: visible; }
+.nc-wrap { min-width: 0; }
+
+.nc-head { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.nc-title { font-size: 13px; font-weight: 600; color: var(--chart-navy); }
+.nc-valuerow { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 4px 14px; }
+.nc-deltacol { display: flex; flex-direction: column; gap: 1px; padding-bottom: 3px; }
+.nc-value { font-family: var(--font-ui); font-size: 26px; font-weight: 700; letter-spacing: -.01em; color: var(--chart-navy); line-height: 1.15; }
+.nc-head.small .nc-value { font-size: 22px; }
+.nc-delta { font-size: 13px; font-weight: 700; color: var(--chart-slate); white-space: nowrap; }
+.nc-delta.pos { color: var(--chart-positive); }
+.nc-delta.neg { color: var(--chart-negative); }
+.nc-vs { font-size: 11px; color: var(--chart-slate); }
+
+.nc-grid { stroke: var(--chart-soft-gray); stroke-width: 1; }
+.nc-axis { font-family: var(--font-ui); font-size: 11px; fill: var(--chart-slate); }
+.nc-line { fill: none; stroke: var(--chart-navy); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.nc-line.thin { stroke-width: 1.6; }
+.nc-area { stroke: none; }
+.nc-stop-top { stop-color: var(--chart-navy); stop-opacity: .10; }
+.nc-stop-bottom { stop-color: var(--chart-navy); stop-opacity: 0; }
+.nc-end.navy { fill: var(--chart-navy); }
+.nc-end.ring { fill: var(--chart-surface); stroke: var(--chart-terracotta); stroke-width: 2.2; }
+.nc-hit { fill: transparent; }
+
+.nc-bar.prev { fill: var(--chart-soft-gray); }
+.nc-bar.cur { fill: var(--chart-navy); }
+.nc-bar.alt { fill: var(--chart-slate); }
+.nc-bar.total { fill: var(--chart-navy); }
+.nc-bar.pos { fill: var(--chart-positive); }
+.nc-bar.neg { fill: var(--chart-negative); }
+.nc-conn { stroke: var(--chart-soft-gray); stroke-width: 1; stroke-dasharray: 2 2; }
+.nc-vlabel { font-family: var(--font-ui); font-size: 11px; font-weight: 600; fill: var(--chart-navy); }
+.nc-vlabel.pos { fill: var(--chart-positive); }
+.nc-vlabel.neg { fill: var(--chart-negative); }
+
+.nc-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--chart-slate); margin: 4px 0 8px; }
+.nc-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.nc-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; }
+.nc-dot.prev { background: var(--chart-soft-gray); } .nc-dot.cur { background: var(--chart-navy); } .nc-dot.alt { background: var(--chart-slate); }
+.nc-dot.c1 { background: var(--chart-navy); } .nc-dot.c2 { background: var(--chart-terracotta); } .nc-dot.c3 { background: var(--chart-slate); }
+.nc-dot.c4 { background: color-mix(in srgb, var(--chart-slate) 45%, #fff); } .nc-dot.c5 { background: var(--chart-soft-gray); }
+
+.nc-donut { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
+.nc-donut-ring { position: relative; flex: 0 0 auto; }
+.nc-arc { fill: none; }
+.nc-arc.track { stroke: var(--chart-soft-gray); }
+.nc-arc.c1 { stroke: var(--chart-navy); } .nc-arc.c2 { stroke: var(--chart-terracotta); } .nc-arc.c3 { stroke: var(--chart-slate); }
+.nc-arc.c4 { stroke: color-mix(in srgb, var(--chart-slate) 45%, #fff); } .nc-arc.c5 { stroke: var(--chart-soft-gray); }
+.nc-donut-centre { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.nc-donut-centre strong { font-size: 14px; max-width: 74px; font-weight: 700; color: var(--chart-navy); line-height: 1.15; }
+.nc-donut-centre span { font-size: 11px; color: var(--chart-slate); }
+.nc-donut-legend { flex: 1 1 140px; min-width: 0; display: flex; flex-direction: column; gap: 9px; }
+.nc-lrow { display: flex; align-items: center; gap: 8px; font-size: 12.5px; min-width: 0; }
+.nc-lname { flex: 1; min-width: 0; color: var(--chart-navy); overflow-wrap: anywhere; }
+.nc-lpct { font-weight: 600; color: var(--chart-navy); }
+
+.nc-empty { display: flex; flex-direction: column; gap: 4px; align-items: center; justify-content: center; text-align: center; min-height: 120px; padding: 16px; font-size: 12.5px; color: var(--chart-slate); }
+.nc-empty strong { color: var(--chart-navy); font-size: 13.5px; }
+
+.nc-cb { display: flex; flex-direction: column; gap: 10px; }
+.nc-cb-row { display: grid; grid-template-columns: minmax(70px, 34%) minmax(0, 1fr) auto; align-items: center; gap: 10px; font-size: 12.5px; }
+.nc-cb-label { color: var(--chart-navy); overflow-wrap: anywhere; line-height: 1.3; }
+.nc-cb-track { position: relative; height: 12px; }
+.nc-cb-axis { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--chart-soft-gray); }
+.nc-cb-bar { position: absolute; top: 1px; height: 10px; border-radius: 2px; }
+.nc-cb-bar.pos { background: var(--chart-positive); } .nc-cb-bar.neg { background: var(--chart-negative); }
+.nc-cb-value { font-weight: 600; white-space: nowrap; min-width: 56px; text-align: right; }
+.nc-cb-value.pos { color: var(--chart-positive); } .nc-cb-value.neg { color: var(--chart-negative); }
+.nc-dq { display: flex; align-items: center; gap: 14px; }
+.nc-dq .nc-donut-centre strong { font-size: 15px; }
+.nc-dq-label { font-size: 12.5px; color: var(--chart-slate); line-height: 1.35; }
+@media (max-width: 560px) {
+  .nc-cb-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; }
+  .nc-cb-label { grid-column: 1 / -1; }
+}
+
+.nc-lval { min-width: 64px; text-align: right; color: var(--chart-slate); font-variant-numeric: tabular-nums; }
+
+.nc-line.ml { stroke-width: 2; }
+.nc-line.ml.c1 { stroke: var(--chart-navy); } .nc-line.ml.c2 { stroke: var(--chart-terracotta); } .nc-line.ml.c3 { stroke: var(--chart-slate); }
+.nc-line.ml.c4 { stroke: color-mix(in srgb, var(--chart-slate) 45%, #fff); } .nc-line.ml.c5 { stroke: var(--chart-soft-gray); }
+.nc-end.s-c1 { fill: var(--chart-navy); } .nc-end.s-c2 { fill: var(--chart-terracotta); } .nc-end.s-c3 { fill: var(--chart-slate); } .nc-end.s-c4 { fill: color-mix(in srgb, var(--chart-slate) 45%, #fff); } .nc-end.s-c5 { fill: var(--chart-soft-gray); }
