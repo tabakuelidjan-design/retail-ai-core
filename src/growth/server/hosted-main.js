@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// HOSTED Nordla Growth (NORDLA_SERVICE=growth, src/service-start.js): the Growth screen on a public https address behind the Core identity.
+// HOSTED Nordla Growth (the "growth" service of src/service-start.js): the Growth screen on a public https address behind the Core identity.
 // The configuration must be complete or nothing starts (each missing piece has its own code). It reuses China Sourcing's hosted checks
 // (hostedConfig, project pin, pinned-project verification) with Growth's own variable names:
 //   GROWTH_HOSTED=1                         explicit opt-in (without it the process refuses to start: the local launcher is serve.js)

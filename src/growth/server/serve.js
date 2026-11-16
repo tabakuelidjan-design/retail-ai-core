@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Launcher (local preview only): npm run growth -> http://127.0.0.1:4413
-// Binds to the loopback interface and has NO sign-in: it must not be exposed. The hosted, signed-in server is hosted-main.js (NORDLA_SERVICE=growth).
+// Binds to the loopback interface and has NO sign-in: it must not be exposed. The hosted, signed-in server is hosted-main.js (the "growth" service of service-start.js).
 // Optional: GROWTH_PORT.
 // Tenant (ADR 0003): when NORDLA_MERCHANT_ID is set, it is resolved at startup through the shared resolver (unknown or invalid ->
 // refused, nothing served) and Potentiel produits reads that merchant's synced data. Without it, the demonstration pages still
