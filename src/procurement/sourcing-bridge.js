@@ -17,11 +17,16 @@ const intOf = (v) => { const n = Number(String(v ?? '').trim()); return Number.i
 
 
 /** Pure: what a case says, in the module's vocabulary, plus everything that could not be read exactly. */
-export function caseToCapture(caseState) {
+export function caseToCapture(caseState, { supplierName: givenName } = {}) {
   const issues = [];
   if (!caseState || typeof caseState !== 'object' || typeof caseState.id !== 'string') return { issues: [{ code: 'NOT_A_CASE', message: 'not a Sourcing case' }] };
-  const supplierName = String(caseState.supplier?.name ?? '').trim();
+  // A case that never got a supplier name can still be imported when the person types the name AT IMPORT (supplierName): it is their statement, never a guess.
+  const caseSupplier = String(caseState.supplier?.name ?? '').trim();
+  const typed = String(givenName ?? '').trim().slice(0, 120);
+  const supplierName = caseSupplier || (typed.length >= 2 ? typed : '');
   if (!supplierName) issues.push({ code: 'NO_SUPPLIER', message: 'the case has no supplier name' });
+  // A recovered copy ("<id>-rec-...") is the SAME dossier as the case it came from: one identity, so one supplier, one item, no duplicate.
+  const rootId = typeof caseState.recoveredFrom?.id === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(caseState.recoveredFrom.id) ? caseState.recoveredFrom.id : caseState.id;
   const name = String(caseState.identity?.workingName ?? caseState.name ?? '').trim();
   if (!name) issues.push({ code: 'NO_PRODUCT_NAME', message: 'the case has no product name' });
   const gtin = String(caseState.identity?.identifiers?.gtin ?? '').trim();
@@ -50,7 +55,7 @@ export function caseToCapture(caseState) {
       depositPct: dep !== undefined && /^\d{1,3}(\.\d{1,2})?$/.test(num(dep)) && Number(num(dep)) <= 100 ? num(dep) : null,
     });
   }
-  return { caseId: caseState.id, supplierName, name, sku: `SRC-${caseState.id}`.slice(0, 64), barcode: /^\d{8,14}$/.test(gtin) ? gtin : null, attachments, quotes, issues };
+  return { caseId: caseState.id, rootId, supplierNameFrom: caseSupplier ? 'CASE' : supplierName ? 'TYPED_AT_IMPORT' : null, supplierName, name, sku: `SRC-${rootId}`.slice(0, 64), barcode: /^\d{8,14}$/.test(gtin) ? gtin : null, attachments, quotes, issues };
 }
 
 const sameTerms = (existing, q) => existing.currency === q.currency && existing.moq === q.moq && existing.incoterm === q.incoterm && existing.leadTimeDays === q.leadTimeDays
@@ -60,11 +65,11 @@ const sameTerms = (existing, q) => existing.currency === q.currency && existing.
  * @param {{commands: object, queries: object, actor: {id: string, role: string}, caseState: object}} a
  * @returns {Promise<{status: 'IMPORTED'|'PARTIAL'|'BLOCKED', supplier?: object, item?: object, quotes: object[], issues: object[]}>}
  */
-export async function importSourcingCase({ commands, queries, actor, caseState }) {
-  const cap = caseToCapture(caseState);
+export async function importSourcingCase({ commands, queries, actor, caseState, supplierName }) {
+  const cap = caseToCapture(caseState, { supplierName });
   const issues = [...cap.issues];
   if (issues.some((i) => ['NOT_A_CASE', 'NO_SUPPLIER', 'NO_PRODUCT_NAME'].includes(i.code))) return { status: 'BLOCKED', quotes: [], issues };
-  const caseId = cap.caseId;
+  const caseId = cap.rootId; // identity of the dossier (a recovered copy shares it): keys, reasons and the SKU stay stable
 
   // ---- supplier: match, never guess
   const key = supplierKeyOf(cap.supplierName);
@@ -113,8 +118,8 @@ export async function importSourcingCase({ commands, queries, actor, caseState }
  * Import (idempotent) then prepare a DRAFT purchase order for `qty` units on the case's latest usable quote. Returns the existing draft when the same quote and
  * quantity already have an open order: pressing the button twice never creates two orders. The order stays DRAFT: nothing is submitted, approved or ordered.
  */
-export async function draftOrderFromCase({ commands, queries, actor, caseState, qty, destinationLocationId, expectedDate, fx }) {
-  const imp = await importSourcingCase({ commands, queries, actor, caseState });
+export async function draftOrderFromCase({ commands, queries, actor, caseState, qty, destinationLocationId, expectedDate, fx, supplierName }) {
+  const imp = await importSourcingCase({ commands, queries, actor, caseState, supplierName });
   if (imp.status === 'BLOCKED') return { ...imp, purchaseOrder: null };
   const quote = [...imp.quotes].reverse().find((q) => q.status !== 'SKIPPED');
   if (!quote) return { ...imp, status: 'BLOCKED', purchaseOrder: null, issues: [...imp.issues, { code: 'NO_USABLE_QUOTE', message: 'no quote could be read: nothing to order' }] };
@@ -122,7 +127,7 @@ export async function draftOrderFromCase({ commands, queries, actor, caseState, 
   const open = (await queries.purchaseOrders()).find((po) => !['CANCELLED', 'CLOSED'].includes(po.status) && po.lines.some((l) => l.quoteId === q.id && l.qty === qty));
   if (open) return { ...imp, purchaseOrder: { id: open.id, number: open.number, status: open.status, totalMinor: open.totalMinor, currency: open.currency, reused: true } };
   try {
-    const r = await commands.createPurchaseOrder(actor, `src:${caseState.id}:po:${q.id}:${qty}`, {
+    const r = await commands.createPurchaseOrder(actor, `src:${caseToCapture(caseState).rootId}:po:${q.id}:${qty}`, {
       supplierId: imp.supplier.id, currency: q.currency, expectedDate, destinationLocationId, lines: [{ itemId: imp.item.id, quoteId: q.id, qty }], ...(fx && q.currency !== 'EUR' ? { fx: typeof fx === 'function' ? fx(q.currency) : fx } : {}),
     });
     const po = r.purchaseOrder;

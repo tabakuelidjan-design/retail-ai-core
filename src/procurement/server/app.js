@@ -243,12 +243,12 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, s
       return res.end(ph.bytes);
     }
     if (p === '/api/sourcing/import' && m === 'POST') {
-      const b = await readJson(req); const caseState = await readCase(b.caseId);
+      const b = await readJson(req); const caseState = await readCase(b.caseId); const supplierName = typeof b.supplierName === 'string' ? b.supplierName.trim().slice(0, 120) : undefined; // typed by the person at import when the case has no supplier name
       if (b.qty !== undefined) {
         const locs = await q.locations(); const dest = b.destinationLocationId ?? locs.find((l) => l.type === 'WAREHOUSE')?.id;
-        return send(res, 200, await draftOrderFromCase({ commands: c, queries: q, actor, caseState, qty: b.qty, destinationLocationId: dest, expectedDate: b.expectedDate, ...(b.fxRate ? { fx: (cur) => ({ from: cur, to: 'EUR', rate: String(b.fxRate), date: now().toISOString().slice(0, 10), source: 'saisie sur téléphone' }) } : b.fx ? { fx: b.fx } : {}) }));
+        return send(res, 200, await draftOrderFromCase({ commands: c, queries: q, actor, caseState, supplierName, qty: b.qty, destinationLocationId: dest, expectedDate: b.expectedDate, ...(b.fxRate ? { fx: (cur) => ({ from: cur, to: 'EUR', rate: String(b.fxRate), date: now().toISOString().slice(0, 10), source: 'saisie sur téléphone' }) } : b.fx ? { fx: b.fx } : {}) }));
       }
-      return send(res, 200, await importSourcingCase({ commands: c, queries: q, actor, caseState }));
+      return send(res, 200, await importSourcingCase({ commands: c, queries: q, actor, caseState, supplierName }));
     }
     if (await v1(req, res, p, m, user, actor)) return;
     return send(res, 404, { error: 'NOT_FOUND' });
