@@ -28,6 +28,8 @@ export function createModulesPanel({ S, api, refresh }) {
     const t = ev.target.closest?.('[data-act^="nx-"]'); if (!t || st.busy) return;
     const a = t.dataset.act; st.open = t.closest('[data-nx-module]')?.dataset.nxModule ?? st.open; // keep the section the person works in open after the redraw
     if (a === 'nx-load') return load();
+    if (a === 'nx-parle') return parle(document.getElementById('nx-q')?.value);
+    if (a === 'nx-parle-ex') { st.askInput = t.dataset.label; return parle(t.dataset.q, t.dataset.label); }
     if (a === 'nx-open-finance') { const w = window.open('', '_blank'); if (w) w.opener = null; st.busy = true; st.error = ''; refresh(); return api('/api/core/finance/open', { method: 'POST', body: '{}' }).then((r) => { if (w) w.location.href = r.url; else window.location.href = r.url; }, (e) => { if (w) w.close(); fail(e); }).finally(() => { st.busy = false; refresh(); });
     }
     if (a === 'nx-ask') return post('/api/core/ask', { text: t.dataset.q }, (r) => { st.answer = { q: t.dataset.label, ...r }; });
@@ -56,12 +58,31 @@ export function createModulesPanel({ S, api, refresh }) {
     ${(st.creation.creations ?? []).slice(0, 5).map(creationCard).join('')}`);
 
   const financeOpenButton = (m) => (m?.dashboard ? ` <button class="btn" data-act="nx-open-finance">Ouvrir le tableau de bord Finance</button>` : '');
+  // ---- Parle à Nordla: one input, one answer zone, on the person's own session (the server resolves the merchant). Read-only: Nordla answers, it executes nothing.
+  const EXAMPLES = [['Ma trésorerie ?', 'ma trésorerie'], ['Quelles factures dois-je payer ?', 'quelles factures fournisseurs dois-je payer et quelles sont les échéances ?'], ['Chiffre d’affaires des 30 derniers jours', 'quel est mon chiffre d’affaires des 30 derniers jours ?']];
+  async function parle(text, label) {
+    const q = String(text ?? '').trim();
+    if (!q) { st.askError = 'Écrivez une question.'; return refresh(); }
+    st.asking = true; st.askError = ''; st.answer = null; refresh();
+    try { const r = await api('/api/core/ask', { method: 'POST', body: JSON.stringify({ text: q.slice(0, 1000) }) }); st.answer = { q: label ?? q, ...r }; }
+    catch (e) { st.askError = coreErrorMessage(e); }
+    st.asking = false; refresh();
+  }
+  if (typeof document !== 'undefined') {
+    document.addEventListener('input', (ev) => { if (ev.target?.id === 'nx-q') st.askInput = ev.target.value; });
+    document.addEventListener('keydown', (ev) => { if (ev.target?.id === 'nx-q' && ev.key === 'Enter' && !st.asking) { ev.preventDefault(); parle(ev.target.value); } });
+  }
+  const parleCard = () => `<section class="card" data-nx-parle><h3>Parle à Nordla</h3><p class="small muted">Posez une question sur votre activité. Nordla répond en lecture seule, sur les données de votre boutique : il ne commande, ne paie et ne publie rien.</p>
+    <div class="row"><input id="nx-q" maxlength="1000" placeholder="Ex. : Ma trésorerie ?" value="${esc(st.askInput ?? '')}" aria-label="Votre question"><button class="btn" data-act="nx-parle" ${st.asking ? 'disabled' : ''}>Demander</button></div>
+    <div class="row">${EXAMPLES.map(([l, q]) => `<button class="btn sec" data-act="nx-parle-ex" data-label="${esc(l)}" data-q="${esc(q)}" ${st.asking ? 'disabled' : ''}>${esc(l)}</button>`).join(' ')}</div>
+    ${st.asking ? '<p class="small muted" role="status" data-nx-waiting>Nordla cherche la réponse…</p>' : ''}${st.askError ? `<p class="warn" role="alert" data-nx-ask-error>${esc(st.askError)}</p>` : ''}${st.answer ? answerCard(st.answer) : ''}</section>`;
+
   const FIN_STATUS = { RECEIVED: 'reçue', TO_REVIEW: 'à vérifier', VALIDATED: 'validée', TO_PAY: 'à payer', PAID: 'payée', REJECTED: 'rejetée' };
   const financeInboxCard = () => { const i = st.financeInbox; if (!i) return ''; const money = (c, cur) => (Number.isInteger(c) ? `${(c / 100).toFixed(2)} ${esc(cur ?? '')}` : 'montant à saisir'); return `<div class="card" data-nx-finance-inbox><p class="small"><b>Boîte factures fournisseurs</b> — ${i.total} fiche(s), ${i.toReview} à vérifier <span class="muted">(${esc(i.source)})</span></p>${i.items.slice(0, 10).map((r) => `<p class="small">${esc(FIN_STATUS[r.status] ?? r.status)} · ${esc(r.supplier ?? 'fournisseur ?')} · ${esc(r.invoiceNumber ?? 'n° de facture à saisir')}${r.orderReference ? ` · bon ${esc(r.orderReference)}` : ''} · ${money(r.grossCents, r.currency)}</p>`).join('') || '<p class="small muted">Aucune fiche.</p>'}<p class="small muted">Lecture seule : rien n’est validé ni payé depuis Nordla.</p></div>`; };
   function section() {
     const head = '<h2 id="nx-head">Nordla</h2>';
     if (!S.online || !S.token) return `${head}<p class="small muted">Hors ligne : seul China Sourcing fonctionne (vos dossiers et photos restent sur ce téléphone). Les six autres modules demandent le serveur.</p>`;
-    if (!st.modules) return `${head}${st.error ? `<p class="warn">${esc(st.error)}</p>` : ''}<button class="btn" data-act="nx-load">Ouvrir Nordla (7 modules)</button>`;
+    if (!st.modules) return `${head}${parleCard()}${st.error ? `<p class="warn">${esc(st.error)}</p>` : ''}<button class="btn" data-act="nx-load">Ouvrir Nordla (7 modules)</button>`;
     const by = Object.fromEntries(st.modules.map((m) => [m.key, m]));
     const mod = (m, body = '') => `<details class="card" data-nx-module="${esc(m.key)}" ${st.open === m.key ? 'open' : ''}><summary><b>${esc(m.label)}</b> <span class="small" style="color:#fff;background:${BADGE[m.state] ?? '#666'};border-radius:4px;padding:1px 6px">${esc(m.state)}</span>${m.offline ? ' <span class="small muted">hors ligne</span>' : ''}</summary><p class="small muted">${esc(m.key === 'core' && m.state === 'NON CONFIGURÉ' ? coreDisabledReason(m.detail) : m.detail)}</p>${body}</details>`;
     const quick = (k) => (QUICK[k] ?? []).map(([l, q]) => `<button class="btn sec" data-act="nx-ask" data-label="${esc(l)}" data-q="${esc(q)}" ${['LECTURE SEULE'].includes(by[k]?.state) ? '' : 'disabled'}>${esc(l)}</button>`).join(' ');
@@ -69,12 +90,12 @@ export function createModulesPanel({ S, api, refresh }) {
     const brandBody = b?.status === 'PROPOSED_NOT_APPROVED' || b?.status === 'APPROVED' ? `<p class="small">Positionnement : ${esc(b.positioning)}</p><p class="small">Interdits proposés : ${esc(b.rules.map((r) => `« ${r.forbidden} » (${r.severity === 'BLOCK' ? 'bloquant' : 'à revoir'})`).join(', '))}</p>${b.status === 'APPROVED' ? `<p class="small">Approuvé le ${esc(String(b.approvedAt).slice(0, 16).replace('T', ' '))}.</p>` : `<p class="small muted">Questions ouvertes : ${esc(b.questions.join(' '))}</p><button class="btn sec" data-act="nx-approve-brand">Approuver ces règles (propriétaire)</button>`}` : '';
     const check = st.check ? `<div class="card" data-nx-check><p class="small"><b>${st.check.official ? `Vérification officielle : ${esc(st.check.outcome)}` : 'Aperçu indicatif (règles non approuvées)'}</b></p>${(st.check.findings ?? []).map((f) => `<p class="small warn">${esc(f.forbidden ?? f.rule)} — ${esc(f.why ?? f.reason ?? f.outcome)}</p>`).join('') || '<p class="small">Rien de signalé.</p>'}</div>` : '';
     const form = `<label class="small">Produit<input id="nx-product"></label><label class="small">Objectif<input id="nx-objective" placeholder="ex. ventes en boutique à Namur"></label><label class="small">Public<input id="nx-audience" placeholder="ex. parents cherchant un cadeau"></label><label class="small">Canal<input id="nx-channel" placeholder="ex. Instagram"></label><label class="small">Texte proposé<textarea id="nx-copy" rows="2"></textarea></label><div class="row"><button class="btn sec" data-act="nx-check">Vérifier la marque</button><button class="btn" data-act="nx-campaign">Préparer la proposition</button></div>`;
-    return `${head}${st.error ? `<p class="warn" role="status">${esc(st.error)}</p>` : ''}<p class="small muted">État réel des modules sur ce serveur. Rien n’est publié, payé ni commandé par Nordla.</p>
+    return `${head}${parleCard()}${st.error ? `<p class="warn" role="status">${esc(st.error)}</p>` : ''}<p class="small muted">État réel des modules sur ce serveur. Rien n’est publié, payé ni commandé par Nordla.</p>
       ${mod(by.core, '<p class="small muted">Voir « Nordla Core » plus bas (décisions d’achat, suivi).</p>')}
       ${mod(by.finance, quick('finance') + financeOpenButton(by.finance) + financeInboxCard())}${by.procurement ? mod(by.procurement, '<p class="small"><a href="/procurement/">Ouvrir Stock / Achats</a></p>') : ''}${mod(by.analytics, quick('analytics'))}
       ${mod(by.sourcing, '<p class="small muted">Écran principal de l’application.</p>')}
       ${mod(by.branding, brandBody)}${mod(by.marketing, `${form}${check}${(st.campaigns ?? []).slice(0, 5).map(campaignCard).join('')}`)}${mod(by.creative, creationBody())}
-      ${st.answer ? answerCard(st.answer) : ''}`;
+      `;
   }
-  return { section, load };
+  return { section, load, ask: parle };
 }
