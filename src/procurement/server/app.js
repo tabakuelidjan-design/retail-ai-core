@@ -40,7 +40,7 @@ const sameToken = (given, expected) => timingSafeEqual(hash(given), hash(expecte
  *  uploadsDir    where photos are stored (named by their SHA-256)
  *  allowedHosts  extra Host names (a live array: a tunnel adds its own)
  */
-export function createProcurementApp({ procurement, users, sourcingDir = null, sourcingPhotosDir = null, caseSource = null, uploadsDir, allowedHosts = [], now = () => new Date(), cacheAssets = true, maxJson = 262_144, maxUpload = 8_000_000 }) {
+export function createProcurementApp({ procurement, users, sourcingDir = null, sourcingPhotosDir = null, caseSource = null, uploadsDir, allowedHosts = [], now = () => new Date(), cacheAssets = true, maxJson = 262_144, maxUpload = 8_000_000, financeHandoff = null }) {
   const cases = caseSource ?? createFileCaseSource({ casesDir: sourcingDir, photosDir: sourcingPhotosDir }); // read-only source of China Sourcing cases and photos
   for (const u of users) if (typeof u.token !== 'string' || u.token.length < 24) throw new Error('every access token needs at least 24 characters');
   const { commands: c, queries: q } = procurement;
@@ -206,6 +206,16 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, s
         })),
         valuation: st.valuation,
       });
+    }
+    mm = /^\/api\/purchase-orders\/([\w-]+)\/finance-handoff$/.exec(p);
+    if (mm && m === 'POST') { // a RECEIVED order -> ONE supplier-invoice record to review in Finance (order number as its reference); idempotent, validates and pays nothing
+      if (!financeHandoff) throw new ProcurementError('FINANCE_NOT_CONNECTED', 'Finance is not connected on this server: nothing was sent');
+      if (!capabilitiesOf(user).canApprove) throw new ProcurementError('FORBIDDEN', 'only the owner (or a person explicitly authorized) hands an order over to Finance');
+      const po = await q.purchaseOrder(mm[1]); if (!po) return send(res, 404, { error: 'PO_NOT_FOUND' });
+      if (po.status !== 'RECEIVED') throw new ProcurementError('PO_NOT_RECEIVED', `the order is ${po.status}: only a received order is handed to Finance`);
+      const supplier = await q.supplier(po.supplierId);
+      const r = await financeHandoff({ po, supplierName: supplier?.name }, user);
+      return send(res, r.created ? 201 : 200, { poNumber: po.number, ...r });
     }
     mm = /^\/api\/purchase-orders\/([\w-]+)\/receive$/.exec(p);
     if (mm && m === 'POST') {

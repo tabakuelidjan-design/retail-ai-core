@@ -42,7 +42,7 @@ export function procurementUserFor(actor, grants = configuredGrants) {
 }
 
 /** @returns {Promise<{ handler: Function|null, assistant: object|null, procurement: object|null, status: string }>} */
-export async function buildHostedProcurement({ dir, merchantId, env = process.env, log = () => {}, pgPool = null, lease = undefined }) {
+export async function buildHostedProcurement({ dir, merchantId, env = process.env, log = () => {}, pgPool = null, lease = undefined, financeHandoff = null }) {
   let closeStore = async () => {}; let offSignals = () => {};
   try {
     const base = join(dir, 'procurement');
@@ -72,7 +72,7 @@ export async function buildHostedProcurement({ dir, merchantId, env = process.en
     const have = new Set((await procurement.queries.locations()).map((l) => l.type));
     const boot = async (type, name) => { if (!have.has(type)) await procurement.commands.createLocation(system, `bootstrap:${type.toLowerCase()}:${merchantId}`, { name, type }).catch((e) => { if (e.code !== 'UNIQUE_VIOLATION') throw e; }); };
     await boot('WAREHOUSE', 'Réception (par défaut)'); await boot('QUARANTINE', 'Quarantaine');
-    const handler = createProcurementApp({ procurement, users: [], sourcingDir: join(dir, 'cases'), uploadsDir: join(base, 'uploads'), allowedHosts: [], cacheAssets: env.PROCUREMENT_DEV !== '1' });
+    const handler = createProcurementApp({ procurement, users: [], sourcingDir: join(dir, 'cases'), uploadsDir: join(base, 'uploads'), allowedHosts: [], cacheAssets: env.PROCUREMENT_DEV !== '1', financeHandoff });
     return { handler, assistant: procurement.assistant, procurement, store, close: closeStore, status: `Stock / Achats ON (${where}; ${configuredGrants.size} authorization(s) granted)` };
   } catch (e) {
     try { await closeStore(); } catch { /* nothing to release */ }

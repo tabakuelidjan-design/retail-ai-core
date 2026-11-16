@@ -3,6 +3,7 @@
 // Binds 127.0.0.1 by default. To use it from a phone on your own network set SOURCING_HOST (e.g. 0.0.0.0): a token of 24+ characters is then mandatory.
 // Nothing is deployed, nothing is sent to Shopify/Supabase; cases are local files under data/local/sourcing.
 import { buildHostedProcurement } from '../../procurement/server/hosted.js';
+import { buildFinanceHandoff } from '../../procurement/server/finance-handoff-host.js';
 import { randomBytes } from 'node:crypto';
 import { mkdir, readdir, readFile, stat, statfs, writeFile } from 'node:fs/promises';
 import http from 'node:http';
@@ -103,7 +104,8 @@ export async function startSourcingServer({ env = process.env, log = console.log
   const mp = await loadMerchantProfile(env, join(HERE, '..', '..', '..')); const merchantProfile = mp.profile; // explicit choice (SOURCING_MERCHANT_ID / SOURCING_MERCHANT_PROFILE): no merchant is named in this code
   const store = createFileStore(join(dir, 'cases'));
   const merchantKey = hosted ? hosted.merchantId : merchantProfile?.merchantId ?? 'local';
-  const proc = await buildHostedProcurement({ dir, merchantId: merchantKey, env, log }); // Stock / Achats on the same sign-in and volume; if it cannot open, Nordla runs without it
+  const financeHandoff = await buildFinanceHandoff({ env, merchantId: merchantKey, log }); // Stock/Achats -> Finance inbox (hosted + Supabase + MERCHANT_TIMEZONE), else null
+  const proc = await buildHostedProcurement({ dir, merchantId: merchantKey, env, log, financeHandoff }); // Stock / Achats on the same sign-in and volume; if it cannot open, Nordla runs without it
   const core = await buildCore({ env, dir, merchantId: merchantKey, store, safety, log, readers: services?.readers ?? null, procurement: proc.assistant });
   let backups = null;
   const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
