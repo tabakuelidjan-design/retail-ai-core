@@ -19,15 +19,15 @@ test('opportunities UI: three sections in order, one row per item of the payload
   assert.deepEqual(errors, []);
   assert.equal(title(root), 'Opportunités');
   assert.deepEqual(navState(root).filter((n) => n.active).map((n) => [n.label, n.href]), [['Opportunités', '#/opportunities']]);
-  assert.deepEqual(cards(root).map((c) => ['gr-pr-fix', 'gr-pr-commercial', 'gr-pr-watch'].find((k) => hasClass(c, k))), ['gr-pr-fix', 'gr-pr-commercial', 'gr-pr-watch']);
+  assert.deepEqual(cards(root).filter((c) => !hasClass(c, 'gv-guide')).map((c) => ['gr-pr-fix', 'gr-pr-commercial', 'gr-pr-watch'].find((k) => hasClass(c, k))), ['gr-pr-commercial', 'gr-pr-fix', 'gr-pr-watch']); // (the closed function guide is the first line of the page, outside these three sections) // the main action first (mockup 02), then the data corrections, then the weak signals
   assert.equal(rowsOf(section(root, 'gr-pr-fix')).length, d.sections.fix.length);
   assert.equal(rowsOf(section(root, 'gr-pr-commercial')).length, d.sections.commercial.length);
   assert.equal(rowsOf(section(root, 'gr-pr-watch')).length, d.sections.watch.length);
-  // Every rendered row carries the stable id of its priority (statuses can attach to it later).
-  assert.deepEqual(all(root, (n) => n.getAttribute && n.getAttribute('data-priority-id')).map((n) => n.getAttribute('data-priority-id')), [...d.sections.fix, ...d.sections.commercial, ...d.sections.watch].map((i) => i.id));
-  const kpis = all(root, (n) => hasClass(n, 'ex-kpi'));
-  assert.equal(kpis.length, 3);
-  assert.ok(text(kpis[0]).includes(String(d.counts.fix)) && text(kpis[1]).includes(String(d.counts.commercial)) && text(kpis[2]).includes(String(d.counts.watch)));
+  // Every rendered row carries the stable id of its priority (statuses can attach to it later); the commercial section lists the main action first, then the others.
+  const ids = all(root, (n) => n.getAttribute && n.getAttribute('data-priority-id')).map((n) => n.getAttribute('data-priority-id'));
+  assert.deepEqual([...ids].sort(), [...d.sections.fix, ...d.sections.commercial, ...d.sections.watch].map((i) => i.id).sort());
+  assert.equal(new Set(ids).size, ids.length, 'an action is shown once');
+  assert.deepEqual(all(root, (n) => hasClass(n, 'ex-kpi')).length, 0, 'the three count tiles repeated the section headers: removed');
 });
 
 test('opportunities UI: a small store sees grouped corrections, an HONEST empty commercial section and weak signals to watch', async () => {
@@ -55,11 +55,13 @@ test('opportunities UI: a small store sees grouped corrections, an HONEST empty 
 
 test('opportunities UI: links open the source page (navigation only); no button except the shell\'s own (language, Plus)', async () => {
   const { root } = await growthDom('#/opportunities', { opportunities: small() });
-  const links = all(root, (n) => n.tagName === 'A' && hasClass(n, 'gr-op-link'));
+  const links = all(root, (n) => n.tagName === 'A' && hasClass(n, 'gr-op-link') && !n.getAttribute('data-export'));
   assert.ok(links.length >= 4);
+  // the correction-file download links are the only others: plain links to the read-only export route, never a script
+  assert.ok(all(root, (n) => n.tagName === 'A' && n.getAttribute('data-export')).every((a) => /^\/api\/growth\/corrections\?category=[A-Za-z]+$/.test(a.getAttribute('href'))));
   assert.ok(links.every((a) => ['#/potential', '#/content', '#/storeGrowth', '#/audience'].includes(a.getAttribute('href'))));
   const buttons = all(root, (n) => n.tagName === 'BUTTON');
-  assert.ok(buttons.every((b) => hasClass(b.parent || {}, 'langswitch') || /^(FR|NL|EN|Plus)$/.test(text(b)) || hasClass(b, 'gr-more-btn')), `unexpected button(s): ${buttons.map(text).join(', ')}`);
+  assert.ok(buttons.every((b) => hasClass(b.parent || {}, 'langswitch') || /^(FR|NL|EN|Plus)$/.test(text(b)) || hasClass(b, 'gr-more-btn') || hasClass(b, 'gv-guide-go')), `unexpected button(s): ${buttons.map(text).join(', ')}`);
   assert.equal(buttons.filter((b) => b.getAttribute('disabled') != null).length, 0);
 });
 

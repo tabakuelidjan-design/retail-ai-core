@@ -4,6 +4,7 @@
 //   core      -> the Shopify sync scheduler           (src/sync/scheduler.js)
 //   finance   -> the Finance dashboard server          (src/finance/server/index.js)
 //   analytics -> the Analytics Premium server          (src/analytics-premium/server/serve.js)
+//   growth    -> Growth (Développement des ventes), hosted: Core identity sign-in, GROWTH_HOSTED=1 (src/growth/server/hosted-main.js)
 //   sourcing  -> China Sourcing (hosted: Core identity sign-in, SOURCING_HOSTED=1; Node 24 required) (src/sourcing/server/index.js)
 //   core-once -> ONE Core sync cycle, then stop        (src/sync/index.js all) - for controlled staging runs: it always ends with exit
 //                code 0 (the cycle's own result is logged and recorded in sync_runs), so a restart-on-failure policy never repeats it
@@ -19,6 +20,7 @@ export const SERVICE_ENTRIES = Object.freeze({
   analytics: 'src/analytics-premium/server/serve.js',
   'core-once': 'src/sync/index.js',
   sourcing: 'src/sourcing/server/index.js',
+  growth: 'src/growth/server/hosted-main.js',
 });
 /** Fixed arguments of a service's program (never taken from the environment or the command line). */
 export const SERVICE_ARGS = Object.freeze({ 'core-once': Object.freeze(['all']) });

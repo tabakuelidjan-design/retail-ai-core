@@ -242,7 +242,7 @@ function segmentItems(A, category) {
     kind: 'segment',
     title: { code: `segment.${s.key}.title`, params: { customers: s.customers } },
     explanation: { code: `segment.${category}.why`, params: { action: s.action } },
-    evidence: { customers: s.customers, orders: s.windowOrders ?? null, revenueShare: s.revenueShare ?? null, days: A.window ? A.window.days : null },
+    evidence: { customers: s.customers, orders: s.windowOrders ?? null, revenueShare: s.revenueShare ?? null, days: A.window ? A.window.days : null, rule: s.rule ?? null, activeShare: s.activeShare ?? null, previousCustomers: s.previousCustomers ?? null },
     reliability: category === 'commercial' ? 'reliable' : 'limited',
     entity: { type: 'segment', id: s.key },
     sourcePage: SOURCE_PAGE.audience,

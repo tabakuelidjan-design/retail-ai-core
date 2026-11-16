@@ -133,7 +133,7 @@ test('priorities: aggregates only - no customer identifier, no per-customer row,
   const p = buildPriorities({ products: potentialPayload(), audience: audiencePayload(), content: contentPayload(), store: storePayload(), now: NOW });
   const json = JSON.stringify(p);
   for (const k of ['customer_key', 'customerKey', 'email', 'phone', 'address', 'firstName', 'lastName', 'customerId']) assert.ok(!json.includes(`"${k}"`), `no ${k}`);
-  for (const i of p.sections.commercial.filter((x) => x.kind === 'segment')) assert.deepEqual(Object.keys(i.evidence).sort(), ['customers', 'days', 'orders', 'revenueShare']);
+  for (const i of p.sections.commercial.filter((x) => x.kind === 'segment')) assert.deepEqual(Object.keys(i.evidence).sort(), ['activeShare', 'customers', 'days', 'orders', 'previousCustomers', 'revenueShare', 'rule']); // still aggregates only: counts, shares and the engine's rule code
 });
 
 test('priorities: a missing source is reported, never guessed; nothing configured = no source at all', async () => {

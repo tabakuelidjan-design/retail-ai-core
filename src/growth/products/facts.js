@@ -35,7 +35,7 @@ export function productPotentialFacts({ data, now, timeZone, config }) {
       key: p.product_key, matched: p.matched, title: product?.title ?? p.title, imageUrl: product?.image_url ?? null,
       category: (product?.product_type ?? '').trim() || null,
       units: p.demand.units_8w, netSales: sold ? sold.net : 0,
-      trend, evolution, observableWeeks: p.observable_weeks, velocity8: p.demand.velocity_8w,
+      trend, evolution, observableWeeks: p.observable_weeks, exposureWeeks: p.exposure_weeks, velocity8: p.demand.velocity_8w,
       inventory: p.inventory,
       cover: { status: p.inventory.cover_status, weeks: p.inventory.weeks_of_cover, days: p.inventory.days_of_cover },
       grossProfit: perf ? perf.gross_profit : null,

@@ -1,0 +1,5807 @@
+{
+ "version": 2,
+ "generated": "2026-10-17",
+ "note": "Catalogue unique des icônes Nordla : pack officiel V1 (en production, inchangé) + livraisons V2 lot 1 et lot 2. Seules les icônes V1 sont utilisées en production ; une icône V2 « conforme » a passé le contrôle technique mais attend la validation graphique.",
+ "categories": {
+  "1": "Modules principaux",
+  "2": "Finance et documents",
+  "3": "Navigation et actions",
+  "4": "Utilisateurs et sécurité",
+  "5": "Ventes et clients",
+  "6": "Fournisseurs et achats",
+  "7": "Stock et produits",
+  "8": "Intelligence et décisions",
+  "9": "Communication et support",
+  "10": "Données et système",
+  "11": "Organisation et automatisations"
+ },
+ "functions": [
+  {
+   "id": "module-tableau-de-bord",
+   "label": "Tableau de bord",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "core"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [
+    {
+     "key": "accueil",
+     "file": "src/shared/assets/nordla/official-icons/04_ui_core_accueil.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "01_icones_officielles/png_256/01_tableau_de_bord.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": "NOM ≠ SYMBOLE : courbe de croissance identique à 01_ventes_et_crm (doublon)",
+     "sha256_16": "fddfad4786ccd15c",
+     "retained": false,
+     "duplicate_of": "module-ventes-crm"
+    }
+   ]
+  },
+  {
+   "id": "module-parle-a-nordla",
+   "label": "Parle à Nordla",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "parle",
+    "core",
+    "finance",
+    "analytics",
+    "growth"
+   ],
+   "file": "src/shared/assets/nordla/library/01-modules/module-parle-a-nordla.png",
+   "origin": "lot1 · 01_icones_officielles/png_256/02_parle_a_nordla.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [
+    {
+     "key": "parleANordla",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_parle_a_nordla.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production ; la variante V2 ne la remplace pas sans arbitrage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "01_icones_officielles/png_256/02_parle_a_nordla.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "efc7a38f430c4ba5",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/01-modules/module-parle-a-nordla.png"
+    },
+    {
+     "lot": "lot1",
+     "source": "03_modules_avances/png_256/08_parle_a_nordla_pro.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "trait coupé (étincelle à droite)"
+     ],
+     "note": "variante de 02_parle_a_nordla",
+     "sha256_16": "b6e90f81af71e772",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/03_modules_avances/png_256/08_parle_a_nordla_pro.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_9_communication_support/01_parle_a_nordla.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "texte seul, aucun pictogramme"
+     ],
+     "note": "NOM ≠ CONTENU : le fichier ne contient que le mot",
+     "sha256_16": "06dfa58c6bb57a8d",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/01_parle_a_nordla.png"
+    }
+   ]
+  },
+  {
+   "id": "module-china-sourcing",
+   "label": "China Sourcing",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "sourcing",
+    "core"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [
+    {
+     "key": "buyingSuppliers",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_buying_suppliers.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "01_icones_officielles/png_256/03_china_sourcing.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": "NOM ≠ SYMBOLE : cube identique à 02_produits (doublon)",
+     "sha256_16": "fb4d0ea88e062907",
+     "retained": false,
+     "duplicate_of": "module-produits"
+    }
+   ]
+  },
+  {
+   "id": "module-finance",
+   "label": "Finance",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "finance",
+    "core"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [
+    {
+     "key": "tresorerie",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_tresorerie.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "01_icones_officielles/png_256/04_finance.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "trait coupé (pile de pièces à droite)"
+     ],
+     "note": null,
+     "sha256_16": "69e2f98a65bdd428",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/01_icones_officielles/png_256/04_finance.png"
+    }
+   ]
+  },
+  {
+   "id": "module-stock-achats",
+   "label": "Stock et achats",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "procurement",
+    "core"
+   ],
+   "file": "src/shared/assets/nordla/library/01-modules/module-stock-achats.png",
+   "origin": "lot1 · 01_icones_officielles/png_256/05_stock_et_achats.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "01_icones_officielles/png_256/05_stock_et_achats.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": "symbole = panier (achats seulement)",
+     "sha256_16": "804352322d3ad300",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/01-modules/module-stock-achats.png"
+    }
+   ]
+  },
+  {
+   "id": "module-analyses",
+   "label": "Analyses",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "analytics",
+    "core"
+   ],
+   "file": "src/shared/assets/nordla/library/10-donnees-systeme/rapport.png",
+   "origin": "lot1 · 05_donnees_et_systeme/png_256/06_rapport.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [
+    {
+     "key": "explorer",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_explorer.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production ; réutilise l'icône « Rapport » (même symbole) - à valider graphiquement",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "01_icones_officielles/png_256/06_analyses.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": "quasi identique à 06_rapport",
+     "sha256_16": "f770bf8f9b63c02e",
+     "retained": false,
+     "duplicate_of": "rapport"
+    }
+   ],
+   "reuses": "rapport"
+  },
+  {
+   "id": "module-fournisseurs",
+   "label": "Fournisseurs",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "suppliers",
+    "procurement",
+    "sourcing",
+    "core"
+   ],
+   "file": "src/shared/assets/nordla/library/01-modules/module-fournisseurs.png",
+   "origin": "lot1 · 01_icones_officielles/png_256/07_fournisseurs.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "01_icones_officielles/png_256/07_fournisseurs.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "7ef3182654ed6b33",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/01-modules/module-fournisseurs.png"
+    }
+   ]
+  },
+  {
+   "id": "parametres",
+   "label": "Paramètres",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "core",
+    "finance",
+    "analytics",
+    "growth",
+    "procurement",
+    "sourcing"
+   ],
+   "file": "src/shared/assets/nordla/library/01-modules/parametres.png",
+   "origin": "lot1 · 01_icones_officielles/png_256/08_parametres.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [
+    {
+     "key": "parametres",
+     "file": "src/shared/assets/nordla/official-icons/04_ui_core_parametres.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production ; la variante V2 ne la remplace pas sans arbitrage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "01_icones_officielles/png_256/08_parametres.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "1083bdc7697a0bfb",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/01-modules/parametres.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/06_parametres.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "a10430097e51a3c8",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/06_parametres.png"
+    }
+   ]
+  },
+  {
+   "id": "module-ventes-crm",
+   "label": "Ventes et CRM",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "sales",
+    "core",
+    "growth"
+   ],
+   "file": "src/shared/assets/nordla/library/01-modules/module-ventes-crm.png",
+   "origin": "lot1 · 02_modules_commerciaux/png_256/01_ventes_et_crm.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "02_modules_commerciaux/png_256/01_ventes_et_crm.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "635250fdbbf92952",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/01-modules/module-ventes-crm.png"
+    }
+   ]
+  },
+  {
+   "id": "module-produits",
+   "label": "Produits",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "products",
+    "core",
+    "analytics",
+    "procurement"
+   ],
+   "file": "src/shared/assets/nordla/library/01-modules/module-produits.png",
+   "origin": "lot1 · 02_modules_commerciaux/png_256/02_produits.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [
+    {
+     "key": "produits",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_produits.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production ; la variante V2 ne la remplace pas sans arbitrage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "02_modules_commerciaux/png_256/02_produits.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "d914c06de0180ab6",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/01-modules/module-produits.png"
+    }
+   ]
+  },
+  {
+   "id": "module-conformite",
+   "label": "Conformité",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "compliance",
+    "core"
+   ],
+   "file": "src/shared/assets/nordla/library/01-modules/module-conformite.png",
+   "origin": "lot1 · 02_modules_commerciaux/png_256/03_conformite.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [
+    {
+     "key": "compliance",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_compliance.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production ; la variante V2 ne la remplace pas sans arbitrage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "02_modules_commerciaux/png_256/03_conformite.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "e3ae3d47dd80a74a",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/01-modules/module-conformite.png"
+    }
+   ]
+  },
+  {
+   "id": "tous-les-modules",
+   "label": "Tous les modules",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "core"
+   ],
+   "file": "src/shared/assets/nordla/library/01-modules/tous-les-modules.png",
+   "origin": "lot1 · 02_modules_commerciaux/png_256/04_tous_les_modules.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "02_modules_commerciaux/png_256/04_tous_les_modules.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "a349635a2c52c3c8",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/01-modules/tous-les-modules.png"
+    }
+   ]
+  },
+  {
+   "id": "module-branding",
+   "label": "Branding",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "branding",
+    "core"
+   ],
+   "file": "src/shared/assets/nordla/library/01-modules/module-branding.png",
+   "origin": "lot1 · 02_modules_commerciaux/png_256/05_branding.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "02_modules_commerciaux/png_256/05_branding.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "0dfffbd821256c80",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/01-modules/module-branding.png"
+    }
+   ]
+  },
+  {
+   "id": "module-marketing",
+   "label": "Marketing",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "marketing",
+    "core",
+    "growth"
+   ],
+   "file": "src/shared/assets/nordla/library/01-modules/module-marketing.png",
+   "origin": "lot1 · 02_modules_commerciaux/png_256/06_marketing.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [
+    {
+     "key": "growth",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_growth.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production ; la variante V2 ne la remplace pas sans arbitrage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "02_modules_commerciaux/png_256/06_marketing.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "9e45a4c9386993aa",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/01-modules/module-marketing.png"
+    }
+   ]
+  },
+  {
+   "id": "module-creation",
+   "label": "Création",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "creative",
+    "core"
+   ],
+   "file": "src/shared/assets/nordla/library/01-modules/module-creation.png",
+   "origin": "lot1 · 02_modules_commerciaux/png_256/07_creation.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "02_modules_commerciaux/png_256/07_creation.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "c0a26902d6264692",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/01-modules/module-creation.png"
+    }
+   ]
+  },
+  {
+   "id": "module-service-apres-vente",
+   "label": "Service après-vente",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "afterSales",
+    "core"
+   ],
+   "file": "src/shared/assets/nordla/library/01-modules/module-service-apres-vente.png",
+   "origin": "lot1 · 03_modules_avances/png_256/01_service_apres_vente.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [
+    {
+     "key": "afterSales",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_after_sales.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production ; la variante V2 ne la remplace pas sans arbitrage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "03_modules_avances/png_256/01_service_apres_vente.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "99eba8f9a9610b7b",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/01-modules/module-service-apres-vente.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_9_communication_support/07_sav.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "texte seul, aucun pictogramme"
+     ],
+     "note": "NOM ≠ CONTENU : le fichier ne contient que le mot",
+     "sha256_16": "07d56a8465805865",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/07_sav.png"
+    }
+   ]
+  },
+  {
+   "id": "module-journal-des-decisions",
+   "label": "Journal des décisions",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "decisions",
+    "core"
+   ],
+   "file": "src/shared/assets/nordla/library/01-modules/module-journal-des-decisions.png",
+   "origin": "lot1 · 03_modules_avances/png_256/02_journal_des_decisions.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [
+    {
+     "key": "decisionLedger",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_decision_ledger.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production ; la variante V2 ne la remplace pas sans arbitrage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "03_modules_avances/png_256/02_journal_des_decisions.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "ffa3c683e68dde2a",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/01-modules/module-journal-des-decisions.png"
+    }
+   ]
+  },
+  {
+   "id": "module-assistants-automatisations",
+   "label": "Assistants et automatisations",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "assistants",
+    "core"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "03_modules_avances/png_256/03_assistants_et_automatisations.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "trait coupé (engrenage à droite)"
+     ],
+     "note": null,
+     "sha256_16": "289e219e496d8365",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/03_modules_avances/png_256/03_assistants_et_automatisations.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "module-centre-des-connexions",
+   "label": "Centre des connexions",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "connections",
+    "core"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "03_modules_avances/png_256/04_centre_des_connexions.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "trait coupé (nœuds à droite)"
+     ],
+     "note": null,
+     "sha256_16": "194792150955a911",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/03_modules_avances/png_256/04_centre_des_connexions.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "module-centre-de-pilotage",
+   "label": "Centre de pilotage",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "core"
+   ],
+   "file": "src/shared/assets/nordla/library/01-modules/module-centre-de-pilotage.png",
+   "origin": "lot1 · 03_modules_avances/png_256/05_centre_de_pilotage.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [
+    {
+     "key": "commandCenter",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_command_center.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production ; la variante V2 ne la remplace pas sans arbitrage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "03_modules_avances/png_256/05_centre_de_pilotage.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "a4f1eb3f0e890250",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/01-modules/module-centre-de-pilotage.png"
+    }
+   ]
+  },
+  {
+   "id": "module-developpement-des-ventes",
+   "label": "Développement des ventes",
+   "category": 1,
+   "category_label": "Modules principaux",
+   "modules": [
+    "growth",
+    "core"
+   ],
+   "file": "src/shared/assets/nordla/library/01-modules/module-ventes-crm.png",
+   "origin": "lot1 · 02_modules_commerciaux/png_256/01_ventes_et_crm.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "réutilise l'icône « Ventes et CRM » (même symbole) - à valider graphiquement",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "03_modules_avances/png_256/07_developpement_des_ventes.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": "symbole identique à 01_ventes_et_crm (doublon)",
+     "sha256_16": "2150e281214fa14c",
+     "retained": false,
+     "duplicate_of": "module-ventes-crm"
+    }
+   ],
+   "reuses": "module-ventes-crm"
+  },
+  {
+   "id": "facture",
+   "label": "Facture",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance",
+    "procurement"
+   ],
+   "file": "src/shared/assets/nordla/library/02-finance-documents/facture.png",
+   "origin": "lot1 · 04_actions_et_statuts/png_256/01_facture.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "04_actions_et_statuts/png_256/01_facture.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "99965a7a7989f669",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/02-finance-documents/facture.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_2_finance_documents/01_facture.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "e2620721e5da817f",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/01_facture.png"
+    }
+   ]
+  },
+  {
+   "id": "paiement",
+   "label": "Paiement",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance"
+   ],
+   "file": "src/shared/assets/nordla/library/02-finance-documents/paiement.png",
+   "origin": "lot1 · 04_actions_et_statuts/png_256/02_paiement.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "04_actions_et_statuts/png_256/02_paiement.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "f4fa52b0317f4e93",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/02-finance-documents/paiement.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_2_finance_documents/05_paiement.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque",
+      "trait coupé"
+     ],
+     "note": null,
+     "sha256_16": "5b27d2d5d0d4d0ab",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/05_paiement.png"
+    }
+   ]
+  },
+  {
+   "id": "retard",
+   "label": "Retard",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance",
+    "procurement"
+   ],
+   "file": "src/shared/assets/nordla/library/02-finance-documents/retard.png",
+   "origin": "lot1 · 04_actions_et_statuts/png_256/03_retard.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "04_actions_et_statuts/png_256/03_retard.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "c6e937a7f30b7b2d",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/02-finance-documents/retard.png"
+    }
+   ]
+  },
+  {
+   "id": "devis",
+   "label": "Devis",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance",
+    "sales"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "07_manquantes_A/png_256/08_devis.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "a6ebbc36657b1201",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/07_manquantes_A/png_256/08_devis.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_2_finance_documents/02_devis.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "c35c84ea72839dc8",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/02_devis.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "avoir",
+   "label": "Avoir / note de crédit",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "07_manquantes_A/png_256/09_avoir.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "e6b49078f34d03b8",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/07_manquantes_A/png_256/09_avoir.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/02_note_de_credit.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "9d844b660969a0d5",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/02_note_de_credit.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_2_finance_documents/03_avoir.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "3039ac4c50046335",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/03_avoir.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "tva",
+   "label": "TVA",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "07_manquantes_A/png_256/10_tva.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "7ef89ac0520497fe",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/07_manquantes_A/png_256/10_tva.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_2_finance_documents/06_tva.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "1932f500bdcf90c0",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/06_tva.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "justificatifs",
+   "label": "Justificatifs",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "07_manquantes_A/png_256/11_justificatifs.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "fe44eb4ba6cae5a2",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/07_manquantes_A/png_256/11_justificatifs.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_2_finance_documents/07_justificatif.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "5119615f134f9964",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/07_justificatif.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "documents-recus",
+   "label": "Documents reçus",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance",
+    "procurement"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "07_manquantes_A/png_256/12_documents_recus.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "821ed69aa2eba3a1",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/07_manquantes_A/png_256/12_documents_recus.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_2_finance_documents/08_documents_recus.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque",
+      "trait coupé"
+     ],
+     "note": null,
+     "sha256_16": "848bb6109e2a7607",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/08_documents_recus.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "documents-envoyes",
+   "label": "Documents envoyés",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_2_finance_documents/09_documents_envoyes.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque",
+      "trait coupé"
+     ],
+     "note": null,
+     "sha256_16": "7fdf52e011f782fe",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/09_documents_envoyes.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "import",
+   "label": "Importer",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance",
+    "analytics",
+    "procurement"
+   ],
+   "file": "src/shared/assets/nordla/library/02-finance-documents/import.png",
+   "origin": "lot1 · 06_operations_et_support/png_256/01_import.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "06_operations_et_support/png_256/01_import.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "9e37020cb51f7d5c",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/02-finance-documents/import.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_2_finance_documents/10_import.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque",
+      "trait coupé"
+     ],
+     "note": "NOM ≠ SYMBOLE : flèche montante (sens « exporter / envoyer »), opposé à 01_import du lot 1",
+     "sha256_16": "a540f8874f0ae85f",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/10_import.png"
+    }
+   ]
+  },
+  {
+   "id": "export",
+   "label": "Exporter",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance",
+    "analytics",
+    "procurement"
+   ],
+   "file": "src/shared/assets/nordla/library/02-finance-documents/export.png",
+   "origin": "lot1 · 06_operations_et_support/png_256/02_export.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "06_operations_et_support/png_256/02_export.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "f2d00e46f2507331",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/02-finance-documents/export.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_2_finance_documents/11_export.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque",
+      "trait coupé"
+     ],
+     "note": null,
+     "sha256_16": "b19933d90c435bbc",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/11_export.png"
+    }
+   ]
+  },
+  {
+   "id": "recu",
+   "label": "Reçu",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/03_recu.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)"
+     ],
+     "note": null,
+     "sha256_16": "0cf978afac99a307",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/03_recu.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_2_finance_documents/12_recu.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": "NOM ≠ SYMBOLE : document + flèche montante (identique à 13_reception), pas un reçu",
+     "sha256_16": "12d5f74eedbc7bdb",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/12_recu.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "reception-document",
+   "label": "Réception de document",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_2_finance_documents/13_reception.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "fb6cf3d7c78cb4ee",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/13_reception.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "ticket",
+   "label": "Ticket de caisse",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_2_finance_documents/14_ticket.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "dbf4b007ef60d0e5",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/14_ticket.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "bon-de-commande",
+   "label": "Bon de commande",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance",
+    "procurement"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/01_bon_de_commande.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "e473c111d8a77685",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/01_bon_de_commande.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_2_finance_documents/04_bon_de_commande.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "846eaeeb4ed71603",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_2_finance_documents/04_bon_de_commande.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "remboursement",
+   "label": "Remboursement",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance",
+    "afterSales"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/04_remboursement.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "a05a27356e3306d8",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/04_remboursement.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "echeance",
+   "label": "Échéance",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/05_echeance.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "e5c89cbd16df18a4",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/05_echeance.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "budget",
+   "label": "Budget",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/06_budget.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "e067b36bceff4a84",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/06_budget.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "rentabilite",
+   "label": "Rentabilité",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance",
+    "analytics"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/07_rentabilite.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "45ac4042df9cd5ff",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/07_rentabilite.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "marge",
+   "label": "Marge",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance",
+    "analytics"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [
+    {
+     "key": "margeBrute",
+     "file": "src/shared/assets/nordla/official-icons/02_performance_business_marge_brute.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/08_marge.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "fc7cc100ee7a2b37",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/D_documents_finances_justificatifs/08_marge.png"
+    }
+   ]
+  },
+  {
+   "id": "facturation",
+   "label": "Facturation",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance",
+    "sales"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/09_facturation.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque",
+      "trait coupé"
+     ],
+     "note": null,
+     "sha256_16": "53d6851981e94ddd",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/09_facturation.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "paiement-recu",
+   "label": "Paiement reçu",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [
+    "finance",
+    "sales"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/06_paiement_recu.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "5210aee8faeee49a",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/06_paiement_recu.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "ajouter",
+   "label": "Ajouter",
+   "category": 3,
+   "category_label": "Navigation et actions",
+   "modules": [
+    "core",
+    "finance",
+    "analytics",
+    "growth",
+    "procurement",
+    "sourcing"
+   ],
+   "file": "src/shared/assets/nordla/library/03-navigation-actions/ajouter.png",
+   "origin": "lot1 · 04_actions_et_statuts/png_256/07_ajouter.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "04_actions_et_statuts/png_256/07_ajouter.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "fd571d23631cdb79",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/03-navigation-actions/ajouter.png"
+    },
+    {
+     "lot": "lot1",
+     "source": "07_manquantes_A/png_256/01_ajouter.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "f237caf75c9221d7",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/07_manquantes_A/png_256/01_ajouter.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/01_ajouter.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "4e9d753208cee4c7",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/01_ajouter.png"
+    }
+   ]
+  },
+  {
+   "id": "menu-plus",
+   "label": "Menu « Plus »",
+   "category": 3,
+   "category_label": "Navigation et actions",
+   "modules": [
+    "core",
+    "finance",
+    "growth"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "07_manquantes_A/png_256/02_menu_plus.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "dc53de5581d02da5",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/07_manquantes_A/png_256/02_menu_plus.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/02_menu_plus.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "17e69b01440f80f2",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/02_menu_plus.png"
+    }
+   ],
+   "priority": "P0"
+  },
+  {
+   "id": "retour",
+   "label": "Retour",
+   "category": 3,
+   "category_label": "Navigation et actions",
+   "modules": [
+    "core",
+    "finance",
+    "analytics",
+    "growth",
+    "procurement",
+    "sourcing"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "07_manquantes_A/png_256/03_retour.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "4ab5df544e3804f0",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/07_manquantes_A/png_256/03_retour.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/06_retour.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "a98d40505df953f5",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/06_retour.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "fermer",
+   "label": "Fermer",
+   "category": 3,
+   "category_label": "Navigation et actions",
+   "modules": [
+    "core",
+    "finance",
+    "analytics",
+    "growth",
+    "procurement",
+    "sourcing"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "07_manquantes_A/png_256/04_fermer.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "a20b900ff0872fc4",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/07_manquantes_A/png_256/04_fermer.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/07_fermer.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "69d001ec8c758c1d",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/07_fermer.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "modifier",
+   "label": "Modifier",
+   "category": 3,
+   "category_label": "Navigation et actions",
+   "modules": [
+    "core",
+    "finance",
+    "analytics",
+    "growth",
+    "procurement",
+    "sourcing"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "07_manquantes_A/png_256/05_modifier.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "65c2a855db218f88",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/07_manquantes_A/png_256/05_modifier.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/03_modifier.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "617006eb55ef6bae",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/03_modifier.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "dupliquer",
+   "label": "Dupliquer",
+   "category": 3,
+   "category_label": "Navigation et actions",
+   "modules": [
+    "finance",
+    "procurement"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/04_dupliquer.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "31f2aa491960fde7",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/04_dupliquer.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "supprimer",
+   "label": "Supprimer",
+   "category": 3,
+   "category_label": "Navigation et actions",
+   "modules": [
+    "core",
+    "finance",
+    "analytics",
+    "growth",
+    "procurement",
+    "sourcing"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/05_supprimer.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "ec8c95eeddc37867",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/05_supprimer.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "recherche",
+   "label": "Rechercher",
+   "category": 3,
+   "category_label": "Navigation et actions",
+   "modules": [
+    "core",
+    "finance",
+    "analytics",
+    "growth",
+    "procurement",
+    "sourcing"
+   ],
+   "file": "src/shared/assets/nordla/library/03-navigation-actions/recherche.png",
+   "origin": "lot1 · 05_donnees_et_systeme/png_256/01_recherche.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [
+    {
+     "key": "recherche",
+     "file": "src/shared/assets/nordla/official-icons/08_ui_utilities_recherche.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production ; la variante V2 ne la remplace pas sans arbitrage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "05_donnees_et_systeme/png_256/01_recherche.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "0bbc811d4c131356",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/03-navigation-actions/recherche.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/08_recherche.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "d9b8765b1cd573ae",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/08_recherche.png"
+    }
+   ]
+  },
+  {
+   "id": "filtre",
+   "label": "Filtrer",
+   "category": 3,
+   "category_label": "Navigation et actions",
+   "modules": [
+    "core",
+    "finance",
+    "analytics",
+    "growth",
+    "procurement",
+    "sourcing"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/01_filtre.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "21c2d3220c6dde87",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/01_filtre.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/09_filtre.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "214ad3059efe7100",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/09_filtre.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "tri",
+   "label": "Trier",
+   "category": 3,
+   "category_label": "Navigation et actions",
+   "modules": [
+    "core",
+    "finance",
+    "analytics",
+    "growth",
+    "procurement",
+    "sourcing"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/02_tri.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)"
+     ],
+     "note": null,
+     "sha256_16": "bb422ac40572e6c1",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/02_tri.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/10_tri.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "1933b4901ed3692c",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/10_tri.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "telecharger",
+   "label": "Télécharger",
+   "category": 3,
+   "category_label": "Navigation et actions",
+   "modules": [
+    "core",
+    "finance",
+    "analytics",
+    "growth",
+    "procurement",
+    "sourcing"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/11_telecharger.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "2673a1b7dc808dd2",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/11_telecharger.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "partager",
+   "label": "Partager",
+   "category": 3,
+   "category_label": "Navigation et actions",
+   "modules": [
+    "core",
+    "finance",
+    "analytics",
+    "growth",
+    "procurement",
+    "sourcing"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/04_partage.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "36fc1076b89402c7",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/04_partage.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/12_partager.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "e85b748dd2d88ab5",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_3_navigation_actions/12_partager.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "photo",
+   "label": "Photo",
+   "category": 3,
+   "category_label": "Navigation et actions",
+   "modules": [
+    "procurement",
+    "sourcing",
+    "creative"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "04_actions_et_statuts/png_256/08_photo.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "trait coupé (côté droit)"
+     ],
+     "note": null,
+     "sha256_16": "70c7816a730641ad",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/04_actions_et_statuts/png_256/08_photo.png"
+    }
+   ],
+   "priority": "P0"
+  },
+  {
+   "id": "variation",
+   "label": "Variation",
+   "category": 3,
+   "category_label": "Navigation et actions",
+   "modules": [
+    "finance",
+    "analytics",
+    "growth"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "07_manquantes_A/png_256/06_variation.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "296fe05d17209b4e",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/07_manquantes_A/png_256/06_variation.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "utilisateur",
+   "label": "Utilisateur",
+   "category": 4,
+   "category_label": "Utilisateurs et sécurité",
+   "modules": [
+    "core"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/01_utilisateur.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "9416c542098b05b2",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/01_utilisateur.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "session",
+   "label": "Session utilisateur",
+   "category": 4,
+   "category_label": "Utilisateurs et sécurité",
+   "modules": [
+    "core",
+    "finance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "09_manquantes_C/png_256/06_utilisateur_session.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06",
+      "trait coupé (côté droit)"
+     ],
+     "note": null,
+     "sha256_16": "49bc45c0ba4965b9",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/09_manquantes_C/png_256/06_utilisateur_session.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/04_session.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "b933f24cdb40d0c3",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/04_session.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "deconnexion",
+   "label": "Déconnexion",
+   "category": 4,
+   "category_label": "Utilisateurs et sécurité",
+   "modules": [
+    "core",
+    "finance",
+    "analytics"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "07_manquantes_A/png_256/07_deconnexion.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "5d14b4efdf26950c",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/07_manquantes_A/png_256/07_deconnexion.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/05_deconnexion.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque",
+      "trait coupé"
+     ],
+     "note": null,
+     "sha256_16": "ecaf65b5f6c7c121",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/05_deconnexion.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "groupe-utilisateurs",
+   "label": "Équipe / groupe",
+   "category": 4,
+   "category_label": "Utilisateurs et sécurité",
+   "modules": [
+    "core",
+    "settings"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/01_equipe.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)"
+     ],
+     "note": null,
+     "sha256_16": "05cf4d50a4af7611",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/01_equipe.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/02_groupe_utilisateurs.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque",
+      "trait coupé"
+     ],
+     "note": null,
+     "sha256_16": "447630bc9362c0bd",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/02_groupe_utilisateurs.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "profil",
+   "label": "Profil",
+   "category": 4,
+   "category_label": "Utilisateurs et sécurité",
+   "modules": [
+    "core",
+    "settings"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/03_profil.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "ab49e621a7259ed8",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/03_profil.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "roles",
+   "label": "Rôles et accès",
+   "category": 4,
+   "category_label": "Utilisateurs et sécurité",
+   "modules": [
+    "core",
+    "settings"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/02_roles_et_acces.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "9a42e02c10841a4f",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/02_roles_et_acces.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/09_roles.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "1e3086753b82da8c",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/09_roles.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "acces",
+   "label": "Accès (clé)",
+   "category": 4,
+   "category_label": "Utilisateurs et sécurité",
+   "modules": [
+    "core",
+    "settings"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/08_acces.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "118cf3bd951d67dd",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/08_acces.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "permission",
+   "label": "Permission",
+   "category": 4,
+   "category_label": "Utilisateurs et sécurité",
+   "modules": [
+    "core",
+    "settings"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/03_permission.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "7b69fe41a4b4e981",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/03_permission.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "securite",
+   "label": "Sécurité",
+   "category": 4,
+   "category_label": "Utilisateurs et sécurité",
+   "modules": [
+    "core",
+    "compliance"
+   ],
+   "file": "src/shared/assets/nordla/library/04-utilisateurs-securite/securite.png",
+   "origin": "lot1 · 05_donnees_et_systeme/png_256/04_securite.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [
+    {
+     "key": "security",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_security.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production ; la variante V2 ne la remplace pas sans arbitrage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "05_donnees_et_systeme/png_256/04_securite.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "f88415035cf55622",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/04-utilisateurs-securite/securite.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/07_securite.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "951609e3fb3cd076",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/07_securite.png"
+    }
+   ]
+  },
+  {
+   "id": "confidentialite",
+   "label": "Confidentialité",
+   "category": 4,
+   "category_label": "Utilisateurs et sécurité",
+   "modules": [
+    "core",
+    "compliance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/11_confidentialite.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "b5ce9824c5d86a12",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/11_confidentialite.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "verrouiller",
+   "label": "Verrouiller",
+   "category": 4,
+   "category_label": "Utilisateurs et sécurité",
+   "modules": [
+    "core",
+    "finance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/08_verrouiller.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "0db3d8c694556edd",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/08_verrouiller.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "historique",
+   "label": "Historique",
+   "category": 4,
+   "category_label": "Utilisateurs et sécurité",
+   "modules": [
+    "core",
+    "decisions",
+    "finance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/07_historique.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)"
+     ],
+     "note": null,
+     "sha256_16": "ec2cff95bce9bb24",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/07_historique.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/12_historique.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque",
+      "trait coupé"
+     ],
+     "note": null,
+     "sha256_16": "dd75624efca4bd40",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/12_historique.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "ventes",
+   "label": "Ventes",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [
+    "sales",
+    "analytics",
+    "growth"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [
+    {
+     "key": "ventes",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_ventes.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/01_ventes.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque",
+      "trait coupé"
+     ],
+     "note": "même symbole que 01_ventes_et_crm du lot 1",
+     "sha256_16": "7dd1b90dff87553f",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/01_ventes.png"
+    }
+   ]
+  },
+  {
+   "id": "crm",
+   "label": "CRM",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [
+    "sales"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/02_crm.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "e9d7b8cc793fbab4",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/02_crm.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "client",
+   "label": "Client",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [
+    "sales",
+    "finance",
+    "analytics",
+    "growth"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [
+    {
+     "key": "clients",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_clients.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/01_client.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)",
+      "aucun accent cuivre"
+     ],
+     "note": null,
+     "sha256_16": "95ba3a357726b78b",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/01_client.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/03_client.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "c7cccb4402b30a57",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/03_client.png"
+    }
+   ]
+  },
+  {
+   "id": "prospect",
+   "label": "Prospect",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [
+    "sales",
+    "growth"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/02_prospect.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "ef7856e07bebdbff",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/02_prospect.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "nouveau-client",
+   "label": "Nouveau client",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [
+    "sales",
+    "analytics",
+    "growth"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [
+    {
+     "key": "nouveauClient",
+     "file": "src/shared/assets/nordla/official-icons/03_clients_nouveau_client.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/04_nouveau_client.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "aa766f01f7642013",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/04_nouveau_client.png"
+    }
+   ]
+  },
+  {
+   "id": "commande-client",
+   "label": "Commande client",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [
+    "sales",
+    "analytics"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [
+    {
+     "key": "commandes",
+     "file": "src/shared/assets/nordla/official-icons/02_performance_business_commandes.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/05_commande_client.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "2321317a50938e1d",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/05_commande_client.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/05_commande.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "860786ac8c3aad30",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/05_commande.png"
+    }
+   ]
+  },
+  {
+   "id": "panier",
+   "label": "Panier",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [
+    "sales",
+    "analytics",
+    "growth"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/06_panier.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "0aff17b3f06c54c2",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/06_panier.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "suivi-commande",
+   "label": "Suivi de commande",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [
+    "sales",
+    "afterSales"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/07_suivi_commande.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque",
+      "trait coupé"
+     ],
+     "note": null,
+     "sha256_16": "e7b30c0a0cb70296",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/07_suivi_commande.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "devis-client",
+   "label": "Devis client",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [
+    "sales",
+    "finance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/08_devis_client.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque",
+      "trait coupé"
+     ],
+     "note": null,
+     "sha256_16": "d0e0b59e6c9bb852",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/08_devis_client.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "retour-client",
+   "label": "Retour client",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [
+    "afterSales",
+    "sales"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/10_retour_client.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "fbd155070d892a4d",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/10_retour_client.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "satisfaction",
+   "label": "Satisfaction",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [
+    "afterSales",
+    "sales"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/11_satisfaction.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "2f383c57a6e1c52d",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/11_satisfaction.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "fidelite",
+   "label": "Fidélité / fidélisation",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [
+    "sales",
+    "growth",
+    "analytics"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [
+    {
+     "key": "clientFidele",
+     "file": "src/shared/assets/nordla/official-icons/03_clients_client_fidele.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/08_fidelisation.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "c97fa540c5637e83",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/08_fidelisation.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/12_fidelite.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "0026807a30c2c484",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_5_ventes_clients/12_fidelite.png"
+    }
+   ]
+  },
+  {
+   "id": "pipeline",
+   "label": "Pipeline commercial",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [
+    "sales",
+    "growth"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/04_pipeline.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "401887e48933303e",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/04_pipeline.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "livraison-client",
+   "label": "Livraison client",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [
+    "sales",
+    "afterSales"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/07_livraison_client.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "d7fb17122085f998",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/07_livraison_client.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "fournisseur",
+   "label": "Fournisseur",
+   "category": 6,
+   "category_label": "Fournisseurs et achats",
+   "modules": [
+    "procurement",
+    "sourcing",
+    "suppliers"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [
+    {
+     "key": "fournisseur",
+     "file": "src/shared/assets/nordla/official-icons/04_produits_commerce_fournisseur.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/01_fournisseur.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "f1336f01d81a702a",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/01_fournisseur.png"
+    }
+   ]
+  },
+  {
+   "id": "nouveau-fournisseur",
+   "label": "Nouveau fournisseur",
+   "category": 6,
+   "category_label": "Fournisseurs et achats",
+   "modules": [
+    "procurement",
+    "sourcing",
+    "suppliers"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/02_nouveau_fournisseur.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "864fb40049510dfa",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/02_nouveau_fournisseur.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "achat",
+   "label": "Achat",
+   "category": 6,
+   "category_label": "Fournisseurs et achats",
+   "modules": [
+    "procurement",
+    "sourcing",
+    "suppliers",
+    "finance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [
+    {
+     "key": "achats",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_achats.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "06_operations_et_support/png_256/04_achat.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "trait coupé (pastille en haut à droite)"
+     ],
+     "note": null,
+     "sha256_16": "5fe31922bd8022b4",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/06_operations_et_support/png_256/04_achat.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/03_achat.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "e4eb31787fad4d5b",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/03_achat.png"
+    }
+   ]
+  },
+  {
+   "id": "demande-achat",
+   "label": "Demande d'achat",
+   "category": 6,
+   "category_label": "Fournisseurs et achats",
+   "modules": [
+    "procurement",
+    "sourcing",
+    "suppliers"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/04_demande_achat.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "fd77e8fdbc586a65",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/04_demande_achat.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "reception-marchandise",
+   "label": "Réception de marchandise",
+   "category": 6,
+   "category_label": "Fournisseurs et achats",
+   "modules": [
+    "procurement",
+    "sourcing",
+    "suppliers"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/05_reception.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "f67bc2a19b5febb4",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/05_reception.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "livraison",
+   "label": "Livraison",
+   "category": 6,
+   "category_label": "Fournisseurs et achats",
+   "modules": [
+    "procurement",
+    "sourcing",
+    "suppliers"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "06_operations_et_support/png_256/05_livraison.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "trait coupé (avant du camion)"
+     ],
+     "note": null,
+     "sha256_16": "64183e3837daeff3",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/06_operations_et_support/png_256/05_livraison.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/06_livraison.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "65bfe6cf938b44f1",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/06_livraison.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "comparer",
+   "label": "Comparer",
+   "category": 6,
+   "category_label": "Fournisseurs et achats",
+   "modules": [
+    "procurement",
+    "sourcing",
+    "suppliers"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "09_manquantes_C/png_256/03_comparer.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06",
+      "trait coupé (côté droit)"
+     ],
+     "note": null,
+     "sha256_16": "2b2110ff0855654e",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/09_manquantes_C/png_256/03_comparer.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/07_comparer.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "cc31f58c5c043cb7",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/07_comparer.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "visite-fournisseur",
+   "label": "Visite fournisseur",
+   "category": 6,
+   "category_label": "Fournisseurs et achats",
+   "modules": [
+    "procurement",
+    "sourcing",
+    "suppliers"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "09_manquantes_C/png_256/02_visite_fournisseur.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06",
+      "trait coupé (côté droit)"
+     ],
+     "note": null,
+     "sha256_16": "2e53d82f4193deb8",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/09_manquantes_C/png_256/02_visite_fournisseur.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/08_visite_fournisseur.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "1bb77fef755109de",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/08_visite_fournisseur.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "negociation",
+   "label": "Négociation",
+   "category": 6,
+   "category_label": "Fournisseurs et achats",
+   "modules": [
+    "procurement",
+    "sourcing",
+    "suppliers"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/09_negociation.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "2c4c43343ddc5c4d",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/09_negociation.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "catalogue",
+   "label": "Catalogue",
+   "category": 6,
+   "category_label": "Fournisseurs et achats",
+   "modules": [
+    "procurement",
+    "sourcing",
+    "suppliers",
+    "products"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/10_catalogue.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "d572ec4b2c59b0a3",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/10_catalogue.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "tarifs",
+   "label": "Tarifs",
+   "category": 6,
+   "category_label": "Fournisseurs et achats",
+   "modules": [
+    "procurement",
+    "sourcing",
+    "suppliers",
+    "products"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [
+    {
+     "key": "prix",
+     "file": "src/shared/assets/nordla/official-icons/04_produits_commerce_prix.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/11_tarifs.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "0b4303bbd42f5dff",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/11_tarifs.png"
+    }
+   ]
+  },
+  {
+   "id": "contrat",
+   "label": "Contrat",
+   "category": 6,
+   "category_label": "Fournisseurs et achats",
+   "modules": [
+    "procurement",
+    "sourcing",
+    "suppliers",
+    "compliance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/12_contrat.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "5c0297cab3926cf5",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_6_fournisseurs_achats/12_contrat.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "dossier-fournisseur",
+   "label": "Dossier fournisseur",
+   "category": 6,
+   "category_label": "Fournisseurs et achats",
+   "modules": [
+    "procurement",
+    "sourcing",
+    "suppliers"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "06_operations_et_support/png_256/08_dossier_fournisseur.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "trait coupé (côté droit)",
+      "fragment de légende en bas"
+     ],
+     "note": null,
+     "sha256_16": "38cbd2ad141dc612",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/06_operations_et_support/png_256/08_dossier_fournisseur.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "stock",
+   "label": "Stock",
+   "category": 7,
+   "category_label": "Stock et produits",
+   "modules": [
+    "procurement",
+    "products",
+    "analytics"
+   ],
+   "file": "src/shared/assets/nordla/library/07-stock-produits/stock.png",
+   "origin": "lot1 · 06_operations_et_support/png_256/03_stock.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [
+    {
+     "key": "stock",
+     "file": "src/shared/assets/nordla/official-icons/04_produits_commerce_stock.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production ; la variante V2 ne la remplace pas sans arbitrage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "06_operations_et_support/png_256/03_stock.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "cf472ab220b3948e",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/07-stock-produits/stock.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_7_stock_produits/01_stock.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "a92081861aa2ba0c",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/01_stock.png"
+    }
+   ]
+  },
+  {
+   "id": "produit",
+   "label": "Produit",
+   "category": 7,
+   "category_label": "Stock et produits",
+   "modules": [
+    "procurement",
+    "products",
+    "analytics"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_7_stock_produits/02_produit.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "8973ae8db24812b6",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/02_produit.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "categories",
+   "label": "Catégories",
+   "category": 7,
+   "category_label": "Stock et produits",
+   "modules": [
+    "procurement",
+    "products"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_7_stock_produits/03_categories.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": "symbole proche de 04_tous_les_modules",
+     "sha256_16": "18000c9c25411479",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/03_categories.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "variantes",
+   "label": "Variantes",
+   "category": 7,
+   "category_label": "Stock et produits",
+   "modules": [
+    "procurement",
+    "products"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_7_stock_produits/04_variantes.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque",
+      "trait coupé"
+     ],
+     "note": null,
+     "sha256_16": "3f213a6edb93d423",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/04_variantes.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "inventaire",
+   "label": "Inventaire",
+   "category": 7,
+   "category_label": "Stock et produits",
+   "modules": [
+    "procurement",
+    "products"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_7_stock_produits/05_inventaire.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "c77246b3125a2b49",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/05_inventaire.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "mouvement-stock",
+   "label": "Mouvement de stock",
+   "category": 7,
+   "category_label": "Stock et produits",
+   "modules": [
+    "procurement",
+    "products"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_7_stock_produits/06_mouvement_stock.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque",
+      "légende intégrée au pictogramme"
+     ],
+     "note": null,
+     "sha256_16": "9febf418c04ba204",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/06_mouvement_stock.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "entree-stock",
+   "label": "Entrée de stock",
+   "category": 7,
+   "category_label": "Stock et produits",
+   "modules": [
+    "procurement",
+    "products"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_7_stock_produits/07_entree_stock.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "22fdf9643ef8098a",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/07_entree_stock.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "sortie-stock",
+   "label": "Sortie de stock",
+   "category": 7,
+   "category_label": "Stock et produits",
+   "modules": [
+    "procurement",
+    "products"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_7_stock_produits/08_sortie_stock.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "b03a19690a58b4c3",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/08_sortie_stock.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "stock-faible",
+   "label": "Stock faible",
+   "category": 7,
+   "category_label": "Stock et produits",
+   "modules": [
+    "procurement",
+    "products"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_7_stock_produits/09_stock_faible.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque",
+      "trait coupé"
+     ],
+     "note": null,
+     "sha256_16": "0e598f0eb7a8b2dd",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/09_stock_faible.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "emplacement",
+   "label": "Emplacement",
+   "category": 7,
+   "category_label": "Stock et produits",
+   "modules": [
+    "procurement",
+    "products"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_7_stock_produits/10_emplacement.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "3c38ce8935161895",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/10_emplacement.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "code-barres",
+   "label": "Code-barres",
+   "category": 7,
+   "category_label": "Stock et produits",
+   "modules": [
+    "procurement",
+    "products"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_7_stock_produits/11_code_barres.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "82ffbc3ea49050d5",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/11_code_barres.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "scan",
+   "label": "Scanner",
+   "category": 7,
+   "category_label": "Stock et produits",
+   "modules": [
+    "procurement",
+    "products"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_7_stock_produits/12_scan.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "ceaa10c3567ad375",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_7_stock_produits/12_scan.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "assistant-ia",
+   "label": "Assistant IA",
+   "category": 8,
+   "category_label": "Intelligence et décisions",
+   "modules": [
+    "assistants",
+    "core",
+    "parle"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/01_assistant_ia.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque",
+      "légende intégrée au pictogramme"
+     ],
+     "note": null,
+     "sha256_16": "638a30aa579ba52d",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/01_assistant_ia.png"
+    }
+   ],
+   "priority": "P0"
+  },
+  {
+   "id": "insight",
+   "label": "Insight",
+   "category": 8,
+   "category_label": "Intelligence et décisions",
+   "modules": [
+    "core",
+    "decisions",
+    "analytics",
+    "growth"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "08_manquantes_B/png_256/02_insight.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "79076164509d0604",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/08_manquantes_B/png_256/02_insight.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/02_insight.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "b5b50c5114cf5243",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/02_insight.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "recommandation",
+   "label": "Recommandation",
+   "category": 8,
+   "category_label": "Intelligence et décisions",
+   "modules": [
+    "core",
+    "decisions",
+    "analytics",
+    "growth"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "08_manquantes_B/png_256/04_recommandation.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "8fec4c27245175f5",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/08_manquantes_B/png_256/04_recommandation.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/03_recommandation.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "a9c05bf147afa6de",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/03_recommandation.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "decision",
+   "label": "Décision",
+   "category": 8,
+   "category_label": "Intelligence et décisions",
+   "modules": [
+    "core",
+    "decisions",
+    "analytics",
+    "growth"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "08_manquantes_B/png_256/05_decision.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "ce9d41257eed9bb1",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/08_manquantes_B/png_256/05_decision.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/04_decision.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "d0d6aaefa4988b36",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/04_decision.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "action-recommandee",
+   "label": "Action recommandée",
+   "category": 8,
+   "category_label": "Intelligence et décisions",
+   "modules": [
+    "core",
+    "decisions",
+    "analytics",
+    "growth",
+    "finance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "08_manquantes_B/png_256/06_action_recommandee.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "8a951d51afd19122",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/08_manquantes_B/png_256/06_action_recommandee.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/05_action_recommandee.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "69217841dcdcf00b",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/05_action_recommandee.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "opportunite",
+   "label": "Opportunité",
+   "category": 8,
+   "category_label": "Intelligence et décisions",
+   "modules": [
+    "growth",
+    "sales",
+    "analytics"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/03_opportunite.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)"
+     ],
+     "note": null,
+     "sha256_16": "b2a817d508935215",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/G_clients_ventes_relation_commerciale/03_opportunite.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/06_opportunite.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque",
+      "couleur hors famille (rouge sombre)"
+     ],
+     "note": null,
+     "sha256_16": "a2fbd9a76a0adb88",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/06_opportunite.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "priorite",
+   "label": "Priorité",
+   "category": 8,
+   "category_label": "Intelligence et décisions",
+   "modules": [
+    "core",
+    "decisions",
+    "analytics",
+    "growth",
+    "finance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "08_manquantes_B/png_256/01_priorite.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "4a4165f0a7087479",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/08_manquantes_B/png_256/01_priorite.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/07_priorite.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "a1de3f0e339f1d5a",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/07_priorite.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "explication",
+   "label": "Explication",
+   "category": 8,
+   "category_label": "Intelligence et décisions",
+   "modules": [
+    "core",
+    "decisions",
+    "analytics",
+    "growth"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "08_manquantes_B/png_256/03_explication.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "22c8b64633caecee",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/08_manquantes_B/png_256/03_explication.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/08_explication.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "883b2fea4bacfebf",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/08_explication.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "validation",
+   "label": "Validation",
+   "category": 8,
+   "category_label": "Intelligence et décisions",
+   "modules": [
+    "core",
+    "decisions",
+    "finance",
+    "procurement"
+   ],
+   "file": "src/shared/assets/nordla/library/08-intelligence-decisions/validation.png",
+   "origin": "lot1 · 02_modules_commerciaux/png_256/08_validations.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [
+    {
+     "key": "approval",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_approval.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production ; la variante V2 ne la remplace pas sans arbitrage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "02_modules_commerciaux/png_256/08_validations.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": "même symbole que 04_validation",
+     "sha256_16": "e2744261188c1159",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/08-intelligence-decisions/validation.png"
+    },
+    {
+     "lot": "lot1",
+     "source": "04_actions_et_statuts/png_256/04_validation.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "trait coupé (cercle à droite)"
+     ],
+     "note": null,
+     "sha256_16": "8e5f22e8ec1cd94e",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/04_actions_et_statuts/png_256/04_validation.png"
+    }
+   ]
+  },
+  {
+   "id": "approbation-proprietaire",
+   "label": "Approbation du propriétaire",
+   "category": 8,
+   "category_label": "Intelligence et décisions",
+   "modules": [
+    "core",
+    "decisions",
+    "procurement"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "06_operations_et_support/png_256/06_approbation_proprietaire.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "fragment de légende en bas"
+     ],
+     "note": null,
+     "sha256_16": "d6d8666eb2f0d75c",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/06_operations_et_support/png_256/06_approbation_proprietaire.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "detection-opportunites",
+   "label": "Détection des opportunités",
+   "category": 8,
+   "category_label": "Intelligence et décisions",
+   "modules": [
+    "growth",
+    "analytics"
+   ],
+   "file": "src/shared/assets/nordla/library/08-intelligence-decisions/detection-opportunites.png",
+   "origin": "lot1 · 03_modules_avances/png_256/06_detection_des_opportunites.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "03_modules_avances/png_256/06_detection_des_opportunites.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "7f604a6459eabe15",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/08-intelligence-decisions/detection-opportunites.png"
+    }
+   ]
+  },
+  {
+   "id": "risque-alerte",
+   "label": "Risque / alerte",
+   "category": 8,
+   "category_label": "Intelligence et décisions",
+   "modules": [
+    "core",
+    "finance",
+    "analytics",
+    "growth",
+    "procurement",
+    "sourcing"
+   ],
+   "file": "src/shared/assets/nordla/library/08-intelligence-decisions/risque-alerte.png",
+   "origin": "lot1 · 04_actions_et_statuts/png_256/05_risque_alerte.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "04_actions_et_statuts/png_256/05_risque_alerte.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "35812c28f6f77065",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/08-intelligence-decisions/risque-alerte.png"
+    }
+   ]
+  },
+  {
+   "id": "information",
+   "label": "Information",
+   "category": 8,
+   "category_label": "Intelligence et décisions",
+   "modules": [
+    "core",
+    "finance",
+    "analytics",
+    "growth",
+    "procurement",
+    "sourcing"
+   ],
+   "file": "src/shared/assets/nordla/library/08-intelligence-decisions/information.png",
+   "origin": "lot1 · 04_actions_et_statuts/png_256/06_information.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "04_actions_et_statuts/png_256/06_information.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "c825d9b00bc63681",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/08-intelligence-decisions/information.png"
+    }
+   ]
+  },
+  {
+   "id": "notifications",
+   "label": "Notifications",
+   "category": 9,
+   "category_label": "Communication et support",
+   "modules": [
+    "core",
+    "sourcing"
+   ],
+   "file": "src/shared/assets/nordla/library/09-communication-support/notifications.png",
+   "origin": "lot1 · 05_donnees_et_systeme/png_256/07_notifications.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "05_donnees_et_systeme/png_256/07_notifications.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "553783188e79ea0f",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/09-communication-support/notifications.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/10_notifications.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "de41c6a7d11e97f5",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_4_utilisateurs_securite/10_notifications.png"
+    }
+   ]
+  },
+  {
+   "id": "micro-dictee",
+   "label": "Micro / dictée",
+   "category": 9,
+   "category_label": "Communication et support",
+   "modules": [
+    "parle",
+    "analytics",
+    "sourcing"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "09_manquantes_C/png_256/01_micro_dictee.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "3766eb6ee1db835b",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/09_manquantes_C/png_256/01_micro_dictee.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "nous-contacter",
+   "label": "Nous contacter",
+   "category": 9,
+   "category_label": "Communication et support",
+   "modules": [
+    "finance",
+    "afterSales"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "09_manquantes_C/png_256/05_nous_contacter.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06",
+      "trait coupé (côté droit)"
+     ],
+     "note": null,
+     "sha256_16": "743d77875151047d",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/09_manquantes_C/png_256/05_nous_contacter.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_9_communication_support/02_nous_contacter.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "texte seul, aucun pictogramme"
+     ],
+     "note": "NOM ≠ CONTENU : le fichier ne contient que le mot",
+     "sha256_16": "7586e47bb18fbb3c",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/02_nous_contacter.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "envoye",
+   "label": "Envoyé",
+   "category": 9,
+   "category_label": "Communication et support",
+   "modules": [
+    "finance",
+    "sales"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "09_manquantes_C/png_256/07_envoye.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06",
+      "trait coupé (côté droit)"
+     ],
+     "note": null,
+     "sha256_16": "ae94d46ad08077cb",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/09_manquantes_C/png_256/07_envoye.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_9_communication_support/04_envoye.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "texte seul, aucun pictogramme"
+     ],
+     "note": "NOM ≠ CONTENU : le fichier ne contient que le mot",
+     "sha256_16": "cc9b372036c5cd60",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/04_envoye.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "email",
+   "label": "E-mail",
+   "category": 9,
+   "category_label": "Communication et support",
+   "modules": [
+    "sales",
+    "afterSales"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_9_communication_support/03_email.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "texte seul, aucun pictogramme"
+     ],
+     "note": "NOM ≠ CONTENU : le fichier ne contient que le mot",
+     "sha256_16": "ff473f7716ca972a",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/03_email.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "message",
+   "label": "Message",
+   "category": 9,
+   "category_label": "Communication et support",
+   "modules": [
+    "parle",
+    "afterSales"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_9_communication_support/05_message.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "texte seul, aucun pictogramme"
+     ],
+     "note": "NOM ≠ CONTENU : le fichier ne contient que le mot",
+     "sha256_16": "8f0d2f0c9eb1f0dc",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/05_message.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "commentaire",
+   "label": "Commentaire",
+   "category": 9,
+   "category_label": "Communication et support",
+   "modules": [
+    "core",
+    "decisions"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/05_commentaire.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)"
+     ],
+     "note": null,
+     "sha256_16": "d4a1f22e0e28a7b9",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/05_commentaire.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "piece-jointe",
+   "label": "Pièce jointe",
+   "category": 9,
+   "category_label": "Communication et support",
+   "modules": [
+    "finance",
+    "sourcing"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/06_piece_jointe.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)"
+     ],
+     "note": null,
+     "sha256_16": "e9367e8e6b35614d",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/06_piece_jointe.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "support",
+   "label": "Support",
+   "category": 9,
+   "category_label": "Communication et support",
+   "modules": [
+    "afterSales"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_9_communication_support/06_support.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "texte seul, aucun pictogramme"
+     ],
+     "note": "NOM ≠ CONTENU : le fichier ne contient que le mot",
+     "sha256_16": "ffd80dd850b76904",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/06_support.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "aide",
+   "label": "Aide",
+   "category": 9,
+   "category_label": "Communication et support",
+   "modules": [
+    "core",
+    "finance",
+    "analytics",
+    "growth",
+    "procurement",
+    "sourcing"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/08_aide.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "ffa5bf11f014fb21",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/E_utilisateurs_collaboration_support/08_aide.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_9_communication_support/08_aide.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "texte seul, aucun pictogramme"
+     ],
+     "note": "NOM ≠ CONTENU : le fichier ne contient que le mot",
+     "sha256_16": "fb650629c75c373b",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/08_aide.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "centre-aide",
+   "label": "Centre d'aide",
+   "category": 9,
+   "category_label": "Communication et support",
+   "modules": [
+    "core"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_9_communication_support/09_centre_aide.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "texte seul, aucun pictogramme"
+     ],
+     "note": "NOM ≠ CONTENU : le fichier ne contient que le mot",
+     "sha256_16": "fe7869ff5a32a42c",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/09_centre_aide.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "tutoriel",
+   "label": "Tutoriel",
+   "category": 9,
+   "category_label": "Communication et support",
+   "modules": [
+    "core"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_9_communication_support/10_tutoriel.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "texte seul, aucun pictogramme"
+     ],
+     "note": "NOM ≠ CONTENU : le fichier ne contient que le mot",
+     "sha256_16": "a493d12c42c30daa",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/10_tutoriel.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "feedback",
+   "label": "Avis / feedback",
+   "category": 9,
+   "category_label": "Communication et support",
+   "modules": [
+    "core",
+    "afterSales"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_9_communication_support/11_feedback.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "texte seul, aucun pictogramme"
+     ],
+     "note": "NOM ≠ CONTENU : le fichier ne contient que le mot",
+     "sha256_16": "363eca5257fd8904",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/11_feedback.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "signalement",
+   "label": "Signalement",
+   "category": 9,
+   "category_label": "Communication et support",
+   "modules": [
+    "core",
+    "afterSales"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_9_communication_support/12_signalement.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "texte seul, aucun pictogramme"
+     ],
+     "note": "NOM ≠ CONTENU : le fichier ne contient que le mot",
+     "sha256_16": "08fd00e9e164de1c",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_9_communication_support/12_signalement.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "synchronisation",
+   "label": "Synchronisation",
+   "category": 10,
+   "category_label": "Données et système",
+   "modules": [
+    "core",
+    "sourcing",
+    "connections"
+   ],
+   "file": "src/shared/assets/nordla/library/10-donnees-systeme/synchronisation.png",
+   "origin": "lot1 · 05_donnees_et_systeme/png_256/02_synchronisation.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [
+    {
+     "key": "synchronisation",
+     "file": "src/shared/assets/nordla/official-icons/08_ui_utilities_synchronisation.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production ; la variante V2 ne la remplace pas sans arbitrage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "05_donnees_et_systeme/png_256/02_synchronisation.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "77c8124c41d489f8",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/10-donnees-systeme/synchronisation.png"
+    }
+   ]
+  },
+  {
+   "id": "sauvegarde",
+   "label": "Sauvegarde",
+   "category": 10,
+   "category_label": "Données et système",
+   "modules": [
+    "core"
+   ],
+   "file": "src/shared/assets/nordla/library/10-donnees-systeme/sauvegarde.png",
+   "origin": "lot1 · 05_donnees_et_systeme/png_256/03_sauvegarde.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "05_donnees_et_systeme/png_256/03_sauvegarde.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "ecd4ff749afea395",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/10-donnees-systeme/sauvegarde.png"
+    }
+   ]
+  },
+  {
+   "id": "donnees",
+   "label": "Données",
+   "category": 10,
+   "category_label": "Données et système",
+   "modules": [
+    "core",
+    "analytics",
+    "connections"
+   ],
+   "file": "src/shared/assets/nordla/library/10-donnees-systeme/donnees.png",
+   "origin": "lot1 · 05_donnees_et_systeme/png_256/05_donnees.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "05_donnees_et_systeme/png_256/05_donnees.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "3e889e7b76e8e17f",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/10-donnees-systeme/donnees.png"
+    }
+   ]
+  },
+  {
+   "id": "rapport",
+   "label": "Rapport",
+   "category": 10,
+   "category_label": "Données et système",
+   "modules": [
+    "analytics",
+    "finance",
+    "core"
+   ],
+   "file": "src/shared/assets/nordla/library/10-donnees-systeme/rapport.png",
+   "origin": "lot1 · 05_donnees_et_systeme/png_256/06_rapport.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "05_donnees_et_systeme/png_256/06_rapport.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "7dbfcab180219843",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/10-donnees-systeme/rapport.png"
+    }
+   ]
+  },
+  {
+   "id": "donnees-a-jour",
+   "label": "Données à jour",
+   "category": 10,
+   "category_label": "Données et système",
+   "modules": [
+    "analytics",
+    "growth",
+    "core"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "08_manquantes_B/png_256/07_donnees_a_jour.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "56b3095d651a5ca0",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/08_manquantes_B/png_256/07_donnees_a_jour.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/09_donnees_a_jour.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "6e95ffd67293e8b4",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/09_donnees_a_jour.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "donnees-partielles",
+   "label": "Données partielles",
+   "category": 10,
+   "category_label": "Données et système",
+   "modules": [
+    "analytics",
+    "growth",
+    "core"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "08_manquantes_B/png_256/08_donnees_partielles.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "90b61a2004c746fd",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/08_manquantes_B/png_256/08_donnees_partielles.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/10_donnees_partielles.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "e83629a0beaff2d8",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/10_donnees_partielles.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "fiabilite-donnees",
+   "label": "Fiabilité des données",
+   "category": 10,
+   "category_label": "Données et système",
+   "modules": [
+    "analytics",
+    "core"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [
+    {
+     "key": "dataHealth",
+     "file": "src/shared/assets/nordla/official-icons/08_ui_utilities_data_health.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "08_manquantes_B/png_256/09_fiabilite_des_donnees.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06"
+     ],
+     "note": null,
+     "sha256_16": "5bb16b09ffc09ca9",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/08_manquantes_B/png_256/09_fiabilite_des_donnees.png"
+    },
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/11_fiabilite_donnees.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque",
+      "légende intégrée au pictogramme"
+     ],
+     "note": null,
+     "sha256_16": "a1e9586c4ab7e8c1",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/11_fiabilite_donnees.png"
+    }
+   ]
+  },
+  {
+   "id": "analyse",
+   "label": "Analyse",
+   "category": 10,
+   "category_label": "Données et système",
+   "modules": [
+    "analytics"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/12_analyse.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "basse résolution (≤ 112 px, flou à 48–64 px)",
+      "résidus de carte / fond blanc opaque"
+     ],
+     "note": null,
+     "sha256_16": "3b0513647d5a7a1b",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Series_2_a_9/serie_8_intelligence_decisions/12_analyse.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "planning",
+   "label": "Planning",
+   "category": 11,
+   "category_label": "Organisation et automatisations",
+   "modules": [
+    "core",
+    "procurement",
+    "sourcing"
+   ],
+   "file": "src/shared/assets/nordla/library/11-organisation-automatisations/planning.png",
+   "origin": "lot1 · 05_donnees_et_systeme/png_256/08_planning.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [
+    {
+     "key": "calendrier",
+     "file": "src/shared/assets/nordla/official-icons/08_ui_utilities_calendrier.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production ; la variante V2 ne la remplace pas sans arbitrage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "05_donnees_et_systeme/png_256/08_planning.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "78b3f803d51fd336",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/11-organisation-automatisations/planning.png"
+    }
+   ]
+  },
+  {
+   "id": "automatisation",
+   "label": "Automatisation",
+   "category": 11,
+   "category_label": "Organisation et automatisations",
+   "modules": [
+    "assistants",
+    "core"
+   ],
+   "file": "src/shared/assets/nordla/library/11-organisation-automatisations/automatisation.png",
+   "origin": "lot1 · 06_operations_et_support/png_256/07_automatisation.png",
+   "technical_quality": "conforme",
+   "graphic_validation": "en-attente",
+   "v1_official": [],
+   "production_rule": "V2 conforme techniquement, à valider graphiquement avant tout usage",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "06_operations_et_support/png_256/07_automatisation.png",
+     "verdict": "conforme",
+     "reasons": [],
+     "note": null,
+     "sha256_16": "ba052a3da56be296",
+     "retained": true,
+     "library_path": "src/shared/assets/nordla/library/11-organisation-automatisations/automatisation.png"
+    }
+   ]
+  },
+  {
+   "id": "tache",
+   "label": "Tâche",
+   "category": 11,
+   "category_label": "Organisation et automatisations",
+   "modules": [
+    "core",
+    "finance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [
+    {
+     "key": "aFaire",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_a_faire.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/06_tache.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "7d25b1edb1dadec5",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/06_tache.png"
+    }
+   ]
+  },
+  {
+   "id": "checklist",
+   "label": "Liste de contrôle",
+   "category": 11,
+   "category_label": "Organisation et automatisations",
+   "modules": [
+    "core",
+    "compliance",
+    "procurement"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/07_checklist.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "138c36fc7da28907",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/07_checklist.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "noter",
+   "label": "Noter",
+   "category": 11,
+   "category_label": "Organisation et automatisations",
+   "modules": [
+    "sourcing",
+    "procurement"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot1",
+     "source": "09_manquantes_C/png_256/04_noter.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "légende intégrée au pictogramme",
+      "accent brun différent des dossiers 01–06",
+      "trait coupé (côté droit)"
+     ],
+     "note": null,
+     "sha256_16": "c5a4af460196f8bb",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot1/09_manquantes_C/png_256/04_noter.png"
+    }
+   ],
+   "priority": "P1"
+  },
+  {
+   "id": "archive",
+   "label": "Archiver",
+   "category": 11,
+   "category_label": "Organisation et automatisations",
+   "modules": [
+    "finance",
+    "core"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/03_archive.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "61171cbf69cb82a0",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/03_archive.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "impression",
+   "label": "Imprimer",
+   "category": 11,
+   "category_label": "Organisation et automatisations",
+   "modules": [
+    "finance"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/04_impression.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "c145a4b56d17d637",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/04_impression.png"
+    }
+   ],
+   "priority": "P2"
+  },
+  {
+   "id": "apercu",
+   "label": "Aperçu",
+   "category": 11,
+   "category_label": "Organisation et automatisations",
+   "modules": [
+    "finance",
+    "core"
+   ],
+   "file": null,
+   "origin": null,
+   "technical_quality": "a-corriger",
+   "graphic_validation": "non-applicable",
+   "v1_official": [],
+   "production_rule": "aucune version utilisable : à créer ou à corriger",
+   "sources": [
+    {
+     "lot": "lot2",
+     "source": "Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/05_apercu.png",
+     "verdict": "a-corriger",
+     "reasons": [
+      "recadré au ras (marge nulle)",
+      "trait coupé (bord inférieur ou latéral)"
+     ],
+     "note": null,
+     "sha256_16": "8e425bb51c405416",
+     "reference_path": "docs/design/nordla-icon-library-v2/reference/lot2/Nordla_Icones_Categories_D_a_G/F_organisation_vues_controle/05_apercu.png"
+    }
+   ],
+   "priority": "P2"
+  }
+ ],
+ "v1_without_v2_equivalent": [
+  {
+   "id": "v1-packComptable",
+   "label": "packComptable",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [],
+   "file": "src/shared/assets/nordla/official-icons/04_ui_core_pack_comptable.png",
+   "origin": "pack officiel V1 (Nordla_Official_Icons_READY)",
+   "technical_quality": "conforme",
+   "graphic_validation": "validee-v1",
+   "v1_official": [
+    {
+     "key": "packComptable",
+     "file": "src/shared/assets/nordla/official-icons/04_ui_core_pack_comptable.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": []
+  },
+  {
+   "id": "v1-banqueEtCaisse",
+   "label": "banqueEtCaisse",
+   "category": 2,
+   "category_label": "Finance et documents",
+   "modules": [],
+   "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_banque_et_caisse.png",
+   "origin": "pack officiel V1 (Nordla_Official_Icons_READY)",
+   "technical_quality": "conforme",
+   "graphic_validation": "validee-v1",
+   "v1_official": [
+    {
+     "key": "banqueEtCaisse",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_banque_et_caisse.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": []
+  },
+  {
+   "id": "v1-ceQuiAChange",
+   "label": "ceQuiAChange",
+   "category": 10,
+   "category_label": "Données et système",
+   "modules": [],
+   "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_ce_qui_a_change.png",
+   "origin": "pack officiel V1 (Nordla_Official_Icons_READY)",
+   "technical_quality": "conforme",
+   "graphic_validation": "validee-v1",
+   "v1_official": [
+    {
+     "key": "ceQuiAChange",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_ce_qui_a_change.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": []
+  },
+  {
+   "id": "v1-contacts",
+   "label": "contacts",
+   "category": 4,
+   "category_label": "Utilisateurs et sécurité",
+   "modules": [],
+   "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_contacts.png",
+   "origin": "pack officiel V1 (Nordla_Official_Icons_READY)",
+   "technical_quality": "conforme",
+   "graphic_validation": "validee-v1",
+   "v1_official": [
+    {
+     "key": "contacts",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_contacts.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": []
+  },
+  {
+   "id": "v1-governance",
+   "label": "governance",
+   "category": 8,
+   "category_label": "Intelligence et décisions",
+   "modules": [],
+   "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_governance.png",
+   "origin": "pack officiel V1 (Nordla_Official_Icons_READY)",
+   "technical_quality": "conforme",
+   "graphic_validation": "validee-v1",
+   "v1_official": [
+    {
+     "key": "governance",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_governance.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": []
+  },
+  {
+   "id": "v1-resume",
+   "label": "resume",
+   "category": 10,
+   "category_label": "Données et système",
+   "modules": [],
+   "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_resume.png",
+   "origin": "pack officiel V1 (Nordla_Official_Icons_READY)",
+   "technical_quality": "conforme",
+   "graphic_validation": "validee-v1",
+   "v1_official": [
+    {
+     "key": "resume",
+     "file": "src/shared/assets/nordla/official-icons/01_navigation_modules_resume.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": []
+  },
+  {
+   "id": "v1-baisse",
+   "label": "baisse",
+   "category": 10,
+   "category_label": "Données et système",
+   "modules": [],
+   "file": "src/shared/assets/nordla/official-icons/02_performance_business_baisse.png",
+   "origin": "pack officiel V1 (Nordla_Official_Icons_READY)",
+   "technical_quality": "conforme",
+   "graphic_validation": "validee-v1",
+   "v1_official": [
+    {
+     "key": "baisse",
+     "file": "src/shared/assets/nordla/official-icons/02_performance_business_baisse.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": []
+  },
+  {
+   "id": "v1-chiffreAffaires",
+   "label": "chiffreAffaires",
+   "category": 10,
+   "category_label": "Données et système",
+   "modules": [],
+   "file": "src/shared/assets/nordla/official-icons/02_performance_business_chiffre_affaires.png",
+   "origin": "pack officiel V1 (Nordla_Official_Icons_READY)",
+   "technical_quality": "conforme",
+   "graphic_validation": "validee-v1",
+   "v1_official": [
+    {
+     "key": "chiffreAffaires",
+     "file": "src/shared/assets/nordla/official-icons/02_performance_business_chiffre_affaires.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": []
+  },
+  {
+   "id": "v1-croissance",
+   "label": "croissance",
+   "category": 10,
+   "category_label": "Données et système",
+   "modules": [],
+   "file": "src/shared/assets/nordla/official-icons/02_performance_business_croissance.png",
+   "origin": "pack officiel V1 (Nordla_Official_Icons_READY)",
+   "technical_quality": "conforme",
+   "graphic_validation": "validee-v1",
+   "v1_official": [
+    {
+     "key": "croissance",
+     "file": "src/shared/assets/nordla/official-icons/02_performance_business_croissance.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": []
+  },
+  {
+   "id": "v1-panierMoyen",
+   "label": "panierMoyen",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [],
+   "file": "src/shared/assets/nordla/official-icons/02_performance_business_panier_moyen.png",
+   "origin": "pack officiel V1 (Nordla_Official_Icons_READY)",
+   "technical_quality": "conforme",
+   "graphic_validation": "validee-v1",
+   "v1_official": [
+    {
+     "key": "panierMoyen",
+     "file": "src/shared/assets/nordla/official-icons/02_performance_business_panier_moyen.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": []
+  },
+  {
+   "id": "v1-clientARisque",
+   "label": "clientARisque",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [],
+   "file": "src/shared/assets/nordla/official-icons/03_clients_client_a_risque.png",
+   "origin": "pack officiel V1 (Nordla_Official_Icons_READY)",
+   "technical_quality": "conforme",
+   "graphic_validation": "validee-v1",
+   "v1_official": [
+    {
+     "key": "clientARisque",
+     "file": "src/shared/assets/nordla/official-icons/03_clients_client_a_risque.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": []
+  },
+  {
+   "id": "v1-clientDormant",
+   "label": "clientDormant",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [],
+   "file": "src/shared/assets/nordla/official-icons/03_clients_client_dormant.png",
+   "origin": "pack officiel V1 (Nordla_Official_Icons_READY)",
+   "technical_quality": "conforme",
+   "graphic_validation": "validee-v1",
+   "v1_official": [
+    {
+     "key": "clientDormant",
+     "file": "src/shared/assets/nordla/official-icons/03_clients_client_dormant.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": []
+  },
+  {
+   "id": "v1-cohorte",
+   "label": "cohorte",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [],
+   "file": "src/shared/assets/nordla/official-icons/03_clients_cohorte.png",
+   "origin": "pack officiel V1 (Nordla_Official_Icons_READY)",
+   "technical_quality": "conforme",
+   "graphic_validation": "validee-v1",
+   "v1_official": [
+    {
+     "key": "cohorte",
+     "file": "src/shared/assets/nordla/official-icons/03_clients_cohorte.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": []
+  },
+  {
+   "id": "v1-segmentClient",
+   "label": "segmentClient",
+   "category": 5,
+   "category_label": "Ventes et clients",
+   "modules": [],
+   "file": "src/shared/assets/nordla/official-icons/03_clients_segment_client.png",
+   "origin": "pack officiel V1 (Nordla_Official_Icons_READY)",
+   "technical_quality": "conforme",
+   "graphic_validation": "validee-v1",
+   "v1_official": [
+    {
+     "key": "segmentClient",
+     "file": "src/shared/assets/nordla/official-icons/03_clients_segment_client.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": []
+  },
+  {
+   "id": "v1-meilleurProduit",
+   "label": "meilleurProduit",
+   "category": 7,
+   "category_label": "Stock et produits",
+   "modules": [],
+   "file": "src/shared/assets/nordla/official-icons/04_produits_commerce_meilleur_produit.png",
+   "origin": "pack officiel V1 (Nordla_Official_Icons_READY)",
+   "technical_quality": "conforme",
+   "graphic_validation": "validee-v1",
+   "v1_official": [
+    {
+     "key": "meilleurProduit",
+     "file": "src/shared/assets/nordla/official-icons/04_produits_commerce_meilleur_produit.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": []
+  },
+  {
+   "id": "v1-produitEnBaisse",
+   "label": "produitEnBaisse",
+   "category": 7,
+   "category_label": "Stock et produits",
+   "modules": [],
+   "file": "src/shared/assets/nordla/official-icons/04_produits_commerce_produit_en_baisse.png",
+   "origin": "pack officiel V1 (Nordla_Official_Icons_READY)",
+   "technical_quality": "conforme",
+   "graphic_validation": "validee-v1",
+   "v1_official": [
+    {
+     "key": "produitEnBaisse",
+     "file": "src/shared/assets/nordla/official-icons/04_produits_commerce_produit_en_baisse.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": []
+  },
+  {
+   "id": "v1-produitEnHausse",
+   "label": "produitEnHausse",
+   "category": 7,
+   "category_label": "Stock et produits",
+   "modules": [],
+   "file": "src/shared/assets/nordla/official-icons/04_produits_commerce_produit_en_hausse.png",
+   "origin": "pack officiel V1 (Nordla_Official_Icons_READY)",
+   "technical_quality": "conforme",
+   "graphic_validation": "validee-v1",
+   "v1_official": [
+    {
+     "key": "produitEnHausse",
+     "file": "src/shared/assets/nordla/official-icons/04_produits_commerce_produit_en_hausse.png"
+    }
+   ],
+   "production_rule": "V1 officielle en production",
+   "sources": []
+  }
+ ]
+}

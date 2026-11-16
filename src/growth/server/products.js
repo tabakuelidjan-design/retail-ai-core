@@ -7,6 +7,7 @@ import { mergeConfig } from '../../metrics/config.js';
 import { productPotentialFacts } from '../products/facts.js';
 import { buildProductPotential } from '../products/potential.js';
 import { requireTimeZone } from '../../metrics/profile.js';
+import { variantDetailsByProduct } from '../products/variants.js';
 
 const DAY = 86400000;
 export const HISTORY_DAYS = 400; // same history depth as Finance's retail load: enough for the product's first-sale / age facts
@@ -21,6 +22,13 @@ export function createProductPotentialSource({ supabase, merchantId, timeZone, c
     const data = await loadDataset(supabase, merchantId, { since: new Date(t.getTime() - HISTORY_DAYS * DAY) });
     const f = productPotentialFacts({ data, now: t, timeZone, config });
     const payload = { generatedAt: t.toISOString(), ...buildProductPotential(f.facts, { config, currency: f.currency, window: f.window, dataQuality: f.dataQuality }) };
+    // Detail by variant (fiche produit): the same window, the net units and the sellable stock with its snapshot date. An optional extra: if it fails, the page is unchanged.
+    try {
+      const exposureByProduct = new Map(f.facts.map((x) => [x.key, { exposureWeeks: x.exposureWeeks, observableWeeks: x.observableWeeks }]));
+      const v = variantDetailsByProduct(data, { window: f.window, now: t, maxSnapshotAgeHours: config.gates.maxStockSnapshotAgeHours, demandConfig: config.demand, exposureByProduct });
+      payload.variantWindow = v.window;
+      for (const r of payload.rows) r.variants = v.byProduct.get(r.id) ?? [];
+    } catch (e) { console.error('growth products: variant detail unavailable:', e?.message ?? e); }
     cached = payload; cachedAt = t.getTime();
     return payload;
   };

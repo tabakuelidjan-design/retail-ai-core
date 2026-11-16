@@ -18,6 +18,9 @@ import { deepFreeze, seal } from '../validation.js';
 import { OAuthFailure, bundleFromResponse, oauthRequest, parseScopes } from './common.js';
 
 export const INSTAGRAM_MINIMUM_SCOPES = Object.freeze(['instagram_business_basic', 'instagram_business_content_publish']);
+// READING statistics (Growth > Abonnés) needs one more scope: instagram_business_manage_insights (Meta docs, user and media insights, checked 2026-11-15). It is NOT part of the minimum: an existing
+// publishing connection stays eligible, and the scope is requested only when the operator asks for it (`withInsights`), as a separate authorisation.
+export const INSTAGRAM_INSIGHTS_SCOPE = 'instagram_business_manage_insights';
 const PROFESSIONAL = ['Business', 'Media_Creator'];
 
 export function createInstagramOAuth({ http, timeoutMs, now = Date.now } = {}) {
@@ -39,7 +42,7 @@ export function createInstagramOAuth({ http, timeoutMs, now = Date.now } = {}) {
     return deepFreeze({
       provider: PROVIDER.INSTAGRAM, external_id: account.id, display_name: account.username, account_type: account.accountType, location_name: null,
       granted_scopes: [...tokens.scopes], eligibility: { eligible: reasons.length === 0, reasons: [...new Set(reasons)].sort() }, review_signals: [],
-      safe_metadata: { account_type: account.accountType },
+      safe_metadata: { account_type: account.accountType, insights_scope_granted: tokens.scopes.includes(INSTAGRAM_INSIGHTS_SCOPE) },
     });
   };
 
@@ -54,12 +57,12 @@ export function createInstagramOAuth({ http, timeoutMs, now = Date.now } = {}) {
       verified_at: '2026-10-09T00:00:00.000Z',
     }),
 
-    buildAuthorizationRequest({ appConfig, state, redirectUri = appConfig.redirectUri }) {
+    buildAuthorizationRequest({ appConfig, state, redirectUri = appConfig.redirectUri, withInsights = false }) {
       const url = new URL('https://www.instagram.com/oauth/authorize');
       url.searchParams.set('client_id', appConfig.clientId);
       url.searchParams.set('redirect_uri', redirectUri);
       url.searchParams.set('response_type', 'code');
-      url.searchParams.set('scope', INSTAGRAM_MINIMUM_SCOPES.join(','));
+      url.searchParams.set('scope', (withInsights ? [...INSTAGRAM_MINIMUM_SCOPES, INSTAGRAM_INSIGHTS_SCOPE] : INSTAGRAM_MINIMUM_SCOPES).join(','));
       url.searchParams.set('state', state);
       return url.toString();
     },

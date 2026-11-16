@@ -25,5 +25,5 @@ test('no Growth server file falls back to UTC; the launcher resolves the zone th
     const src = readFileSync(new URL(`../src/growth/server/${f}.js`, import.meta.url), 'utf8');
     assert.doesNotMatch(src, /timeZone\s*=\s*'UTC'|\|\|\s*'UTC'/, f);
   }
-  assert.match(readFileSync(new URL('../src/growth/server/serve.js', import.meta.url), 'utf8'), /resolveBusinessProfile\(/);
+  assert.match(readFileSync(new URL('../src/growth/server/sources.js', import.meta.url), 'utf8'), /resolveBusinessProfile\(/);
 });

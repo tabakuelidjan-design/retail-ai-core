@@ -12,6 +12,7 @@
 //   Produits Potentiels / Audience / Contenu / Croissance magasin read the tenant's real synced data.
 // Campagnes is not part of this version (no advertising connector): no page, no script, no endpoint.
 
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { readNordlaShared } from '../../shared/nordla-static.js';
 import { buildOverview } from './overview.js';
@@ -25,6 +26,10 @@ const CSS = 'text/css; charset=utf-8';
 const STATIC = {
   '/': [UI, 'index.html', 'text/html; charset=utf-8'],
   '/app.js': [UI, 'app.js', JS],
+  '/persist.js': [UI, 'persist.js', JS],
+  '/guide.js': [UI, 'guide.js', JS],
+  '/pipeline.js': [UI, 'pipeline.js', JS],
+  '/inbox.js': [UI, 'inbox.js', JS],
   '/opportunities.js': [UI, 'opportunities.js', JS],
   '/potential.js': [UI, 'potential.js', JS],
   '/audience.js': [UI, 'audience.js', JS],
@@ -34,8 +39,7 @@ const STATIC = {
   '/lang-fr.js': [UI, 'lang-fr.js', JS],
   '/lang-nl.js': [UI, 'lang-nl.js', JS],
   '/lang-en.js': [UI, 'lang-en.js', JS],
-  '/style.css': [ANALYTICS_UI, 'style.css', CSS],
-  '/nordla-tokens.css': [ANALYTICS_UI, 'nordla-tokens.css', CSS],
+  '/style.css': [UI, 'style.css', CSS],
   '/i18n.js': [ANALYTICS_UI, 'i18n.js', JS],
 };
 
@@ -56,17 +60,21 @@ const IMG = { svg: 'image/svg+xml', png: 'image/png', webp: 'image/webp' };
 // productPotential: the tenant's Potentiel produits source (server/products.js), created from the Growth server's context
 // (NORDLA_MERCHANT_ID). Nothing in a request can choose or change the merchant: the route reads no parameter at all.
 // audience / content / store: the tenant's Audience, Contenu and Croissance magasin sources (server/*.js), same contract.
-export function createGrowthApp({ now = () => new Date(), productPotential = null, audience = null, content = null, store = null } = {}) {
-  const priorities = createPrioritiesSource({ productPotential, audience, content, store, now });
+export function createGrowthApp({ now = () => new Date(), productPotential = null, audience = null, content = null, store = null, merchantId = null, review = null, corrections = null, ads = null, site = null, siteReview = null, social = null, socialReview = null, inbox = null, inboxReview = null, guide = null, hosted = false } = {}) {
+  const historyScope = merchantId ? createHash('sha256').update(String(merchantId)).digest('hex') : null;
+  const priorities = createPrioritiesSource({ productPotential, audience, content, store, ads, site, social, inbox, now });
   const send = (res, status, type, body) => { res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', ...SECURITY_HEADERS }); res.end(body); };
   const json = (res, status, obj) => send(res, status, 'application/json', JSON.stringify(obj));
   return async function handle(req, res) {
     try {
       const url = new URL(req.url, 'http://localhost');
       if (req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { error: { code: 'METHOD_NOT_ALLOWED' } });
+      // HOSTED (hosted.js): the sign-in and server-side follow-up script is in the page and served only then
+      if (hosted && url.pathname === '/session.js') return send(res, 200, JS, await readFile(new URL('session.js', UI)));
       if (STATIC[url.pathname]) {
         const [base, file, type] = STATIC[url.pathname];
-        return send(res, 200, type, await readFile(new URL(file, base)));
+        const body = await readFile(new URL(file, base));
+        return send(res, 200, type, hosted && url.pathname === '/' ? String(body).replace('<script src="/app.js"></script>', '<script src="/session.js"></script>\n<script src="/app.js"></script>') : body);
       }
       const shared = await readNordlaShared(url.pathname);
       if (shared) return send(res, 200, shared.type, shared.body);
@@ -81,7 +89,7 @@ export function createGrowthApp({ now = () => new Date(), productPotential = nul
       }
       if (url.pathname === '/api/growth/opportunities') {
         if (!priorities) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });
-        try { return json(res, 200, await priorities()); } catch (e) { console.error('growth opportunities failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
+        try { return json(res, 200, { ...await priorities(), ...(historyScope && { historyScope }), ...(guide && { guide }) }); } catch (e) { console.error('growth opportunities failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
       }
       if (url.pathname === '/api/growth/products') {
         if (!productPotential) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });
@@ -94,6 +102,27 @@ export function createGrowthApp({ now = () => new Date(), productPotential = nul
       if (url.pathname === '/api/growth/content') {
         if (!content) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });
         try { return json(res, 200, await content()); } catch (e) { console.error('growth content failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
+      }
+      if (url.pathname === '/api/growth/corrections') {
+        // The "dossier de correction": a Markdown download built from what was already read. READ ONLY, merchant = server context (no merchant parameter).
+        if (!corrections) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });
+        const category = url.searchParams.get('category') ?? 'all';
+        try {
+          const f = await corrections({ category });
+          res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8', 'Content-Disposition': `attachment; filename="${f.filename}"`, 'Cache-Control': 'no-store', ...SECURITY_HEADERS });
+          return res.end(f.markdown);
+        } catch (e) {
+          if (e?.code === 'BAD_CATEGORY') return json(res, 400, { error: { code: 'BAD_REQUEST' } });
+          console.error('growth corrections failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } });
+        }
+      }
+      if (url.pathname === '/api/growth/review') {
+        // Before / after net units of an applied product or variant action. The merchant is the server's context: the route accepts no merchant parameter.
+        if (!review && !['page', 'post', 'inbox'].includes(url.searchParams.get('type'))) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });
+        const q = Object.fromEntries(url.searchParams);
+        const date = /^\d{4}-\d{2}-\d{2}$/;
+        if (!['product', 'variant', 'page', 'post', 'inbox'].includes(q.type) || !q.id || q.id.length > 200 || !date.test(q.applied ?? '') || !date.test(q.review ?? '')) return json(res, 400, { error: { code: 'BAD_REQUEST' } });
+        try { if (q.type === 'inbox') { if (!inboxReview) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } }); if (!['instagram', 'tiktok'].includes(q.network) || !q.account || q.account.length > 200 || !/^\d{1,3}$/.test(q.days ?? '') || !date.test(q.from ?? '') || (q.qualified ?? '').length > 4000 || (q.notQualified ?? '').length > 4000 || (q.declared ?? '').length > 4000) return json(res, 400, { error: { code: 'BAD_REQUEST' } }); return json(res, 200, await inboxReview({ id: q.id, network: q.network, account: q.account, days: q.days, from: q.from, type: q.type2 ?? q.requestType, qualified: q.qualified, notQualified: q.notQualified, declared: q.declared })); } if (q.type === 'post') { if (!socialReview) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } }); if (!['instagram', 'tiktok'].includes(q.network) || !q.account || q.account.length > 200 || !/^\d{1,3}$/.test(q.days ?? '')) return json(res, 400, { error: { code: 'BAD_REQUEST' } }); return json(res, 200, await socialReview({ id: q.id, network: q.network, account: q.account, days: q.days })); } if (q.type === 'page') { if (!siteReview) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } }); return json(res, 200, await siteReview({ id: q.id, applied: q.applied, review: q.review })); } return json(res, 200, await review({ type: q.type, id: q.id, applied: q.applied, review: q.review })); } catch (e) { console.error('growth review failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
       }
       if (url.pathname === '/api/growth/store') {
         if (!store) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });

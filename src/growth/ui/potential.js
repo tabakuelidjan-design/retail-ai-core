@@ -9,9 +9,10 @@
 const PP_TONE = { push: 'gr-good', restock: 'gr-warn', topSeller: 'gr-info', watch: 'gr-warn', declining: 'gr-bad', lowMargin: 'gr-bad', returns: 'gr-bad', insufficient: 'mute', stable: 'mute' };
 const PP_ACTION_TONE = { increaseVisibility: 'gr-good', restockFirst: 'gr-warn', doNotPromote: 'gr-bad', reviewReturns: 'gr-warn', checkCost: 'gr-warn', checkStock: 'gr-warn', watch: 'mute', keep: 'gr-info', none: 'mute' };
 const PP_SORTS = ['sales', 'evolution', 'cover', 'margin'];
-let ppState = { filter: 'all', q: '', cat: 'all', sort: 'sales', sel: null };
+let ppState = { filter: 'all', q: '', cat: 'all', sort: 'sales', sel: null, linked: null, missing: null };
 
 const ppNorm = (s) => String(s || '').toLocaleLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+const ppDateTime = (iso) => `${new Date(iso).toLocaleDateString(tag(), { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })} ${new Date(iso).toISOString().slice(11, 16)} UTC`;
 const ppPct = (v) => `${Math.round(v * 100)} %`;
 const ppDays = (v) => t('gr.pp.days', num(Math.round(v)));
 const ppDate = (iso) => new Date(iso).toLocaleDateString(tag(), { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
@@ -120,7 +121,7 @@ function ppToolbar(d) {
 }
 // Detail panel: focus handled by the shell (dialogOpened / dialogClosed + data-focus-id on every trigger).
 function ppOpen(id, trigger) { dialogOpened(trigger); ppState.sel = id; render(); }
-function ppClose() { ppState.sel = null; dialogClosed(); render(); }
+function ppClose() { ppState.sel = null; clearHashParams('potential'); dialogClosed(); render(); }
 function ppRow(r) {
   const cell = (cls, k, ...c) => h('div', { class: `gr-pp-c ${cls}`, ...(k ? { 'data-k': k } : {}) }, ...c);
   return h('button', { type: 'button', class: `gr-pp-row${ppState.sel === r.id ? ' sel' : ''}`, 'aria-label': t('gr.pp.openDetail', r.title), 'data-focus-id': `pp-row:${r.id}`, on: { click: (e) => ppOpen(r.id, e && e.currentTarget) } },
@@ -215,6 +216,21 @@ function ppWhy(r, d) {
 function ppStat(label, value, note) {
   return h('div', { class: 'gr-pp-stat' }, h('span', { class: 'gr-pp-stat-label' }, label), h('strong', { class: 'gr-pp-stat-value' }, value), note ? h('span', { class: 'gr-pp-stat-note' }, note) : null);
 }
+// Detail by variant: exact window, net units with their deductions, sellable stock with its snapshot date and location. An unknown / stale stock is a dash with its reason, never 0.
+function ppVariantsSection(r, d) {
+  if (!Array.isArray(r.variants) || !d.variantWindow) return null;
+  const w = d.variantWindow; const days = (iso) => ppDate(iso);
+  const loc = (s) => (s.locations.length ? s.locations.map((l) => l.name || t('gr.pp.var.nolocation')).join(', ') : t('gr.pp.var.nolocation'));
+  return h('section', { class: 'gr-pp-sec gr-pp-vars' }, h('h3', null, t('gr.pp.var.title')),
+    h('p', { class: 'gr-pp-stat-note' }, t('gr.pp.var.window', days(w.since), days(w.until), d.window.weeks)),
+    r.variants.length ? h('div', { class: 'gr-pp-var-list' }, r.variants.map((v) => h('div', { class: `gr-pp-var${hashParam('variant') === v.id ? ' gr-pp-var-proposed' : ''}`, 'data-variant-id': v.id },
+      h('div', { class: 'gr-pp-var-name' }, v.title, hashParam('variant') === v.id ? chip(t('gr.pp.var.proposed'), 'gr-good') : null),
+      h('div', { class: 'gr-pp-var-net' }, h('strong', null, t('gr.pp.var.net', num(v.unitsNet))), h('span', { class: 'gr-pp-stat-note' }, t('gr.pp.var.deduct', num(v.unitsGross), num(v.unitsRefunded), num(v.unitsCancelled)))),
+      h('div', { class: 'gr-pp-var-stock' },
+        v.stock.usable ? h('strong', null, t('gr.pp.var.stock', num(v.stock.units))) : h('strong', { class: 'gr-pp-warn' }, `${t('gr.dash')} · ${t(`gr.pp.var.${v.stock.state}`)}`),
+        v.stock.snapshotAt ? h('span', { class: 'gr-pp-stat-note' }, t('gr.pp.var.snap', ppDateTime(v.stock.snapshotAt), loc(v.stock))) : null,
+        v.cover && v.cover.status === 'CALCULATED' ? h('span', { class: 'gr-pp-stat-note' }, t('gr.pp.var.cover', num(v.cover.weeks))) : null)))) : h('div', { class: 'gr-pp-empty' }, t('gr.pp.var.none')));
+}
 function ppDrawer(d) {
   const r = d.rows.find((x) => x.id === ppState.sel);
   if (!r) return null;
@@ -244,6 +260,7 @@ function ppDrawer(d) {
             ppStat(t('gr.pp.col.cover'), r.cover.status === 'CALCULATED' ? ppDays(r.cover.days) : t('gr.dash'), coverNote),
             ppStat(t('gr.pp.ev.refunds'), r.refunds.rate == null ? t('gr.dash') : ppPct(r.refunds.rate), refundNote),
             ppStat(t('gr.pp.ev.history'), t('gr.pp.ev.weeks', e.observableWeeks), e.observableWeeks < d.thresholds.minObservableWeeks ? t('gr.pp.reason.TREND_INSUFFICIENT') : null))),
+        ppVariantsSection(r, d),
         h('section', { class: 'gr-pp-sec gr-pp-action' }, h('h3', null, t('gr.pp.d.action')), ppActionChip(r),
           h('p', { class: 'gr-pp-action-text' }, t(`gr.pp.actionText.${r.action}`))),
         h('section', { class: 'gr-pp-sec' }, h('p', { class: 'gr-pp-action-text' }, t('gr.pp.d.method'))))));
@@ -255,6 +272,10 @@ if (typeof document !== 'undefined' && document.addEventListener) {
 
 function renderPotential(main, safe) {
   const d = PAGES.potential.get();
+  // Opened from an opportunity: #/potential?open=<product id>. A product that is not in the engine's list is said, never silently ignored.
+  const want = hashParam('open');
+  if (want && ppState.linked !== want) { ppState.linked = want; if (d.rows.some((r) => r.id === want)) { ppState.sel = want; ppState.missing = null; dialogOpened(null); } else ppState.missing = want; }
+  if (want && ppState.missing) main.appendChild(h('div', { class: 'ex-card gr-pr-card' }, h('div', { class: 'gr-pp-empty' }, t('gr.pp.deepMissing'))));
   if (ppState.sel && !d.rows.some((r) => r.id === ppState.sel)) ppState.sel = null;
   main.appendChild(safe(ppKpiRow));
   main.appendChild(h('div', { class: 'gr-grid-pipe gr-grid-pp' }, safe(ppListCard), h('div', { class: 'gr-stack' }, safe(ppPushCard), safe(ppProtectCard), safe(ppStatusCard))));
@@ -264,5 +285,5 @@ function renderPotential(main, safe) {
 }
 // Leaving the page (back button, hash link) never leaves the drawer open or the page scroll locked.
 if (typeof window !== 'undefined' && window.addEventListener) {
-  window.addEventListener('hashchange', () => { ppState.sel = null; if (document.body && document.body.classList) document.body.classList.remove('gr-pp-lock'); });
+  window.addEventListener('hashchange', () => { ppState.sel = null; ppState.linked = null; ppState.missing = null; if (document.body && document.body.classList) document.body.classList.remove('gr-pp-lock'); });
 }

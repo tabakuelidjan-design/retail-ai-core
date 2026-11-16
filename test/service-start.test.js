@@ -13,14 +13,17 @@ const DISPATCHER = 'node src/service-start.js';
 
 test('every root deployment config starts the dispatcher - never a specific service program', () => {
   const railway = JSON.parse(read('railway.json')); const railpack = JSON.parse(read('railpack.json'));
-  assert.equal(railway.deploy.startCommand, DISPATCHER); assert.equal(railpack.deploy.startCommand, DISPATCHER);
+  // release/sourcing-staging only: railway.json wraps the dispatcher in the image entrypoint (it hands the root-owned volume to `node`, then execs the dispatcher as `node`).
+  const ENTRYPOINT = '/app/docker-entrypoint.sh';
+  assert.ok([DISPATCHER, `${ENTRYPOINT} ${DISPATCHER}`].includes(railway.deploy.startCommand), railway.deploy.startCommand); assert.equal(railpack.deploy.startCommand, DISPATCHER);
+  if (railway.deploy.startCommand !== DISPATCHER) assert.match(read('deploy/sourcing/Dockerfile'), /COPY deploy\/sourcing\/docker-entrypoint\.sh \/app\/docker-entrypoint\.sh/, 'the entrypoint named by railway.json must be shipped in the image');
   for (const f of ['railway.toml', 'nixpacks.toml', 'Procfile']) assert.equal(existsSync(new URL(f, ROOT)), false, `${f} would be a second, competing start command`);
   for (const cfg of [read('railway.json'), read('railpack.json')]) for (const entry of Object.values(SERVICE_ENTRIES)) assert.ok(!cfg.includes(entry), `a root config names ${entry} directly`);
 });
 
 test('each service maps to its own program (no inversion), and each program is really that service', () => {
-  assert.deepEqual(Object.keys(SERVICE_ENTRIES).sort(), ['analytics', 'core', 'core-once', 'finance', 'sourcing']);
-  const signature = { core: /export async function schedule\(/, finance: /export async function startFinanceServer\(/, analytics: /export async function startAnalyticsServer\(/, 'core-once': /export async function runSync\(/, sourcing: /export async function startSourcingServer\(/ };
+  assert.deepEqual(Object.keys(SERVICE_ENTRIES).sort(), ['analytics', 'core', 'core-once', 'finance', 'growth', 'sourcing']);
+  const signature = { core: /export async function schedule\(/, finance: /export async function startFinanceServer\(/, analytics: /export async function startAnalyticsServer\(/, 'core-once': /export async function runSync\(/, sourcing: /export async function startSourcingServer\(/, growth: /export async function startGrowthHosted\(/ };
   for (const [name, entry] of Object.entries(SERVICE_ENTRIES)) {
     assert.ok(existsSync(new URL(entry, ROOT)), `${name}: ${entry} exists`);
     assert.match(read(entry), signature[name], `${name} starts ${entry}, which must be the ${name} program`);
@@ -30,7 +33,7 @@ test('each service maps to its own program (no inversion), and each program is r
 });
 
 test('NORDLA_SERVICE is required and exact: missing, empty or unknown refuses to start', () => {
-  for (const env of [{}, { NORDLA_SERVICE: '' }, { NORDLA_SERVICE: '  ' }, { NORDLA_SERVICE: 'growth' }, { NORDLA_SERVICE: 'sync' }]) assert.throws(() => resolveServiceEntry(env), ServiceStartError, JSON.stringify(env));
+  for (const env of [{}, { NORDLA_SERVICE: '' }, { NORDLA_SERVICE: '  ' }, { NORDLA_SERVICE: 'growthx' }, { NORDLA_SERVICE: 'sync' }]) assert.throws(() => resolveServiceEntry(env), ServiceStartError, JSON.stringify(env));
   assert.deepEqual(resolveServiceEntry({ NORDLA_SERVICE: 'analytics' }), { name: 'analytics', entry: 'src/analytics-premium/server/serve.js', args: [] });
   assert.equal(resolveServiceEntry({ NORDLA_SERVICE: ' Core ' }).entry, 'src/sync/scheduler.js');
 });

@@ -13,11 +13,17 @@
  *   store = Croissance magasin payload (or null), priorities = Opportunités payload (or null).
  */
 export function buildOverview({ now = new Date(), store = null, priorities = null } = {}) {
-  const pr = priorities && priorities.sections ? priorities : null;
+  // A true zero is a computed zero. When NONE of the four engines could be read, nothing was computed: priorities = null (the page shows dashes, never 0).
+  // When only some could not be read, the figures stand but are flagged partial and the missing sources are named (the UI says so).
+  const states = priorities && priorities.sources ? Object.entries(priorities.sources) : [];
+  const down = states.filter(([, v]) => v !== 'ok').map(([k]) => k);
+  const allDown = states.length > 0 && down.length === states.length;
+  const pr = priorities && priorities.sections && !allDown ? priorities : null;
   return {
     currency: (pr && pr.currency) || (store && store.currency) || 'EUR',
     generatedAt: now.toISOString(),
-    sources: { store: store ? 'real' : 'unavailable', priorities: pr ? 'real' : 'unavailable' },
+    sources: { store: store ? 'real' : 'unavailable', priorities: !pr ? 'unavailable' : down.length ? 'partial' : 'real' },
+    ...(pr && down.length ? { unavailableSources: down } : {}),
     kpis: {
       fix: pr ? { value: pr.counts.fix, corrections: pr.counts.fixCorrections } : null,
       commercial: pr ? { value: pr.counts.commercial } : null,

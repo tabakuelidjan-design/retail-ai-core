@@ -265,9 +265,22 @@ const PAGES = {
   content: { title: 'gr.ct.title', subtitle: 'gr.ct.subtitle', url: '/api/growth/content', period: { weeks: 8 }, get: () => ctData, set: (v) => { ctData = v; }, render: renderContent },
   storeGrowth: { title: 'gr.st.title', subtitle: 'gr.st.subtitle', url: '/api/growth/store', period: { weeks: 8 }, get: () => stData, set: (v) => { stData = v; }, render: renderStore },
 };
-function currentPage() { const p = location.hash.replace(/^#\/?/, ''); return PAGES[p] && p !== 'overview' ? p : 'overview'; }
+function currentPage() { const p = location.hash.replace(/^#\/?/, '').split('?')[0]; return PAGES[p] && p !== 'overview' ? p : 'overview'; }
+// Deep link to a target of an opportunity: #/potential?open=<product id>&variant=<variant id>, #/audience?open=<segment key>. Identifiers are Growth's own stable ids.
+function hashParam(name) {
+  const q = location.hash.split('?')[1]; if (!q) return null;
+  for (const part of q.split('&')) { const [k, v = ''] = part.split('='); if (k === name) { try { return decodeURIComponent(v); } catch { return null; } } }
+  return null;
+}
+function clearHashParams(page) { if (typeof history !== 'undefined' && history.replaceState && location.hash.includes('?')) history.replaceState(null, '', `#/${page}`); }
 
+// Partial data: the figures below are real but some engines could not be read; they are named, never hidden (same wording as Opportunités).
+function partialNote(d) {
+  const names = { products: 'potential', audience: 'audience', store: 'storeGrowth', content: 'content' };
+  return d.unavailableSources && d.unavailableSources.length ? h('div', { class: 'ex-card gr-pr-card' }, h('div', { class: 'gr-pp-empty' }, t('gr.op.srcUnavailable', d.unavailableSources.map((k) => t(`gr.nav.${names[k]}`)).join(', ')))) : null;
+}
 function renderOverview(main, safe) {
+  const note = safe(partialNote); if (note) main.appendChild(note);
   main.appendChild(safe(kpiRow));
   main.appendChild(h('div', { class: 'gr-grid gr-grid-main' }, safe(attentionCard), safe(opportunitiesCard), safe(storeCard)));
 }
@@ -305,6 +318,7 @@ async function loadPage(key) {
   if (currentPage() === key) render();
   try {
     const r = await fetch(page.url);
+    if (r.status === 401 && typeof growthHosted !== 'undefined') { delete loadState[key]; growthHosted.expired(); return; } // the hosted session ended: back to the sign-in
     if (r.ok) { page.set(await r.json()); delete loadState[key]; }
     else {
       let code = 'UNKNOWN';
@@ -357,4 +371,5 @@ async function route() {
   window.scrollTo(0, 0);
 }
 window.addEventListener('hashchange', route);
-route();
+// HOSTED (session.js is in the page only then): sign in and load the merchant's follow-up first. The local preview goes straight to the screen.
+if (typeof growthHosted !== 'undefined') growthHosted.boot(route); else route();

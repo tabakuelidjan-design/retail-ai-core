@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createGrowthApp } from '../src/growth/server/app.js';
@@ -20,7 +20,9 @@ import { smallStore } from './fixtures/growth-priorities-sample.js';
 const CANDIDATES = [process.env.CHROME_PATH, 'C:/Program Files/Google/Chrome/Application/chrome.exe', 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
   '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'].filter(Boolean);
 const CHROME = CANDIDATES.find((p) => existsSync(p));
-const skip = CHROME ? false : 'no Chrome/Chromium found (set CHROME_PATH)';
+// The CDP client uses the global WebSocket (Node >= 22). On Node 20 it does not exist: an UNSUPPORTED combination, skipped and said so
+// (it used to throw after Chrome was spawned, and the live Chrome child kept this file - and the whole Node 20 job - from ever finishing).
+const skip = !CHROME ? 'no Chrome/Chromium found (set CHROME_PATH)' : typeof WebSocket === 'undefined' ? `no global WebSocket on Node ${process.versions.node} (needs Node >= 22)` : false;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const WIDTHS = [1440, 1280, 1024, 768, 390, 375, 320];
 const PAGES = ['', 'opportunities', 'potential', 'audience', 'content', 'storeGrowth'];
@@ -28,63 +30,105 @@ const PAGES = ['', 'opportunities', 'potential', 'audience', 'content', 'storeGr
 async function serve(opts) {
   const server = http.createServer(createGrowthApp(opts));
   await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  // If browser setup fails before the test enters its try/finally, this server must not keep the whole test file alive.
+  server.unref();
   // closeAllConnections: a keep-alive connection of a browser that has not exited yet would otherwise keep server.close() (and the test file) waiting forever
   return { base: `http://127.0.0.1:${server.address().port}`, close: () => new Promise((r) => { server.close(r); server.closeAllConnections(); }) };
+}
+
+async function stopBrowser(proc, dir, ws = null) {
+  if (ws && ws.readyState <= 1) { try { ws.close(); } catch { /* already closed */ } }
+  const exited = proc.exitCode !== null || proc.signalCode !== null
+    ? Promise.resolve()
+    : new Promise((r) => { proc.once('exit', r); proc.once('error', r); });
+  const killAll = (sig) => {
+    try {
+      if (process.platform !== 'win32' && proc.pid) process.kill(-proc.pid, sig);
+      else proc.kill(sig);
+    } catch { /* already gone */ }
+  };
+  killAll('SIGTERM');
+  if (await Promise.race([exited.then(() => true), sleep(3000).then(() => false)]) === false) {
+    killAll('SIGKILL');
+    await Promise.race([exited, sleep(3000)]);
+  }
+  proc.unref();
+  try { rmSync(dir, { recursive: true, force: true }); } catch { /* locked on Windows: temp dir */ }
 }
 
 /** One headless browser, one tab, driven over CDP. */
 async function browser() {
   const dir = mkdtempSync(path.join(tmpdir(), 'growth-cdp-'));
-  const port = 9400 + Math.floor(Math.random() * 400);
-  // own process group (detached): /usr/bin/google-chrome is a wrapper script with helper processes, so close() ends the WHOLE group, not one pid
-  const proc = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-first-run', `--remote-debugging-port=${port}`, `--user-data-dir=${dir}`, 'about:blank'], { stdio: 'ignore', detached: process.platform !== 'win32' });
-  let targets = [];
-  for (let i = 0; i < 100 && !targets.length; i += 1) { try { targets = (await (await fetch(`http://127.0.0.1:${port}/json`)).json()).filter((t) => t.type === 'page'); } catch { /* not up yet */ } if (!targets.length) await sleep(100); }
-  const ws = new WebSocket(targets[0].webSocketDebuggerUrl);
-  await new Promise((r) => ws.addEventListener('open', r));
-  let id = 0; const pending = new Map();
-  ws.addEventListener('message', (e) => { const m = JSON.parse(e.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } });
-  const send = (method, params = {}) => new Promise((r) => { id += 1; pending.set(id, r); ws.send(JSON.stringify({ id, method, params })); });
-  await send('Page.enable'); await send('Runtime.enable');
-  const errors = [];
-  ws.addEventListener('message', (e) => { const m = JSON.parse(e.data); if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') errors.push(m.params.args.map((a) => a.value ?? a.description).join(' ')); if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails.text); });
-  let b;
-  b = {
-    errors,
-    send,
-    // Waits until the page left its loading state (polling, not a fixed delay: the suite runs files in parallel and a busy
-    // machine must not make a test flaky). `ready: false` returns as soon as the shell is on screen (to observe loading).
-    async open(url, width = 1440, height = 900, { ready = true } = {}) {
-      await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 768 });
-      await send('Page.navigate', { url: 'about:blank' });
-      await send('Page.navigate', { url });
-      const cond = ready ? `!!document.querySelector('.ex-title') && !document.querySelector('.gr-state-loading')` : `!!document.querySelector('.ex-title')`;
-      for (let i = 0; i < 100; i += 1) { if (await b.eval(cond)) break; await sleep(100); }
-      await sleep(150);
-    },
-    async eval(expr) { const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); return r.result?.result?.value; },
-    async key(key, { shift = false } = {}) {
-      const codes = { Tab: 9, Escape: 27, Enter: 13 };
-      const base = { key, code: key, windowsVirtualKeyCode: codes[key], nativeVirtualKeyCode: codes[key], modifiers: shift ? 8 : 0 };
-      // Enter must carry its text to activate a focused button (like a real keyboard); Tab / Escape are raw keys.
-      await send('Input.dispatchKeyEvent', key === 'Enter' ? { type: 'keyDown', text: String.fromCharCode(13), unmodifiedText: String.fromCharCode(13), ...base } : { type: 'rawKeyDown', ...base });
-      await send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
-      await sleep(120);
-    },
-    // Chrome does not always exit on SIGTERM (it was seen orphaned on CI, keeping the file's process alive until the job limit): wait for the exit, then SIGKILL.
-    async close() {
-      ws.close();
-      const exited = proc.exitCode !== null || proc.signalCode !== null ? Promise.resolve() : new Promise((r) => proc.once('exit', r));
-      const killAll = (sig) => { try { if (process.platform !== 'win32') process.kill(-proc.pid, sig); else proc.kill(sig); } catch { /* already gone */ } };
-      killAll('SIGTERM');
-      if (await Promise.race([exited.then(() => true), sleep(3000).then(() => false)]) === false) { killAll('SIGKILL'); await Promise.race([exited, sleep(3000)]); }
-      proc.unref(); // nothing left of the browser may hold the test file open
-      try { rmSync(dir, { recursive: true, force: true }); } catch { /* locked on Windows: temp dir */ }
-    },
-  };
-  return b;
+  // Chrome chooses an unused port and publishes it in this profile's DevToolsActivePort file.
+  // This avoids collisions between parallel CI jobs using a guessed port range.
+  const proc = spawn(CHROME, ['--headless=new', '--disable-gpu', '--no-first-run', '--remote-debugging-port=0', `--user-data-dir=${dir}`, 'about:blank'], { stdio: 'ignore', detached: process.platform !== 'win32' });
+  let ws = null;
+  try {
+    let targets = [];
+    let port = null;
+    for (let i = 0; i < 600 && !targets[0]; i += 1) {
+      if (proc.exitCode !== null || proc.signalCode !== null) break;
+      if (port === null) {
+        try {
+          const active = readFileSync(path.join(dir, 'DevToolsActivePort'), 'utf8').trim().split(/\r?\n/);
+          const candidate = Number(active[0]);
+          if (Number.isInteger(candidate) && candidate > 0) port = candidate;
+        } catch { /* Chrome is still starting */ }
+      }
+      if (port !== null) {
+        try {
+          const response = await fetch(`http://127.0.0.1:${port}/json`);
+          if (response.ok) targets = (await response.json()).filter((t) => t.type === 'page');
+        } catch { /* DevTools is not accepting connections yet */ }
+      }
+      if (!targets[0]) await sleep(100);
+    }
+    if (!targets[0]?.webSocketDebuggerUrl) {
+      throw new Error(`Chrome did not expose a page target within 60s (exitCode=${proc.exitCode}, signal=${proc.signalCode}, devtoolsPort=${port ?? 'unavailable'})`);
+    }
+    ws = new WebSocket(targets[0].webSocketDebuggerUrl);
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Chrome DevTools WebSocket did not open within 10s')), 10_000);
+      ws.addEventListener('open', () => { clearTimeout(timer); resolve(); }, { once: true });
+      ws.addEventListener('error', () => { clearTimeout(timer); reject(new Error('Chrome DevTools WebSocket failed to open')); }, { once: true });
+    });
+    let id = 0; const pending = new Map();
+    ws.addEventListener('message', (e) => { const m = JSON.parse(e.data); if (m.id && pending.has(m.id)) { pending.get(m.id)(m); pending.delete(m.id); } });
+    const send = (method, params = {}) => new Promise((r) => { id += 1; pending.set(id, r); ws.send(JSON.stringify({ id, method, params })); });
+    await send('Page.enable'); await send('Runtime.enable');
+    const errors = [];
+    ws.addEventListener('message', (e) => { const m = JSON.parse(e.data); if (m.method === 'Runtime.consoleAPICalled' && m.params.type === 'error') errors.push(m.params.args.map((a) => a.value ?? a.description).join(' ')); if (m.method === 'Runtime.exceptionThrown') errors.push(m.params.exceptionDetails.text); });
+    let b;
+    b = {
+      errors,
+      send,
+      // Waits until the page left its loading state (polling, not a fixed delay: the suite runs files in parallel and a busy
+      // machine must not make a test flaky). `ready: false` returns as soon as the shell is on screen (to observe loading).
+      async open(url, width = 1440, height = 900, { ready = true } = {}) {
+        await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: width < 768 });
+        await send('Page.navigate', { url: 'about:blank' });
+        await send('Page.navigate', { url });
+        const cond = ready ? `!!document.querySelector('.ex-title') && !document.querySelector('.gr-state-loading')` : `!!document.querySelector('.ex-title')`;
+        for (let i = 0; i < 100; i += 1) { if (await b.eval(cond)) break; await sleep(100); }
+        await sleep(150);
+      },
+      async eval(expr) { const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); return r.result?.result?.value; },
+      async key(key, { shift = false } = {}) {
+        const codes = { Tab: 9, Escape: 27, Enter: 13 };
+        const base = { key, code: key, windowsVirtualKeyCode: codes[key], nativeVirtualKeyCode: codes[key], modifiers: shift ? 8 : 0 };
+        // Enter must carry its text to activate a focused button (like a real keyboard); Tab / Escape are raw keys.
+        await send('Input.dispatchKeyEvent', key === 'Enter' ? { type: 'keyDown', text: String.fromCharCode(13), unmodifiedText: String.fromCharCode(13), ...base } : { type: 'rawKeyDown', ...base });
+        await send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+        await sleep(120);
+      },
+      close: () => stopBrowser(proc, dir, ws),
+    };
+    return b;
+  } catch (error) {
+    await stopBrowser(proc, dir, ws);
+    throw error;
+  }
 }
-
 const sources = () => ({
   productPotential: async () => potentialPayload(), audience: async () => audiencePayload(),
   content: async () => contentPayload(), store: async () => storePayload(),
@@ -96,10 +140,10 @@ test('browser: 6 pages x 1440 / 1280 / 1024 / 768 / 390 / 375 / 320 - no horizon
     for (const pg of PAGES) {
       for (const w of WIDTHS) {
         await b.open(`${app.base}/#/${pg}`, w);
-        const r = JSON.parse(await b.eval(`JSON.stringify({ sw: document.documentElement.scrollWidth, w: innerWidth, state: !!document.querySelector('.gr-state'), kpis: document.querySelectorAll('.ex-kpi').length })`));
+        const r = JSON.parse(await b.eval(`JSON.stringify({ sw: document.documentElement.scrollWidth, w: innerWidth, state: !!document.querySelector('.gr-state'), kpis: document.querySelectorAll('.ex-kpi').length, fiche: document.querySelectorAll('.gv-action').length })`));
         assert.ok(r.sw <= r.w, `${pg || 'overview'} @${w}: page scrolls horizontally (${r.sw} > ${r.w})`);
         assert.equal(r.state, false, `${pg || 'overview'} @${w}: still in a loading / error state`);
-        assert.ok(r.kpis >= 3, `${pg || 'overview'} @${w}: page content rendered`);
+        assert.ok(pg === 'opportunities' ? r.fiche >= 1 : r.kpis >= 3, `${pg || 'overview'} @${w}: page content rendered`); // Opportunités now opens on the compact priority lines (the count tiles are gone)
       }
     }
     assert.deepEqual(b.errors.filter((e) => !/ResizeObserver/.test(e)), []);

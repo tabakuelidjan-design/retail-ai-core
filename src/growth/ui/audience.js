@@ -8,7 +8,7 @@
 const AU_TONE = { priority: 'gr-good', activate: 'gr-warn', develop: 'gr-info', watch: 'gr-bad', insufficient: 'mute' };
 const AU_SEG_ICON = { loyal: 'clientFidele', returning: 'pack:returningCustomers', newReturned: 'nouveauClient', new: 'nouveauClient', reactivate: 'clientDormant', occasional: 'segmentClient', unknown: 'dataHealth' };
 const AU_ACTION_ICON = { reactivation: 'pack:retargeting', loyalty: 'pack:loyalty', secondPurchase: 'pack:gifts', targetedOffer: 'segmentClient', growSample: 'dataHealth', enableCustomerKey: 'dataHealth' };
-let auState = { sel: null };
+let auState = { sel: null, linked: null, missing: null };
 
 const auPct = (v) => `${Math.round(v * 100)} %`;
 const auNA = (text) => h('span', { class: 'gr-pp-na' }, text);
@@ -88,7 +88,7 @@ function auNoCustomerLevel() {
 }
 // Detail panel: focus handled by the shell (dialogOpened / dialogClosed + data-focus-id on every trigger).
 function auOpen(key, trigger) { dialogOpened(trigger); auState.sel = key; render(); }
-function auClose() { auState.sel = null; dialogClosed(); render(); }
+function auClose() { clearHashParams('audience'); auState.sel = null; dialogClosed(); render(); }
 function auPriorityCard(d) {
   const head = cardHead('pack:priorityHigh', t('gr.au.prio.title'));
   if (d.mode !== 'customer') return h('div', { class: 'ex-card gr-au-prio' }, head, auNoCustomerLevel());
@@ -218,11 +218,15 @@ if (typeof document !== 'undefined' && document.addEventListener) {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && auState.sel && currentPage() === 'audience') auClose(); });
 }
 if (typeof window !== 'undefined' && window.addEventListener) {
-  window.addEventListener('hashchange', () => { auState.sel = null; if (document.body && document.body.classList) document.body.classList.remove('gr-pp-lock'); });
+  window.addEventListener('hashchange', () => { auState.sel = null; auState.linked = null; auState.missing = null; if (document.body && document.body.classList) document.body.classList.remove('gr-pp-lock'); });
 }
 
 function renderAudience(main, safe) {
   const d = PAGES.audience.get();
+  // Opened from an opportunity: #/audience?open=<segment key>. A segment that is not in the engine's list is said, never silently ignored.
+  const want = hashParam('open');
+  if (want && auState.linked !== want) { auState.linked = want; if (d.mode !== 'empty' && d.segments.some((s) => s.key === want)) { auState.sel = want; auState.missing = null; dialogOpened(null); } else auState.missing = want; }
+  if (want && auState.missing) main.appendChild(h('div', { class: 'ex-card gr-pr-card' }, h('div', { class: 'gr-pp-empty' }, t('gr.au.deepMissing'))));
   if (d.mode === 'empty') { main.appendChild(h('div', { class: 'ex-card' }, NordlaCharts.insufficient(t('gr.au.empty.title'), t('gr.au.empty.text')))); return; }
   if (auState.sel && !d.segments.some((s) => s.key === auState.sel)) auState.sel = null;
   if (d.mode === 'aggregate') main.appendChild(h('div', { class: 'gr-au-banner', role: 'note' }, gi('dataHealth', 'md'), h('span', null, t('gr.au.noKey.banner'))));

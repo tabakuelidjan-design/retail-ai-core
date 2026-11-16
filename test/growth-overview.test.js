@@ -36,7 +36,7 @@ test('growth server: serves the page, its assets and the shared design system; C
     }
     for (const p of ['/campaigns.js', '/api/growth/campaigns']) assert.equal((await fetch(base + p)).status, 404, `${p} no longer exists`);
     // Reused Analytics stylesheet is served byte-identical (a reuse, not a fork).
-    assert.equal(await (await fetch(`${base}/style.css`)).text(), await readFile(new URL('../src/analytics-premium/ui/style.css', import.meta.url), 'utf8'));
+    assert.equal(await (await fetch(`${base}/style.css`)).text(), await readFile(new URL('../src/growth/ui/style.css', import.meta.url), 'utf8'));
     // No tenant configured: Vue d'ensemble states it, Opportunités refuses with the known safe code.
     const d = await (await fetch(`${base}/api/growth/overview`)).json();
     assert.equal(d.demo, undefined, 'no demonstration flag: nothing on this page is demonstration data');
@@ -148,7 +148,7 @@ test('« À corriger maintenant » total: counted as corrections (one product ma
     for (const h of ['#/', '#/opportunities']) {
       const { root, errors } = await growthDom(h, { lang });
       assert.deepEqual(errors, []);
-      const tile = text(all(root, (n) => hasClass(n, 'ex-kpi'))[0]);
+      const tile = h === '#/' ? text(all(root, (n) => hasClass(n, 'ex-kpi'))[0]) : text(all(root, (n) => hasClass(n, 'gr-pr-fix'))[0]); // Opportunités: the total moved into the corrections section (the count tiles are gone)
       assert.ok(tile.includes(note) && tile.includes(hint), `${lang} ${h}: ${tile}`);
       assert.ok(!/éléments concernés|betrokken elementen|items affected/.test(text(root)), `${lang} ${h}: ambiguous wording`);
     }

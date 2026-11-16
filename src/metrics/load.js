@@ -24,9 +24,11 @@ const LINE_COLUMNS = 'id,order_id,variant_id,title_snapshot,sku_snapshot,quantit
 const REFUND_COLUMNS = 'id,order_id,amount,refunded_at,shipping_subtotal,shipping_tax';
 const REFUND_LINE_COLUMNS = 'id,refund_id,order_line_id,quantity,amount,tax_amount';
 
+import { readCostPolicy, applyCostPolicy } from './cost-policy.js';
+
 export async function loadDataset(supabase, merchantId, { since }) {
   const eq = { merchant_id: `eq.${merchantId}` };
-  const [products, variants, orders, costs, collections, locations] = await Promise.all([
+  const [products, variants, orders, rawCosts, collections, locations] = await Promise.all([
     supabase.selectAll('products', { select: 'id,title,handle,product_type,source_created_at,source_status,image_url,image_alt_text,source_id', ...eq }),
     supabase.selectAll('variants', { select: 'id,product_id,sku,title,source_id', ...eq }),
     supabase.selectAll('orders', { select: ORDER_COLUMNS, ...eq, ordered_at: `gte.${since.toISOString()}` }),
@@ -34,6 +36,8 @@ export async function loadDataset(supabase, merchantId, { since }) {
     supabase.selectAll('product_collections', { select: 'product_id,source_id,title,is_current', ...eq, is_current: 'eq.true' }),
     supabase.selectAll('locations', { select: 'id,name,type,source_id', ...eq }),
   ]);
+
+  const costs = applyCostPolicy(rawCosts, await readCostPolicy(supabase, merchantId)); // merchant-declared Shopify costs are read as verified (cost-policy.js); no-op for every other merchant
 
   // orderIds is already merchant-scoped (orders was fetched with merchant_id above), but every one of these
   // now also carries its own merchant_id column (migration 20260922230000) - passed explicitly as

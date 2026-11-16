@@ -15,10 +15,11 @@
 const json = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers }); res.end(JSON.stringify(body)); };
 const SAFE = ['GET', 'HEAD'];
 
-export function createSessionGate({ identity, security }) {
+export function createSessionGate({ identity, security, moduleCode = 'sourcing' }) {
   if (!identity || typeof identity.authenticateAndOpenSession !== 'function' || typeof identity.resolveAccessSession !== 'function') throw new TypeError('createSessionGate needs the identity service of this server (createIdentityService)');
   if (!security || typeof security.guardMutation !== 'function') throw new TypeError('createSessionGate needs the HTTP security of this server (createHttpSecurity)');
-  if (identity.context?.module !== 'sourcing' || security.module !== 'sourcing') throw new TypeError('the identity and the HTTP security must both be built for the "sourcing" module');
+  // the default stays 'sourcing' (this server); another hosted module (the Creator) names its own, and BOTH collaborators must be built for exactly that module
+  if (identity.context?.module !== moduleCode || security.module !== moduleCode) throw new TypeError(`the identity and the HTTP security must both be built for the "${moduleCode}" module`);
   const refusal = (r) => ({ ok: false, status: r.response?.status ?? 403, body: r.response ?? { error: 'FORBIDDEN' } });
   const cookiesFor = (token) => [security.cookies.sessionCookie(token), security.cookies.csrfCookie(security.csrfTokenFor(token))];
   const cleared = () => [security.cookies.clearSessionCookie(), security.cookies.clearCsrfCookie()];
