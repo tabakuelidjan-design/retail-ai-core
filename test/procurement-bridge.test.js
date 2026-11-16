@@ -140,6 +140,7 @@ test('a recovered copy is the same dossier: importing both creates one item, one
   const b = await importSourcingCase({ commands: w.c, queries: w.q, actor: buyer, caseState: copy, supplierName: 'Xiaomi test supplier' });
   assert.equal(b.item.id, a.item.id); assert.equal(b.supplier.id, a.supplier.id); assert.equal(b.item.created, false);
   assert.equal(a.item.sku, 'SRC-case-mvdqusb7');
+  assert.equal((await w.q.item(a.item.id)).attachments.length, 2); // the copy's photo-0 / photo-1 are the source's photos: not attached a second time
   assert.equal((await w.q.items()).filter((i) => i.sku.startsWith('SRC-')).length, 1);
   assert.equal((await w.q.priceHistory({ supplierId: a.supplier.id, itemId: a.item.id })).length, 1);
   assert.deepEqual(b.quotes.filter((q) => q.status !== 'SKIPPED').map((q) => q.status), ['UNCHANGED']);

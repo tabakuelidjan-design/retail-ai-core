@@ -32,7 +32,7 @@ export function caseToCapture(caseState, { supplierName: givenName } = {}) {
   const gtin = String(caseState.identity?.identifiers?.gtin ?? '').trim();
   // the Sourcing PWA writes bare references (photo-0); the image itself lives on the phone / in Sourcing's photo store. A bare reference becomes sourcing://<case>/<ref>,
   // which the server can resolve (read-only) when the photo is stored; a reference that is already a URI is kept as it is.
-  const refOf = (r) => (String(r).includes('://') ? String(r) : `sourcing://${caseState.id}/${r}`).slice(0, 300);
+  const refOf = (r) => (String(r).includes('://') ? String(r) : `sourcing://${rootId}/${r}`).slice(0, 300); // a recovered copy points at its source's photos: the same photo is never attached twice
   const attachments = [
     ...(caseState.identity?.photos ?? []).filter((p) => p?.ref).map((p) => ({ kind: 'PHOTO', ref: refOf(p.ref), note: p.note ? String(p.note).slice(0, 300) : null })),
     ...(caseState.documents ?? []).filter((d) => d?.ref || d?.photoRef).map((d) => ({ kind: d.photoRef && !d.ref ? 'PHOTO' : 'DOCUMENT', ref: refOf(d.ref ?? d.photoRef), note: d.fileName ? String(d.fileName).slice(0, 300) : null })),
