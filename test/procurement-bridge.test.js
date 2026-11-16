@@ -111,3 +111,44 @@ test('a draft purchase order is prepared from the case and is never created twic
   // the draft is only a draft: it cannot be ordered without the whole approval path
   await rejects(w.c.placeOrder(owner, key(), { poId: d.purchaseOrder.id, approval: undefined }), 'INVALID_TRANSITION');
 });
+
+// The real staging dossier "TEST XIAOMI - GOURDE 18-10" (2026-10-18): no supplier name, and a quote that was built up in three saved steps
+// (MOQ, then the currency, then the price). The recovered copy "-rec-" points to the same dossier.
+const xiaomi = (over = {}) => ({
+  schema: 2, id: 'case-mvdqusb7', identity: { workingName: 'TEST XIAOMI - GOURDE 18-10', identifiers: { gtin: null }, photos: [{ ref: 'photo-0' }, { ref: 'photo-1' }] }, supplier: {},
+  quotes: [{ moq: 60, at: '2026-10-18T12:53:20.901Z' }, { moq: 60, currency: 'USD', at: '2026-10-18T12:53:26.451Z' }, { moq: 60, currency: 'USD', unitPrice: '5', at: '2026-10-18T12:53:28.342Z' }],
+  recoveredFrom: { id: 'case-mvdqusb7', sourceRev: 1, source: 'server' }, ...over,
+});
+
+test('a case without a supplier name is refused until the person types the name: nothing is guessed', async () => {
+  const w = await setup();
+  const refused = await importSourcingCase({ commands: w.c, queries: w.q, actor: buyer, caseState: xiaomi() });
+  assert.equal(refused.status, 'BLOCKED'); assert.ok(refused.issues.some((i) => i.code === 'NO_SUPPLIER'));
+  const before = (await w.q.suppliers()).length;
+  const ok = await importSourcingCase({ commands: w.c, queries: w.q, actor: buyer, caseState: xiaomi(), supplierName: '  Xiaomi test supplier  ' });
+  assert.equal(ok.supplier.name, 'Xiaomi test supplier'); assert.equal(ok.supplier.created, true); assert.equal((await w.q.suppliers()).length, before + 1);
+  const h = await w.q.priceHistory({ supplierId: ok.supplier.id, itemId: ok.item.id });
+  assert.equal(h.length, 1); assert.deepEqual(h[0].tiers, [{ minQty: 60, unitPrice: '5.0' }]); assert.equal(h[0].moq, 60); // the two unfinished saves are reported, never imported
+  assert.ok(ok.issues.some((i) => i.code === 'CURRENCY_MISSING'));
+  assert.equal(caseToCapture(xiaomi(), { supplierName: 'A' }).issues.some((i) => i.code === 'NO_SUPPLIER'), true); // one letter is not a name
+});
+
+test('a recovered copy is the same dossier: importing both creates one item, one supplier, one quote', async () => {
+  const w = await setup();
+  const original = xiaomi(); const copy = xiaomi({ id: 'case-mvdqusb7-rec-mvdv69n1', recoveredFrom: { id: 'case-mvdqusb7', sourceRev: 3, source: 'server' } });
+  const a = await importSourcingCase({ commands: w.c, queries: w.q, actor: buyer, caseState: original, supplierName: 'Xiaomi test supplier' });
+  const b = await importSourcingCase({ commands: w.c, queries: w.q, actor: buyer, caseState: copy, supplierName: 'Xiaomi test supplier' });
+  assert.equal(b.item.id, a.item.id); assert.equal(b.supplier.id, a.supplier.id); assert.equal(b.item.created, false);
+  assert.equal(a.item.sku, 'SRC-case-mvdqusb7');
+  assert.equal((await w.q.items()).filter((i) => i.sku.startsWith('SRC-')).length, 1);
+  assert.equal((await w.q.priceHistory({ supplierId: a.supplier.id, itemId: a.item.id })).length, 1);
+  assert.deepEqual(b.quotes.filter((q) => q.status !== 'SKIPPED').map((q) => q.status), ['UNCHANGED']);
+});
+
+test('a draft order from the typed-name import is created once, then reused', async () => {
+  const w = await setup();
+  const r1 = await draftOrderFromCase({ commands: w.c, queries: w.q, actor: buyer, caseState: xiaomi(), supplierName: 'Xiaomi test supplier', qty: 60, destinationLocationId: loc, expectedDate: '2026-12-31', fx: () => ({ from: 'USD', to: 'EUR', rate: '0.92', date: '2026-11-16', source: 'test' }) });
+  assert.ok(r1.purchaseOrder && r1.purchaseOrder.status === 'DRAFT'); assert.equal(r1.purchaseOrder.reused, false);
+  const r2 = await draftOrderFromCase({ commands: w.c, queries: w.q, actor: buyer, caseState: xiaomi({ id: 'case-mvdqusb7-rec-mvdv69n1' }), supplierName: 'Xiaomi test supplier', qty: 60, destinationLocationId: loc, expectedDate: '2026-12-31' });
+  assert.equal(r2.purchaseOrder.id, r1.purchaseOrder.id); assert.equal(r2.purchaseOrder.reused, true);
+});

@@ -31,7 +31,7 @@ export function createFileCaseSource({ casesDir, photosDir = null }) {
       let names; try { names = await readdir(casesDir); } catch { return { available: false, reason: 'the Sourcing directory is not readable', cases: [] }; }
       const cases = [];
       for (const f of names.filter((n) => /^[A-Za-z0-9_-]+\.json$/.test(n))) {
-        try { const s = JSON.parse(await readFile(join(casesDir, f), 'utf8')); cases.push({ id: s.id, name: s.identity?.workingName ?? '', supplier: s.supplier?.name ?? null, quotes: (s.quotes ?? []).length, photos: (s.identity?.photos ?? []).length, updatedAt: s.updatedAt ?? null }); } catch { /* a corrupt case file is skipped, never fatal */ }
+        try { const s = JSON.parse(await readFile(join(casesDir, f), 'utf8')); cases.push({ id: s.id, recoveredFrom: typeof s.recoveredFrom?.id === 'string' ? s.recoveredFrom.id : null, name: s.identity?.workingName ?? '', supplier: s.supplier?.name ?? null, quotes: (s.quotes ?? []).length, photos: (s.identity?.photos ?? []).length, updatedAt: s.updatedAt ?? null }); } catch { /* a corrupt case file is skipped, never fatal */ }
       }
       return { available: true, cases: cases.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))) };
     },
