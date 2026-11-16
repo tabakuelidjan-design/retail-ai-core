@@ -198,6 +198,8 @@ function kpiRow(d) {
     pr('watch', null, t('gr.kpi.watch'), t('gr.kpi.watchNote')));
 }
 
+// The empty "À corriger" message says what was really established: a checked zero, nothing to analyse, or an incomplete check (a source is down).
+const fixEmptyKey = (state) => (state === 'NO_DATA' ? 'gr.op.fix.emptyNoData' : state === 'PARTIAL' ? 'gr.op.fix.emptyPartial' : 'gr.op.fix.empty');
 // ---------- Needs your attention = the first "À corriger maintenant" groups of Opportunités (real, grouped by problem) ----------
 const ovLink = () => h('a', { class: 'gr-op-link', href: '#/opportunities' }, t('gr.ov.toOpportunities'));
 function attentionCard(d) {
@@ -210,7 +212,7 @@ function attentionCard(d) {
         h('div', { class: 'ex-mover-main' },
           h('div', { class: 'ex-mover-name' }, opFixTitle(g)),
           h('div', { class: 'ex-mover-sub gr-wrap' }, t(g.kind === 'purchaseCost' ? 'gr.op.fix.purchaseCost.why' : `gr.op.fix.content.${g.problem}.why`))))))
-      : h('div', { class: 'gr-pp-empty' }, t('gr.op.fix.empty')),
+      : h('div', { class: 'gr-pp-empty', 'data-fix-state': d.fixState || 'CHECKED' }, t(fixEmptyKey(d.fixState))),
     h('div', { class: 'ex-foot' }, ovLink()));
 }
 

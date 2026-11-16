@@ -31,6 +31,8 @@ export function buildOverview({ now = new Date(), store = null, priorities = nul
     },
     // "À corriger maintenant" (first groups) and the commercial opportunities, straight from the aggregator.
     attention: pr ? pr.sections.fix.slice(0, 3) : null,
+    fixState: pr ? (pr.fixState ?? 'CHECKED') : null, // why "À corriger" is empty: CHECKED (real zero) | NO_DATA | PARTIAL
+    fixDownSources: pr ? (pr.fixDownSources ?? []) : [],
     opportunities: pr ? pr.sections.commercial.slice(0, 3) : null,
     waiting: pr ? pr.waiting : [],
     real: { store: storeSummary(store) },

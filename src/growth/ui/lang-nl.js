@@ -607,6 +607,8 @@ window.NORDLA_DICTS.nl = Object.assign(window.NORDLA_DICTS.nl || {}, {
   'gr.op.fix.title': 'Nu te corrigeren',
   'gr.op.fix.intro': 'Betrouwbare problemen in uw gegevens, gegroepeerd per probleem. Ze corrigeren maakt de aanbevelingen betrouwbaarder.',
   'gr.op.fix.empty': 'Niets te corrigeren in de geanalyseerde gegevens.',
+  'gr.op.fix.emptyNoData': "Nog niets te analyseren: de gesynchroniseerde catalogus is leeg en er werd geen product verkocht in de periode. Dit is geen “alles in orde”.",
+  'gr.op.fix.emptyPartial': "Onvolledige controle: een bron kon niet gelezen worden. Niets laat toe te zeggen dat alles in orde is.",
   'gr.op.fix.examples': 'Voorbeelden:',
   'gr.op.fix.dossier.all': 'Het correctiedossier downloaden',
   'gr.op.fix.dossier.one': 'Deze categorie exporteren',

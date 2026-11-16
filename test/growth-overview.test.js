@@ -103,7 +103,7 @@ test('Vue d\'ensemble payload: real sources only - store sales from Croissance m
   assert.deepEqual(d.sources, { store: 'real', priorities: 'real' });
   // Removed for this beta (owner rule 2026-09-28): no attribution, pulse, AI insights or social content source exists.
   assert.deepEqual(Object.keys(d.kpis), ['fix', 'commercial', 'watch']);
-  assert.deepEqual(Object.keys(d).sort(), ['attention', 'currency', 'generatedAt', 'kpis', 'opportunities', 'real', 'sources', 'waiting']);
+  assert.deepEqual(Object.keys(d).sort(), ['attention', 'currency', 'fixDownSources', 'fixState', 'generatedAt', 'kpis', 'opportunities', 'real', 'sources', 'waiting']);
   assert.equal(JSON.stringify(d).includes('notConnected'), false, 'no "not connected" source left');
   assert.equal(d.real.store.net, store.kpis.storeNet.value);
   assert.equal(d.real.store.orders, store.kpis.storeOrders.value);

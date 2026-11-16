@@ -61,7 +61,7 @@ function opFixCard(d) {
     h('p', { class: 'ex-sub gr-pr-intro' }, t('gr.op.fix.intro')),
     groups.length ? h('p', { class: 'ex-sub gr-pr-intro' }, t('gr.kpi.fixHint')) : null,
     groups.length ? h('p', { class: 'gr-op-dossier' }, h('a', { class: 'gv-primary gr-op-dossier-btn', href: opDossierHref('all'), download: '', 'data-export': 'all' }, t('gr.op.fix.dossier.all')), h('span', { class: 'gr-muted' }, t('gr.op.fix.dossier.hint'))) : null,
-    groups.length ? h('div', { class: 'ex-movers' }, groups.map(opFixRow)) : h('div', { class: 'gr-pp-empty' }, t('gr.op.fix.empty')));
+    groups.length ? h('div', { class: 'ex-movers' }, groups.map(opFixRow)) : h('div', { class: 'gr-pp-empty', 'data-fix-state': d.fixState || 'CHECKED' }, t(d.fixState === 'NO_DATA' ? 'gr.op.fix.emptyNoData' : d.fixState === 'PARTIAL' ? 'gr.op.fix.emptyPartial' : 'gr.op.fix.empty')));
 }
 
 // ---------- Opportunités commerciales: validated by an engine, or an honest empty state ----------

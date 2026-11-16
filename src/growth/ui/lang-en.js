@@ -607,6 +607,8 @@ window.NORDLA_DICTS.en = Object.assign(window.NORDLA_DICTS.en || {}, {
   'gr.op.fix.title': 'To fix now',
   'gr.op.fix.intro': 'Reliable problems in your data, grouped by problem. Fixing them makes the recommendations safer.',
   'gr.op.fix.empty': 'Nothing to fix in the analysed data.',
+  'gr.op.fix.emptyNoData': "Nothing to analyse yet: the synced catalogue is empty and no product was sold in the period. This is not an “all clear”.",
+  'gr.op.fix.emptyPartial': "Incomplete check: a source could not be read. Nothing allows saying everything is fine.",
   'gr.op.fix.examples': 'Examples:',
   'gr.op.fix.dossier.all': 'Download the correction file',
   'gr.op.fix.dossier.one': 'Export this category',

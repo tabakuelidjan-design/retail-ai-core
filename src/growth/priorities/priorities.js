@@ -62,6 +62,10 @@ export function buildPriorities({ products = null, audience = null, store = null
     currency: (P && P.currency) || (S && S.currency) || (C && C.currency) || (A && A.currency) || 'EUR',
     window: { weeks: (P && P.window && P.window.weeks) || (S && S.window && S.window.weeks) || 8, audienceDays: (A && A.window && A.window.days) || null },
     sources,
+    // WHY the fix list is empty (never "nothing to fix" when nothing could be checked): CHECKED = both engines answered and analysed something (a real zero),
+    // NO_DATA = they answered but had nothing to analyse (empty catalogue and no sold product), PARTIAL = a source is down, so the check is incomplete.
+    fixState: !P || !C ? 'PARTIAL' : (C.scope && C.scope.analysed === 0 && !(Array.isArray(P.rows) && P.rows.length) ? 'NO_DATA' : 'CHECKED'),
+    fixDownSources: ['products', 'content'].filter((k) => sources[k] !== 'ok'),
     counts: { fix: fix.length, commercial: commercial.length, watch: watch.length, fixCorrections: fix.reduce((a, g) => a + g.evidence.count, 0) },
     sections: { fix, commercial, watch },
     waiting: waiting(P, A, S),

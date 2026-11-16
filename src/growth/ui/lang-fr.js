@@ -607,6 +607,8 @@ window.NORDLA_DICTS.fr = Object.assign(window.NORDLA_DICTS.fr || {}, {
   'gr.op.fix.title': 'À corriger maintenant',
   'gr.op.fix.intro': 'Problèmes fiables dans vos données, regroupés par problème. Les corriger rend les recommandations plus sûres.',
   'gr.op.fix.empty': 'Rien à corriger dans les données analysées.',
+  'gr.op.fix.emptyNoData': "Aucune donnée à analyser pour l’instant : le catalogue synchronisé est vide et aucun produit n’a été vendu sur la période. Ce n’est pas un « tout est bon ».",
+  'gr.op.fix.emptyPartial': "Vérification incomplète : une source n’a pas pu être lue. Rien ne permet de dire que tout est correct.",
   'gr.op.fix.examples': 'Exemples :',
   'gr.op.fix.dossier.all': 'Télécharger le dossier de correction',
   'gr.op.fix.dossier.one': 'Exporter cette catégorie',
