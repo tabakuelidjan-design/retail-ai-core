@@ -61,6 +61,7 @@ export async function startFinanceServer({ env = process.env, runtimeDeps = {}, 
       return latestSyncStatus(rt.supabase, rt.merchant.id, { staleAfterMinutes: Number(env.SYNC_STALE_AFTER_MINUTES || 60) });
     },
     allowedHosts: hosting.allowedHosts ?? undefined, secureCookie: hosting.secureCookie, trustProxyHops: hosting.trustProxyHops,
+    sso: hosting.hosted && env.FINANCE_SSO_ENABLED === '1' ? { secret: token } : null, // /sso: Nordla single sign-on, hosted and explicitly enabled only
     settings: {
       load: () => loadSettings(),
       save: (s) => saveSettings(s),

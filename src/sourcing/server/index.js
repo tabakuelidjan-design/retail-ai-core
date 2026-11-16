@@ -65,12 +65,22 @@ export async function buildCore({ env, dir, merchantId, store, safety, log = () 
   const campaigns = createCampaignService({ merchantId, branding, analytics: readers.analytics, file: join(dir, 'core', 'campaigns.jsonl'), env });
   let creation = null; // local visual (owner's photo + headline), only when the merchant's typography is configured; no provider, no network
   try { const { createCreationService, loadCreationConfig } = await import('../../core-pilot/creation.js'); const cfg = await loadCreationConfig(env, root); if (cfg) creation = createCreationService({ merchantId, config: cfg, branding, dir: join(dir, 'core', 'creations') }); } catch (e) { log(`Création (local visual): NOT connected (${e.message}).`); }
-  return { core: createCoreHttp({ runtime, store, externals, ...readers, branding, campaigns, creation, env }), status: `Nordla Core ON for merchant ${merchantId} (owner rules: ${config.ownerRules.length || 'none configured'}); Finance ${readers.finance ? 'read-only' : 'not connected'}; Analytics ${readers.analytics ? 'read-only' : 'not connected'}` };
+  const financeSso = buildFinanceSso(env, merchantId);
+  return { core: createCoreHttp({ runtime, store, externals, ...readers, branding, campaigns, creation, financeSso, env }), status: `Nordla Core ON for merchant ${merchantId} (owner rules: ${config.ownerRules.length || 'none configured'}); Finance ${readers.finance ? 'read-only' : 'not connected'}; Analytics ${readers.analytics ? 'read-only' : 'not connected'}` };
 }
 
 /** Read-only Finance and Analytics for the Core, on the SAME Supabase project and merchant as the sign-in (hosted mode only). Finance needs
  *  MERCHANT_TIMEZONE (no silent UTC). Analytics reports are rebuilt by Analytics' own report run (mode 'report': reads, writes no row)
  *  into a directory of this server's volume, at start then every ANALYTICS_REFRESH_HOURS (default 3); a failure is logged, never fatal. */
+/** Finance dashboard single sign-on: FINANCE_PUBLIC_URL (https origin, no path) + FINANCE_SSO_SECRET (server-side only, 24+ characters). Anything missing or malformed: null (no dashboard link). */
+export function buildFinanceSso(env, merchantId) {
+  try {
+    const u = new URL(String(env.FINANCE_PUBLIC_URL ?? '').trim()); const secret = String(env.FINANCE_SSO_SECRET ?? '');
+    if (u.protocol !== 'https:' || u.pathname !== '/' || u.search || u.hash || u.username || u.password || secret.length < 24) return null;
+    return { publicUrl: u.origin, secret, merchantId };
+  } catch { return null; }
+}
+
 export async function buildReaders({ env, dir, merchantId, log = () => {}, schedule = true }) {
   if (!isHosted(env) || !String(env.SUPABASE_URL ?? '').trim()) return { finance: null, analytics: null };
   const { createSupabaseClient: client, loadSupabaseConfigFromEnv: cfg } = await import('../../supabase/client.js');
