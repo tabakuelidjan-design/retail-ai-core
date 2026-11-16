@@ -1,0 +1,1 @@
+{"patches":[{"path":"art_direction.narrative_elements[1].element","value":"Une ligne tendue, fine et discrète, reliant le cou à un point lumineux dans la main"}]}

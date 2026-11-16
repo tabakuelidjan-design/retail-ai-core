@@ -1,0 +1,21 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15522822717788",
+  "title": "Chargeur mural ultra-rapide 65W",
+  "description": "Ce chargeur mural 65W concentre une puissance élevée dans un format simple à glisser dans un sac. Il est destiné aux appareils compatibles qui demandent une recharge rapide, à la maison, au bureau ou pendant les déplacements.",
+  "tags": [],
+  "productType": "",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57253205606748",
+     "title": "Default Title",
+     "price": "9.90",
+     "inventoryQuantity": 39
+    }
+   ]
+  }
+ }
+}

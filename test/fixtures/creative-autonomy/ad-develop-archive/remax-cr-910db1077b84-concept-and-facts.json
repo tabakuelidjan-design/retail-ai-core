@@ -1,0 +1,172 @@
+{
+ "concept": {
+  "name": "Le café du matin, avant le premier appel",
+  "from_rapprochement": "Transport public : prête à l’emploi, universelle, sans formalité",
+  "starting_point": "BENEFIT",
+  "need": "Pouvoir recharger son smartphone en déplacement sans se soucier d’oublier ou de perdre des câbles.",
+  "idea": "Sur une table en bois sombre d’un café namurois (briques apparentes, lumière naturelle douce venant de la gauche), la batterie Remax bleu clair repose près d’un smartphone éteint, posé à plat, à 5 cm d’elle. Le câble USB-C pend naturellement le long du boîtier, orienté vers le téléphone sans le toucher ; la boucle supérieure est visible au-dessus, détendue. Un petit carnet fermé et un expresso froid complètent la scène.",
+  "visible_cues": "Smartphone éteint à portée de main, câble USB-C intégré pointé vers lui sans contact, affichage lumineux à 100%, absence de câbles externes sur la table.",
+  "cable_role": "Le câble USB-C pend vers le téléphone, montrant qu’il suffit de le glisser pour recharger — pas besoin de chercher ni de brancher un autre câble.",
+  "link_to_product": "La batterie est le seul objet de recharge présent, avec ses deux câbles visibles et prêts, dans un contexte où l’on sait qu’on va partir bientôt — elle remplace tout le kit câble/chargeur.",
+  "speaks_to_the_public": "Aux Namurois pressés qui partent travailler ou étudier, elle dit : tu n’as rien à préparer, juste à prendre ce que tu vois.",
+  "headline": "Elle est prête. Pas de câble à chercher.",
+  "product_brings": "Un départ sans stress : le téléphone peut être rechargé immédiatement, sans chercher ni emporter quoi que ce soit d’autre.",
+  "scene_alone_reading": "Une batterie avec câble intégré près d’un téléphone éteint, sur une table de café — on comprend qu’elle est là pour recharger.",
+  "headline_adds": "Elle transforme l’urgence du départ en geste simple : pas de recherche, pas d’oubli — juste la prise en main.",
+  "supported_by": [
+   "integrated_cables",
+   "digital_display"
+  ],
+  "headline_judgement": {
+   "adds": "REPEATS_A_VISIBLE_FEATURE",
+   "direction": "AUCUN"
+  }
+ },
+ "brief": {
+  "scene_permissions": [
+   "SECONDARY_SMARTPHONE"
+  ],
+  "visual_prohibitions": "aucun beige, crème ou sable ; pas de cœurs, de feuillage décoratif, de dorures, de faux luxe ni de rendu IA générique ; le produit réel n'est jamais modifié. Mots et éléments refusés par Nordla à chaque étape : beige, crème, creme, cream, sable, sand, sandy, écru, ecru, taupe, ivoire, ivory, cœur, coeur, heart, hearts, feuille, feuillage, leaf, leafy, leaves, foliage, fougère, fern, frond, eucalyptus, botanical, botanique, végétation, vegetation, végétal, vegetal, végétaux, vegetaux, greenery, verdure, doré, dore, dorure, gold, golden, gilded, gilt, paillette, glitter, luxe, luxury, luxueux, luxueuse, marbre, marbré, marble, velours, velvet, pétale, petal, bokeh.",
+  "merchant": "HABB, Namur",
+  "objective": "Donner envie d'acheter cette batterie chez HABB, à Namur. Pars d'un moment concret où le client a besoin de recharger son téléphone et se reconnaît : la scène doit lui faire comprendre tout de suite ce que la Remax lui simplifie. Les caractéristiques techniques viennent ensuite. Si un téléphone est dans la scène, il reste entièrement visible dans le cadre, secondaire, et assez proche de la Remax pour que le lien avec son câble intégré se lise d'un coup d'œil ; le câble intégré reste débranché, d Offre de la campagne : Aucune remise ni promotion tarifaire.",
+  "audience": "Personnes qui utilisent beaucoup leur smartphone et passent une grande partie de leur journée en déplacement, entre travail, études et sorties. Pas de tranche d'âge imposée. Besoin : pouvoir recharger pendant la journée et disposer des câbles intégrés sans emporter de câbles séparés.",
+  "occasion": "Campagne quotidienne, sans fête particulière.",
+  "merchant_identity": "HABB, boutique de cadeaux et de personnalisation à Namur (Belgique) : coques, impressions UV, coffrets, petite tech.",
+  "merchant_voice": "direct, chaleureux sans mièvrerie, local ; tutoiement accepté ; jamais de superlatif non prouvé.",
+  "facts_rule": "Seuls les faits vérifiés de la fiche Shopify peuvent être affirmés. Aucune capacité non écrite dans la fiche (isolation, durée de froid ou de chaud, étanchéité, incassable, sans BPA, écologique, garantie, superlatif) ne peut être attribuée au produit. Le produit réel est montré tel qu'il est photographié : forme, couleur, logo inchangés.",
+  "verified_selling_points": [
+   "Produit : Batterie externe 20 000 mAh – 45W, coloris Bleu.",
+   "Aspect RÉEL du produit (d'après la photo fournie ; c'est ce qui sera posé dans l'image, à ne jamais contredire ni remplacer) : Batterie externe compacte, bleu clair satiné, en forme de rectangle aux angles très arrondis (la taille d'une grande paume). Elle est photographiée en vue 3/4 d'en haut, depuis la gauche : on voit la face avant, la tranche supérieure et le côté gauche, avec un éclairage de studio doux venant de la gauche. Face avant : un afficheur rond noir qui indique « 100% », dans un anneau bleu clair, en haut à droite ; « 45W | REMAX 20000mAh » en bas. Tranche supérieure : deux ports (un USB-C et un USB-A orange). Deux câbles tressés bleus intégrés, de la couleur du boîtier, dans une pose FIXE, celle de la photo : l'un sort du coin supérieur gauche et forme une grande boucle au-dessus du boîtier ; l'autre sort du côté gauche, pend le long du boîtier et sous son bas, et se termine par un embout USB-C. Ces câbles ne sont jamais déplacés, dépliés, tendus ni reliés à autre chose : le décor ne peut compter ni sur leur forme ni sur un nouveau geste.",
+   "Mentionné dans la fiche mais NON visible sur la photo, donc jamais montré ni mis en scène : le nombre exact de sorties (la fiche en indique trois, le propriétaire en a confirmé quatre : ne pas les compter, ne pas les mettre en scène).",
+   "Description vérifiée : Avec 20 000 mAh, une sortie jusqu’à 45W et deux câbles intégrés, la Remax FC-02 est conçue pour rester autonome plus longtemps sans multiplier les accessoires. Son affichage numérique permet de suivre la batterie en un coup d’œil, tandis que ses trois sorties facilitent la recharge de plusieurs appareils compatibles.",
+   "Prix vérifié : 49,00 €.",
+   "Coloris existants (fiche Shopify) : Bleu, Noir.",
+   "Vendu par HABB, Namur."
+  ]
+ },
+ "product_facts": {
+  "product": "Batterie externe 20 000 mAh – 45W (Bleu)",
+  "variant": "Bleu",
+  "verified_references": [
+   "20 000 mAh",
+   "45W",
+   "FC-02"
+  ],
+  "lit_side_of_the_photograph": "LEFT",
+  "tonal_class": "CLAIR",
+  "product_carries_its_own_cables": true,
+  "pendant_cable_below_the_body_share_of_height": 0.161,
+  "appearance": {
+   "dominant_colours": [
+    {
+     "hex": "#c7dae7",
+     "share": 0.786
+    },
+    {
+     "hex": "#8fa3b2",
+     "share": 0.138
+    },
+    {
+     "hex": "#151616",
+     "share": 0.076
+    }
+   ],
+   "aspect_width_over_height": 0.568,
+   "tonal_class": "CLAIR"
+  },
+  "visible_on_the_photograph": [
+   {
+    "item": "« 45W » (gris foncé, bas du boîtier)",
+    "kind": "MARK",
+    "owner_confirmed": false
+   },
+   {
+    "item": "« REMAX » et « 20000mAh » à droite du trait vertical",
+    "kind": "MARK",
+    "owner_confirmed": false
+   },
+   {
+    "item": "anneau de l'écran : « FAST CHARGING POWER BANK 20000mAh »",
+    "kind": "MARK",
+    "owner_confirmed": false
+   },
+   {
+    "item": "écran rond noir affichant « 100 % » avec l'éclair vert",
+    "kind": "MARK",
+    "owner_confirmed": false
+   },
+   {
+    "item": "port USB-C du dessus",
+    "kind": "PORT",
+    "owner_confirmed": false
+   },
+   {
+    "item": "port USB-A orange du dessus",
+    "kind": "PORT",
+    "owner_confirmed": false
+   },
+   {
+    "item": "prise latérale (est-elle une sortie ?)",
+    "kind": "PORT",
+    "owner_confirmed": false
+   },
+   {
+    "item": "boucle de câble tissé en haut à gauche",
+    "kind": "CABLE",
+    "owner_confirmed": false
+   },
+   {
+    "item": "câble pendant avec connecteur USB-C",
+    "kind": "CABLE",
+    "owner_confirmed": false
+   },
+   {
+    "item": "bleu pâle (teinte d'environ 210°)",
+    "kind": "COLOUR",
+    "owner_confirmed": false
+   }
+  ],
+  "held_wordings": [
+   "trois sorties"
+  ]
+ },
+ "verified_facts": [
+  {
+   "id": "capacity",
+   "claim": "20 000 mAh"
+  },
+  {
+   "id": "power",
+   "claim": "une sortie jusqu'à 45 W"
+  },
+  {
+   "id": "integrated_cables",
+   "claim": "deux câbles intégrés"
+  },
+  {
+   "id": "digital_display",
+   "claim": "affichage numérique"
+  },
+  {
+   "id": "outputs_count",
+   "claim": "quatre sorties au total"
+  }
+ ],
+ "scene_prohibitions": [
+  "second product",
+  "duplicate product",
+  "extra cable",
+  "extra port",
+  "hands",
+  "people",
+  "plants",
+  "added text",
+  "extra letters",
+  "extra inscriptions",
+  "added brand marks",
+  "watermark",
+  "distorted product",
+  "redrawn artwork",
+  "changed printed marks"
+ ]
+}

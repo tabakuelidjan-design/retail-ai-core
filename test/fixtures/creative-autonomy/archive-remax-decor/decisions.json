@@ -1,0 +1,199 @@
+{
+ "concept": {
+  "concept_id": "cnc_2174ebb849fb486b5a78e6863c29193a",
+  "central_idea": "Une batterie qui ne se cache pas derrière la technologie : son bleu clair satiné est mis en valeur par un mur de plâtre fissuré, où chaque craquelure rappelle les micro-ruptures de la journée — et la capacité du produit à les traverser sans faiblir.",
+  "visual_metaphor": "Un mur de briques blanchies, légèrement irrégulier, dont les joints fins et la surface mate forment un contraste subtil avec le bleu satiné du boîtier — comme une structure solide qui laisse la place à ce qui est utile, sans bruit ni décoration.",
+  "story": "Le mur porte les traces discrètes du temps passé, mais la batterie, intacte et pleine, y fait face sans défense ni ostentation — elle ne corrige pas les fissures, elle les ignore, parce qu’elle a assez d’énergie pour continuer.",
+  "emotional_intent": "Résilience douce : le produit ne crie pas sa puissance, il la démontre par sa présence calme dans un environnement imparfait, comme un compagnon discret mais inébranlable.",
+  "product_role": "DESTINATION_OF_THE_STORY",
+  "message_role": "LEADS",
+  "memory_hook": "Le mur fissuré en arrière-plan, contrastant avec la surface lisse et intacte de la batterie bleue — comme si le monde usait, mais elle restait pleine.",
+  "distinctiveness_reason": "Les fissures du mur ne sont pas décoratives mais symboliques : elles incarnent les aléas quotidiens que la batterie traverse grâce à son autonomie, sans que le produit soit montré en action.",
+  "risks": [
+   "Les fissures peuvent être interprétées comme un défaut de construction plutôt que comme une métaphore du temps si la lumière ne les rend pas poétiques",
+   "Le socle de béton brut risque de dominer visuellement si sa taille ou sa teinte entre en compétition avec le bleu du produit",
+   "Le contraste entre imperfection du mur et perfection du produit peut sembler moralisateur si l’émotion n’est pas ancrée dans la sobriété"
+  ]
+ },
+ "art_direction": {
+  "art_direction_id": "art_79f5e8d4ca337a4c7508dd4f03c33a98",
+  "concept_id": "cnc_2174ebb849fb486b5a78e6863c29193a",
+  "atmosphere": "A quiet interior where time has left subtle traces on surfaces, yet the space remains composed and undisturbed, inviting focus on what endures",
+  "depth_model": "LAYERED_DEPTH",
+  "material_language": "Matte plaster with micro-fissures, smooth concrete floor with faint directional wear, and soft-edged shadows that emphasize texture without gloss",
+  "lighting_intent": "A single directional source from the left, casting gentle gradients across surfaces to reveal texture and depth while preserving calmness and continuity with studio lighting",
+  "visual_rhythm": "MEASURED",
+  "product_relationship": "GROUNDED_IN_SCENE",
+  "text_image_relationship": "TEXT_IN_CALM_ZONES",
+  "realism": "PHOTOREALISTIC",
+  "emotional_temperature": "NEUTRAL",
+  "visual_tension": "MEDIUM",
+  "negative_space_strategy": "SURROUNDING_REST",
+  "narrative_elements": [
+   {
+    "element": "Fine hairline cracks across a plaster wall",
+    "reason": "They embody the micro-ruptures of daily life that the battery traverses without faltering, directly echoing the concept’s ‘resilience douce’ and the story’s theme of enduring imperfection.",
+    "zone": "BACKGROUND"
+   },
+   {
+    "element": "A fine vertical crack in the plaster wall, slightly offset from centre, catching a sliver of light",
+    "reason": "It confirms contact and grounding, reinforcing the idea of quiet presence rather than performance, and aligns with the emotional intent of an inébranlable companion.",
+    "zone": "FOREGROUND"
+   }
+  ],
+  "permitted_secondary_elements": [
+   "A single dust mote caught in the left-side light beam",
+   "A faint seam where two plaster panels meet vertically"
+  ],
+  "forbidden_decorative_noise": [
+   "Any representation of a device, screen, cable, battery, or electronic component",
+   "battery, batterie, power bank, display, charger, cable, câble, cord, USB, LED, port, connector, object",
+   "person, hand, screen, écran, device, appareil, logo, brand, price, texte, letter, watermark",
+   "shell, housing, casing, sleeve, bumper, blank, polymer, silicone, protector, étui, boîtier",
+   "a substitute for the product",
+   "a phone, a case or any device",
+   "a competing hero object",
+   "a misleading commercial object",
+   "text, letters, logos or watermarks"
+  ],
+  "rationale": "The scene is built entirely before the product arrives, using light, cracked plaster and grounded shadow to evoke autonomy and quiet resilience—precisely what the verified facts support—while forbidding any visual noise that would distract from or misrepresent the real product’s role."
+ },
+ "stage": {
+  "stage_id": "stg_d31cddaff71aef08f9eefcf725ac5fb6",
+  "concept_id": "cnc_2174ebb849fb486b5a78e6863c29193a",
+  "backdrop": "WALL_AND_FLOOR",
+  "backdrop_tone": "COOL_GREY",
+  "floor_finish": "MATTE",
+  "key_light": {
+   "kind": "SOFTBOX",
+   "side": "LEFT",
+   "intensity": "MEDIUM",
+   "temperature": "NEUTRAL",
+   "purpose": "Reveals the satiné blue finish and integrated cables while casting soft shadows that ground the product on the floor."
+  },
+  "accent_lights": [
+   {
+    "kind": "SLIT_SHEET",
+    "side": "BACK",
+    "intensity": "LOW",
+    "temperature": "COOL",
+    "purpose": "Traces the vertical hairline crack in the plaster wall, turning it into a quiet narrative element that embodies daily micro-ruptures without overwhelming."
+   },
+   {
+    "kind": "RIM",
+    "side": "RIGHT",
+    "intensity": "LOW",
+    "temperature": "NEUTRAL",
+    "purpose": "Adds subtle separation between the battery and the wall, reinforcing its presence as an intact object against a fissuré background—echoing ‘résilience douce’."
+   }
+  ],
+  "camera": {
+   "height": "PRODUCT_CENTER",
+   "framing": "MEDIUM",
+   "product_position": "CENTER"
+  },
+  "support_surface": "FLOOR",
+  "props": [
+   {
+    "shape": "PLINTH",
+    "material": "CONCRETE",
+    "placement": "BENEATH",
+    "scale": "LOW",
+    "reason": "A low concrete plinth grounds the battery subtly, echoing the ‘béton ciré gris clair’ of the brief while ensuring the blue satiné surface remains visually dominant—no competition, only support."
+   },
+   {
+    "shape": "PANEL",
+    "material": "MATTE_BLACK",
+    "placement": "BEHIND",
+    "scale": "HIGH",
+    "reason": "A matte-black panel behind the plaster wall deepens the backdrop tonally, isolating the fissuré texture and preventing visual bleed—so the cracks read as metaphor, not defect."
+   }
+  ],
+  "headline": "Une batterie qui traverse le temps sans bruit",
+  "text_placement": "BOTTOM_RIGHT",
+  "show_price": "YES",
+  "rationale": "Le mur de plâtre fissuré et le sol mat créent une scène photoréaliste où la batterie bleue, posée au centre avec ses câbles intégrés, incarne la résilience douce : chaque élément — lumière gauche, plinth discret, panneau sombre.",
+  "wanted_but_not_available": [
+   "Un vrai mur en plâtre fissuré avec patine naturelle (le système ne permet que des matériaux génériques)",
+   "Une légère poussière visible sur le sol pour renforcer l’idée de temps passé, sans tomber dans le sale ou le négligé",
+   "Un léger reflet diffus du câble tressé sur le sol mat, pour souligner sa présence sans le rendre secondaire"
+  ]
+ },
+ "frame": {
+  "frame_id": "cpf_be413674a3a33b0505a986e48ba79472",
+  "what_we_show": "Une batterie externe Remax FC-02 bleue, posée sur un sol en béton ciré gris clair, baignée d’une lumière douce venant de la gauche, avec un mur texturé en briques blanchies en arrière-plan — le décor minimal met en valeur la forme arrondie, les câbles intégrés tels que photographiés.",
+  "audience": "Clients belges (surtout namurois) à la recherche d’un accessoire tech pratique, autonome et élégant, qui veulent éviter les câbles supplémentaires sans sacrifier la puissance ou le design.",
+  "understood_immediately": "C’est une batterie externe compacte, bleue, avec deux câbles intégrés visibles, un écran numérique actif et des ports exposés — conçue pour recharger sans accessoires superflus.",
+  "felt": "Une sensation de calme technologique : rien n’est superflu, tout est là quand on en a besoin, sans bruit ni complication — comme un outil qui sait rester discret jusqu’à ce qu’on en ait besoin.",
+  "remembered": "La batterie bleue, posée seule sur un sol sobre, avec ses deux câbles tressés fixés en boucle et en chute, comme si elle attendait tranquillement d’être prise en main.",
+  "commercial_objective": "Faire découvrir la Remax FC-02 bleue chez HABB en mettant en avant son autonomie (20 000 mAh), sa puissance (45W) et son avantage pratique : deux câbles intégrés, sans accessoires supplémentaires.",
+  "occasion_context": "Achat spontané ou réfléchi en boutique locale, souvent motivé par un besoin immédiat (voyage, journée chargée, cadeau utile) ou par l’envie d’un accessoire tech bien pensé, pas générique.",
+  "fixed": [
+   {
+    "kind": "PRODUCT_PIXELS",
+    "ref": "product://shopify/15500511084892/Bleu"
+   },
+   {
+    "kind": "PRODUCT_FIDELITY",
+    "ref": "product://shopify/15500511084892/Bleu"
+   },
+   {
+    "kind": "FORMAT",
+    "ref": "4:5"
+   },
+   {
+    "kind": "BRAND_HARD_RULES",
+    "ref": "brand-memory"
+   },
+   {
+    "kind": "APPROVED_TEXT",
+    "ref": "PRICE"
+   },
+   {
+    "kind": "APPROVED_CLAIM",
+    "ref": "claim://shopify/price/57117888119132"
+   }
+  ],
+  "may_change": [
+   "SCENE",
+   "MATERIALS",
+   "LIGHT",
+   "ATMOSPHERE",
+   "COMPOSITION",
+   "TYPOGRAPHIC_TREATMENT",
+   "NARRATIVE_ELEMENTS"
+  ],
+  "generic_risks": [
+   "Un décor neutre mais impersonnel (béton, blanc) qui pourrait servir à n’importe quelle batterie",
+   "L’absence de lien entre le décor et le bénéfice ‘sans câbles séparés’",
+   "Une lumière trop uniforme qui efface la texture du produit et des câbles",
+   "Un cadrage centré sans hiérarchie visuelle, rendant le produit banal",
+   "Une palette froide qui masque la chaleur du bleu satiné du boîtier"
+  ],
+  "distinctive_levers": [
+   "Le mur en briques blanchies : matière brute mais soignée, rappelant l’artisanat local de HABB sans tomber dans le décoratif",
+   "La lumière venant de la gauche, identique à celle de la photo produit, créant une continuité entre studio et décor réel",
+   "Le sol en béton ciré gris clair, lisse mais non réfléchissant, qui laisse le bleu du produit se détacher sans compétition",
+   "L’absence totale de personnes, écrans ou objets secondaires — le produit est seul, mais pas isolé : il occupe son espace avec autorité tranquille",
+   "La pose fixe des câbles, exactement comme photographiés, transformée en signature visuelle plutôt que comme détail technique"
+  ],
+  "rationale": "Ce cadre minimal, construit avant le produit, utilise lumière, matière et architecture pour évoquer l’autonomie et la sobriété du produit, tandis que la fidélité absolue à la photo garantit reconnaissance et crédibilité."
+ },
+ "zone_note": "plate geometry of the archived request: reserved area 25%-68% x 43%-92%, front edge 84%",
+ "zone": {
+  "canvas": [
+   1080,
+   1350
+  ],
+  "box": {
+   "x0": 272,
+   "y0": 581,
+   "w": 457,
+   "h": 662
+  },
+  "contact": [
+   540,
+   1134
+  ]
+ }
+}

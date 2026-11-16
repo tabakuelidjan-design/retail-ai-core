@@ -1,0 +1,53 @@
+{
+  "note": "Open library of visual FAMILIES for Creator (proposal 2026-11-08, to be approved by the owner). A family is a STARTING POINT, never a template: Creator may depart from it, and says in what it departed. Nothing here overrides the HABB rules (forbidden decor, verified facts, the real product unchanged) or the facts of the product photograph (the side its light comes from, its perspective).",
+  "families": {
+    "LUMINEUSE": {
+      "name": "Bright studio",
+      "composition": "Few planes, a low or absent horizon, the product on a clean support, large light areas, generous calm space. Depth comes from a long soft shadow and the support, not from built structures.",
+      "light": "Bright and wide, high-key, cool white. Directional enough to give the product and the support a clearly drawn soft shadow. The side comes from the product photograph. The light must agree with the way the photograph is lit.",
+      "material": "Matte paper white, frosted glass, pale brushed steel, smooth matte plaster. Nothing glossy.",
+      "may_vary": [
+        "the shape and length of the cast shadow",
+        "the height and geometry of the support",
+        "how sharp the horizon is, or whether there is one",
+        "one single accent colour of the kit, or none",
+        "a tight or an airy framing"
+      ]
+    },
+    "COLOREE": {
+      "name": "Colour field",
+      "composition": "Large flat planes of a strong colour of the kit and one or two simple geometric volumes (a cylinder, a block, an arch). Graphic, poster-like, very few elements, an asymmetric balance.",
+      "light": "Hard and single-direction, with crisp shadow edges. The side comes from the product photograph. The light must agree with the way the photograph is lit.",
+      "material": "Matte paint, smooth plaster, matte ceramic. No texture noise.",
+      "may_vary": [
+        "which colour dominates and which one answers it",
+        "the number and the shape of the volumes",
+        "the angle and length of the shadows",
+        "a background split in two colours or a single field"
+      ]
+    },
+    "SOMBRE": {
+      "name": "Dark chamber",
+      "composition": "Stacked planes, a built structure, depth, a quiet architectural space.",
+      "light": "Directional beams in a dark space. The side comes from the product photograph.",
+      "material": "Concrete, matte steel, near-black and steel navy.",
+      "may_vary": [
+        "the shape of the structure",
+        "the source of the light",
+        "whether there is an opening in the back wall"
+      ]
+    },
+    "LIBRE": {
+      "name": "Free choice (series)",
+      "composition": "No starting point: you choose the organisation of the scene yourself, a different one for every scene of a series.",
+      "light": "You choose its quality and mood. It must be compatible with the soft, even light already on the product photograph (the side it comes from is a fact of the photograph) and with the HABB rules.",
+      "material": "You choose the materials within the HABB palette and rules.",
+      "may_vary": [
+        "the organisation of the space",
+        "the materials",
+        "the light",
+        "the colours of the kit and the roles they play"
+      ]
+    }
+  }
+}

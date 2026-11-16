@@ -1,0 +1,89 @@
+{
+ "brief": {
+  "visual_prohibitions": "aucun beige, crème ou sable ; pas de cœurs, de feuillage décoratif, de dorures, de faux luxe ni de rendu IA générique ; le produit réel n'est jamais modifié. Mots et éléments refusés par Nordla à chaque étape : beige, crème, creme, cream, sable, sand, sandy, écru, ecru, taupe, ivoire, ivory, cœur, coeur, heart, hearts, feuille, feuillage, leaf, leafy, leaves, foliage, fougère, fern, frond, eucalyptus, botanical, botanique, végétation, vegetation, végétal, vegetal, végétaux, vegetaux, greenery, verdure, doré, dore, dorure, gold, golden, gilded, gilt, paillette, glitter, luxe, luxury, luxueux, luxueuse, marbre, marbré, marble, velours, velvet, pétale, petal, bokeh.",
+  "merchant": "HABB, Namur",
+  "objective": "Donner envie d'emporter cette gourde Tyeso mauve (500 ml, avec poignée), vendue chez HABB à Namur : je veux comprendre pourquoi on aurait envie de l'emporter. Piste de départ, que Creator peut garder, adapter ou abandonner : un bureau, la gourde prête à repartir quand le programme change. Accroche de départ possible : « Prête quand tu changes de plan ». Creator décide lui-même comment montrer qu'on peut la saisir et repartir. Produit coloré, décor clair et vivant, lumière naturelle, couleur réel Offre de la campagne : Aucune remise ni promotion tarifaire.",
+  "audience": "Personnes actives de Namur et des environs qui emportent leur boisson partout, entre sport, travail et études. Pas de tranche d'âge imposée.",
+  "occasion": "Campagne quotidienne, sans fête particulière.",
+  "merchant_identity": "HABB, boutique de cadeaux et de personnalisation à Namur (Belgique) : coques, impressions UV, coffrets, petite tech.",
+  "merchant_voice": "direct, chaleureux sans mièvrerie, local ; tutoiement accepté ; jamais de superlatif non prouvé.",
+  "facts_rule": "Seuls les faits vérifiés de la fiche Shopify peuvent être affirmés. Aucune capacité non écrite dans la fiche (isolation, durée de froid ou de chaud, étanchéité, incassable, sans BPA, écologique, garantie, superlatif) ne peut être attribuée au produit. Le produit réel est montré tel qu'il est photographié : forme, couleur, logo inchangés.",
+  "verified_selling_points": [
+   "Produit : Gourde Tyeso TS-8755C avec poignée – 500 ml, coloris Mauve.",
+   "Description vérifiée : Une gourde TYESO pensée pour un mode de vie actif. Sa poignée de transport, son couvercle verrouillable et sa construction robuste la rendent pratique pour le sport, la randonnée et les déplacements.",
+   "Prix vérifié : 24,90 €.",
+   "Coloris existants (fiche Shopify) : Mauve, Noir, Gris, Blanc, Vert, Orange.",
+   "Vendu par HABB, Namur."
+  ]
+ },
+ "product_facts": {
+  "product": "Gourde Tyeso TS-8755C avec poignée – 500 ml",
+  "variant": "Mauve",
+  "verified_references": [
+   "500"
+  ],
+  "lit_side_of_the_photograph": null,
+  "tonal_class": "CLAIR",
+  "product_carries_its_own_cables": false,
+  "pendant_cable_below_the_body_share_of_height": null,
+  "appearance": {
+   "dominant_colours": [
+    {
+     "hex": "#bbaec2",
+     "share": 0.739
+    },
+    {
+     "hex": "#a397aa",
+     "share": 0.157
+    },
+    {
+     "hex": "#d4cad9",
+     "share": 0.105
+    }
+   ],
+   "aspect_width_over_height": 0.4434,
+   "tonal_class": "CLAIR"
+  },
+  "visible_on_the_photograph": [],
+  "held_wordings": []
+ },
+ "verified_facts": [
+  {
+   "id": "active_lifestyle",
+   "claim": "pensée pour un mode de vie actif"
+  },
+  {
+   "id": "carry_handle",
+   "claim": "poignée de transport"
+  },
+  {
+   "id": "lockable_lid",
+   "claim": "couvercle verrouillable"
+  },
+  {
+   "id": "sturdy",
+   "claim": "construction robuste"
+  },
+  {
+   "id": "volume",
+   "claim": "500 ml"
+  }
+ ],
+ "scene_prohibitions": [
+  "second product",
+  "duplicate product",
+  "extra cable",
+  "extra port",
+  "hands",
+  "people",
+  "plants",
+  "added text",
+  "extra letters",
+  "extra inscriptions",
+  "added brand marks",
+  "watermark",
+  "distorted product",
+  "redrawn artwork",
+  "changed printed marks"
+ ]
+}

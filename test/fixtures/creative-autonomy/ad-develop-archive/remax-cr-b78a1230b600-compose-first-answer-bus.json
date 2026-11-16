@@ -1,0 +1,99 @@
+{
+ "concept_conserve": "CONSERVED",
+ "concept_changes": "",
+ "starting_point": "BENEFIT",
+ "relation": "FUNCTIONAL",
+ "intention": "Montrer que la batterie Remax FC-02, avec ses deux câbles intégrés et son affichage clair, est l’outil idéal pour rester autonome en déplacement urbain sans chercher ni emporter d’accessoires supplémentaires.",
+ "visible_link": "Les deux câbles tressés bleus, dans leur pose fixe (boucle au-dessus, pendaison latérale), sont visibles à côté du smartphone éteint, signalant qu’ils font partie du dispositif — prêts à l’emploi sans préparation.",
+ "reason_to_care": "Tu n’as pas à t’inquiéter des câbles perdus ou oubliés : ils sont déjà là, intégrés, comme une poche zippée bien placée — et l’affichage te dit exactement où tu en es.",
+ "audience_use": "Personnes qui utilisent beaucoup leur smartphone en déplacement quotidien (travail, études, sorties), besoin réel de recharge autonome sans accessoires supplémentaires ; aucune tranche d’âge imposée, mais usage intensif et contexte urbain partagé.",
+ "supported_by": [
+  "integrated_cables",
+  "digital_display"
+ ],
+ "product_nature": "Batterie externe compacte, bleu clair satiné, aux angles très arrondis, avec affichage numérique rond indiquant « 100% », deux ports sur le dessus (USB-C et USB-A orange), et deux câbles tressés bleus intégrés dans une pose fixe : l’un en boucle au-dessus, l’autre pendu le long du côté gauche avec embout USB-C.",
+ "idea": "Une batterie bleu clair posée sur un sac à dos noir, à côté d’un smartphone éteint, sur un siège de bus en plastique gris, fenêtre embuée en arrière-plan — lumière douce venant de la gauche, aucun texte, aucune personne, décor sobre et réaliste.",
+ "product_position": "LEFT_THIRD",
+ "product_framing": "MEDIUM",
+ "structure": "Composition en trois plans : fond flou avec fenêtre de bus embuée et reflet d’un arrêt, plan intermédiaire avec siège en plastique gris texturé, plan avant avec sac à dos noir, batterie bleu clair et smartphone éteint posés côte à côte, câbles visibles dans leur pose photographiée.",
+ "setting": "Intérieur d’un bus urbain, siège en plastique gris mat, fenêtre embuée laissant deviner un arrêt flou, lumière naturelle diffuse filtrant par la vitre depuis la gauche, ambiance calme et fonctionnelle.",
+ "materials": "Plastique gris mat du siège, tissu nylon noir du sac à dos, finition satinée bleu clair de la batterie, câbles tressés bleus, verre embué de la fenêtre.",
+ "atmosphere": "Calme, pratique, quotidien — une pause dans le trajet, où tout est prêt sans effort, sans stress ni recherche d’accessoires.",
+ "light": "Lumière douce et diffuse venant de la gauche, compatible avec l’éclairage de studio de la photo, créant des ombres subtiles sous la batterie et les câbles, mettant en valeur le satiné du boîtier et la texture des câbles tressés.",
+ "text_reserve": {
+  "zone": "TOP_RIGHT",
+  "description": "Surface claire et uniforme, légèrement plus pâle que le gris du siège, sans texture ni détail, offrant un contraste net pour le texte."
+ },
+ "elements": [
+  {
+   "zone": "BACKGROUND",
+   "element": "Fenêtre de bus embuée avec reflet flou d’un arrêt"
+  },
+  {
+   "zone": "MIDGROUND",
+   "element": "Siège en plastique gris mat, légèrement usé"
+  },
+  {
+   "zone": "FOREGROUND",
+   "element": "Sac à dos noir en nylon, surface mate, posé horizontalement"
+  },
+  {
+   "zone": "FOREGROUND",
+   "element": "Smartphone éteint, écran noir, posé à droite de la batterie"
+  }
+ ],
+ "resolution": "Aucun conflit à résoudre : le concept s’adapte parfaitement aux contraintes de la photo, du placement et du décor autorisé.",
+ "placement_why": "Le produit est placé à gauche, en tiers, avec cadrage moyen, pour laisser de l’espace à droite au smartphone et au réserve textuelle, tout en respectant la hauteur de pied mesurée (84 %) et la lumière venant de la gauche qui éclaire naturellement sa face avant et ses câbles.",
+ "headline": "Deux câbles intégrés, zéro souci en déplacement",
+ "headline_role": "Résumer le bénéfice central — la disponibilité immédiate des câbles — en lien direct avec la scène de transport urbain, sans promesse non vérifiée.",
+ "headline_lines": "ONE",
+ "palette_roles": [
+  {
+   "colour": "COOL_GREY",
+   "role": "DOMINANT",
+   "surfaces": "Siège en plastique, fond embué, ton général du décor"
+  },
+  {
+   "colour": "NAVY",
+   "role": "SECONDARY",
+   "surfaces": "Sac à dos noir (ton proche du navy profond), ombres portées discrètes"
+  },
+  {
+   "colour": "SOFT_TERRACOTTA",
+   "role": "ACCENT",
+   "surfaces": "Reflet subtil dans la fenêtre embuée, ton chaud discret contrastant avec le froid du métro"
+  },
+  {
+   "colour": "WHITE",
+   "role": "LIGHT_TINT",
+   "surfaces": "Zone de réserve textuelle en haut à droite, surface légèrement plus claire que le fond"
+  },
+  {
+   "colour": "STEEL_NAVY",
+   "role": "SHADOW_TINT",
+   "surfaces": "Ombres sous la batterie et les câbles, renforçant la profondeur sans saturer"
+  }
+ ],
+ "choices": [
+  {
+   "decision": "COMPOSITION",
+   "why": "Structure en trois plans pour ancrer la batterie dans un contexte réaliste de déplacement, avec le sac et le smartphone comme éléments fonctionnels secondaires — sans surcharge ni distraction."
+  },
+  {
+   "decision": "PRODUCT_PLACEMENT",
+   "why": "Position gauche, cadrage moyen, conforme aux mesures de la photo (pied à 84 %, lumière venant de la gauche), permettant de montrer les câbles et l’affichage tout en laissant de l’espace pour le smartphone et la réserve."
+  },
+  {
+   "decision": "LIGHT",
+   "why": "Lumière douce venant de la gauche, identique à celle de la photo, pour conserver la fidélité du produit tout en créant une ambiance réaliste de bus en journée."
+  },
+  {
+   "decision": "PALETTE",
+   "why": "Utilisation du kit HABB avec COOL_GREY dominant pour le décor urbain neutre, NAVY secondaire pour le sac, SOFT_TERRACOTTA comme accent chaleureux discret — évitant beige, crème, doré ou végétal comme exigé."
+  },
+  {
+   "decision": "TEXT_RESERVE",
+   "why": "Zone TOP_RIGHT claire et calme, suffisamment grande pour la ligne unique du titre, sans toucher le produit ni le smartphone, et contrastante grâce au LIGHT_TINT blanc."
+  }
+ ]
+}

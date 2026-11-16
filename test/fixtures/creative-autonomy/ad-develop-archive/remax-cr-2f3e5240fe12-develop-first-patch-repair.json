@@ -1,0 +1,12 @@
+{
+ "patches": [
+  {
+   "path": "proposals[0].idea",
+   "value": "Sur un siège de bus en plastique gris, la batterie Remax bleu clair repose à côté d’un smartphone éteint, écran vers le haut. Le décor est sobre : fenêtre embuée, reflet flou d’une rue namuroise, lumière douce venant de la gauche comme sur la photo. Aucun autre objet n’est visible — pas de sac, pas de portefeuille. Les câbles intégrés sont visibles en boucle et pendante, rappelant qu’ils sont déjà là, prêts. L’affichage « 100% » rassure avant même d’allumer l’appareil."
+  },
+  {
+   "path": "proposals[3].headline",
+   "value": "20 000 mAh, câbles intégrés, prêt à l’emploi"
+  }
+ ]
+}

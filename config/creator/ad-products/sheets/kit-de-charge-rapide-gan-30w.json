@@ -1,0 +1,66 @@
+{
+ "product_key": "kit-de-charge-rapide-gan-30w",
+ "title": "Kit de charge rapide GaN 30W",
+ "photo": {
+  "status": "SHOPIFY_VARIANT_LINK",
+  "note": "Photo de la variante liée dans Shopify (aucun fichier local). Fiche construite le 2026-11-15 par Nordla à partir de la lecture seule du catalogue ; NON confirmée par le propriétaire."
+ },
+ "facts": [
+  {
+   "id": "d1",
+   "claim": "le Remax RP-U71 exploite la technologie GaN pour délivrer jusqu’à 30W dans un format facile à emporter",
+   "source": {
+    "snapshot": "shopify-kit-de-charge-rapide-gan-30w-20261115.json",
+    "excerpt": "le Remax RP-U71 exploite la technologie GaN pour délivrer jusqu’à 30W dans un format facile à emporter"
+   }
+  },
+  {
+   "id": "d2",
+   "claim": "Livré avec son câble USB-C RC-C021",
+   "source": {
+    "snapshot": "shopify-kit-de-charge-rapide-gan-30w-20261115.json",
+    "excerpt": "Livré avec son câble USB-C RC-C021"
+   }
+  },
+  {
+   "id": "d3",
+   "claim": "il constitue un kit complet pour recharger rapidement les appareils compatibles à la maison",
+   "source": {
+    "snapshot": "shopify-kit-de-charge-rapide-gan-30w-20261115.json",
+    "excerpt": "il constitue un kit complet pour recharger rapidement les appareils compatibles à la maison"
+   }
+  },
+  {
+   "id": "d4",
+   "claim": "au travail ou en déplacement",
+   "source": {
+    "snapshot": "shopify-kit-de-charge-rapide-gan-30w-20261115.json",
+    "excerpt": "au travail ou en déplacement"
+   }
+  },
+  {
+   "id": "s5",
+   "claim": "30W",
+   "source": {
+    "snapshot": "shopify-kit-de-charge-rapide-gan-30w-20261115.json",
+    "excerpt": "30W"
+   }
+  }
+ ],
+ "pending": [
+  {
+   "id": "owner_confirmation",
+   "claim": "fiche produit construite automatiquement, non confirmée par le propriétaire",
+   "why": "les faits sont les phrases et les chiffres du texte du catalogue ; les éléments qui ne doivent jamais changer sur l'image n'ont pas été relevés (la photo n'est pas examinée ici)"
+  }
+ ],
+ "invariants": [],
+ "coverage_missing": [
+  "éléments invariants du produit : photo non examinée",
+  "confirmation du propriétaire"
+ ],
+ "product_nouns": [
+  "charges?",
+  "remax rp-u71"
+ ]
+}

@@ -1,0 +1,2 @@
+Normalised decisions of the first decor-first preparation attempt (plan trial-186ce04bb0b8eb1d, 2026-11-07, Remax FC-02 Bleu): the frame and the three concepts as Nordla's contract normalised them (all three built on the cables; one justification used a word HABB forbids).
+The raw model answers are not kept in the repository (privacy rule). Used offline only, to prove how the concept guard and the route check behave on a real answer. Nothing here is an idea chosen or written by Nordla's code.

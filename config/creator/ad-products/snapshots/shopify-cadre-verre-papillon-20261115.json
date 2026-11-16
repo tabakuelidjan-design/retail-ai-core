@@ -1,0 +1,26 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15547356447068",
+  "title": "Cadre Verre Papillon",
+  "description": "Un support personnalisable avec votre photo et votre texte, préparé avec soin dans notre atelier à Namur.",
+  "tags": [
+   "cadeau photo",
+   "cadre en verre",
+   "cadre papillon",
+   "support sublimation"
+  ],
+  "productType": "Uv Printing",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57398927786332",
+     "title": "Default Title",
+     "price": "39.99",
+     "inventoryQuantity": 22
+    }
+   ]
+  }
+ }
+}

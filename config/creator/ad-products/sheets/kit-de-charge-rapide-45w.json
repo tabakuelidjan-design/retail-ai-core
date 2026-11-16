@@ -1,0 +1,66 @@
+{
+ "product_key": "kit-de-charge-rapide-45w",
+ "title": "Kit de charge rapide 45W",
+ "photo": {
+  "status": "SHOPIFY_VARIANT_LINK",
+  "note": "Photo de la variante liée dans Shopify (aucun fichier local). Fiche construite le 2026-11-15 par Nordla à partir de la lecture seule du catalogue ; NON confirmée par le propriétaire."
+ },
+ "facts": [
+  {
+   "id": "d1",
+   "claim": "Le kit 45W réunit le chargeur",
+   "source": {
+    "snapshot": "shopify-kit-de-charge-rapide-45w-20261115.json",
+    "excerpt": "Le kit 45W réunit le chargeur"
+   }
+  },
+  {
+   "id": "d2",
+   "claim": "son câble pour proposer une solution complète dès l’ouverture de la boîte",
+   "source": {
+    "snapshot": "shopify-kit-de-charge-rapide-45w-20261115.json",
+    "excerpt": "son câble pour proposer une solution complète dès l’ouverture de la boîte"
+   }
+  },
+  {
+   "id": "d3",
+   "claim": "Une combinaison pratique pour recharger rapidement les appareils compatibles",
+   "source": {
+    "snapshot": "shopify-kit-de-charge-rapide-45w-20261115.json",
+    "excerpt": "Une combinaison pratique pour recharger rapidement les appareils compatibles"
+   }
+  },
+  {
+   "id": "d4",
+   "claim": "éviter de multiplier les accessoires",
+   "source": {
+    "snapshot": "shopify-kit-de-charge-rapide-45w-20261115.json",
+    "excerpt": "éviter de multiplier les accessoires"
+   }
+  },
+  {
+   "id": "s5",
+   "claim": "45W",
+   "source": {
+    "snapshot": "shopify-kit-de-charge-rapide-45w-20261115.json",
+    "excerpt": "45W"
+   }
+  }
+ ],
+ "pending": [
+  {
+   "id": "owner_confirmation",
+   "claim": "fiche produit construite automatiquement, non confirmée par le propriétaire",
+   "why": "les faits sont les phrases et les chiffres du texte du catalogue ; les éléments qui ne doivent jamais changer sur l'image n'ont pas été relevés (la photo n'est pas examinée ici)"
+  }
+ ],
+ "invariants": [],
+ "coverage_missing": [
+  "éléments invariants du produit : photo non examinée",
+  "confirmation du propriétaire"
+ ],
+ "product_nouns": [
+  "charges?",
+  "kit 45w"
+ ]
+}

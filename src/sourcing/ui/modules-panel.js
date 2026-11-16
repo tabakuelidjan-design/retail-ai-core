@@ -57,6 +57,7 @@ export function createModulesPanel({ S, api, refresh }) {
     <label class="small">Titre (80 caractères max.)<input id="nx-headline" maxlength="80"></label><button class="btn" data-act="nx-render">Composer le visuel</button>
     ${(st.creation.creations ?? []).slice(0, 5).map(creationCard).join('')}`);
 
+  const creatorLink = (m) => (m?.creator_screen ? '<p class="small"><a class="btn" href="/creator">Ouvrir le Créateur</a> <span class="muted">— mode TEST : résultats archivés, aucun fournisseur, rien n’est publié.</span></p>' : '');
   const financeOpenButton = (m) => (m?.dashboard ? ` <button class="btn" data-act="nx-open-finance">Ouvrir le tableau de bord Finance</button>` : '');
   // ---- Parle à Nordla: one input, one answer zone, on the person's own session (the server resolves the merchant). Read-only: Nordla answers, it executes nothing.
   const EXAMPLES = [['Ma trésorerie ?', 'ma trésorerie'], ['Quelles factures dois-je payer ?', 'quelles factures fournisseurs dois-je payer et quelles sont les échéances ?'], ['Chiffre d’affaires des 30 derniers jours', 'quel est mon chiffre d’affaires des 30 derniers jours ?']];
@@ -94,7 +95,7 @@ export function createModulesPanel({ S, api, refresh }) {
       ${mod(by.core, '<p class="small muted">Voir « Nordla Core » plus bas (décisions d’achat, suivi).</p>')}
       ${mod(by.finance, quick('finance') + financeOpenButton(by.finance) + financeInboxCard())}${by.procurement ? mod(by.procurement, '<p class="small"><a href="/procurement/">Ouvrir Stock / Achats</a></p>') : ''}${mod(by.analytics, quick('analytics'))}
       ${mod(by.sourcing, '<p class="small muted">Écran principal de l’application.</p>')}
-      ${mod(by.branding, brandBody)}${mod(by.marketing, `${form}${check}${(st.campaigns ?? []).slice(0, 5).map(campaignCard).join('')}`)}${mod(by.creative, creationBody())}
+      ${mod(by.branding, brandBody)}${mod(by.marketing, `${form}${check}${(st.campaigns ?? []).slice(0, 5).map(campaignCard).join('')}`)}${mod(by.creative, creationBody() + creatorLink(by.creative))}
       `;
   }
   return { section, load, ask: parle };

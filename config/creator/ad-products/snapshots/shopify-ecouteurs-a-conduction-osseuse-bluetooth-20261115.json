@@ -1,0 +1,27 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15500510855516",
+  "title": "Écouteurs à conduction osseuse Bluetooth",
+  "description": "Le Remax RB-S18 utilise la conduction osseuse pour diffuser le son tout en laissant les oreilles dégagées. Léger et conçu pour bouger, il permet de rester plus attentif à son environnement pendant la marche, les déplacements ou le sport, avec jusqu’à 6 à 8 heures d’écoute annoncées.",
+  "tags": [],
+  "productType": "",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57117885563228",
+     "title": "Orange",
+     "price": "59.00",
+     "inventoryQuantity": 25
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57117885595996",
+     "title": "Noir",
+     "price": "59.00",
+     "inventoryQuantity": 27
+    }
+   ]
+  }
+ }
+}

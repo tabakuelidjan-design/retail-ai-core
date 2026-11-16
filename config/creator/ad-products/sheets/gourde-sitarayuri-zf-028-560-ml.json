@@ -1,0 +1,83 @@
+{
+ "product_key": "gourde-sitarayuri-zf-028-560-ml",
+ "title": "Gourde Sitarayuri ZF-028 – 560 ml",
+ "photo": {
+  "status": "SHOPIFY_VARIANT_LINK",
+  "note": "Photo de la variante liée dans Shopify (aucun fichier local). Fiche construite le 2026-11-15 par Nordla à partir de la lecture seule du catalogue ; NON confirmée par le propriétaire."
+ },
+ "facts": [
+  {
+   "id": "d1",
+   "claim": "Une gourde compacte",
+   "source": {
+    "snapshot": "shopify-gourde-sitarayuri-zf-028-560-ml-20261115.json",
+    "excerpt": "Une gourde compacte"
+   }
+  },
+  {
+   "id": "d2",
+   "claim": "pratique qui combine isolation",
+   "source": {
+    "snapshot": "shopify-gourde-sitarayuri-zf-028-560-ml-20261115.json",
+    "excerpt": "pratique qui combine isolation"
+   }
+  },
+  {
+   "id": "d3",
+   "claim": "poignée confortable",
+   "source": {
+    "snapshot": "shopify-gourde-sitarayuri-zf-028-560-ml-20261115.json",
+    "excerpt": "poignée confortable"
+   }
+  },
+  {
+   "id": "d4",
+   "claim": "format quotidien",
+   "source": {
+    "snapshot": "shopify-gourde-sitarayuri-zf-028-560-ml-20261115.json",
+    "excerpt": "format quotidien"
+   }
+  },
+  {
+   "id": "d5",
+   "claim": "Elle convient au travail",
+   "source": {
+    "snapshot": "shopify-gourde-sitarayuri-zf-028-560-ml-20261115.json",
+    "excerpt": "Elle convient au travail"
+   }
+  },
+  {
+   "id": "d6",
+   "claim": "aux déplacements",
+   "source": {
+    "snapshot": "shopify-gourde-sitarayuri-zf-028-560-ml-20261115.json",
+    "excerpt": "aux déplacements"
+   }
+  },
+  {
+   "id": "s7",
+   "claim": "560 ml",
+   "source": {
+    "snapshot": "shopify-gourde-sitarayuri-zf-028-560-ml-20261115.json",
+    "excerpt": "560 ml"
+   }
+  }
+ ],
+ "pending": [
+  {
+   "id": "owner_confirmation",
+   "claim": "fiche produit construite automatiquement, non confirmée par le propriétaire",
+   "why": "les faits sont les phrases et les chiffres du texte du catalogue ; les éléments qui ne doivent jamais changer sur l'image n'ont pas été relevés (la photo n'est pas examinée ici)"
+  }
+ ],
+ "invariants": [],
+ "coverage_missing": [
+  "éléments invariants du produit : photo non examinée",
+  "confirmation du propriétaire"
+ ],
+ "product_nouns": [
+  "gourdes?",
+  "zf-028",
+  "sitarayuri zf-028"
+ ]
+}

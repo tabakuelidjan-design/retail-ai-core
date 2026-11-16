@@ -1,0 +1,65 @@
+{
+  "backdrop": "WALL_AND_FLOOR",
+  "backdrop_tone": "CHARCOAL",
+  "floor_finish": "MATTE",
+  "key_light": {
+    "kind": "STRIP",
+    "side": "LEFT",
+    "intensity": "HIGH",
+    "temperature": "NEUTRAL",
+    "purpose": "Creates a sharp, directional shadow under the hand and battery, anchoring the gesture in real time and emphasizing the physicality of the action without drama."
+  },
+  "accent_lights": [
+    {
+      "kind": "RIM",
+      "side": "BACK",
+      "intensity": "MEDIUM",
+      "temperature": "COOL",
+      "purpose": "Traces the contour of the cordon and the edge of the battery to separate them from the charcoal backdrop, reinforcing the diagonal tension of the metaphor."
+    },
+    {
+      "kind": "SOFTBOX",
+      "side": "RIGHT",
+      "intensity": "LOW",
+      "temperature": "NEUTRAL",
+      "purpose": "Softly lifts the matte black surface of the battery to reveal its texture without creating false gloss, preserving material credibility."
+    }
+  ],
+  "camera": {
+    "height": "PRODUCT_CENTER",
+    "framing": "MEDIUM",
+    "product_position": "RIGHT_THIRD"
+  },
+  "props": [
+    {
+      "shape": "PLINTH",
+      "material": "CONCRETE",
+      "placement": "BENEATH",
+      "scale": "LOW",
+      "word": "",
+      "reason": "A low concrete plinth grounds the product in a raw, tactile reality, echoing the ‘surface brute’ requirement and contrasting with the matte black battery—making the compacité and corps relationship tangible."
+    },
+    {
+      "shape": "BLOCK",
+      "material": "MATTE_BLACK",
+      "placement": "BEHIND",
+      "scale": "MEDIUM",
+      "word": "",
+      "reason": "A matte-black block behind the hand creates negative space that isolates the diagonal cordon line, directing the eye along the prolongement from neck to screen, fulfilling the visual metaphor’s bridge."
+    }
+  ],
+  "headline": "La batterie noire devient un prolongement du corps en déplacement",
+  "text_placement": "LEFT_COLUMN",
+  "show_price": "YES",
+  "rationale": "This set uses shallow depth, directional natural-style light, and minimal props to stage the verified narrative: the cordon tensed by motion, the screen lit mid-gesture, the hand in action—making the battery an active extension of the body, not a passive object; the charcoal backdrop and concrete plinth reinforce sobriety and function while the rim light traces the metaphor’s diagonal line.",
+  "wanted_but_not_available": [
+    "Une vraie main en mouvement avec flou de vitesse contrôlé (le système ne permet que des poses figées)",
+    "Un écran numérique réellement lisible à distance sans zoom (la résolution du produit pixelisé limite la lisibilité)",
+    "Un câble USB-C en déploiement naturel avec ressort visible (le produit fixe ne permet pas de simuler le mouvement du câble)"
+  ],
+  "headline_alternatives": [
+    "Compacte, noire, toujours prête — elle suit votre déplacement",
+    "Le cordon tendu, l’écran allumé : une batterie qui devient vous",
+    "Pas de recherche, pas de stress — juste un geste actif et une recharge"
+  ]
+}

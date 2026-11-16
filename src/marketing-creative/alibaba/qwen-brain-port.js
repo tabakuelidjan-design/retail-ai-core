@@ -8,6 +8,8 @@ import { estimateTextInputTokens } from './budget.js';
 // refused before the call when it exceeds the input cap, and the output is capped, so the worst case of one call is a known figure (see brainCallCapEur).
 
 export const BRAIN_PORT_LIMITS = Object.freeze({ max_input_tokens: 12_000, max_output_tokens: 4_000, timeout_ms: 240_000 });
+/** The output cap of ONE call: a caller may only LOWER it (a tiny call is sent and priced as a tiny call); anything invalid or higher gives the port's own cap. */
+export const brainOutputCap = (requested) => (Number.isInteger(requested) && requested >= 50 && requested < BRAIN_PORT_LIMITS.max_output_tokens ? requested : BRAIN_PORT_LIMITS.max_output_tokens);
 
 export function createQwenBrainPort({
   config, budget, journal = null, maxCalls, fetchImpl = globalThis.fetch, temperature = 0.5, timeoutMs = BRAIN_PORT_LIMITS.timeout_ms, operationPrefix = 'brain-text',
@@ -15,7 +17,7 @@ export function createQwenBrainPort({
   if (!Number.isInteger(maxCalls) || maxCalls < 1) throw new TypeError('maxCalls (a positive integer) is required: the Brain port is bounded');
   if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 300_000) throw new RangeError('timeoutMs must be between 1000 and 300000');
   let calls = 0;
-  return Object.assign(async ({ system, user }) => {
+  return Object.assign(async ({ system, user, max_output_tokens: requestedCap }) => {
     if (typeof system !== 'string' || typeof user !== 'string') throw new TypeError('system and user text are required');
     calls += 1;
     if (calls > maxCalls) throw Object.assign(new Error(`the Creative Brain port makes at most ${maxCalls} completions per run`), { code: 'BRAIN_CALL_LIMIT_REACHED' });
@@ -29,7 +31,7 @@ export function createQwenBrainPort({
       journal,
       operationId: `${operationPrefix}-${String(calls).padStart(2, '0')}`,
       temperature,
-      maxTokens: BRAIN_PORT_LIMITS.max_output_tokens,
+      maxTokens: brainOutputCap(requestedCap),
       timeoutMs: Math.min(Math.max(timeoutMs, config?.requestTimeoutMs ?? 0), 300_000),
       fetchImpl,
       enableThinking: false,

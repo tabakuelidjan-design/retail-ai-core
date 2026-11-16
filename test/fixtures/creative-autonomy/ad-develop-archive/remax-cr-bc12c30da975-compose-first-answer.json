@@ -1,0 +1,92 @@
+{
+  "concept_conserve": "CONSERVED",
+  "concept_changes": "",
+  "starting_point": "BENEFIT",
+  "relation": "VISUAL",
+  "intention": "Show the Remax FC-02 as the quiet companion ready before departure: its full display, integrated cables in their natural pose, and proximity to a smartphone signal instant readiness without clutter or search.",
+  "visible_link": "The round digital display showing '100%' and the two blue braided cables — one looped above, one hanging along the side — are immediately visible and unambiguous, confirming the product is charged and equipped.",
+  "reason_to_care": "You recognize the moment: leaving home or café with your phone, needing power but dreading the hunt for cables — this battery solves that micro-stress with what’s already there.",
+  "audience_use": "People who rely heavily on their smartphones during daily commutes, work, study, or outings; they value preparedness and hate carrying extra accessories.",
+  "supported_by": ["capacity", "integrated_cables", "digital_display"],
+  "product_nature": "A compact, satin-finish light blue power bank (20 000 mAh, 45W) with rounded corners, a circular digital display showing '100%', two integrated braided blue cables in fixed poses (one looped above, one hanging), and top-mounted USB-C and orange USB-A ports.",
+  "idea": "A Namurois café table at morning light: raw wood surface, exposed brick wall behind, soft left-side illumination matching the studio photo; the Remax rests beside an off-screen smartphone, cables visible, display lit — no hands, no clutter, just readiness.",
+  "product_position": "LEFT_THIRD",
+  "product_framing": "MEDIUM",
+  "structure": "Diagonal composition from top-left light source to bottom-right shadow; product occupies left third, smartphone in midground right of it, brick wall receding behind; negative space on right allows text reserve without crowding.",
+  "setting": "A rustic wooden café table in Namur, with visible grain and slight wear, backed by an aged brick wall with subtle mortar lines; no signage, no branding, just authentic local texture.",
+  "materials": "Unvarnished oak table, rough-hewn brick wall, matte-finish light blue power bank body, braided textile cables, cool-toned metal ports.",
+  "atmosphere": "Calm, grounded, everyday readiness — the quiet confidence of being prepared before the day begins, without drama or artifice.",
+  "light": "Soft natural daylight entering from the left, matching the studio lighting direction, casting gentle shadows to the right and highlighting the display ring and cable texture without glare.",
+  "text_reserve": {
+    "zone": "RIGHT_COLUMN",
+    "description": "Smooth cool grey vertical band, slightly darker than background, calm and untextured, offering contrast for white headline"
+  },
+  "elements": [
+    {
+      "zone": "BACKGROUND",
+      "element": "Exposed brick wall with irregular mortar joints, neutral cool tone"
+    },
+    {
+      "zone": "MIDGROUND",
+      "element": "Off-screen smartphone lying face down, black glass back visible, 5 cm from Remax"
+    },
+    {
+      "zone": "FOREGROUND",
+      "element": "Wood grain table surface with minor scratches and natural knots"
+    }
+  ],
+  "resolution": "No resolution needed: the concept fits perfectly within placement options and verified facts; all elements are permitted and coherent.",
+  "placement_why": "LEFT_THIRD MEDIUM places the product clearly in the frame while preserving space for the smartphone and text reserve; the foot sits at 84% height, resting naturally on the table surface with visible shadow contact.",
+  "headline": "Prêt à partir, sans câble à chercher",
+  "headline_role": "Expresses the emotional relief of eliminating a daily micro-anxiety — the viewer sees the full display and cables, and the headline confirms the benefit they’ve just recognized.",
+  "headline_lines": "ONE",
+  "palette_roles": [
+    {
+      "colour": "COOL_GREY",
+      "role": "DOMINANT",
+      "surfaces": "Brick wall and table surface, creating a neutral urban backdrop"
+    },
+    {
+      "colour": "NAVY",
+      "role": "SECONDARY",
+      "surfaces": "Shadow areas under product and smartphone, grounding the scene"
+    },
+    {
+      "colour": "TERRACOTTA",
+      "role": "ACCENT",
+      "surfaces": "USB-A port visible on top of the power bank"
+    },
+    {
+      "colour": "WHITE",
+      "role": "LIGHT_TINT",
+      "surfaces": "Highlight on table edge and cable sheen under left light"
+    },
+    {
+      "colour": "NEAR_BLACK",
+      "role": "SHADOW_TINT",
+      "surfaces": "Display screen background and deepest recesses"
+    }
+  ],
+  "choices": [
+    {
+      "decision": "COMPOSITION",
+      "why": "Diagonal left-to-right flow mirrors the light direction and guides eye from product to smartphone to text reserve, reinforcing the ‘ready to go’ narrative without forcing attention."
+    },
+    {
+      "decision": "PRODUCT_PLACEMENT",
+      "why": "LEFT_THIRD MEDIUM uses the measured box correctly (foot at 84% height), leaves room for smartphone proximity and text reserve, and aligns with the left-lit photograph."
+    },
+    {
+      "decision": "LIGHT",
+      "why": "Soft left-side illumination matches the studio photo’s lit_side, ensures display readability and cable texture visibility without harsh reflections or shadows contradicting the product’s pose."
+    },
+    {
+      "decision": "PALETTE",
+      "why": "COOL_GREY dominates to keep focus on product; NAVY deepens shadows for dimension; TERRACOTTA accents the orange port as a functional detail; WHITE and NEAR_BLACK refine tonal contrast per brand kit."
+    },
+    {
+      "decision": "TEXT_RESERVE",
+      "why": "RIGHT_COLUMN offers clean vertical space aligned with smartphone position, using COOL_GREY for calm contrast — large enough for headline, far from product, no visual competition."
+    }
+  ]
+}

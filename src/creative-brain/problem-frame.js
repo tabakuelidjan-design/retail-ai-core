@@ -20,8 +20,8 @@ export const MAY_CHANGE = Object.freeze({
 const MODEL_FIELDS = ['what_we_show', 'audience', 'understood_immediately', 'felt', 'remembered', 'commercial_objective', 'occasion_context', 'generic_risks', 'distinctive_levers', 'rationale'];
 /** The model's part of a frame: the contract the answer is validated against AND the contract the instruction states. */
 export const FRAME_SPEC = obj({
-  what_we_show: text(), audience: text(), understood_immediately: text(), felt: text(), remembered: text(), commercial_objective: text(), occasion_context: text(),
-  generic_risks: list(text({ max: 200 }), { min: 1, max: 5 }), distinctive_levers: list(text({ max: 200 }), { min: 1, max: 5 }), rationale: text(),
+  what_we_show: text({ fit: true }), audience: text({ fit: true }), understood_immediately: text({ fit: true }), felt: text({ fit: true }), remembered: text({ fit: true }), commercial_objective: text({ fit: true }), occasion_context: text({ fit: true }),
+  generic_risks: list(text({ max: 200, fit: true }), { min: 1, max: 5, fit: true }), distinctive_levers: list(text({ max: 200, fit: true }), { min: 1, max: 5, fit: true }), rationale: text({ fit: true }),
 });
 // What the brief may simply not say. An audience, a commercial objective and an occasion are FACTS of the brief; a framer that is forced to state them invents them. When the brief does not give one, the honest value
 // is UNKNOWN (a later stage and the person see it as unknown). The other fields are the framer's own judgment or are derived from what the brief does give, so they are always stated.
@@ -100,7 +100,8 @@ export function normalizeProblemFrame(frame) {
   return deepFreeze(structuredClone(frame));
 }
 
-export function buildFramerInstruction({ observation }) {
+/** `hints`: optional lines of the caller's route, appended before the principles (the decor-first route tells the framer to leave the set open). */
+export function buildFramerInstruction({ observation, hints = [] }) {
   const system = [
     'You are the Nordla problem framer. Before any idea is sought, you frame the creative problem for a product visual from the observation you are given.',
     'Return ONLY one JSON object, described exactly by these lines (Nordla refuses an answer that does not follow them):',
@@ -108,6 +109,7 @@ export function buildFramerInstruction({ observation }) {
     ...renderRules(FRAME_RULES),
     'generic_risks name what would make the result generic or template-like for THIS product, audience and occasion; distinctive_levers name what could make it distinctive. occasion_context says what occasion or buying situation the product serves, or that none applies.',
     'You do not propose a concept, a layout or a scene here. You never use numbers. rationale is one concise sentence of why this framing, for the record; it is not a reasoning log.',
+    ...hints,
     'Reason with these principles of art direction:',
     principlesAsText(principlesFor({ stage: REASONING_STAGE.FRAME })),
   ].join('\n');
@@ -115,10 +117,10 @@ export function buildFramerInstruction({ observation }) {
 }
 
 /** The FRAME stage: one model completion, then the closed contract. */
-export function createProblemFramer({ complete }) {
+export function createProblemFramer({ complete, hints = [] }) {
   return Object.freeze({
     async frame({ observation }) {
-      const { value, meta } = await askAndNormalize({ complete, instruction: buildFramerInstruction({ observation }), stage: 'FRAME', spec: FRAME_SPEC, normalize: (raw) => buildProblemFrame({ observation, model: raw }) });
+      const { value, meta } = await askAndNormalize({ complete, instruction: buildFramerInstruction({ observation, hints }), stage: 'FRAME', spec: FRAME_SPEC, normalize: (raw) => buildProblemFrame({ observation, model: raw }) });
       return { frame: value, meta };
     },
   });

@@ -1,0 +1,70 @@
+{
+ "proposals": [
+  {
+   "name": "Le trajet en bus, sans câble perdu",
+   "from_rapprochement": "Transport public : une seule solution pour plusieurs trajets",
+   "starting_point": "BENEFIT",
+   "need": "Pouvoir recharger son smartphone en déplacement sans emporter plusieurs câbles ni accessoires supplémentaires.",
+   "idea": "Sur un siège de bus en plastique gris, la batterie Remax bleu clair repose à côté d’un smartphone éteint, écran vers le haut. Le décor est sobre : fenêtre embuée, reflet flou d’une rue namuroise, lumière douce venant de la gauche comme sur la photo. Aucun autre objet n’est visible — pas de sac, pas de portefeuille. Le câble tressé en boucle au-dessus du boîtier et l’autre pendante rappellent qu’ils sont déjà là, prêts. L’affichage « 100% » rassure avant même d’allumer l’appareil.",
+   "visible_cues": "Batterie bleu clair posée sur siège de bus, smartphone éteint à côté, câbles intégrés visibles en boucle et pendante, affichage rond avec « 100% », lumière douce venant de la gauche, fenêtre embuée en arrière-plan.",
+   "cable_role": "Les deux câbles tressés, fixés et non connectés, montrent qu’aucun accessoire supplémentaire n’est nécessaire pour recharger en déplacement.",
+   "link_to_product": "Le produit tel que photographié — bleu clair, angles arrondis, câbles en position fixe — s’intègre naturellement dans un espace public minimaliste, où chaque élément doit être utile et présent sans encombre.",
+   "speaks_to_the_public": "Aux Namurois qui prennent le bus ou le train quotidiennement, cette scène dit : ton smartphone ne sera jamais à plat, et tu n’auras pas à fouiller ton sac pour trouver un câble.",
+   "headline": "Recharge en déplacement, sans câble à chercher",
+   "supported_by": [
+    "capacity",
+    "integrated_cables",
+    "digital_display"
+   ]
+  },
+  {
+   "name": "La pause café, avec tout ce qu’il faut",
+   "from_rapprochement": "Cuisine : un ustensile multifonction qui remplace plusieurs outils",
+   "starting_point": "PRODUCT_NATURE",
+   "need": "Éviter les frustrations liées à des câbles perdus, incompatibles ou trop courts lorsqu’on est loin d’une prise secteur.",
+   "idea": "Sur une table en bois brut d’un café namurois (pas de nappe, pas de vaisselle), la batterie Remax repose près d’une tasse vide et d’un smartphone posé à l’envers. La lumière vient de la gauche, douce, comme dans le studio. Le câble en boucle au-dessus du boîtier et celui pendu le long du côté gauche sont visibles, mais aucun n’est branché — leur présence suffit à signifier qu’ils sont prêts. Pas de sac, pas de chargeur mural : juste ce qu’il faut, là où on en a besoin.",
+   "visible_cues": "Batterie bleu clair sur table en bois, tasse vide, smartphone à l’envers, câbles intégrés en position fixe (boucle et pendante), lumière douce venant de la gauche, aucun autre objet ni texte.",
+   "cable_role": "Aucun câble n’est connecté, mais leur position fixe et leur couleur assortie au boîtier indiquent qu’ils font partie intégrante de la solution, sans risque de perte.",
+   "link_to_product": "Le produit réel, avec ses câbles tressés bleus et son affichage clair, est montré exactement comme photographié — compact, autonome, prêt à l’emploi sans préparation.",
+   "speaks_to_the_public": "À ceux qui veulent profiter d’une pause sans stress technique : ici, tout est déjà là, sans chercher, sans deviner, sans compromis.",
+   "headline": "Tout ce qu’il faut, déjà dans la batterie",
+   "supported_by": [
+    "integrated_cables",
+    "digital_display"
+   ]
+  },
+  {
+   "name": "L’attente à la gare, sans deviner la charge",
+   "from_rapprochement": "Cartographie : un repère visuel stable sur une carte",
+   "starting_point": "ABSTRACT_INTENTION",
+   "need": "Disposer d’un outil fiable et intuitif, dont l’état de charge est lisible au premier coup d’œil.",
+   "idea": "Sur un banc en béton gris de la gare de Namur, la batterie Remax est posée à plat, face visible. En arrière-plan, flou mais reconnaissable : horloge murale, panneau d’affichage des trains. La lumière douce vient de la gauche, mettant en valeur l’anneau bleu clair autour de l’écran noir affichant « 100% ». Le câble en boucle et celui pendu sont visibles, mais neutres — l’attention est attirée par la lisibilité immédiate de la charge. Aucune main, aucun téléphone allumé : juste le signal clair, sans effort.",
+   "visible_cues": "Batterie sur banc de gare, écran rond avec « 100% » bien lisible, anneau bleu clair, câbles intégrés en position fixe, horloge et panneau flous en arrière-plan, lumière venant de la gauche.",
+   "cable_role": "AUCUN",
+   "link_to_product": "L’affichage numérique, visible sur la photo, est mis en scène comme un repère fiable — exactement comme il apparaît, sans ajout ni interprétation.",
+   "speaks_to_the_public": "Pour qui veut éviter les mauvaises surprises : cette batterie ne demande pas de deviner, elle dit clairement où elle en est, même sous la lumière crue d’une gare.",
+   "headline": "État de charge lisible, même en urgence",
+   "supported_by": [
+    "digital_display",
+    "capacity"
+   ]
+  },
+  {
+   "name": "Le retour de cours, avec tout en un",
+   "from_rapprochement": "Vêtement fonctionnel : comme une poche zippée bien placée",
+   "starting_point": "BENEFIT",
+   "need": "Avoir une autonomie suffisante pour couvrir une journée entière, même avec une utilisation intensive.",
+   "idea": "Sur un pupitre en bois usé d’une salle de cours à Namur, la batterie Remax repose entre un cahier fermé et un stylo. La lumière douce vient de la gauche, comme sur la photo. Les deux câbles intégrés sont visibles dans leur pose fixe — l’un en boucle au-dessus, l’autre pendu le long du côté gauche — sans être utilisés. L’affichage « 100% » indique qu’elle est pleine après une nuit de recharge. Rien d’autre n’est présent : pas de sac, pas de chargeur, pas de câble supplémentaire. Le message est simple : elle tient toute la journée, et tout ce qu’elle contient est déjà là.",
+   "visible_cues": "Batterie bleu clair sur pupitre, cahier fermé, stylo, câbles intégrés en position fixe, affichage « 100% », lumière douce venant de la gauche, aucun autre objet.",
+   "cable_role": "Les câbles tressés, fixés et visibles, montrent qu’ils sont toujours disponibles, comme une poche zippée qui garde ce qu’il faut sans désordre.",
+   "link_to_product": "Le produit réel, avec sa capacité de 20 000 mAh et ses câbles intégrés, est présenté dans un contexte d’usage quotidien intensif — études, déplacements, besoins multiples — sans artifice.",
+   "speaks_to_the_public": "Aux étudiants et jeunes pros qui passent la journée dehors : cette batterie ne se contente pas de durer, elle simplifie tout, sans ajouter de poids ni de stress.",
+   "headline": "20 000 mAh pour toute la journée, sans câble",
+   "supported_by": [
+    "capacity",
+    "integrated_cables"
+   ]
+  }
+ ],
+ "how_they_differ": "Chaque proposition met en scène un besoin différent : recharge sans câble perdu (bus), éviter la frustration technique (café), lisibilité immédiate (gare), autonomie totale pour usage intensif (cours) — tous ancrés dans des lieux namurois familiers, sans superflu."
+}

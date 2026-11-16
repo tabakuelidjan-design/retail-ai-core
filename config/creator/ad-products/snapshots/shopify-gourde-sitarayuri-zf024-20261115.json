@@ -1,0 +1,51 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15520834945372",
+  "title": "Gourde Sitarayuri ZF-024 – 580 ml",
+  "description": "Une gourde à café premium adaptée au café, au thé et aux boissons du quotidien. Son format est pensé pour le bureau et les déplacements.",
+  "tags": [],
+  "productType": "",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57236180500828",
+     "title": "Bleu Ciel",
+     "price": "22.50",
+     "inventoryQuantity": 7
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57236180533596",
+     "title": "Blanc",
+     "price": "22.50",
+     "inventoryQuantity": 8
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57236180566364",
+     "title": "Rose Violet",
+     "price": "22.50",
+     "inventoryQuantity": 8
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57236180599132",
+     "title": "Bronze",
+     "price": "22.50",
+     "inventoryQuantity": 8
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57236180631900",
+     "title": "Noir",
+     "price": "22.50",
+     "inventoryQuantity": 8
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57780488307036",
+     "title": "Violet",
+     "price": "22.50",
+     "inventoryQuantity": 8
+    }
+   ]
+  }
+ }
+}

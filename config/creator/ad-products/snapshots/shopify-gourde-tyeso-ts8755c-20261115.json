@@ -1,0 +1,51 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15507746914652",
+  "title": "Gourde Tyeso TS-8755C avec poignée – 500 ml",
+  "description": "Une gourde TYESO pensée pour un mode de vie actif. Sa poignée de transport, son couvercle verrouillable et sa construction robuste la rendent pratique pour le sport, la randonnée et les déplacements.",
+  "tags": [],
+  "productType": "",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57246312137052",
+     "title": "Mauve",
+     "price": "24.90",
+     "inventoryQuantity": 9
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57246312169820",
+     "title": "Noir",
+     "price": "24.90",
+     "inventoryQuantity": 10
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57246312202588",
+     "title": "Gris",
+     "price": "24.90",
+     "inventoryQuantity": 10
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57246312235356",
+     "title": "Blanc",
+     "price": "24.90",
+     "inventoryQuantity": 8
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57246312300892",
+     "title": "Vert",
+     "price": "24.90",
+     "inventoryQuantity": 9
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57781414396252",
+     "title": "Orange",
+     "price": "24.90",
+     "inventoryQuantity": 8
+    }
+   ]
+  }
+ }
+}

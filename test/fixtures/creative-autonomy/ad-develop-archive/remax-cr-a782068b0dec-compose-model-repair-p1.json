@@ -1,0 +1,96 @@
+{
+ "concept_conserve": "CONSERVED",
+ "concept_changes": "",
+ "starting_point": "BENEFIT",
+ "relation": "FUNCTIONAL",
+ "intention": "Show the Remax power bank ready for immediate use in a real Namur morning café moment: no extra accessories, integrated cables visibly in place, digital display clear — everything needed to recharge during the day without stress or forgotten cables.",
+ "visible_link": "The two blue braided integrated cables are present in their fixed pose — one looped above the body, one hanging with its USB-C tip — while the round display shows '100%' in green, confirming full charge and readiness without any action.",
+ "reason_to_care": "You leave with your phone. It stays ready — no forgotten cable, no bag to rummage through, just reliable autonomy at a glance.",
+ "audience_use": "People constantly on the move between work, studies and outings, who rely heavily on their smartphone and want to avoid cable-related stress; no age limit, only a concrete need for daily simplicity and reliability.",
+ "supported_by": [
+  "capacity",
+  "integrated_cables",
+  "digital_display"
+ ],
+ "product_nature": "Compact external battery, light blue satin finish, very rounded rectangular shape, with active round digital display showing '100%' in green, two visible ports on top (USB-C and orange USB-A), and two blue braided integrated cables in fixed position: one looped above the top-left corner, one hanging along the left side with USB-C connector.",
+ "idea": "A raw wooden table in a Namur café at dawn, with the light blue battery placed near an empty ceramic cup and a folded newspaper, a turned-off smartphone beside it — soft morning light from the left, integrated cables visible in their fixed pose, display lit, zero extra accessories.",
+ "product_position": "LEFT_THIRD",
+ "product_framing": "MEDIUM",
+ "structure": "Three-plane composition: blurred background of cool grey painted brick wall, midground with textured raw wooden table, foreground with Remax battery at left third, turned-off smartphone to its right, empty cup and folded newspaper slightly behind — all aligned horizontally, breathing space on the right for text.",
+ "setting": "Interior of an authentic Namur café at early morning: cool grey painted brick wall, raw untreated wooden table, soft natural light entering from a left-side window, subtle reflections on wood and satin casing.",
+ "materials": "Raw unvarnished wood for the table, matte painted brick in background, cold ceramic for the empty cup, kraft paper for the folded newspaper — all contrasting with the light blue satin finish of the battery.",
+ "atmosphere": "Calm morning, functional and warm without sentimentality: a realistic pause where you prepare your day without stress or unnecessary items.",
+ "light": "Soft natural light coming from the left, matching the product photograph’s lighting condition, casting gentle shadows under the battery and phone, highlighting the satin finish and texture of the integrated cables without harsh reflections.",
+ "text_reserve": {
+  "zone": "RIGHT_COLUMN",
+  "description": "Vertical surface in uniform cool grey, slightly lighter than the wall, smooth and featureless, calm and neutral to ensure strong contrast with white text."
+ },
+ "elements": [
+  {
+   "zone": "BACKGROUND",
+   "element": "Cool grey painted brick wall, slightly out of focus to keep attention on the table"
+  },
+  {
+   "zone": "MIDGROUND",
+   "element": "Raw wooden table with visible grain, lightly worn but clean surface"
+  },
+  {
+   "zone": "FOREGROUND",
+   "element": "Empty ceramic cup placed at a soft angle, folded newspaper with top corner slightly lifted"
+  }
+ ],
+ "resolution": "No resolution needed: the concept is directly executable with the photographed product as-is, cables in fixed pose, and lighting compatible with the source photo.",
+ "placement_why": "Product placed at left third in medium framing respects measured foot height (84%) and positions it on the wooden table with a coherent shadow to the right, matching left-side lighting as in the product photo.",
+ "headline": "Tu pars avec ton téléphone. Elle, elle reste prête.",
+ "headline_role": "Summarize the core benefit in two short, familiar Belgian French phrases that reinforce instant readiness and effortless trust — exactly what the scene demonstrates.",
+ "headline_lines": "TWO",
+ "palette_roles": [
+  {
+   "colour": "COOL_GREY",
+   "role": "DOMINANT",
+   "surfaces": "Painted brick wall, table tone, text reserve area"
+  },
+  {
+   "colour": "NAVY",
+   "role": "SECONDARY",
+   "surfaces": "Subtle cast shadows, bottom rim of cup, newspaper details"
+  },
+  {
+   "colour": "TERRACOTTA",
+   "role": "ACCENT",
+   "surfaces": "Visible orange USB-A port on top edge of product"
+  },
+  {
+   "colour": "WHITE",
+   "role": "LIGHT_TINT",
+   "surfaces": "Soft highlights on satin casing and cup, window-lit zone"
+  },
+  {
+   "colour": "NEAR_BLACK",
+   "role": "SHADOW_TINT",
+   "surfaces": "Black round display, faint markings on casing"
+  }
+ ],
+ "choices": [
+  {
+   "decision": "COMPOSITION",
+   "why": "Three-plane structure with product at left third clearly showcases integrated cables and display while reserving right space for text — faithful to the 'morning café, no forgotten cable' concept."
+  },
+  {
+   "decision": "PRODUCT_PLACEMENT",
+   "why": "LEFT_THIRD + MEDIUM respects measured box (body_foot_y_share = 84%) and places battery on wooden table with shadow consistent with left-side lighting, as in the product photo."
+  },
+  {
+   "decision": "LIGHT",
+   "why": "Soft left-side natural light replicates the exact studio condition of the product photo, emphasizing satin finish and integrated cable texture without aggressive glare or black zones."
+  },
+  {
+   "decision": "PALETTE",
+   "why": "COOL_GREY dominant creates a neutral local backdrop (Namur café), NAVY secondary anchors brand identity, TERRACOTTA accent highlights the visible orange port, WHITE and NEAR_BLACK handle highlights and display — fully compliant with prohibitions."
+  },
+  {
+   "decision": "TEXT_RESERVE",
+   "why": "RIGHT_COLUMN in uniform cool grey provides a calm, high-contrast background for white text, without encroaching on product or wasting frame space — vertical height from 50% to 88% fits two headline lines perfectly."
+  }
+ ]
+}

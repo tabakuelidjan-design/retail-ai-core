@@ -1,0 +1,43 @@
+{
+ "usage": {
+  "input_tokens": 2013,
+  "input_tokens_details": {
+   "image_tokens": 1280,
+   "text_tokens": 733
+  },
+  "output_tokens": 1510,
+  "output_tokens_details": {
+   "image_tokens": 1510,
+   "text_tokens": 0
+  },
+  "total_tokens": 3523
+ },
+ "cost_usd_measured": 0.05921,
+ "model": "gpt-image-2.5-sunburst",
+ "settings": {
+  "model": "gpt-image-2.5-sunburst",
+  "endpoint": "/v1/images/edits",
+  "size": "1024x1280",
+  "quality": "high",
+  "n": 1,
+  "output_format": "png",
+  "variant": "s25-1024x1280-custom",
+  "size_documentation": "custom size documented for gpt-image-2.5-sunburst: 1024 and 1280 are divisible by 16, ratio 1:1.25 is within 1:3..3:1, below 2560x1440",
+  "input_images": [
+   "frame_t1.png (1080x1350 = grey 118 background + authentic cut-out of the owner photo) resized to 1024x1280 (LANCZOS)"
+  ],
+  "sent_frame_sha256": "b751d06980e372ca5c9ce10f32ecd5f6b21ac83e38aa88f469649845c938c324",
+  "prompt_sha256": "00c65b14e8da7687a1643e7ab0de25bd695ca2ac5fa81cff5675e89f3a67a590",
+  "prompt_chars": 3265,
+  "negative_prompt_handling": "folded into the prompt as one final sentence (no negative_prompt parameter; arm A used a real negative_prompt)",
+  "seed": "not available (arm A seed 424242)",
+  "input_fidelity": "not passed (the API rejects it for gpt-image-2 family)",
+  "differences_from_qwen_arm_A": [
+   "no negative_prompt parameter",
+   "no seed",
+   "size and model per variant (see size_documentation); the output is cropped/resampled back to 1080x1350 for restoration",
+   "one image per request (n=1)",
+   "prompt written for Qwen"
+  ]
+ }
+}

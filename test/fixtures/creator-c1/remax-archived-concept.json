@@ -1,0 +1,16 @@
+{
+ "concept_id": "cnc_3f84a1c44689d7835589b58533312fb9",
+ "central_idea": "Une batterie bleue repose sur un sol de pavé namurois usé, son câble déroulé en diagonale vers le vide comme une promesse silencieuse d’usage futur, sans personne ni appareil — la puissance est dans l’attente, pas dans l’action.",
+ "visual_metaphor": "Un câble tendu comme une ligne de fuite vers l’absence d’un téléphone, évoquant un lien invisible mais garanti, tandis que l’ombre nette de la batterie ancre sa présence réelle dans le décor brut.",
+ "story": "Avant que le téléphone ne tombe en panne, elle est déjà là — posée, prête, discrète ; son câble s’étire comme une intention anticipée, non exécutée, mais certaine.",
+ "emotional_intent": "Un sentiment de prévoyance tranquille : la confiance que procure savoir qu’une solution existe, même hors champ, sans bruit ni spectacle.",
+ "product_role": "HERO_OF_THE_STORY",
+ "message_role": "FOLLOWS",
+ "memory_hook": "Le câble bleu qui part du produit et disparaît hors cadre, comme une promesse tenue avant même qu’on en ait besoin.",
+ "distinctiveness_reason": "Aucune autre batterie n’est montrée avec un câble déroulé *sans contact*, dans un décor local texturé, où l’absence d’appareil devient le cœur du récit.",
+ "risks": [
+  "Le câble peut être lu comme un défaut technique si le spectateur ne perçoit pas l’intention narrative",
+  "Le pavé namurois risque d’être trop régional pour un public national, diluant l’universalité de l’utilité",
+  "L’asymétrie forte peut déséquilibrer la composition si la lumière ne renforce pas la direction du câble"
+ ]
+}

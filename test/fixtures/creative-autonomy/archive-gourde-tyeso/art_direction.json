@@ -1,0 +1,48 @@
+{
+ "art_direction_id": "art_3157e0280ca3c18057c52b6fac2c9650",
+ "concept_id": "cnc_bbd7aa9940226ba95cf78b5cd186806e",
+ "atmosphere": "A narrow passage between raw concrete walls, lit by a single high slit of light that casts one sharp, deliberate shadow on uneven stone slabs — quiet, intentional, and stripped of all but the essential gesture.",
+ "depth_model": "LAYERED_DEPTH",
+ "material_language": "Unfinished concrete with subtle asymmetrical fissures, paired with rough-hewn stone slabs whose irregular edges catch light differently; texture is honest, unpolished, and scale-appropriate to human movement.",
+ "lighting_intent": "A single oblique light source from high right creates one crisp shadow shaped like a raised lever handle, anchoring the narrative in physical causality without revealing the object that casts it.",
+ "visual_rhythm": "MEASURED",
+ "product_relationship": "GROUNDED_IN_SCENE",
+ "text_image_relationship": "TEXT_IN_CALM_ZONES",
+ "realism": "PHOTOREALISTIC",
+ "emotional_temperature": "NEUTRAL",
+ "visual_tension": "MEDIUM",
+ "negative_space_strategy": "DIRECTIONAL_LEAD",
+ "narrative_elements": [
+  {
+   "element": "A precise shadow in the shape of a raised lever handle, cast across stone slabs",
+   "reason": "L’ombre portée nette, projetée par un rayon oblique sur les dalles, répète la forme de la poignée relevée de la gourde noire et suggère le geste de boire sans effort.",
+   "zone": "FOREGROUND"
+  },
+  {
+   "element": "An asymmetrical wall junction where one surface tilts inward at fifteen degrees",
+   "reason": "It creates a controlled visual lead toward the product zone while avoiding template repetition, supporting the story’s suspended moment between activities.",
+   "zone": "BACKGROUND"
+  }
+ ],
+ "permitted_secondary_elements": [
+  "Faint dust motes caught in the light beam",
+  "Subtle variation in stone slab thickness along the path",
+  "One hairline crack in the concrete wall, following no symmetry"
+ ],
+ "forbidden_decorative_noise": [
+  "beige, crème, cream, sable, sand, écru, taupe, ivoire, ivory",
+  "feuille, leaf, foliage, eucalyptus, botanical, végétation",
+  "doré, gold, glitter, luxe, marbre, velours, pétale",
+  "person, hand, battery, cable, USB, screen, logo",
+  "generic wood grain, brushed metal, uniform texture",
+  "bokeh, heart, coeur, protagoniste, héros",
+  "unprinted shell, casing, protector, étui",
+  "text, lettre, watermark, price mention outside approved zone",
+  "a substitute for the product",
+  "a phone, a case or any device",
+  "a competing hero object",
+  "a misleading commercial object",
+  "text, letters, logos or watermarks"
+ ],
+ "rationale": "By reducing the entire narrative to a single shadow shaped by the cap’s geometry and a directional light path, the image makes the verified benefit—drinking effortlessly in motion—tangible through architecture and light alone, with no added elements or promises."
+}

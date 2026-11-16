@@ -1,0 +1,66 @@
+{
+ "product_key": "ecouteurs-a-conduction-osseuse-bluetooth",
+ "title": "Écouteurs à conduction osseuse Bluetooth",
+ "photo": {
+  "status": "SHOPIFY_VARIANT_LINK",
+  "note": "Photo de la variante liée dans Shopify (aucun fichier local). Fiche construite le 2026-11-15 par Nordla à partir de la lecture seule du catalogue ; NON confirmée par le propriétaire."
+ },
+ "facts": [
+  {
+   "id": "d1",
+   "claim": "Le Remax RB-S18 utilise la conduction osseuse pour diffuser le son tout en laissant les oreilles dégagées",
+   "source": {
+    "snapshot": "shopify-ecouteurs-a-conduction-osseuse-bluetooth-20261115.json",
+    "excerpt": "Le Remax RB-S18 utilise la conduction osseuse pour diffuser le son tout en laissant les oreilles dégagées"
+   }
+  },
+  {
+   "id": "d2",
+   "claim": "conçu pour bouger",
+   "source": {
+    "snapshot": "shopify-ecouteurs-a-conduction-osseuse-bluetooth-20261115.json",
+    "excerpt": "conçu pour bouger"
+   }
+  },
+  {
+   "id": "d3",
+   "claim": "il permet de rester plus attentif à son environnement pendant la marche",
+   "source": {
+    "snapshot": "shopify-ecouteurs-a-conduction-osseuse-bluetooth-20261115.json",
+    "excerpt": "il permet de rester plus attentif à son environnement pendant la marche"
+   }
+  },
+  {
+   "id": "d4",
+   "claim": "les déplacements ou le sport",
+   "source": {
+    "snapshot": "shopify-ecouteurs-a-conduction-osseuse-bluetooth-20261115.json",
+    "excerpt": "les déplacements ou le sport"
+   }
+  },
+  {
+   "id": "d5",
+   "claim": "avec jusqu’à 6 à 8 heures d’écoute annoncées",
+   "source": {
+    "snapshot": "shopify-ecouteurs-a-conduction-osseuse-bluetooth-20261115.json",
+    "excerpt": "avec jusqu’à 6 à 8 heures d’écoute annoncées"
+   }
+  }
+ ],
+ "pending": [
+  {
+   "id": "owner_confirmation",
+   "claim": "fiche produit construite automatiquement, non confirmée par le propriétaire",
+   "why": "les faits sont les phrases et les chiffres du texte du catalogue ; les éléments qui ne doivent jamais changer sur l'image n'ont pas été relevés (la photo n'est pas examinée ici)"
+  }
+ ],
+ "invariants": [],
+ "coverage_missing": [
+  "éléments invariants du produit : photo non examinée",
+  "confirmation du propriétaire"
+ ],
+ "product_nouns": [
+  "écouteurss?",
+  "remax rb-s18"
+ ]
+}

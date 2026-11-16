@@ -1,0 +1,27 @@
+{
+  "read_at": "2026-11-07T00:00:00Z",
+  "product": {
+    "id": "gid://shopify/Product/15500511084892",
+    "title": "Batterie externe 20 000 mAh – 45W",
+    "description": "Avec 20 000 mAh, une sortie jusqu’à 45W et deux câbles intégrés, la Remax FC-02 est conçue pour rester autonome plus longtemps sans multiplier les accessoires. Son affichage numérique permet de suivre la batterie en un coup d’œil, tandis que ses trois sorties facilitent la recharge de plusieurs appareils compatibles.",
+    "tags": [],
+    "productType": "",
+    "status": "ACTIVE",
+    "variants": {
+      "nodes": [
+        {
+          "id": "gid://shopify/ProductVariant/57117888119132",
+          "title": "Bleu",
+          "price": "49.00",
+          "inventoryQuantity": 5
+        },
+        {
+          "id": "gid://shopify/ProductVariant/57117888151900",
+          "title": "Noir",
+          "price": "49.00",
+          "inventoryQuantity": 7
+        }
+      ]
+    }
+  }
+}

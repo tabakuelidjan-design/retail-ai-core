@@ -1,0 +1,86 @@
+{
+ "product_key": "gourde-tyeso-ts8771c",
+ "title": "Gourde Tyeso TS-8771C – paille – 750 ml",
+ "photo": {
+  "status": "MISSING_FULL_RESOLUTION",
+  "note": "Seule une planche de vignettes de 90 x 150 px existe localement (~/nordla-private/matting/audit/gourde_tyeso_ts_8771c_paille_750_ml_sheet.png). Le packshot de 2 000 px est sur le CDN Shopify : le télécharger demande l'accord du propriétaire (lecture seule)."
+ },
+ "facts": [
+  {
+   "id": "sport_bottle",
+   "claim": "gourde sport",
+   "source": {
+    "snapshot": "shopify-gourde-tyeso.json",
+    "excerpt": "gourde sport"
+   }
+  },
+  {
+   "id": "straw",
+   "claim": "avec paille",
+   "source": {
+    "snapshot": "shopify-gourde-tyeso.json",
+    "excerpt": "paille"
+   }
+  },
+  {
+   "id": "lockable_lid",
+   "claim": "couvercle verrouillable",
+   "source": {
+    "snapshot": "shopify-gourde-tyeso.json",
+    "excerpt": "couvercle verrouillable"
+   }
+  },
+  {
+   "id": "volume",
+   "claim": "750 ml",
+   "source": {
+    "snapshot": "shopify-gourde-tyeso.json",
+    "excerpt": "750 ml"
+   }
+  }
+ ],
+ "pending": [
+  {
+   "id": "colour_choice",
+   "claim": "coloris à utiliser (Gris, Rose, Bleu, Blanc, Noir… selon la fiche)",
+   "why": "À choisir par le propriétaire : l'archive est noire, une couleur vive ajouterait de la diversité avec la Remax bleue."
+  }
+ ],
+ "invariants": [
+  {
+   "id": "brand_mark",
+   "kind": "MARK",
+   "item": "« TYESO » petit, sur le bas du corps (lisibilité à confirmer sur la photo pleine résolution)",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "lid",
+   "kind": "SHAPE",
+   "item": "couvercle à paille avec anse de verrouillage",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "body",
+   "kind": "SHAPE",
+   "item": "corps cylindrique en inox, finition à confirmer (mate ou brillante)",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  }
+ ],
+ "coverage_missing": [
+  "photo pleine résolution (packshot de 2 000 px sur le CDN Shopify)",
+  "examen du produit (détourage, tonalité, côté éclairé)",
+  "décisions archivées (concept, direction artistique, STAGE) : aucune, l'essai archivé s'est arrêté sur une erreur avant la direction artistique",
+  "couverture de transmission et lisibilité"
+ ],
+ "product_nouns": [
+  "gourdes?",
+  "bottles?",
+  "flasks?",
+  "bouteilles?",
+  "tyeso",
+  "ts-8771c"
+ ]
+}

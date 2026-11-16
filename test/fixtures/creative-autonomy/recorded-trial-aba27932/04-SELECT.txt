@@ -1,0 +1,193 @@
+{
+  "evaluations": [
+    {
+      "concept_id": "cnc_13e32ed918bb5562293d5db3e13db97b",
+      "criteria": [
+        {
+          "criterion": "CONCEPT_STRENGTH",
+          "outcome": "MEETS",
+          "evidence": "One clear idea: the battery as a body-attached extension, activated by instinctive motion—expressible in a single sentence and visible in a glance.",
+          "refinement": "Ensure the cordon tension is visually unambiguous to prevent misreading as passive accessory."
+        },
+        {
+          "criterion": "RELEVANCE_TO_BRIEF",
+          "outcome": "MEETS",
+          "evidence": "Directly answers active-day audience need: compact, always-accessible power via neck strap, with verified features (screen, cable, portability) central to the story.",
+          "refinement": "Keep background minimal but ensure surface texture reads as urban/active context (e.g., concrete grain), not studio abstraction."
+        },
+        {
+          "criterion": "EMOTIONAL_RESONANCE",
+          "outcome": "MEETS",
+          "evidence": "Evokes quiet confidence and bodily fluency—matching the brief’s ‘freedom without theatre’ and ‘assurance silencieuse’ register for active users.",
+          "refinement": "Avoid over-stylizing the hand motion; preserve realism so the gesture feels habitual, not staged."
+        },
+        {
+          "criterion": "PRODUCT_RELATIONSHIP",
+          "outcome": "MEETS",
+          "evidence": "Product is hero: the cordon’s tension, screen illumination, and cable deployment are all triggered by its use—no story without it.",
+          "refinement": "Confirm the USB-C cable visibly integrates from the unit (not detached) to uphold verified fact integrity."
+        },
+        {
+          "criterion": "DISTINCTIVENESS",
+          "outcome": "MEETS",
+          "evidence": "Only this product has the neck strap used *in motion* as a functional tether—not decoration—and only this concept makes it a kinetic bridge between body and tech.",
+          "refinement": "Double-check that no competitor uses the strap this way in current campaigns; if yes, amplify the diagonal tension line uniquely."
+        },
+        {
+          "criterion": "FEASIBILITY",
+          "outcome": "PARTIAL",
+          "evidence": "Requires precise hand positioning, cordon tension, and readable screen at scale; risk of unreadable % if lighting or angle fails.",
+          "refinement": "Pre-test screen legibility at 100% zoom on mobile; use high-contrast digits (e.g., white on black) and avoid glare-prone angles."
+        },
+        {
+          "criterion": "BRAND_COMPATIBILITY",
+          "outcome": "NOT_ASSESSED",
+          "evidence": ""
+        },
+        {
+          "criterion": "COMMERCIAL_CLARITY",
+          "outcome": "NOT_ASSESSED",
+          "evidence": ""
+        },
+        {
+          "criterion": "NARRATIVE_COHESION",
+          "outcome": "MEETS",
+          "evidence": "Idea, metaphor (living wire), and story (urgent grab → instant charge) form one loop: body → strap → hand → screen → phone.",
+          "refinement": "Ensure the phone’s low-battery indicator is visible *before* connection to clarify cause-effect without text."
+        },
+        {
+          "criterion": "GENERIC_RISK",
+          "outcome": "MEETS",
+          "evidence": "No stock travel tropes; avoids cityscapes, backpacks, or bokeh; distinct hook (tensed strap + live screen) resists template reuse.",
+          "refinement": "Exclude any background hint of airport/train; keep surface raw but neutral to avoid accidental cliché."
+        }
+      ]
+    },
+    {
+      "concept_id": "cnc_ac0ba1253dc1305e5c5aa66ee73f8179",
+      "criteria": [
+        {
+          "criterion": "CONCEPT_STRENGTH",
+          "outcome": "MEETS",
+          "evidence": "Strong singular idea: two screens as mirror states (death/rebirth), with the cable as luminous bridge—clear, visual, and self-explanatory.",
+          "refinement": "Ensure the phone’s dead screen shows unmistakable low-battery icon or red bar, not just blackness."
+        },
+        {
+          "criterion": "RELEVANCE_TO_BRIEF",
+          "outcome": "PARTIAL",
+          "evidence": "Addresses autonomy anxiety and quick recharge, but underemphasizes the neck strap—a verified distinctive feature—and risks feeling static rather than active.",
+          "refinement": "Add subtle hand motion (e.g., fingers guiding cable) to reinforce ‘active day’ urgency and integrate the strap visibly."
+        },
+        {
+          "criterion": "EMOTIONAL_RESONANCE",
+          "outcome": "MEETS",
+          "evidence": "Captures quiet relief and intimacy of reconnection, fitting the ‘discreet premium’ register and avoiding theatricality.",
+          "refinement": "Maintain muted tones and soft vibration cue (visible phone micro-movement) to preserve subtlety without losing impact."
+        },
+        {
+          "criterion": "PRODUCT_RELATIONSHIP",
+          "outcome": "MEETS",
+          "evidence": "Battery proves its capacity via live screen; the story collapses if the screen doesn’t light or show %—product is essential proof.",
+          "refinement": "Verify screen displays exact % (e.g., 100%) matching verified specs, not generic ‘full’ symbol."
+        },
+        {
+          "criterion": "DISTINCTIVENESS",
+          "outcome": "PARTIAL",
+          "evidence": "Screen mirroring is novel, but dual-screen setups exist elsewhere; distinctiveness hinges on the *integrated* cable and daylight contrast, not yet fully leveraged.",
+          "refinement": "Emphasize the cable’s origin point on the battery body to distinguish from external cables and reinforce ‘integrated’ claim."
+        },
+        {
+          "criterion": "FEASIBILITY",
+          "outcome": "PARTIAL",
+          "evidence": "Daylight may wash out the battery screen; requires precise backlighting and anti-glare finish on product to ensure readability.",
+          "refinement": "Use polarized lighting or slight tilt to protect screen visibility; test render at 4:5 crop on mobile preview."
+        },
+        {
+          "criterion": "BRAND_COMPATIBILITY",
+          "outcome": "NOT_ASSESSED",
+          "evidence": ""
+        },
+        {
+          "criterion": "COMMERCIAL_CLARITY",
+          "outcome": "NOT_ASSESSED",
+          "evidence": ""
+        },
+        {
+          "criterion": "NARRATIVE_COHESION",
+          "outcome": "MEETS",
+          "evidence": "Mirror screens + cable bridge + silent vibration form a tight cause-effect chain: dead phone → battery arrival → revival.",
+          "refinement": "Ensure the phone’s vibration is implied through micro-shift or shadow, not animation, to stay within deterministic constraints."
+        },
+        {
+          "criterion": "GENERIC_RISK",
+          "outcome": "PARTIAL",
+          "evidence": "Dual-screen motif risks resembling generic tech ads if not anchored by the specific integrated cable and raw surface context.",
+          "refinement": "Anchor the scene on verified brutalist surface (concrete/wood) and omit any background elements to avoid stock association."
+        }
+      ]
+    },
+    {
+      "concept_id": "cnc_3c5cb39090cd978728d82aa65c08010c",
+      "criteria": [
+        {
+          "criterion": "CONCEPT_STRENGTH",
+          "outcome": "MEETS",
+          "evidence": "One potent idea: shadow as narrative frame, battery as luminous interruption—simple, visual, and emotionally resonant in a single glance.",
+          "refinement": "Calibrate shadow edge to precisely frame phone screen without obscuring battery; test with multiple hand sizes."
+        },
+        {
+          "criterion": "RELEVANCE_TO_BRIEF",
+          "outcome": "MEETS",
+          "evidence": "Directly serves active outdoor users: urgent grab, visible screen, integrated cable—all verified features deployed in real-use moment.",
+          "refinement": "Ensure the ‘street light’ source reads as natural daylight, not artificial, to match ‘pleine lumière du jour’ requirement."
+        },
+        {
+          "criterion": "EMOTIONAL_RESONANCE",
+          "outcome": "MEETS",
+          "evidence": "Embodies physical calm and precision—aligning with ‘apaisement physique’ and ‘sans théâtre’—making stress relief feel embodied, not abstract.",
+          "refinement": "Keep hand motion restrained; avoid dramatic wrist angle to preserve sobriety and realism."
+        },
+        {
+          "criterion": "PRODUCT_RELATIONSHIP",
+          "outcome": "MEETS",
+          "evidence": "Battery is the tool that resolves the shadowed crisis; its lit screen is the only light source in the frame—necessary and irreplaceable.",
+          "refinement": "Confirm the screen glow illuminates part of the hand or surface to reinforce its role as active light source."
+        },
+        {
+          "criterion": "DISTINCTIVENESS",
+          "outcome": "MEETS",
+          "evidence": "Shadow-framing is rare in tech ads; combined with the battery’s screen-as-lantern and verified strap/cable, it creates a unique memory hook.",
+          "refinement": "Ensure the strap is visible *around the neck* in the frame’s upper edge to tie back to verified feature without clutter."
+        },
+        {
+          "criterion": "FEASIBILITY",
+          "outcome": "PARTIAL",
+          "evidence": "High-contrast shadow/light risks hiding product details or making screen illegible; demands precise lighting control in generation.",
+          "refinement": "Use soft-edged shadow (not hard cutout) and increase screen brightness delta to guarantee legibility at small scale."
+        },
+        {
+          "criterion": "BRAND_COMPATIBILITY",
+          "outcome": "NOT_ASSESSED",
+          "evidence": ""
+        },
+        {
+          "criterion": "COMMERCIAL_CLARITY",
+          "outcome": "NOT_ASSESSED",
+          "evidence": ""
+        },
+        {
+          "criterion": "NARRATIVE_COHESION",
+          "outcome": "MEETS",
+          "evidence": "Shadow → phone stress → battery emergence → screen glow forms a seamless, wordless arc where each element motivates the next.",
+          "refinement": "Align the battery’s entry vector so it breaks the shadow’s boundary cleanly, reinforcing ‘rupture’ metaphor."
+        },
+        {
+          "criterion": "GENERIC_RISK",
+          "outcome": "MEETS",
+          "evidence": "No travel clichés, no bokeh, no decorative elements; the shadow technique is ownable and tied to the product’s luminosity.",
+          "refinement": "Avoid any background texture that suggests interior or studio; keep surface raw and edge-free to maintain focus."
+        }
+      ]
+    }
+  ]
+}

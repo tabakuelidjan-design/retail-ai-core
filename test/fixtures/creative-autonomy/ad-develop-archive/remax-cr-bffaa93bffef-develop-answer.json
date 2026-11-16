@@ -1,0 +1,57 @@
+{
+ "proposals": [
+  {
+   "name": "Le module urbain autonome",
+   "from_rapprochement": "Architecture modulaire : un objet compact conçu pour s’adapter à l’espace restreint d’un sac, sans surcharge visuelle",
+   "starting_point": "PRODUCT_NATURE",
+   "idea": "Une scène de bureau minimaliste à Namur : une table en chêne brut, un plan incliné en métal brossé, une carte papier de la ville posée à plat. La batterie bleu clair repose au centre, éclairée doucement par la gauche comme sur la photo. Aucun autre objet n’est présent — pas de câbles, pas de téléphone. Le décor suggère un lieu de transition (un coin de la gare de Namur, un espace de coworking local), où l’on prépare son trajet. L’absence de bruit visuel met en valeur la sobriété du produit et son rôle de point fixe dans un flux continu.",
+   "link_to_product": "La forme arrondie, les angles doux et la couleur claire évoquent un élément urbain intégré — comme un banc ou un boîtier de signalisation — qui ne perturbe pas l’environnement tout en étant fonctionnel.",
+   "speaks_to_the_public": "Aux personnes en déplacement constant, ce décor rappelle qu’on peut emporter un seul objet fiable, sans accessoires superflus, comme on emporte une carte : simple, utile, toujours là quand on en a besoin.",
+   "headline": "Ton autonomie, en un seul module.",
+   "supported_by": [
+    "capacity",
+    "integrated_cables",
+    "digital_display"
+   ]
+  },
+  {
+   "name": "L’affichage sans parole",
+   "from_rapprochement": "Horlogerie mécanique : un cadran sobre qui donne une information précise, immédiate, sans superflu",
+   "starting_point": "ABSTRACT_INTENTION",
+   "idea": "Un fond uni en gris anthracite mat, légèrement texturé comme du papier vélin. Au centre, la batterie est posée à plat, éclairée par la gauche, son écran rond affichant « 100 % » avec l’éclair vert visible. Rien d’autre. Le contraste entre le bleu clair du boîtier et le fond sombre accentue la lisibilité du display, comme un cadran de montre sous verre. L’ambiance est calme, presque méditative — une pause dans le flux numérique.",
+   "link_to_product": "L’affichage circulaire noir avec anneau bleu clair imite la logique horlogère : une seule information, claire, sans interaction, juste là quand on regarde.",
+   "speaks_to_the_public": "Pour ceux qui veulent comprendre leur niveau de charge en un coup d’œil — sans cliquer, sans déballer, sans deviner — cette image dit que la batterie respecte leur temps et leur attention.",
+   "headline": "Ce qu’il faut savoir, quand tu regardes.",
+   "supported_by": [
+    "digital_display"
+   ]
+  },
+  {
+   "name": "Le vêtement technique du quotidien",
+   "from_rapprochement": "Vêtement technique : des poches zippées discrètes, toujours disponibles, jamais encombrantes",
+   "starting_point": "PRODUCT_NATURE",
+   "idea": "Un plan rapproché sur un sac à dos en toile cirée bleu marine, posé sur un banc en béton brut près du Flénu à Namur. La batterie repose sur le bord ouvert du sac, légèrement inclinée, comme si elle venait d’être sortie. Le câble bouclé en haut à gauche et le câble pendu à gauche sont visibles exactement comme sur la photo. Pas de main, pas de téléphone — juste le sac, le produit, et l’ombre portée douce venant de la gauche. L’atmosphère est celle d’une pause rapide entre deux rendez-vous.",
+   "link_to_product": "Les câbles intégrés, tressés et fixés dans leur pose, agissent comme des éléments couturés — présents mais invisibles tant qu’on n’en a pas besoin, prêts dès qu’on les cherche.",
+   "speaks_to_the_public": "Aux gens qui vivent en mouvement, cela parle d’un accessoire qui se comporte comme une extension naturelle de leur tenue : discret, pratique, toujours là.",
+   "headline": "Elle t’accompagne, sans encombre.",
+   "supported_by": [
+    "integrated_cables",
+    "capacity"
+   ]
+  },
+  {
+   "name": "La signalétique fiable",
+   "from_rapprochement": "Signalétique routière : un panneau clair, sans ambiguïté, juste l’information nécessaire au bon moment",
+   "starting_point": "ABSTRACT_INTENTION",
+   "idea": "Un mur de briques blanchies à la chaux, légèrement patiné, typique des façades namuroises. La batterie est posée au centre, à hauteur de poitrine, éclairée par la gauche. Derrière elle, une fine ligne bleue horizontale (peinte, non imprimée) traverse le mur, à la hauteur du display. L’anneau bleu clair du display résonne avec cette ligne, créant un lien visuel silencieux. Aucun texte, aucun symbole supplémentaire — juste le produit et sa propre signalétique intégrée.",
+   "link_to_product": "L’écran lumineux et l’anneau bleu agissent comme un indicateur visuel immédiat, comme un panneau ‘Charge disponible’ sur une voie rapide — clair, sans interprétation.",
+   "speaks_to_the_public": "Pour ceux qui n’ont pas de temps à perdre avec des interfaces complexes, cette image dit que la batterie communique comme une bonne signalisation : directement, sans bruit.",
+   "headline": "Tu vois. Tu sais. Tu continues.",
+   "supported_by": [
+    "digital_display",
+    "power"
+   ]
+  }
+ ],
+ "how_they_differ": "Les quatre propositions proviennent de domaines radicalement différents : architecture modulaire (objet dans un espace fonctionnel), horlogerie (temps et lisibilité), vêtement technique (intégration au corps en mouvement), et signalétique (communication visuelle immédiate)."
+}

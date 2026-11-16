@@ -18,6 +18,7 @@ import { assertScopedExternalMediaUse } from './scoped-media-authorization.js';
 
 export const IMAGE_EDIT_MODEL = 'qwen-image-3.0-pro';
 export const IMAGE_EDIT_PROVIDER_ID = 'alibaba-cloud-model-studio';
+export const MAX_REFERENCES = 2; // option C: the product photograph + up to two references (the provider takes 1 to 3 input images)
 const MIN_PIXELS = 512 * 512;
 const MAX_PIXELS = 2048 * 2048;
 
@@ -42,7 +43,36 @@ const FIXED_CLAUSES = Object.freeze([
  * The ephemeral provider prompt, translated from a structured request. Returns { prompt, negative_prompt }; none of it is stored as canonical data.
  * @param {object} request { scene, product_role, preserve: string[], forbid: string[] }
  */
+export const NEGATIVE_PROMPT_MAX_CHARS = 500;
+const PRODUCT_PROTECTION_NEGATIVES = Object.freeze(['distorted product', 'changed printed text', 'redrawn artwork', 'altered camera module', 'extra lens', 'missing lens', 'added text', 'watermark']);
+const ENVIRONMENT_NEGATIVES = Object.freeze(['product', 'electronic device', 'object in the reserved area', 'person', 'hand', 'text', 'watermark']);
+/** ENVIRONMENT FIRST: the reference image is an EMPTY neutral frame (no product pixel was sent); the model builds the environment, with a reserved clear area where Nordla's compositor puts the real product. */
+function buildEnvironmentPrompt(request) {
+  const reserved = request.product_role.trim().replace(/[.\s]+$/, '');
+  const prompt = [
+    'The referenced image is an empty neutral frame: build the photograph described below in exactly that frame and those proportions.',
+    `Scene: ${request.scene.trim().replace(/[.\s]+$/, '')}.`,
+    `Reserved area: ${reserved}. Keep that whole area, and the floor under it, calm, open and uncluttered. No object, prop, person, hand, plant or text is in it or overlaps it.`,
+    'Do not add any text, letters, numbers, prices, logos, labels, captions or watermarks anywhere in the image.',
+  ].join(' ');
+  const forbid = Array.isArray(request.forbid) ? request.forbid.filter((s) => typeof s === 'string' && s.trim()) : [];
+  const terms = [...new Set([...ENVIRONMENT_NEGATIVES, ...forbid].map((s) => s.trim().toLowerCase()))];
+  const kept = []; const dropped = []; let len = 0;
+  for (const term of terms) { const add = (kept.length ? 2 : 0) + term.length; if (len + add <= NEGATIVE_PROMPT_MAX_CHARS) { kept.push(term); len += add; } else dropped.push(term); }
+  return Object.freeze({ prompt, negative_prompt: kept.join(', '), negative_dropped: Object.freeze(dropped) });
+}
 export function buildProductEditPrompt(request) {
+  if (request?.kind === 'PRODUCT_IN_SCENE') {
+    // "Qwen pleins pouvoirs" B0: the exact prompt was built and reviewed by Nordla (full-power-b0.js); it is sent as it is. Only its shape is checked here.
+    if (typeof request.prompt !== 'string' || !request.prompt.trim()) throw new TypeError('prompt is required');
+    if (typeof request.negative_prompt !== 'string' || request.negative_prompt.length > NEGATIVE_PROMPT_MAX_CHARS) throw new RangeError(`negative_prompt must be a string of at most ${NEGATIVE_PROMPT_MAX_CHARS} characters`);
+    return Object.freeze({ prompt: request.prompt.trim(), negative_prompt: request.negative_prompt.trim(), negative_dropped: Object.freeze([]) });
+  }
+  if (request?.kind === 'ENVIRONMENT') {
+    if (typeof request.scene !== 'string' || !request.scene.trim()) throw new TypeError('scene is required');
+    if (typeof request.product_role !== 'string' || !request.product_role.trim()) throw new TypeError('the reserved area (product_role) is required');
+    return buildEnvironmentPrompt(request);
+  }
   const list = (value, field) => {
     if (!Array.isArray(value) || value.length === 0 || !value.every((s) => typeof s === 'string' && s.trim())) throw new TypeError(`${field} must be a non-empty list of strings`);
     return value.map((s) => s.trim().replace(/[.\s]+$/, ''));
@@ -59,8 +89,13 @@ export function buildProductEditPrompt(request) {
     'Keep the product upright, with the same orientation, the same viewing angle and the same proportions. Do not redesign, replace, recolor, relabel or retouch the product.',
     ...FIXED_CLAUSES,
   ].join(' ');
-  const negative = [...forbid, 'extra lens', 'missing lens', 'altered camera module', 'redrawn artwork', 'changed printed text', 'added text', 'watermark', 'distorted product'].join(', ');
-  return Object.freeze({ prompt, negative_prompt: negative });
+  // The provider truncates negative_prompt beyond NEGATIVE_PROMPT_MAX_CHARS characters, SILENTLY (Model Studio documentation, qwen-image 2.0 series;
+  // no other limit is documented for qwen-image-3.0-pro, so the stricter documented one applies). The PRODUCT protections go FIRST so they are
+  // never the part cut; duplicates are removed; what does not fit is returned in negative_dropped (reported, never silently lost).
+  const terms = [...new Set([...PRODUCT_PROTECTION_NEGATIVES, ...forbid].map((s) => s.toLowerCase()))];
+  const kept = []; const dropped = []; let len = 0;
+  for (const term of terms) { const add = (kept.length ? 2 : 0) + term.length; if (len + add <= NEGATIVE_PROMPT_MAX_CHARS) { kept.push(term); len += add; } else dropped.push(term); }
+  return Object.freeze({ prompt, negative_prompt: kept.join(', '), negative_dropped: Object.freeze(dropped) });
 }
 
 /** The pixel size of a PNG or JPEG, read from its header; null when it is neither. */
@@ -81,17 +116,20 @@ export function imageInfoOf(bytes) {
 
 const invalid = (message, extra = {}) => new AlibabaProviderError(message, { code: 'INVALID_PROVIDER_RESPONSE', ...extra });
 
-function parseEditResponse(payload) {
+function parseEditResponse(payload, expected = 1) {
   const choice = payload?.output?.choices?.[0];
   if (!choice || typeof choice !== 'object') throw invalid('Alibaba image-edit response has no choice', { requestId: payload?.request_id ?? null });
   if (choice.finish_reason !== 'stop') throw invalid('Alibaba image-edit response did not finish normally', { requestId: payload?.request_id ?? null });
   const parts = Array.isArray(choice.message?.content) ? choice.message.content : [];
   const images = parts.map((p) => p?.image).filter((v) => typeof v === 'string' && v);
-  if (images.length !== 1) throw invalid('Alibaba image-edit response must hold exactly one image', { requestId: payload?.request_id ?? null });
-  let url;
-  try { url = new URL(images[0]); } catch { throw invalid('Alibaba image-edit output is not a URL', { requestId: payload?.request_id ?? null }); }
-  if (url.protocol !== 'https:' || url.username || url.password) throw invalid('Alibaba image-edit output URL is not a credential-free HTTPS URL', { requestId: payload?.request_id ?? null });
-  return { url: url.toString(), requestId: typeof payload.request_id === 'string' ? payload.request_id : null, usage: payload.usage && typeof payload.usage === 'object' ? payload.usage : null };
+  if (images.length !== expected) throw invalid(expected === 1 ? 'Alibaba image-edit response must hold exactly one image' : `Alibaba image-edit response must hold exactly ${expected} images`, { requestId: payload?.request_id ?? null });
+  const urls = images.map((image) => {
+    let url;
+    try { url = new URL(image); } catch { throw invalid('Alibaba image-edit output is not a URL', { requestId: payload?.request_id ?? null }); }
+    if (url.protocol !== 'https:' || url.username || url.password) throw invalid('Alibaba image-edit output URL is not a credential-free HTTPS URL', { requestId: payload?.request_id ?? null });
+    return url.toString();
+  });
+  return { url: urls[0], urls, requestId: typeof payload.request_id === 'string' ? payload.request_id : null, usage: payload.usage && typeof payload.usage === 'object' ? payload.usage : null };
 }
 
 /**
@@ -100,11 +138,14 @@ function parseEditResponse(payload) {
  *  config        loadAlibabaCreativeConfig(...) of the Frankfurt lane (credentials from the environment, never from Git)
  *  authorization the scoped external-media authorization record
  *  asset         { ref, bytes, media_type }  the private source photograph
- *  request       { request_id, capability: 'IMAGE_EDIT', text_policy: 'NO_CRITICAL_TEXT', purpose, scene, product_role, preserve, forbid, size }
+ *  request       { request_id, capability: 'IMAGE_EDIT', text_policy: 'NO_CRITICAL_TEXT', purpose, scene, product_role, preserve, forbid, size, n? }
+ *                n = variants of the SAME edit in ONE call (1 to 6, default 1): one request, one clearance, n output images billed, all reserved before sending
  *  budget        a SpendGuard      journal  a call journal      outputStore  a private output store
+ *  references    OPTIONAL (option C, 2026-11-08): up to two reference images sent AFTER the product photograph, in this order: [{ asset: { ref, bytes, media_type }, authorization }]. Each reference has its OWN scoped clearance
+ *                checked from its real bytes before anything is reserved or sent, its own SHA-256 in the journal, and is billed as an input image. The provider takes 1 to 3 images and one text object; the array order is the image order.
  */
 export async function editProductImage({
-  config, authorization, asset, request, budget, journal = null, outputStore, operationId = randomUUID(), fetchImpl = globalThis.fetch, now = () => performance.now(),
+  config, authorization, asset, request, budget, journal = null, outputStore, operationId = randomUUID(), fetchImpl = globalThis.fetch, now = () => performance.now(), references = [],
 }) {
   requireAlibabaCreativeConfig(config);
   if (!isHeaderSafeApiKey(config.apiKey)) {
@@ -120,21 +161,33 @@ export async function editProductImage({
   if (typeof fetchImpl !== 'function') throw new TypeError('fetch implementation is required');
   if (!asset?.bytes || !asset?.bytes.length || !['image/jpeg', 'image/png'].includes(asset.media_type)) throw new TypeError('asset needs bytes and an image/jpeg or image/png media_type');
 
+  if (!Array.isArray(references) || references.length > MAX_REFERENCES) throw new RangeError(`references must be a list of at most ${MAX_REFERENCES} images (the provider takes 1 to 3 images in all)`);
+  for (const r of references) if (!r?.asset?.bytes?.length || !['image/jpeg', 'image/png'].includes(r.asset.media_type) || !r.asset.ref || !r.authorization) throw new TypeError('each reference needs asset { ref, bytes, media_type: image/png or image/jpeg } and its own authorization');
   // the clearance is computed from the REAL bytes, before anything else can happen
   const inputSha = sha256(asset.bytes);
   const clearance = assertScopedExternalMediaUse({
     authorization, asset: { ref: asset.ref, sha256: inputSha }, provider_id: IMAGE_EDIT_PROVIDER_ID, region: config.region, purpose: request.purpose, operation: 'IMAGE_EDIT',
   });
 
+  // each reference is cleared on ITS OWN bytes and record (a record that names another image does not clear it); nothing is reserved or sent before all clearances pass
+  const referenceClearances = references.map((r) => assertScopedExternalMediaUse({
+    authorization: r.authorization, asset: { ref: r.asset.ref, sha256: sha256(r.asset.bytes) }, provider_id: IMAGE_EDIT_PROVIDER_ID, region: config.region, purpose: request.purpose, operation: 'IMAGE_EDIT',
+  }));
+  const referenceShas = references.map((r) => sha256(r.asset.bytes));
+  const inputImages = 1 + references.length;
   const size = String(request.size ?? '').replace('x', '*');
   const [w, h] = size.split('*').map(Number);
   if (!Number.isInteger(w) || !Number.isInteger(h) || w * h < MIN_PIXELS || w * h > MAX_PIXELS) throw new RangeError('request.size must be W*H between 512*512 and 2048*2048 pixels');
-  const { prompt, negative_prompt: negativePrompt } = buildProductEditPrompt(request);
+  const n = request.n ?? 1;
+  if (!Number.isInteger(n) || n < 1 || n > 6) throw new RangeError('request.n must be an integer from 1 to 6');
+  const { prompt, negative_prompt: negativePrompt, negative_dropped: negativeDropped } = buildProductEditPrompt(request);
   const promptSha = sha256(prompt);
-  const reservation = budget.reserveImages({ id: operationId, n: 1, size: `${w}x${h}` });
+  // every input image is billed (the product photograph and each reference), so the reservation covers all of them
+  const reservation = budget.reserveImages({ id: operationId, n, size: `${w}x${h}`, inputImages });
   const base = {
     operation_id: operationId, provider: IMAGE_EDIT_PROVIDER_ID, model: config.imageModel, region: config.region, data_class: 'SCOPED_PRIVATE_MEDIA', operation: 'IMAGE_EDIT',
     clearance_id: clearance.authorization_id, input_sha256: inputSha, prompt_sha256: promptSha,
+    ...(references.length ? { reference_sha256s: referenceShas, reference_clearance_ids: referenceClearances.map((c) => c.authorization_id), input_images: inputImages } : {}),
   };
   await journal?.append({ ...base, event: 'RESERVED', estimated_cost_eur: reservation.reserved_eur });
 
@@ -147,21 +200,26 @@ export async function editProductImage({
       fetchImpl,
       body: {
         model: config.imageModel,
-        input: { messages: [{ role: 'user', content: [{ image: `data:${asset.media_type};base64,${Buffer.from(asset.bytes).toString('base64')}` }, { text: prompt }] }] },
-        // prompt_extend off: the provider must not rewrite or embellish the instruction; one output image only
-        parameters: { n: 1, size, negative_prompt: negativePrompt, watermark: false, prompt_extend: false, ...(request.seed == null ? {} : { seed: request.seed }) },
+        input: { messages: [{ role: 'user', content: [{ image: `data:${asset.media_type};base64,${Buffer.from(asset.bytes).toString('base64')}` }, ...references.map((r) => ({ image: `data:${r.asset.media_type};base64,${Buffer.from(r.asset.bytes).toString('base64')}` })), { text: prompt }] }] },
+        // prompt_extend off: the provider must not rewrite or embellish the instruction; exactly n output images
+        parameters: { n, size, negative_prompt: negativePrompt, watermark: false, prompt_extend: false, ...(request.seed == null ? {} : { seed: request.seed }) },
       },
     });
     const latencyMs = Math.round(now() - started);
-    const parsed = parseEditResponse(payload);
-    const stored = await outputStore.storeUrl({ url: parsed.url, kind: 'image', operationId, fetchImpl });
-    const info = imageInfoOf(await outputStore.readBytes(stored));
-    if (!info) throw invalid('Alibaba image-edit output is not a PNG or JPEG image', { requestId: parsed.requestId });
-    const actualEur = priceImagesEur({ n: 1, size: `${w}x${h}`, usdToEur: budget.usdToEur });
+    const parsed = parseEditResponse(payload, n);
+    const outputs = []; const infos = [];
+    for (const url of parsed.urls) {
+      const one = await outputStore.storeUrl({ url, kind: 'image', operationId, fetchImpl });
+      const oneInfo = imageInfoOf(await outputStore.readBytes(one));
+      if (!oneInfo) throw invalid('Alibaba image-edit output is not a PNG or JPEG image', { requestId: parsed.requestId });
+      outputs.push(one); infos.push(oneInfo);
+    }
+    const [stored] = outputs; const [info] = infos;
+    const actualEur = priceImagesEur({ n, size: `${w}x${h}`, usdToEur: budget.usdToEur, inputImages });
     budget.settle(reservation, actualEur);
     const usage = parsed.usage ? Object.freeze({ ...parsed.usage }) : null;
     await journal?.append({
-      ...base, event: 'SUCCEEDED', status: 'SUCCEEDED', request_id: parsed.requestId, latency_ms: latencyMs, usage, actual_cost_eur: actualEur, output_sha256: stored.sha256,
+      ...base, event: 'SUCCEEDED', status: 'SUCCEEDED', request_id: parsed.requestId, latency_ms: latencyMs, usage, actual_cost_eur: actualEur, output_sha256: outputs.map((o) => o.sha256).join(','), images: n,
     });
     return Object.freeze({
       provider_id: IMAGE_EDIT_PROVIDER_ID,
@@ -170,6 +228,7 @@ export async function editProductImage({
       endpoint_class: 'WORKSPACE_DOMAIN_SYNC',
       api_protocol: 'DASHSCOPE_MULTIMODAL_GENERATION',
       request_id: parsed.requestId,
+      negative_dropped: negativeDropped,
       latency_ms: latencyMs,
       attempts: 1,
       requested_size: { width: w, height: h },
@@ -179,15 +238,20 @@ export async function editProductImage({
       input_sha256: inputSha,
       prompt_sha256: promptSha,
       clearance_id: clearance.authorization_id,
+      input_images: inputImages,
+      reference_sha256s: Object.freeze(referenceShas),
+      reference_clearance_ids: Object.freeze(referenceClearances.map((c) => c.authorization_id)),
       output: stored,
       output_info: info,
+      outputs: Object.freeze(outputs),
+      output_infos: Object.freeze(infos),
     });
   } catch (caught) {
     // a provider error already carries no credential; any other error (a fetch implementation may quote a header) is redacted before it leaves
-    const error = caught instanceof AlibabaProviderError ? caught : Object.assign(new Error(redactCredentials(caught?.message, config.apiKey)), { name: caught?.name ?? 'Error', code: caught?.code ?? null, requestId: caught?.requestId ?? null, status: caught?.status ?? null, transient: caught?.transient ?? null });
+    const error = caught instanceof AlibabaProviderError ? caught : Object.assign(new Error(redactCredentials(caught?.message, config.apiKey)), { name: caught?.name ?? 'Error', code: caught?.code ?? null, network: caught?.network ?? null, requestId: caught?.requestId ?? null, status: caught?.status ?? null, transient: caught?.transient ?? null });
     budget.hold(reservation);
     await journal?.append({
-      ...base, event: 'FAILED', status: 'FAILED', request_id: error?.requestId ?? null, estimated_cost_eur: reservation.reserved_eur, reason: error?.code ?? 'REQUEST_FAILED',
+      ...base, event: 'FAILED', status: 'FAILED', request_id: error?.requestId ?? null, estimated_cost_eur: reservation.reserved_eur, reason: error?.code ?? 'REQUEST_FAILED', ...(error?.network ? { network: error.network } : {}),
     });
     throw error;
   }

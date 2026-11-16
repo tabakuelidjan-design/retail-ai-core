@@ -1,0 +1,24 @@
+{
+  "what_we_show": "Une batterie externe noire Remax MH136, compacte et munie d’un câble USB-C intégré, d’un écran numérique allumé et d’un cordon tour de cou, posée sur une surface brute (béton ou bois brut), avec une main en mouvement qui la saisit au moment où elle alimente un téléphone en pleine lumière du jour — le produit est le seul objet net, tout le reste est légèrement flou pour renforcer le focal point.",
+  "audience": "Clients actifs, voyageurs occasionnels ou urbains qui passent la journée dehors et ont besoin d’une recharge fiable, sans encombre, sans chercher un câble ni se soucier de l’autonomie restante — ils valorisent la simplicité, la fonctionnalité immédiate et le design sobre.",
+  "understood_immediately": "C’est une batterie portable noire, petite mais puissante (10 000 mAh), avec écran, câble intégré et cordon pratique — prête à l’emploi dès qu’on la sort de sa poche.",
+  "felt": "Une sensation de liberté discrète : pas de stress à chercher un chargeur, pas de poids dans le sac, juste une assurance silencieuse que son téléphone tiendra toute la journée — sans théâtre, sans bruit.",
+  "remembered": "La batterie noire avec son écran lumineux et son cordon autour du cou, saisie par une main en plein mouvement — comme si on venait de la sortir pour sauver son téléphone en urgence.",
+  "commercial_objective": "Faire découvrir la batterie Mini noire chez HABB Namur auprès des clients qui voyagent ou passent la journée dehors, en mettant en avant sa compacité, son câble intégré, sa charge rapide (22,5W) et son prix de 29 €.",
+  "occasion_context": "Journée active en extérieur — déplacement urbain, voyage court, festival, randonnée légère — où la recharge impromptue devient un besoin concret, non un luxe.",
+  "generic_risks": [
+    "Montrer la batterie dans un décor de voyage générique (aéroport, train, sac à dos) sans lien direct avec son usage réel",
+    "Utiliser un éclairage studio trop neutre qui masque la matérialité brute du produit",
+    "Inclure des éléments décoratifs interdits (feuillage, dorures, bokeh) qui diluent le message",
+    "Présenter plusieurs coloris ou accessoires non vérifiés, créant une fausse promesse",
+    "Rendre le geste passif (batterie posée seule) au lieu d’un moment d’action concrète"
+  ],
+  "distinctive_levers": [
+    "Le cordon tour de cou utilisé *en action* — pas comme accessoire décoratif, mais comme solution pratique pour ne pas perdre l’objet pendant un déplacement",
+    "L’écran numérique allumé au moment précis où la batterie alimente un téléphone — montrant la transparence de l’autonomie restante, sans texte",
+    "La main qui saisit le produit avec une légère dynamique (doigts en mouvement, ombre portée nette) — suggérant l’urgence résolue, pas la contemplation",
+    "Le contraste entre la matière noire mate du produit et une surface brute (béton/bois non traité) — soulignant la sobriété fonctionnelle, pas le luxe",
+    "L’absence totale de fond narratif : pas de ville, pas de paysage, pas de personne entière — uniquement le geste, le produit, la lumière du jour"
+  ],
+  "rationale": "Ce framing concentre l’attention sur le produit comme protagoniste actif dans une situation réelle, évite les clichés de la tech portable et exploite les trois éléments uniques vérifiés (écran, câble intégré, cordon tour de cou) pour créer un hook visuel mémorable, en phase avec la voix directe et locale de HABB."
+}

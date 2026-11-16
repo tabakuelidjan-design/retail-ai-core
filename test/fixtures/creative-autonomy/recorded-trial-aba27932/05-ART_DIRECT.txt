@@ -1,0 +1,41 @@
+{
+  "atmosphere": "Une tension douce entre urgence et maîtrise, où le geste est rapide mais précis, la lumière du jour crue révèle chaque détail sans dramatisation, et l’absence de décor renforce l’intimité du moment vécu.",
+  "depth_model": "SHALLOW_LAYERS",
+  "material_language": "Matières brutes et non traitées — béton rugueux ou bois brut à grain visible — qui contrastent avec la surface noire mate et légèrement texturée de la batterie, sans reflets artificiels ni brillance trompeuse.",
+  "lighting_intent": "Lumière naturelle directe venant d’un angle bas et latéral, créant des ombres portées nettes sous la main et la batterie, pour ancrer le geste dans un temps réel et une physicalité tangible.",
+  "visual_rhythm": "PUNCTUATED",
+  "product_relationship": "ELEVATED_IN_SCENE",
+  "text_image_relationship": "TEXT_IN_CALM_ZONES",
+  "realism": "PHOTOREALISTIC",
+  "emotional_temperature": "NEUTRAL",
+  "visual_tension": "MEDIUM",
+  "negative_space_strategy": "DIRECTIONAL_LEAD",
+  "narrative_elements": [
+    {
+      "element": "Le cordon tour de cou tendu en diagonale par le mouvement de la main",
+      "reason": "Il matérialise la continuité entre le corps et la batterie, incarnant l’idée que l’objet devient un prolongement instinctif, comme un accessoire porté en action.",
+      "zone": "MIDGROUND"
+    },
+    {
+      "element": "L’écran numérique allumé, affichant un pourcentage clair sans texte supplémentaire",
+      "reason": "Il rend visible la transparence de l’autonomie restante, en lien direct avec l’émotion d’assurance silencieuse et la fonctionnalité vérifiée de la batterie.",
+      "zone": "FOREGROUND"
+    }
+  ],
+  "permitted_secondary_elements": [
+    "Ombre portée nette de la main sur la surface brute",
+    "Légère distorsion du câble USB-C en déploiement naturel",
+    "Reflet subtil mais non métallique sur le bord arrondi de la batterie"
+  ],
+  "forbidden_decorative_noise": [
+    "feuillage ou toute forme de végétation",
+    "dorure, paillettes, glitter ou effet luxe artificiel",
+    "marbre, velours, écru, sable, ivoire ou teintes neutres génériques",
+    "bokeh, flou artistique ou fond dégradé",
+    "logo, texte, lettre, watermark ou élément graphique non autorisé",
+    "objet ressemblant à un téléphone, une coque ou un écran secondaire",
+    "personne entière, visage ou contexte urbain identifiable",
+    "plusieurs coloris ou versions du produit"
+  ],
+  "rationale": "L’image concentre l’attention sur le geste fluide et la batterie comme extension du corps, en utilisant uniquement les éléments vérifiés (écran, cordon tendu, câble intégré) pour créer un hook visuel mémorable sans décor superflu ni faux luxe."
+}

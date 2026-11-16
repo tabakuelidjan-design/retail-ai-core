@@ -1,0 +1,146 @@
+{
+ "product_key": "remax-fc02-bleu",
+ "title": "Batterie externe 20 000 mAh – 45W (Bleu)",
+ "photo": {
+  "status": "AVAILABLE",
+  "source": "catalogue Shopify, image remax_fc-02.jpg, confirmée par le propriétaire le 2026-11-09 pour la variante Bleu (confirmation locale : media-confirmations.json)",
+  "media_id": "gid://shopify/MediaImage/70901308359004",
+  "sha256": "e2945061d50e96e04ab666ebc08858438d8b45be69957fd728948f2536f35190",
+  "size": [1000, 1000],
+  "previous_reading_photo": "upload 8e47bf25c928fa2e (1234x1275), même produit, fichier différent ; les invariants ci-dessous ont été relus sur la photo B le 2026-11-09 : tous visibles, aucune contradiction ; connecteur du câble pendant vu presque de profil à 1000 px (type USB-C non vérifiable sur cette photo)"
+ },
+ "facts": [
+  {
+   "id": "capacity",
+   "claim": "20 000 mAh",
+   "source": {
+    "snapshot": "shopify-remax-fc02-20261107.json",
+    "excerpt": "20 000 mAh"
+   }
+  },
+  {
+   "id": "power",
+   "claim": "une sortie jusqu'à 45 W",
+   "source": {
+    "snapshot": "shopify-remax-fc02-20261107.json",
+    "excerpt": "45W"
+   }
+  },
+  {
+   "id": "integrated_cables",
+   "claim": "deux câbles intégrés",
+   "source": {
+    "snapshot": "shopify-remax-fc02-20261107.json",
+    "excerpt": "deux câbles intégrés"
+   }
+  },
+  {
+   "id": "digital_display",
+   "claim": "affichage numérique",
+   "source": {
+    "snapshot": "shopify-remax-fc02-20261107.json",
+    "excerpt": "affichage numérique"
+   }
+  }
+ ],
+ "confirmations": [
+  {
+   "id": "outputs_count",
+   "claim": "quatre sorties au total",
+   "value": 4,
+   "replaces": "trois sorties",
+   "source": "OWNER_CONFIRMED_IN_CHAT",
+   "confirmed_on": "2026-11-07",
+   "statement": "Le propriétaire confirme que cette Remax FC-02 possède quatre sorties au total.",
+   "contradicts": {
+    "snapshot": "shopify-remax-fc02-20261107.json",
+    "excerpt": "trois sorties"
+   },
+   "check_on_photo": true
+  }
+ ],
+ "held_wordings": [
+  "trois sorties"
+ ],
+ "invariants": [
+  {
+   "id": "mark_45w",
+   "kind": "MARK",
+   "item": "« 45W » (gris foncé, bas du boîtier)",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "mark_remax",
+   "kind": "MARK",
+   "item": "« REMAX » et « 20000mAh » à droite du trait vertical",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "ring_text",
+   "kind": "MARK",
+   "item": "anneau de l'écran : « FAST CHARGING POWER BANK 20000mAh »",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "display",
+   "kind": "MARK",
+   "item": "écran rond noir affichant « 100 % » avec l'éclair vert",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "port_usbc",
+   "kind": "PORT",
+   "item": "port USB-C du dessus",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "port_usba",
+   "kind": "PORT",
+   "item": "port USB-A orange du dessus",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "side_socket",
+   "kind": "PORT",
+   "item": "prise latérale (est-elle une sortie ?)",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "cable_loop",
+   "kind": "CABLE",
+   "item": "boucle de câble tissé en haut à gauche",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "cable_hanging",
+   "kind": "CABLE",
+   "item": "câble pendant avec connecteur USB-C",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "colour",
+   "kind": "COLOUR",
+   "item": "bleu pâle (teinte d'environ 210°)",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  }
+ ],
+ "coverage_missing": [],
+ "product_nouns": [
+  "batteries?",
+  "batterie externe",
+  "power ?banks?",
+  "powerbanks?",
+  "chargeurs?",
+  "chargers?"
+ ]
+}

@@ -1,0 +1,50 @@
+{
+ "scores": [
+  {
+   "id": "P1",
+   "harmony": "HIGH",
+   "relevance": "HIGH",
+   "desirability": "MEDIUM",
+   "originality": "MEDIUM",
+   "feasibility": "VERY_HIGH",
+   "cues_in_scene": "ALL",
+   "brief_fit": "HIGH",
+   "note": "Scène réaliste de café namurois avec smartphone éteint et câbles visibles en pose fixe : répond clairement au besoin de recharge mobile sans accessoires supplémentaires."
+  },
+  {
+   "id": "P2",
+   "harmony": "MEDIUM",
+   "relevance": "LOW",
+   "desirability": "LOW",
+   "originality": "LOW",
+   "feasibility": "VERY_HIGH",
+   "cues_in_scene": "ALL",
+   "brief_fit": "MEDIUM",
+   "note": "Planche à découper et sandwich créent un contexte alimentaire déconnecté du besoin de recharge en déplacement ; le lien avec la mobilité est faible."
+  },
+  {
+   "id": "P3",
+   "harmony": "MEDIUM",
+   "relevance": "LOW",
+   "desirability": "LOW",
+   "originality": "MEDIUM",
+   "feasibility": "VERY_HIGH",
+   "cues_in_scene": "SOME",
+   "brief_fit": "LOW",
+   "note": "Gare et horloge floue suggèrent le déplacement, mais l’absence de smartphone ou d’indice d’usage rend le besoin peu tangible ; le câble n’a aucun rôle visible."
+  },
+  {
+   "id": "P4",
+   "harmony": "HIGH",
+   "relevance": "MEDIUM",
+   "desirability": "MEDIUM",
+   "originality": "MEDIUM",
+   "feasibility": "VERY_HIGH",
+   "cues_in_scene": "ALL",
+   "brief_fit": "MEDIUM",
+   "note": "Banc béton et cahier évoquent l’étudiant ou le travailleur itinérant, mais le besoin reste implicite ; le câble est présent mais non mis en valeur comme solution."
+  }
+ ],
+ "choice": "P1",
+ "why_this_one": "P1 est la seule scène qui montre explicitement un smartphone éteint à côté de la batterie, dans un lieu quotidien namurois (café), avec les câbles intégrés visibles en pose fixe — cela rend le besoin (recharger sans oublier de câble) immédiatement compréhensible et le bénéfice concret, contrairement à P4 qui reste trop abstrait et à P2/P3 qui déconnectent le produit de son usage réel."
+}

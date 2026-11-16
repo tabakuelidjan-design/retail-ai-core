@@ -1,0 +1,92 @@
+{
+  "concept_conserve": "CONSERVED",
+  "concept_changes": "",
+  "starting_point": "PRODUCT_NATURE",
+  "relation": "VISUAL",
+  "intention": "Montrer la batterie comme un élément naturellement intégré à un vêtement fonctionnel, où ses câbles tressés évoquent des cordons rangés et son format compact suggère une présence discrète mais toujours disponible dans la poche d’une veste urbaine.",
+  "visible_link": "Les deux câbles intégrés, déjà en place sur la photo — l’un en boucle au-dessus, l’autre pendu le long du boîtier — ressemblent à des cordons de serrage ou sangles rangées, renforçant l’idée d’un objet conçu pour voyager sans encombre.",
+  "reason_to_care": "Tu n’as plus à chercher de câble ni à deviner quelle prise utiliser : tout est déjà là, prêt, dans un format qui glisse facilement dans ta poche ou ton sac.",
+  "audience_use": "Personnes en déplacement fréquent (travail, études, sorties) qui veulent alléger leur sac sans sacrifier la fonctionnalité, avec un besoin concret de recharger en mobilité et d’avoir les câbles intégrés.",
+  "supported_by": ["integrated_cables", "capacity"],
+  "product_nature": "Batterie externe compacte, bleu clair satiné, aux angles très arrondis, avec affichage numérique rond indiquant 100 %, deux ports visibles (USB-C et USB-A orange), et deux câbles tressés bleus intégrés dans une pose fixe : l’un en boucle au-dessus, l’autre pendu le long du boîtier avec embout USB-C.",
+  "idea": "Un plan serré sur un tissu technique bleu-gris, texturé comme une veste légère de ville, plié en deux pour former une surface plane, avec la batterie posée dessus comme glissée dans une poche extérieure.",
+  "product_position": "LEFT_THIRD",
+  "product_framing": "MEDIUM",
+  "structure": "Composition verticale centrée sur la texture du tissu en arrière-plan, la batterie légèrement inclinée sur la gauche, occupant le tiers gauche du cadre, avec espace libre à droite pour le texte ; la lumière douce venant de la gauche accentue les reliefs du tissu et le satin du boîtier sans créer d’ombre dure.",
+  "setting": "Surface plane formée par un tissu technique bleu-gris, doux et imperméable, plié en deux comme une veste légère de ville posée à plat, sans coutures visibles ni accessoires supplémentaires.",
+  "materials": "Tissu technique mat, non brillant, avec une texture subtile de maille fine ou de micro-relief, rappelant les vestes urbaines fonctionnelles ; le boîtier de la batterie en plastique satiné bleu clair, avec câbles tressés assortis.",
+  "atmosphere": "Calme, pratique, moderne — l’impression d’un objet qui fait partie du quotidien, sans effort ni encombrement, comme un bon outil bien rangé.",
+  "light": "Éclairage doux et diffus venant de la gauche, compatible avec la lumière de la photo originale, créant un léger contraste entre le tissu mat et le satin du boîtier, avec ombre douce sous la batterie pour ancrer sa présence.",
+  "text_reserve": {
+    "zone": "RIGHT_COLUMN",
+    "description": "Surface lisse et uniforme du tissu bleu-gris, sans texture ni détail, offrant un fond calme et neutre pour le texte."
+  },
+  "elements": [
+    {
+      "zone": "BACKGROUND",
+      "element": "Tissu technique bleu-gris plié en deux, formant une surface plane sans couture visible"
+    },
+    {
+      "zone": "MIDGROUND",
+      "element": "Batterie externe bleu clair satiné, posée légèrement inclinée sur le tissu"
+    },
+    {
+      "zone": "FOREGROUND",
+      "element": "Ombre douce projetée sous la batterie, ancrant son volume sur la surface"
+    }
+  ],
+  "resolution": "Aucune résolution nécessaire : le concept est directement réalisable avec la photo existante et le décor proposé, sans conflit avec les faits visuels ou les prohibitions.",
+  "placement_why": "La batterie est placée à gauche en plan moyen pour respecter la pose photographiée (vue 3/4 depuis la gauche), laisser de l’espace à droite pour le texte, et évoquer l’idée d’un objet glissé dans une poche extérieure, naturellement accessible.",
+  "headline": "Ce qu’il te faut, déjà dedans.",
+  "headline_role": "Résumer en une phrase l’essence du concept : la batterie n’est pas un accessoire à ajouter, mais une extension intégrée du quotidien, avec tout ce qu’on attend d’elle — câbles, capacité — déjà présent.",
+  "headline_lines": "ONE",
+  "palette_roles": [
+    {
+      "colour": "STEEL_NAVY",
+      "role": "DOMINANT",
+      "surfaces": "Tissu technique en arrière-plan, couvrant toute la surface plane"
+    },
+    {
+      "colour": "COOL_GREY",
+      "role": "SECONDARY",
+      "surfaces": "Subtils reflets sur le tissu et ombre douce sous la batterie"
+    },
+    {
+      "colour": "WHITE",
+      "role": "LIGHT_TINT",
+      "surfaces": "Hauteurs lumineuses sur le bord supérieur du boîtier et les câbles"
+    },
+    {
+      "colour": "NAVY",
+      "role": "SHADOW_TINT",
+      "surfaces": "Ombre portée sous la batterie et zones profondes du tissu"
+    },
+    {
+      "colour": "TERRACOTTA",
+      "role": "ACCENT",
+      "surfaces": "Port USB-A orange visible sur la tranche supérieure (seul élément coloré contrastant)"
+    }
+  ],
+  "choices": [
+    {
+      "decision": "COMPOSITION",
+      "why": "Structure verticale avec batterie à gauche et réserve à droite permet de montrer le produit dans sa pose réelle tout en laissant de l’espace pour le message, en cohérence avec l’idée de ‘poche intelligente’."
+    },
+    {
+      "decision": "PRODUCT_PLACEMENT",
+      "why": "Position LEFT_THIRD en MEDIUM framing respecte les proportions mesurées, laisse assez de marge à droite pour le texte, et simule l’effet d’un objet glissé dans une poche extérieure."
+    },
+    {
+      "decision": "LIGHT",
+      "why": "Lumière douce venant de la gauche, identique à celle de la photo originale, préserve la fidélité du produit tout en accentuant le contraste entre tissu mat et boîtier satiné."
+    },
+    {
+      "decision": "PALETTE",
+      "why": "STEEL_NAVY comme dominant pour le tissu crée un fond moderne et neutre ; TERRACOTTA en accent sur le port orange apporte un point de repère visuel sans rompre la sobriété."
+    },
+    {
+      "decision": "TEXT_RESERVE",
+      "why": "RIGHT_COLUMN offre une surface homogène et calme, suffisamment large pour le titre en une ligne, sans toucher le produit ni occuper trop d’espace visuel."
+    }
+  ]
+}

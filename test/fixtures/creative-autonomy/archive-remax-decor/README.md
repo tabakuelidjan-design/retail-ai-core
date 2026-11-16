@@ -1,0 +1,2 @@
+Normalised decisions of the second decor-first preparation (plan trial-03c3e94217cd1db4, 2026-11-07, Remax FC-02 Bleu): the concept, art direction and stage of the prepared concept (decisions.json), its first-selected sibling (concept-256f.json),
+the three concepts (second-concepts.normalized.json), the frame as the model's fields (second-frame.fields.json) and SELECT's judgments (second-evaluations.normalized.json). The raw model answers are not kept in the repository (privacy rule). Used offline only.

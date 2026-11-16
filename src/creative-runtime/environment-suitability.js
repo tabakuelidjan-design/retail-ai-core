@@ -57,11 +57,58 @@ export function zoneObjectStructure({ width, height, pixels }, box) {
   return n ? { structure_share: strong / n, structure_blocks: n } : { structure_share: null, structure_blocks: 0 };
 }
 
+/**
+ * THE SAME structure measure, without the HORIZON. Real run 2026-11-05 (plan trial-627b17993d2b845f): the two rooms the image model drew for an environment-first scene were calm, dark and empty,
+ * and were refused (3.5 % and 5.2 % against 2.5 %): the product zone of a product that stands on the floor in front of a wall is crossed by the floor/wall line, and that line (plus its glints)
+ * counted as structure. A horizon is not an object: a connected run of structure blocks that is LONG (at least 12 blocks wide), nearly HORIZONTAL (|slope| <= 0.25) and THIN (every block within
+ * 2 blocks of its own fitted line) is removed before the share is computed. Everything else counts as before: an object, a hand, a prop, a plant, a window, a vertical pole, a compact cluster.
+ */
+export function zoneObjectStructureWithoutHorizon({ width, height, pixels }, box) {
+  const B = Math.max(8, Math.round(width * SUITABILITY.structure_block_ratio));
+  const bx0 = Math.max(0, Math.floor(box.x / B)); const by0 = Math.max(0, Math.floor(box.y / B));
+  const bx1 = Math.min(Math.floor(width / B) - 1, Math.ceil((box.x + box.width) / B)); const by1 = Math.min(Math.floor(height / B) - 1, Math.ceil((box.y + box.height) / B));
+  const cache = new Map();
+  const mean = (bx, by) => { const key = (bx * 100003) + by; if (!cache.has(key)) { let sum = 0; for (let y = by * B; y < (by + 1) * B; y += 1) for (let x = bx * B; x < (bx + 1) * B; x += 1) sum += lumaAt(pixels, (y * width + x) * 4); cache.set(key, sum / (B * B)); } return cache.get(key); };
+  const strong = new Set(); let n = 0;
+  for (let by = by0; by < by1; by += 1) for (let bx = bx0; bx < bx1; bx += 1) { n += 1; if (Math.max(Math.abs(mean(bx + 1, by) - mean(bx, by)), Math.abs(mean(bx, by + 1) - mean(bx, by))) > SUITABILITY.structure_level) strong.add(`${bx},${by}`); }
+  if (!n) return { structure_share: null, structure_blocks: 0, structure_share_raw: null, horizon_blocks_removed: 0 };
+  const seen = new Set(); let removed = 0; const kept = new Set(strong);
+  // a lit line has gaps: fragments within 3 blocks along it are one line
+  for (const start of strong) {
+    if (seen.has(start)) continue;
+    const comp = []; const stack = [start]; seen.add(start);
+    while (stack.length) { const cur = stack.pop(); comp.push(cur); const [cx, cy] = cur.split(',').map(Number); for (let dx = -3; dx <= 3; dx += 1) for (let dy = -2; dy <= 2; dy += 1) { const k = `${cx + dx},${cy + dy}`; if ((dx || dy) && strong.has(k) && !seen.has(k)) { seen.add(k); stack.push(k); } } }
+    const pts = comp.map((c) => c.split(',').map(Number)); const xs = pts.map((p) => p[0]); const span = Math.max(...xs) - Math.min(...xs) + 1;
+    if (span < 12) continue;
+    const mx = xs.reduce((a, b) => a + b, 0) / pts.length; const my = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+    const sxx = pts.reduce((a, p) => a + (p[0] - mx) ** 2, 0); const sxy = pts.reduce((a, p) => a + (p[0] - mx) * (p[1] - my), 0);
+    const slope = sxx ? sxy / sxx : Infinity; if (Math.abs(slope) > 0.25) continue;
+    if (pts.every((p) => Math.abs((p[1] - my) - slope * (p[0] - mx)) <= 2)) { for (const c of comp) kept.delete(c); removed += comp.length; }
+  }
+  return { structure_share: kept.size / n, structure_blocks: n, structure_share_raw: strong.size / n, horizon_blocks_removed: removed };
+}
+
 /** @returns {{ suitable, rule, zone, measured, limit }}; an unmeasurable zone is not suitable. */
-export function assessEnvironment({ environment, productBox }) {
+export function assessEnvironment({ environment, productBox, ignoreHorizon = false }) {
   const m = SUITABILITY.zone_margin;
   const zone = { x: productBox.x - productBox.width * m, y: productBox.y - productBox.height * m, width: productBox.width * (1 + 2 * m), height: productBox.height * (1 + 2 * m) };
-  const measured = { ...zoneStructure(environment, zone), ...zoneObjectStructure(environment, zone) };
+  const measured = { ...zoneStructure(environment, zone), ...(ignoreHorizon ? zoneObjectStructureWithoutHorizon(environment, zone) : zoneObjectStructure(environment, zone)) };
   const suitable = measured.structure_blocks > 0 && measured.structure_share <= SUITABILITY.max_structure_share;
   return Object.freeze({ suitable, rule: SUITABILITY.rule, zone, measured, limit: { max_structure_share: SUITABILITY.max_structure_share, structure_level: SUITABILITY.structure_level, block_ratio: SUITABILITY.structure_block_ratio, max_strong_edge_share: SUITABILITY.max_strong_edge_share, strong_edge_level: SUITABILITY.strong_edge_level } });
+}
+/**
+ * LOCAL REPOSITIONING of the product zone (owner decision 2026-11-06). A room that is calm and empty except for an architectural band at the EDGE of the zone (a window frame, a pillar) is not
+ * refused: the product is moved sideways by the smallest step (40 px, at most 7 steps = about 26 % of the frame width, alternating right then left, never closer than 40 px to the frame edge) to a
+ * zone that the SAME measure (same limit, same horizon rule) finds suitable. The search stops at the first suitable zone; when none exists the caller refuses the variant as before, so an object,
+ * a hand, a prop or a duplicate in the room is refused wherever the product would stand.
+ * @returns {{ dx: number, verdict }|null}
+ */
+export function repositionZone({ environment, box, width }) {
+  for (let k = 1; k <= 7; k += 1) for (const sign of [1, -1]) {
+    const dx = sign * k * 40; const nx = box.x + dx;
+    if (nx < 40 || nx + box.width > width - 40) continue;
+    const verdict = assessEnvironment({ environment, productBox: { x: nx, y: box.y, width: box.width, height: box.height }, ignoreHorizon: true });
+    if (verdict.suitable) return { dx, verdict };
+  }
+  return null;
 }

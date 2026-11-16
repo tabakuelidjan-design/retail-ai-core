@@ -1,0 +1,161 @@
+{
+ "_note": "Products for which the advertisement route (AD) has a validated product sheet. Copied from test/fixtures/creative-autonomy on 2026-11-09 (sheet definitions confirmed by the owner, Shopify snapshots read-only). A product that is not listed here cannot use the AD route.",
+ "products": [
+  {
+   "key": "remax-fc02",
+   "shopify_product_id": "gid://shopify/Product/15500511084892",
+   "sheet": "remax-fc02.json",
+   "snapshot": "shopify-remax-fc02-20261107.json"
+  },
+  {
+   "key": "gourde-tyeso",
+   "shopify_product_id": "gid://shopify/Product/15514012254556",
+   "sheet": "gourde-tyeso.json",
+   "snapshot": "shopify-gourde-tyeso.json"
+  },
+  {
+   "key": "mini-noire",
+   "shopify_product_id": "gid://shopify/Product/15500510986588",
+   "sheet": "mini-noire.json",
+   "snapshot": "shopify-batterie-mini-noir-20261105.json"
+  },
+  {
+   "key": "gourde-sitarayuri-zf024",
+   "shopify_product_id": "gid://shopify/Product/15520834945372",
+   "sheet": "gourde-sitarayuri-zf024.json",
+   "snapshot": "shopify-gourde-sitarayuri-zf024-20261115.json"
+  },
+  {
+   "key": "gourde-tyeso-ts8755c",
+   "shopify_product_id": "gid://shopify/Product/15507746914652",
+   "sheet": "gourde-tyeso-ts8755c.json",
+   "snapshot": "shopify-gourde-tyeso-ts8755c-20261115.json"
+  },
+  {
+   "key": "casque-remax-rb300hb",
+   "shopify_product_id": "gid://shopify/Product/15500205523292",
+   "sheet": "casque-remax-rb300hb.json",
+   "snapshot": "shopify-casque-remax-rb300hb-20261115.json"
+  },
+  {
+   "key": "ecouteurs-true-wireless-pour-musique-et-",
+   "shopify_product_id": "gid://shopify/Product/15500363170140",
+   "sheet": "ecouteurs-true-wireless-pour-musique-et-.json",
+   "snapshot": "shopify-ecouteurs-true-wireless-pour-musique-et--20261115.json"
+  },
+  {
+   "key": "cable-usb-c-vers-usb-c-2-m",
+   "shopify_product_id": "gid://shopify/Product/15522611102044",
+   "sheet": "cable-usb-c-vers-usb-c-2-m.json",
+   "snapshot": "shopify-cable-usb-c-vers-usb-c-2-m-20261115.json"
+  },
+  {
+   "key": "coffret-cadeau-c-ur-finition-marbree",
+   "shopify_product_id": "gid://shopify/Product/15547355791708",
+   "sheet": "coffret-cadeau-c-ur-finition-marbree.json",
+   "snapshot": "shopify-coffret-cadeau-c-ur-finition-marbree-20261115.json"
+  },
+  {
+   "key": "gourde-sitarayuri-zf-028-560-ml",
+   "shopify_product_id": "gid://shopify/Product/15520803684700",
+   "sheet": "gourde-sitarayuri-zf-028-560-ml.json",
+   "snapshot": "shopify-gourde-sitarayuri-zf-028-560-ml-20261115.json"
+  },
+  {
+   "key": "ecouteurs-a-conduction-osseuse-bluetooth",
+   "shopify_product_id": "gid://shopify/Product/15500510855516",
+   "sheet": "ecouteurs-a-conduction-osseuse-bluetooth.json",
+   "snapshot": "shopify-ecouteurs-a-conduction-osseuse-bluetooth-20261115.json"
+  },
+  {
+   "key": "boite-cadeau-en-cuir-pu",
+   "shopify_product_id": "gid://shopify/Product/15517247701340",
+   "sheet": "boite-cadeau-en-cuir-pu.json",
+   "snapshot": "shopify-boite-cadeau-en-cuir-pu-20261115.json"
+  },
+  {
+   "key": "coffret-cadeau-c-ur-classique-3-tailles",
+   "shopify_product_id": "gid://shopify/Product/15547355627868",
+   "sheet": "coffret-cadeau-c-ur-classique-3-tailles.json",
+   "snapshot": "shopify-coffret-cadeau-c-ur-classique-3-tailles-20261115.json"
+  },
+  {
+   "key": "coque-personnalisee-apple-iphone-17-pro-",
+   "shopify_product_id": "gid://shopify/Product/15684482236764",
+   "sheet": "coque-personnalisee-apple-iphone-17-pro-.json",
+   "snapshot": "shopify-coque-personnalisee-apple-iphone-17-pro--20261115.json"
+  },
+  {
+   "key": "cadre-photo-ardoise-c-ur",
+   "shopify_product_id": "gid://shopify/Product/15547357004124",
+   "sheet": "cadre-photo-ardoise-c-ur.json",
+   "snapshot": "shopify-cadre-photo-ardoise-c-ur-20261115.json"
+  },
+  {
+   "key": "coque-personnalisee-apple-iphone-15",
+   "shopify_product_id": "gid://shopify/Product/15684481024348",
+   "sheet": "coque-personnalisee-apple-iphone-15.json",
+   "snapshot": "shopify-coque-personnalisee-apple-iphone-15-20261115.json"
+  },
+  {
+   "key": "kit-de-charge-rapide-45w",
+   "shopify_product_id": "gid://shopify/Product/15522756067676",
+   "sheet": "kit-de-charge-rapide-45w.json",
+   "snapshot": "shopify-kit-de-charge-rapide-45w-20261115.json"
+  },
+  {
+   "key": "cadre-verre-papillon",
+   "shopify_product_id": "gid://shopify/Product/15547356447068",
+   "sheet": "cadre-verre-papillon.json",
+   "snapshot": "shopify-cadre-verre-papillon-20261115.json"
+  },
+  {
+   "key": "coque-personnalisee-apple-iphone-17",
+   "shopify_product_id": "gid://shopify/Product/15684482171228",
+   "sheet": "coque-personnalisee-apple-iphone-17.json",
+   "snapshot": "shopify-coque-personnalisee-apple-iphone-17-20261115.json"
+  },
+  {
+   "key": "coffret-cadeau-premium-avec-poignee-et-r",
+   "shopify_product_id": "gid://shopify/Product/15547356250460",
+   "sheet": "coffret-cadeau-premium-avec-poignee-et-r.json",
+   "snapshot": "shopify-coffret-cadeau-premium-avec-poignee-et-r-20261115.json"
+  },
+  {
+   "key": "coffret-cadeau-luxe-avec-poignee-et-ruba",
+   "shopify_product_id": "gid://shopify/Product/15547356315996",
+   "sheet": "coffret-cadeau-luxe-avec-poignee-et-ruba.json",
+   "snapshot": "shopify-coffret-cadeau-luxe-avec-poignee-et-ruba-20261115.json"
+  },
+  {
+   "key": "chargeur-sans-fil-pliable-3-en-1-avec-ve",
+   "shopify_product_id": "gid://shopify/Product/15520732905820",
+   "sheet": "chargeur-sans-fil-pliable-3-en-1-avec-ve.json",
+   "snapshot": "shopify-chargeur-sans-fil-pliable-3-en-1-avec-ve-20261115.json"
+  },
+  {
+   "key": "coffret-cadeau-transparent-avec-poignee-",
+   "shopify_product_id": "gid://shopify/Product/15547355365724",
+   "sheet": "coffret-cadeau-transparent-avec-poignee-.json",
+   "snapshot": "shopify-coffret-cadeau-transparent-avec-poignee--20261115.json"
+  },
+  {
+   "key": "kit-de-charge-rapide-gan-30w",
+   "shopify_product_id": "gid://shopify/Product/15520731824476",
+   "sheet": "kit-de-charge-rapide-gan-30w.json",
+   "snapshot": "shopify-kit-de-charge-rapide-gan-30w-20261115.json"
+  },
+  {
+   "key": "cable-usb-c-vers-lightning-2-m",
+   "shopify_product_id": "gid://shopify/Product/15522712846684",
+   "sheet": "cable-usb-c-vers-lightning-2-m.json",
+   "snapshot": "shopify-cable-usb-c-vers-lightning-2-m-20261115.json"
+  },
+  {
+   "key": "chargeur-mural-ultra-rapide-65w",
+   "shopify_product_id": "gid://shopify/Product/15522822717788",
+   "sheet": "chargeur-mural-ultra-rapide-65w.json",
+   "snapshot": "shopify-chargeur-mural-ultra-rapide-65w-20261115.json"
+  }
+ ]
+}

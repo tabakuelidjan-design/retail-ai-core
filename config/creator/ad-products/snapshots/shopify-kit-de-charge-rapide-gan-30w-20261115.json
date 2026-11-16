@@ -1,0 +1,21 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15520731824476",
+  "title": "Kit de charge rapide GaN 30W",
+  "description": "Compact et efficace, le Remax RP-U71 exploite la technologie GaN pour délivrer jusqu’à 30W dans un format facile à emporter. Livré avec son câble USB-C RC-C021, il constitue un kit complet pour recharger rapidement les appareils compatibles à la maison, au travail ou en déplacement.",
+  "tags": [],
+  "productType": "",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57235096797532",
+     "title": "Default Title",
+     "price": "14.90",
+     "inventoryQuantity": 207
+    }
+   ]
+  }
+ }
+}

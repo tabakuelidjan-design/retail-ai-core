@@ -1,5 +1,5 @@
 import {
-  BRAIN_ERROR, enumOf, fail, isPlain, listOf, noNumbers, oneLine, TEXT_MAX,
+  BRAIN_ERROR, BrainError, enumOf, fail, isPlain, listOf, noNumbers, oneLine, TEXT_MAX,
 } from './validation.js';
 import { assertNoSubstitute } from './substitutes.js';
 
@@ -15,10 +15,11 @@ const node = (kind, body) => Object.freeze({ [SPEC]: true, kind, ...body });
 export const isSpec = (v) => v !== null && typeof v === 'object' && v[SPEC] === true;
 
 /** One line of plain text. `geometry`: no digit, colour code or unit (a semantic line). `forbid`: refuses the scene lexicon (a narrative element). */
-export const text = ({ min = 1, max = TEXT_MAX, geometry = false, forbid = false, doc = null } = {}) => node('text', { min, max, geometry, forbid, doc });
+/** `allowEmpty`: an empty text is a valid answer (a field that may honestly say nothing); the instruction wording is unchanged. */
+export const text = ({ min = 1, max = TEXT_MAX, geometry = false, forbid = false, fit = false, doc = null, allowFigures = null, allowEmpty = false } = {}) => node('text', { min, max, geometry, forbid, fit, doc, allowFigures, allowEmpty });
 /** A closed vocabulary (an object of NAME: 'NAME'). Matching is exact after trimming; `caseInsensitive` also accepts another casing of the same word (a harmless syntactic variant, journaled). */
 export const word = (vocab, { caseInsensitive = true, doc = null } = {}) => node('word', { vocab, caseInsensitive, doc });
-export const list = (item, { min = 0, max = 12, doc = null } = {}) => node('list', { item, min, max, doc });
+export const list = (item, { min = 0, max = 12, fit = false, doc = null } = {}) => node('list', { item, min, max, fit, doc });
 /** An object whose keys are words of a closed vocabulary (each at most once) and whose values follow one spec. */
 export const map = (keyVocab, value, { min = 1, max = 12, doc = null } = {}) => node('map', { keyVocab, value, min, max, doc });
 /** A closed object: exactly `fields`, except the `optional` keys which may be absent. */
@@ -26,12 +27,92 @@ export const obj = (fields, { optional = [], doc = null } = {}) => node('object'
 
 const GEOMETRY_TEXT = /[0-9]|#[0-9a-f]{3,8}\b|\b(px|pt|em|rem)\b/i;
 
+// ---- VERIFIED FIGURES (PRODUCT_VISIBLE art direction, 2026-11-08). A semantic line holds no digit, EXCEPT a reference that the product itself carries and the verified facts state: its model number ("FC-02") and its verified
+// characteristics ("20 000 mAh", "45W"). `allowFigures` is the list of the KEYS of those references; every other figure (a size, a percentage, a count, a colour code) stays refused. Nothing is rewritten: the answer is checked, never edited.
+const FIGURE_UNIT = '(?:mAh|Ah|Wh|Hz|kg|mm|cm|min|W|V|A|g|h|s|m|%)';
+const FIGURE_SPAN = new RegExp('(?:\\p{L}+-)?\\d+(?:[\\u00a0\\u202f ,.]\\d+)*(?:[\\u00a0\\u202f ]?' + FIGURE_UNIT + ')?(?![\\p{L}\\d])', 'gu');
+/** The figure references written in a text, as written: ["FC-02", "20 000 mAh", "45W"]. */
+export const figureSpansOf = (t) => String(t ?? '').match(FIGURE_SPAN) ?? [];
+/** The comparison key of a figure reference: case, spaces, thin spaces and thousands separators do not matter ("20 000 mAh" = "20000mAh" = "20,000 mah"). */
+export const figureKey = (span) => String(span).toLowerCase().replace(/[\u00a0\u202f ,.]/g, '');
+/** A text without its VERIFIED figure references (spans whose key is in `allowedKeys`), and the figures that are NOT verified. */
+export function splitFigures(t, allowedKeys) {
+  const allowed = new Set(allowedKeys ?? []); const unverified = [];
+  const masked = String(t ?? '').replace(FIGURE_SPAN, (span) => { if (allowed.has(figureKey(span))) return ' '; unverified.push(span); return span; });
+  return { masked, unverified };
+}
+
+// ---- LENGTH FIT. A language model cannot count characters. For DESCRIPTIVE prose (a rationale, an evidence line, a reason, an atmosphere: text that explains and is never shown to the customer as copy), an
+// over-long answer is cut back deterministically, locally and for free, instead of stopping the run: at the last whole sentence, else the last whole clause, else the last whole word. Nothing is added, nothing is
+// reworded; the stricter validators then run on the shortened text exactly as before (a cut cannot introduce a forbidden word, a digit or a claim). Copy the customer reads (a headline, a price, a claim, a word
+// carved in a prop) is NEVER fitted: it keeps its hard limit. Every cut is journaled { kind: LENGTH_FIT }.
+const SENTENCE_END = /[.!?…。！？](?=\s|$)/gu;
+const CLAUSE_END = /[;:,—–、，；：](?=\s|$)/gu;
+const UNSPACED_SCRIPT = /[฀-๿぀-ヿ㐀-鿿가-힯]/u;
+const DANGLING = /\s+(?:and|or|but|with|of|to|in|on|at|for|from|by|the|a|an|as|that|which|et|ou|mais|avec|de|du|des|d['’]|la|le|les|un|une|au|aux|en|dans|sur|pour|par|que|qui|und|mit|von|der|die|das|en|met|van|het|puis|donc|alors|tandis|sans|sous|chez|vers|entre|dont|ni|si|car|comme|ainsi|pendant|then|while|so|into|onto|about|without|under|over|between|is|are|be|its|their|this|these|our|your)$/iu;
+const lastEndWithin = (re, s, max) => { let end = -1; for (const m of s.matchAll(re)) { const e = m.index + m[0].length; if (e <= max) end = e; } return end; };
+
+/** The text cut back to at most `max` characters, or null when no clean cut keeps at least `min`. { text, rule: SENTENCE | CLAUSE | WORD | CHARACTERS } */
+export function fitText(value, { min = 1, max = TEXT_MAX } = {}) {
+  const full = String(value).normalize('NFC').trim().replace(/ {2,}/g, ' ');
+  if (full.length <= max) return { text: full, rule: null };
+  const floor = (ratio) => Math.max(min, Math.ceil(max * ratio));
+  const done = (s, rule) => { const t = s.trim(); return t.length >= min && t.length <= max ? { text: t, rule } : null; };
+  const sentence = lastEndWithin(SENTENCE_END, full, max);
+  if (sentence >= floor(0.5)) return done(full.slice(0, sentence), 'SENTENCE');
+  const clause = lastEndWithin(CLAUSE_END, full, max + 1) - 1; // the clause mark itself is dropped
+  if (clause >= floor(0.6)) { const body = full.slice(0, clause).replace(/[\s,;:\-–—(]+$/u, ''); return done(body.length < max ? `${body}.` : body, 'CLAUSE'); }
+  let head = full.slice(0, max + 1);
+  const cut = /\s/u.test(head[max] ?? '') ? max : head.lastIndexOf(' ', max);
+  if (cut >= floor(0.6)) {
+    let body = full.slice(0, cut);
+    for (let i = 0; i < 3 && DANGLING.test(body); i += 1) body = body.replace(DANGLING, '');
+    body = body.replace(/[\s,;:\-–—(]+$/u, '');
+    return done(body.length < max && !/[.!?…]$/u.test(body) ? `${body}.` : body, 'WORD');
+  }
+  head = full.slice(0, max);
+  if (!/\s/u.test(head) && UNSPACED_SCRIPT.test(head)) { const high = head.charCodeAt(head.length - 1); return done(high >= 0xD800 && high <= 0xDBFF ? head.slice(0, -1) : head, 'CHARACTERS'); } // never between the halves of a surrogate pair
+  return null;
+}
+
+/**
+ * EVERY contract violation of an answer, not only the first: [{ field, code, message, detail }] in document order. The validator below stays the authority (it throws at the first
+ * refusal); this walks the same spec, validating each leaf on its own, so that ONE repair can name them all. Read-only. A structure that is not an object or a list of the expected
+ * shape is reported at its own field and not walked further.
+ */
+export function collectSpecViolations(spec, value, where, out = []) {
+  const leaf = (s, v, w) => { try { validateSpec(s, v, w); } catch (e) { if (!(e instanceof BrainError)) throw e; out.push({ field: e.field ?? w, code: e.code, message: e.message, detail: e.detail ?? null }); } };
+  switch (spec.kind) {
+    case 'list': {
+      try { listOf(value, where, { min: spec.min, max: spec.max }); } catch (e) { if (!(e instanceof BrainError)) throw e; out.push({ field: where, code: e.code, message: e.message, detail: null }); if (!Array.isArray(value)) break; }
+      value.forEach((v, i) => collectSpecViolations(spec.item, v, `${where}[${i}]`, out));
+      break;
+    }
+    case 'object': {
+      if (!isPlain(value)) { leaf(spec, value, where); break; }
+      const keys = Object.keys(spec.fields);
+      for (const key of Object.keys(value)) if (!keys.includes(key)) out.push({ field: `${where}.${key}`, code: BRAIN_ERROR.UNKNOWN_KEY, message: `${where}.${key} is not part of this contract`, detail: null });
+      for (const key of keys) {
+        if (!(key in value)) { if (!spec.optional.includes(key)) out.push({ field: `${where}.${key}`, code: BRAIN_ERROR.MISSING_KEY, message: `${where}.${key} is missing`, detail: null }); } else collectSpecViolations(spec.fields[key], value[key], `${where}.${key}`, out);
+      }
+      break;
+    }
+    default: leaf(spec, value, where); // text, word, map
+  }
+  return out;
+}
+
 /** Validates `value` against a spec. Throws a BrainError naming the field; returns the value (normalized as the helpers do: trimmed single-line text). */
 export function validateSpec(spec, value, where) {
   switch (spec.kind) {
     case 'text': {
-      const out = oneLine(value, where, { min: spec.min, max: spec.max });
-      if (spec.geometry && GEOMETRY_TEXT.test(out)) fail(BRAIN_ERROR.FORBIDDEN_CONTENT, `${where} holds a digit, a colour code or a unit`, where);
+      const out = oneLine(value, where, { min: spec.allowEmpty ? 0 : spec.min, max: spec.max });
+      if (spec.geometry) {
+        const { masked, unverified } = spec.allowFigures ? splitFigures(out, spec.allowFigures) : { masked: out, unverified: [] };
+        if (GEOMETRY_TEXT.test(masked)) fail(BRAIN_ERROR.FORBIDDEN_CONTENT, spec.allowFigures
+          ? `${where} holds a figure that is not one of the product's verified references${unverified.length ? ` (${unverified.join(', ')})` : ''}: name the product plainly, or quote a verified reference exactly as listed in product_facts.verified_references; no other digit, size, percentage or colour code`
+          : `${where} holds a digit, a colour code or a unit`, where, spec.allowFigures ? { problem: 'FIGURE_NOT_A_VERIFIED_REFERENCE', figures: unverified } : undefined);
+      }
       if (spec.forbid) assertNoSubstitute(out, where);
       return out;
     }
@@ -71,7 +152,7 @@ export function validateAnswer({ spec, rules = [] }, value, where, ctx = {}) {
 // ---- the instruction: the spec rendered as words
 const describe = (spec) => {
   switch (spec.kind) {
-    case 'text': return `ONE line of plain text, ${spec.min === 1 ? 'at most' : `${spec.min} to`} ${spec.max} characters${spec.geometry ? ', with no digit at all, no colour code and no unit' : ''}${spec.forbid ? ', without any word of the refused scene lexicon (see below)' : ''}`;
+    case 'text': return `ONE line of plain text, ${spec.min === 1 ? 'at most' : `${spec.min} to`} ${spec.max} characters (spaces included; ${spec.fit ? `aim for about ${Math.max(spec.min, Math.floor(spec.max * 0.8))}: a longer text is cut back to its last whole sentence or clause, so put the essential point first` : 'a HARD limit: a longer text is refused, so count before you answer'})${spec.geometry ? ', with no digit at all, no colour code and no unit' : ''}${spec.forbid ? ', without any word of the refused scene lexicon (see below)' : ''}`;
     case 'word': return `one of: ${Object.values(spec.vocab).join(' | ')}`;
     case 'list': return `a list of ${spec.min} to ${spec.max} ${describe(spec.item).replace(/^a /, '')}`.replace(/(\d+) to (\d+) (one|an?|ONE) /, '$1 to $2 ');
     case 'map': return `an object whose keys are among ${Object.values(spec.keyVocab).join(', ')} (each at most once, ${spec.min} to ${spec.max} entries)`;
@@ -94,7 +175,7 @@ export function renderSpec(spec, name = 'answer', depth = 0) {
     return lines;
   }
   if (spec.kind === 'list') {
-    lines.push(`${name}: a list of ${spec.min} to ${spec.max} items.`);
+    lines.push(`${name}: a list of ${spec.min} to ${spec.max} items${spec.fit ? ` (put the most important first: any item beyond the first ${spec.max} is dropped)` : ''}.`);
     lines.push(...renderSpec(spec.item, `${name}[]`, depth + 1));
     return lines;
   }
@@ -132,7 +213,7 @@ export const renderRules = (rules) => rules.map((r) => `RULE ${r.id}: ${r.statem
 // It repairs only SYNTACTIC near misses, never a creative meaning: (1) a key misspelled within two edits when exactly one key is unknown and exactly one is missing (so no choice is made);
 // (2) line breaks, tabs and runs of blanks inside a one-line text; (3) another casing of a word of a closed vocabulary. It never chooses between contradictory values, never fills a missing value,
 // never turns one word of a vocabulary into a different one, never drops a relation. Every repair is returned as journal evidence: { path, kind, from, to }.
-export const REPAIR_KIND = Object.freeze({ ENVELOPE: 'ENVELOPE', KEY_NEAR_MISS: 'KEY_NEAR_MISS', WHITESPACE: 'WHITESPACE', WORD_CASE: 'WORD_CASE', OPTIONAL_EMPTY: 'OPTIONAL_EMPTY' });
+export const REPAIR_KIND = Object.freeze({ ENVELOPE: 'ENVELOPE', KEY_NEAR_MISS: 'KEY_NEAR_MISS', WHITESPACE: 'WHITESPACE', WORD_CASE: 'WORD_CASE', OPTIONAL_EMPTY: 'OPTIONAL_EMPTY', LENGTH_FIT: 'LENGTH_FIT', LIST_FIT: 'LIST_FIT', JSON_SYNTAX: 'JSON_SYNTAX', SUPPORT_AS_PLINTH: 'SUPPORT_AS_PLINTH' });
 const MAX_KEY_EDITS = 2;
 
 function editDistance(a, b) {
@@ -160,9 +241,14 @@ export function normalizeNearMisses(spec, value, repairs = [], path = 'answer') 
   }
   switch (spec.kind) {
     case 'text': {
-      if (typeof value !== 'string' || !/[\r\n\t\u2028\u2029]/.test(value)) return value;
-      const out = value.replace(/[\r\n\t\u2028\u2029]+/g, ' ');
-      repairs.push({ path, kind: REPAIR_KIND.WHITESPACE, from: 'line break or tab', to: 'one blank' });
+      if (typeof value !== 'string') return value;
+      let out = value;
+      if (/[\r\n\t\u2028\u2029]/.test(out)) { out = out.replace(/[\r\n\t\u2028\u2029]+/g, ' '); repairs.push({ path, kind: REPAIR_KIND.WHITESPACE, from: 'line break or tab', to: 'one blank' }); }
+      if (spec.fit) {
+        const length = out.normalize('NFC').trim().replace(/ {2,}/g, ' ').length;
+        const fitted = length > spec.max ? fitText(out, { min: spec.min, max: spec.max }) : null;
+        if (fitted?.rule) { repairs.push({ path, kind: REPAIR_KIND.LENGTH_FIT, from: `${length} characters`, to: `${fitted.text.length} characters, cut at the last whole ${fitted.rule.toLowerCase()}`, dropped: out.normalize('NFC').trim().replace(/ {2,}/g, ' ').slice(fitted.text.length).slice(0, 200) }); out = fitted.text; }
+      }
       return out;
     }
     case 'word': {
@@ -175,7 +261,12 @@ export function normalizeNearMisses(spec, value, repairs = [], path = 'answer') 
       repairs.push({ path, kind: REPAIR_KIND.WORD_CASE, from: value, to: matches[0] });
       return matches[0];
     }
-    case 'list': return Array.isArray(value) ? value.map((v, i) => normalizeNearMisses(spec.item, v, repairs, `${path}[${i}]`)) : value;
+    case 'list': {
+      if (!Array.isArray(value)) return value;
+      let items = value;
+      if (spec.fit && items.length > spec.max) { repairs.push({ path, kind: REPAIR_KIND.LIST_FIT, from: `${items.length} items`, to: `the first ${spec.max} items` }); items = items.slice(0, spec.max); }
+      return items.map((v, i) => normalizeNearMisses(spec.item, v, repairs, `${path}[${i}]`));
+    }
     case 'map': {
       if (!isPlain(value)) return value;
       const allowed = Object.values(spec.keyVocab);
@@ -201,7 +292,8 @@ export function normalizeNearMisses(spec, value, repairs = [], path = 'answer') 
         repairs.push({ path, kind: REPAIR_KIND.KEY_NEAR_MISS, from: unknown[0], to: missing[0] });
       }
       for (const key of keys) if (key in out) out[key] = normalizeNearMisses(spec.fields[key], out[key], repairs, `${path}.${key}`);
-      return out;
+      // a contract may declare ONE deterministic correction of its whole object (recorded like every other near-miss; the rules still judge the result)
+      return typeof spec.nearMiss === 'function' ? spec.nearMiss(out, repairs, path) : out;
     }
     default: return value;
   }

@@ -1,0 +1,99 @@
+{
+ "concept_conserve": "CONSERVED",
+ "concept_changes": "",
+ "starting_point": "BENEFIT",
+ "relation": "FUNCTIONAL",
+ "intention": "Show the Remax FC-02 as the only tool needed to recharge a smartphone on the go—no extra cables, no preparation—capturing the moment just before departure in a Namur café where urgency meets calm readiness.",
+ "visible_link": "The USB-C integrated cable hangs naturally toward the smartphone, visually suggesting immediate connection; the digital display reads 100%, confirming full readiness without needing to check settings or open a case.",
+ "reason_to_care": "You recognize yourself: rushing out the door with your phone low, and this battery is already there, cables built-in, no search, no stress—just take it and go.",
+ "audience_use": "People who use their smartphone heavily while moving between work, study, and outings; they need autonomy and simplicity, not more accessories to manage.",
+ "supported_by": [
+  "integrated_cables",
+  "digital_display"
+ ],
+ "product_nature": "A compact, satin-finish light blue power bank with rounded edges, two integrated braided cables (one looped above, one hanging with USB-C tip), a circular digital display showing 100%, and visible ports on top including an orange USB-A; designed for portability and plug-and-go charging without external cables.",
+ "idea": "A quiet morning at a Namur café table: the Remax FC-02 rests beside a switched-off smartphone, its USB-C cable dangling toward it, ready to connect in one motion—no searching, no extra gear, just departure made simple.",
+ "product_position": "LEFT_THIRD",
+ "product_framing": "MEDIUM",
+ "structure": "The composition follows a diagonal flow from top-left light source to bottom-right object placement: the product sits on the left third of the frame, slightly forward on a dark wooden table; the smartphone lies flat to its right, 5 cm away; a closed notebook and cold espresso sit behind them, reinforcing the ‘before leaving’ moment without crowding the hero.",
+ "setting": "A rustic Namur café interior: exposed brick wall in soft shadow behind, warm-toned dark wood table surface, natural daylight entering from the left window, casting gentle highlights consistent with the product’s studio-lit side.",
+ "materials": "Dark stained oak table, matte-finished ceramic espresso cup, textured paper notebook cover, brushed steel spoon beside the cup; all surfaces are tactile but uncluttered, supporting the product’s clean lines and satin finish.",
+ "atmosphere": "Calm urgency—the stillness of a moment just before movement, where everything needed is already in place and nothing is missing.",
+ "light": "Soft natural daylight from the left, matching the product’s photographed lighting direction, creating subtle highlights on the satin blue casing and gentle shadows under the hanging cable and phone, reinforcing realism and depth.",
+ "text_reserve": {
+  "zone": "TOP_RIGHT",
+  "description": "A smooth, cool grey surface with faint wood grain texture, softly lit and free of objects, offering high contrast for white text."
+ },
+ "elements": [
+  {
+   "zone": "BACKGROUND",
+   "element": "Exposed brick wall in muted terracotta tones, slightly out of focus"
+  },
+  {
+   "zone": "MIDGROUND",
+   "element": "Dark wooden café table with visible grain, supporting the product and phone"
+  },
+  {
+   "zone": "FOREGROUND",
+   "element": "Closed notebook and cold espresso cup with spoon, placed behind the product"
+  },
+  {
+   "zone": "MIDGROUND",
+   "element": "Smartphone lying flat, screen off, fully within frame, 5 cm right of the power bank"
+  }
+ ],
+ "resolution": "The scene resolves the customer’s daily friction: forgetting cables. By showing the integrated cable poised near the phone—and nothing else needed—it makes the benefit instantly legible without explanation.",
+ "placement_why": "Left-third medium framing places the product prominently while leaving space for the smartphone and context on the right; the measured foot position (84% height) aligns with the table surface, making the support physically credible and the cable’s hang natural.",
+ "headline": "Elle est prête. Pas de câble à chercher.",
+ "headline_role": "Reinforces the functional benefit shown in the image: the product eliminates the need to search for cables, turning a stressful prep moment into a simple grab-and-go action.",
+ "headline_lines": "ONE",
+ "palette_roles": [
+  {
+   "colour": "STEEL_NAVY",
+   "role": "DOMINANT",
+   "surfaces": "Brick wall background and table edge shadow"
+  },
+  {
+   "colour": "COOL_GREY",
+   "role": "SECONDARY",
+   "surfaces": "Table surface and espresso cup base"
+  },
+  {
+   "colour": "TERRACOTTA",
+   "role": "ACCENT",
+   "surfaces": "Orange USB-A port and subtle brick undertones"
+  },
+  {
+   "colour": "WHITE",
+   "role": "LIGHT_TINT",
+   "surfaces": "Highlights on the power bank’s satin finish and notebook pages"
+  },
+  {
+   "colour": "NEAR_BLACK",
+   "role": "SHADOW_TINT",
+   "surfaces": "Under-table shadow and display screen"
+  }
+ ],
+ "choices": [
+  {
+   "decision": "COMPOSITION",
+   "why": "Diagonal left-to-right flow mirrors the user’s gaze from product to phone, reinforcing the functional link; medium framing keeps context readable without shrinking the product’s presence."
+  },
+  {
+   "decision": "PRODUCT_PLACEMENT",
+   "why": "Left-third placement matches the product’s measured box and leaves room for the smartphone and narrative elements on the right, while keeping the hanging cable visually coherent with gravity and light direction."
+  },
+  {
+   "decision": "LIGHT",
+   "why": "Natural left-side light preserves the photograph’s lighting integrity, enhances the satin texture, and casts realistic shadows that ground the product on the table without harshness."
+  },
+  {
+   "decision": "PALETTE",
+   "why": "Using STEEL_NAVY as dominant grounds the scene in HABB’s identity while contrasting the light blue product; TERRACOTTA accents echo Namur’s brick architecture and the orange port, tying local context to function."
+  },
+  {
+   "decision": "TEXT_RESERVE",
+   "why": "Top-right cool grey reserve offers clean contrast for white headline text, avoids overlapping product or phone, and uses negative space that feels intentional rather than empty."
+  }
+ ]
+}

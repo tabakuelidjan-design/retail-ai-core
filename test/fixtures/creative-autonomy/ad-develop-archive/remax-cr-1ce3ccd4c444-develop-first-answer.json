@@ -1,0 +1,72 @@
+{
+ "proposals": [
+  {
+   "name": "Le concert improvisé dans le tram",
+   "from_rapprochement": "Musique live : un seul équipement prêt à jouer sans chercher de câbles",
+   "starting_point": "BENEFIT",
+   "need": "Pouvoir recharger son smartphone en déplacement sans chercher ni emporter plusieurs câbles, surtout quand on est en mouvement et qu’on ne peut pas s’arrêter pour fouiller dans un sac.",
+   "idea": "Dans un tramway bruxellois en fin d’après-midi, la batterie Remax repose sur une tablette en métal brossé, à côté d’un smartphone éteint (écran off). La lumière douce du crépuscule entre par la fenêtre, éclairant le bleu satiné du boîtier. Le câble tressé en boucle au-dessus du boîtier et l’autre pendante rappellent les cordes d’un instrument prêt à être branché — aucun câble supplémentaire n’est visible, aucune main ne touche rien. L’affichage rond indique « 100% » avec l’éclair vert, comme un feu vert pour continuer la journée.",
+   "visible_cues": "Batterie bleu clair posée sur une tablette métallique dans un tram ; smartphone éteint à côté ; câbles intégrés en position fixe (boucle haute + câble pendu) ; port USB-A orange bien visible sous la lumière naturelle ; pas de sacs, pas de câbles externes.",
+   "cable_role": "Les deux câbles tressés, en position fixe, montrent qu’ils sont toujours là, prêts à l’emploi — pas besoin de les sortir, les chercher ou les ranger.",
+   "link_to_product": "La batterie est photographiée exactement comme fournie : vue 3/4 depuis la gauche, éclairage doux venant de la gauche, affichage actif à 100%, câbles en leur pose originale. Le décor renforce l’autonomie mobile sans ajouter d’éléments interprétatifs.",
+   "speaks_to_the_public": "Aux personnes qui vivent leur journée en continu — étudiants, freelances, voyageurs — ce visuel dit : tu n’as pas besoin de préparer, juste de prendre ça, et tu es couvert.",
+   "headline": "Recharge sans chercher de câble, même en déplacement",
+   "supported_by": [
+    "integrated_cables",
+    "digital_display",
+    "capacity"
+   ]
+  },
+  {
+   "name": "La pause café avec trois appareils",
+   "from_rapprochement": "Transport public : un ticket valable pour plusieurs trajets, sans billets supplémentaires",
+   "starting_point": "PRODUCT_NATURE",
+   "need": "Disposer d’un outil fiable et intuitif, sans configuration ni geste compliqué au moment critique — par exemple quand trois appareils doivent être rechargés en même temps pendant une courte pause.",
+   "idea": "Sur une table en bois sombre d’un café namurois, la Remax est posée près d’un ordinateur portable fermé, d’une montre connectée et d’un smartphone. Aucun câble n’est branché, mais les trois ports (USB-C, USB-A orange, latéral) sont visibles, ainsi que les deux câbles intégrés en position fixe. La lumière douce du café met en valeur le bleu satiné et l’affichage « 100% ». Le décor est sobre, fonctionnel, typique d’un lieu où on travaille ou se retrouve — pas de plantes, pas de dorures, juste l’essentiel.",
+   "visible_cues": "Batterie sur table en bois sombre ; trois appareils non branchés à proximité (ordinateur fermé, montre, smartphone) ; ports visibles (incl. USB-A orange) ; câbles intégrés en pose fixe ; affichage actif à 100%.",
+   "cable_role": "AUCUN",
+   "link_to_product": "Le produit est placé tel que photographié, avec ses deux câbles tressés en position fixe, sa face avant lisible, et son éclairage compatible avec la lumière douce du café venant de la gauche.",
+   "speaks_to_the_public": "À ceux qui veulent tout gérer en une seule prise — pas de gestion de câbles, pas de choix de port, juste la batterie qui fait le job silencieusement.",
+   "headline": "Trois appareils, une seule batterie, zéro complication",
+   "supported_by": [
+    "outputs_count",
+    "power",
+    "digital_display"
+   ]
+  },
+  {
+   "name": "Le regard rapide avant de partir",
+   "from_rapprochement": "Horlogerie : lecture immédiate comme une montre analogique, sans écran allumé",
+   "starting_point": "ABSTRACT_INTENTION",
+   "need": "Se sentir autonome face aux aléas de la batterie, sans stress ni dépendance à une prise murale — et savoir, en un coup d’œil, qu’on est couvert.",
+   "idea": "Sur une commode en chêne clair dans une entrée de maison namuroise, la Remax est posée près des clés et d’un porte-monnaie. La lumière du matin entre par une fenêtre latérale (gauche), éclairant doucement le boîtier bleu. L’affichage rond noir avec « 100% » et l’éclair vert est nettement visible — comme une montre au poignet, il donne une info sans effort. Les câbles restent en leur pose fixe, sans interaction. Rien ne bouge, personne n’est là : juste le geste mental de vérifier avant de sortir.",
+   "visible_cues": "Batterie sur commode en bois clair ; clés et porte-monnaie à proximité ; affichage « 100% » bien lisible ; éclair vert actif ; câbles en pose fixe ; lumière naturelle venant de la gauche.",
+   "cable_role": "AUCUN",
+   "link_to_product": "Le produit est présenté exactement comme photographié : vue 3/4, éclairage de studio doux venant de la gauche, affichage actif, câbles intacts. Le décor renforce la simplicité de la vérification visuelle.",
+   "speaks_to_the_public": "Pour ceux qui veulent éviter le stress de la batterie basse, ce visuel dit : tu regardes, tu vois, tu pars — c’est ça, l’autonomie tranquille.",
+   "headline": "Un coup d’œil, et tu sais que tu tiens le coup",
+   "supported_by": [
+    "digital_display",
+    "capacity"
+   ]
+  },
+  {
+   "name": "Le sac à dos ouvert sur le banc",
+   "from_rapprochement": "Couture : fil cousu dans le tissu — présent, utile, jamais encombrant",
+   "starting_point": "PRODUCT_NATURE",
+   "need": "Avoir une autonomie suffisante pour couvrir une journée entière, même avec une utilisation intensive, sans devoir penser à la recharge comme une tâche supplémentaire.",
+   "idea": "Un sac à dos noir est ouvert sur un banc en béton brut, dans un parc namurois. À l’intérieur, rien d’encombrant : juste la Remax, posée à plat, son bleu clair contrastant avec le noir du sac. Le câble en boucle au-dessus du boîtier et l’autre pendu rappellent un fil intégré au tissu — toujours là, jamais perdu. Le smartphone est posé à côté, écran off. La lumière est douce, venant de la gauche, comme dans la photo studio. Pas de mains, pas de câbles externes, pas de désordre.",
+   "visible_cues": "Sac à dos ouvert sur banc en béton ; batterie bleu clair posée à l’intérieur, visible ; câbles intégrés en pose fixe ; smartphone éteint à côté ; pas d’autres objets ni câbles.",
+   "cable_role": "Les câbles tressés, en position fixe, évoquent un fil cousu — présent sans encombrement, utile sans manipulation.",
+   "link_to_product": "Le produit est placé tel que photographié, sans modification, avec ses câbles en pose originale. Le décor souligne l’intégration naturelle dans un quotidien mobile.",
+   "speaks_to_the_public": "Aux gens qui veulent que la tech disparaisse dans le fond — qu’elle soit là quand on en a besoin, mais qu’elle ne prenne pas de place mentale ni physique.",
+   "headline": "Autonomie intégrée, comme un fil dans le tissu",
+   "supported_by": [
+    "integrated_cables",
+    "capacity",
+    "digital_display"
+   ]
+  }
+ ],
+ "how_they_differ": "Les quatre propositions illustrent des besoins distincts : (1) recharge sans recherche de câbles en déplacement, (2) multi-appareils sans complication, (3) vérification rapide et rassurante, (4) intégration discrète dans le quotidien — chacune avec un décor, une lumière et une situation unique, sans répétition de thème."
+}

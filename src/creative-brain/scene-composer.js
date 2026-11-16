@@ -3,6 +3,7 @@ import {
   BRAIN_ERROR, closed, deepFreeze, deriveId, enumOf, fail, isPlain, listOf, noNumbers, oneLine,
 } from './validation.js';
 import { PRODUCT_RELATIONSHIP, REALISM, SCENE_ZONE } from './art-direction.js';
+import { fitText } from './contract.js';
 
 // SCENE COMPOSER. The scene is no longer assumed to be empty: it can carry materials, light, atmosphere, depth and the secondary or narrative elements the selected concept argues for. What stays
 // absolute is the line between the two things in the image:
@@ -45,7 +46,7 @@ const GROUNDING = Object.freeze({
 export function composeScene({ artDirection, productAssetRef }) {
   if (typeof productAssetRef !== 'string' || !productAssetRef) fail(BRAIN_ERROR.MALFORMED, 'the scene needs the reference of the protected product', 'productAssetRef');
   const layers = [
-    { role: SCENE_ZONE.BACKGROUND, content: oneLine(`${artDirection.atmosphere}; ${artDirection.material_language}`, 'scene.layers.background', { max: 300 }), concept_link: 'atmosphere and material language of the art direction', optional: false },
+    { role: SCENE_ZONE.BACKGROUND, content: oneLine(fitText(`${artDirection.atmosphere}; ${artDirection.material_language}`, { max: 300 })?.text ?? `${artDirection.atmosphere}; ${artDirection.material_language}`, 'scene.layers.background', { max: 300 }), concept_link: 'atmosphere and material language of the art direction', optional: false },
     ...artDirection.narrative_elements.map((e) => ({ role: e.zone, content: e.element, concept_link: e.reason, optional: false })),
     ...artDirection.permitted_secondary_elements.map((element) => ({ role: SCENE_ZONE.MIDGROUND, content: element, concept_link: 'a secondary element the art direction permits', optional: true })),
   ];

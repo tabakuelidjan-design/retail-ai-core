@@ -1,0 +1,924 @@
+{
+ "status": "STOPPED_ERROR",
+ "trace": [
+  {
+   "n": 1,
+   "step": "BRIEF",
+   "component": "buildAutonomousBrief + assessBrief",
+   "module": "src/creative-autonomy/brief.js, src/creative-brain/brief-assessment.js",
+   "kind": "DETERMINISTIC",
+   "provider": "NONE",
+   "model": null,
+   "cost_eur": 0,
+   "ms": 3,
+   "outcome": "PROCEED",
+   "detail": {
+    "issues": [],
+    "unknowns": [],
+    "claims": [
+     "PRICE: 24,90 €"
+    ],
+    "personalisation_offered": false
+   }
+  },
+  {
+   "n": 2,
+   "step": "EXAMINE",
+   "component": "examine_product",
+   "module": "scripts/creative-autonomy/examine_product.py",
+   "kind": "LOCAL_ENGINE",
+   "provider": "REAL",
+   "model": null,
+   "cost_eur": 0,
+   "ms": 6,
+   "outcome": "CUT_OUT",
+   "detail": {
+    "source": {
+     "width": 2000,
+     "height": 2000
+    },
+    "background": {
+     "rgb": [
+      248,
+      248,
+      248
+     ],
+     "std": 0
+    },
+    "status": "CUT_OUT",
+    "bbox": {
+     "x": 800,
+     "y": 745,
+     "w": 466,
+     "h": 1051
+    },
+    "aspect_w_over_h": 0.4434,
+    "is_dark_object": false,
+    "tonal_class": "CLAIR",
+    "luminance": {
+     "mean": 0.72,
+     "p10": 0.667,
+     "p90": 0.779
+    },
+    "lit_side": {
+     "lr": 0.0121,
+     "side": null
+    },
+    "ground_contact": null,
+    "translucent_share": 0.0097,
+    "opaque_pixels": 408446,
+    "dominant_colours": [
+     {
+      "rgb": [
+       187,
+       174,
+       194
+      ],
+      "share": 0.739
+     },
+     {
+      "rgb": [
+       163,
+       151,
+       170
+      ],
+      "share": 0.157
+     },
+     {
+      "rgb": [
+       212,
+       202,
+       217
+      ],
+      "share": 0.105
+     }
+    ],
+    "recomposite_on_source_background_mean_error": 0,
+    "edge_pixels_recomposited_mean_error": 6.3654,
+    "edge_pixels": 5388,
+    "rules_applied": [
+     "plain background keyed",
+     "enclosed background kept transparent",
+     "base clamped to body width"
+    ]
+   }
+  },
+  {
+   "n": 3,
+   "step": "OBSERVE",
+   "component": "observeBrief",
+   "module": "src/creative-brain/problem-frame.js",
+   "kind": "DETERMINISTIC",
+   "provider": "NONE",
+   "model": null,
+   "cost_eur": 0,
+   "ms": 1,
+   "outcome": "OBSERVED",
+   "detail": {
+    "product_ref": "product://shopify/15507746914652/Mauve",
+    "approved_text_roles": [
+     "PRICE"
+    ],
+    "format": {
+     "content_kind": "IMAGE",
+     "aspect_ratio": "4:5",
+     "locale": "fr-BE"
+    }
+   }
+  },
+  {
+   "n": 4,
+   "step": "AD_UNDERSTAND",
+   "component": "understand the product and the public (interpretations, rapprochements)",
+   "module": "src/creative-autonomy/concept-route.js",
+   "kind": "LLM",
+   "provider": "REAL",
+   "model": "qwen3-vl-plus",
+   "cost_eur": 0.008498463,
+   "ms": 11183,
+   "outcome": "UNDERSTOOD",
+   "detail": {
+    "rapprochements": [
+     "Musique",
+     "Architecture",
+     "Typographie",
+     "Météorologie",
+     "Cinéma",
+     "Cuisine",
+     "Transport public",
+     "Langue des signes"
+    ],
+    "repairs": 0
+   }
+  },
+  {
+   "n": 5,
+   "step": "AD_DEVELOP",
+   "component": "develop four proposals from its own rapprochements",
+   "module": "src/creative-autonomy/concept-route.js",
+   "kind": "LLM",
+   "provider": "REAL",
+   "model": "qwen3-vl-plus",
+   "cost_eur": 0.012639191000000001,
+   "ms": 36007,
+   "outcome": "FOUR_PROPOSALS",
+   "detail": {
+    "proposals": [
+     {
+      "name": "La gourde qui attend au bureau, prête à partir",
+      "from_rapprochement": "Transport public : clair, accessible, utile sans impressionner",
+      "need": "Une gourde qu’on peut laisser posée sur le bureau sans crainte, et emporter en deux secondes quand l’agenda bascule entre réunion, déjeuner et trajet vélo.",
+      "headline": "Prête quand tu changes de plan"
+     },
+     {
+      "name": "Dans le sac à dos, elle tient sa place",
+      "from_rapprochement": "Cuisine : un ustensile minimaliste, fiable sans ostentation",
+      "need": "Une gourde qui ne roule pas, ne fuit pas et ne se coince pas dans le sac à dos lorsqu’on court entre cours, réunion ou piste cyclable — un compagnon silencieux, pas un souci.",
+      "headline": "Stable dans ton sac, même quand tu cours"
+     },
+     {
+      "name": "Sur le banc du parc, elle respire avec toi",
+      "from_rapprochement": "Météorologie : douceur d’un ciel matinal clair, ni trop vif ni trop neutre",
+      "need": "Une gourde qui ne se fond pas dans le décor mais ne domine pas non plus — un objet personnel, doux, présent sans bruit, comme une pause respiratoire dans une journée dense.",
+      "headline": "Une présence douce, quand tu fais une pause"
+     },
+     {
+      "name": "À la station Vélo, elle attend ton retour",
+      "from_rapprochement": "Langue des signes : design qui communique directement, sans ambiguïté",
+      "need": "Une gourde qu’on reconnaît instantanément dans la foule des sacs et des casques — pas par son logo, mais par sa forme, sa poignée, sa couleur : un signal clair, sans parole.",
+      "headline": "Tu la vois avant même de la chercher"
+     }
+    ],
+    "withheld": []
+   }
+  },
+  {
+   "n": 6,
+   "step": "AD_COMPARE",
+   "component": "compare the four proposals blind on five criteria and choose one",
+   "module": "src/creative-autonomy/concept-route.js",
+   "kind": "LLM",
+   "provider": "REAL",
+   "model": "qwen3-vl-plus",
+   "cost_eur": 0.017453635000000002,
+   "ms": 18736,
+   "outcome": "CHOSEN",
+   "detail": {
+    "choice": "P4",
+    "grounded_reason": {
+     "ok": true,
+     "why": [],
+     "detail": "Gourde verticale dans sac à dos ouvert, encadrée par objets compacts (pull roulé, carnet), aucune trace humide, poignée visible mais non tendue, forme cylindrique stable.",
+     "customer_understands": "Dans un sac en mouvement (course entre cours/réunion), la gourde ne roule pas ni ne fuit — elle reste en place sans effort ni surveillance."
+    },
+    "scores": [
+     {
+      "id": "P1",
+      "harmony": "HIGH",
+      "relevance": "MEDIUM",
+      "desirability": "MEDIUM",
+      "originality": "LOW",
+      "feasibility": "HIGH",
+      "cues_in_scene": "SOME",
+      "brief_fit": "LOW",
+      "scene_alone": {
+       "need_clear": "LOW",
+       "benefit_clear": "VERY_LOW",
+       "reading": "Une gourde mauve sur un banc de parc avec des chaussures et un short plié : une pause sportive.",
+       "detail": "Gourde seule sur banc en bois, avec chaussures et vêtement plié à proximité, lumière douce latérale, couleur mauve vive mais non criarde.",
+       "detail_shows": "THE_SETTING",
+       "customer_understands": "Il y a eu une activité physique, mais rien ne montre que la gourde était nécessaire ou qu’elle résout un problème immédiat."
+      },
+      "with_headline": {
+       "adds": "VAGUE",
+       "note": "La headline évoque une émotion sans lien direct avec une situation tangible ou un gain fonctionnel."
+      }
+     },
+     {
+      "id": "P2",
+      "harmony": "HIGH",
+      "relevance": "HIGH",
+      "desirability": "MEDIUM",
+      "originality": "MEDIUM",
+      "feasibility": "HIGH",
+      "cues_in_scene": "SOME",
+      "brief_fit": "MEDIUM",
+      "scene_alone": {
+       "need_clear": "MEDIUM",
+       "benefit_clear": "LOW",
+       "reading": "Gourde sur une tablette de station Vélo Namur, avec casques et cadenas : elle se distingue visuellement.",
+       "detail": "Gourde seule sur tablette de station Vélo, poignée orientée vers la droite, couvercle fermé, aucun objet similaire à proximité.",
+       "detail_shows": "THE_SETTING",
+       "customer_understands": "C’est une gourde dans un lieu public, mais pas pourquoi on en a besoin là, ni ce qu’elle apporte de plus qu’une autre."
+      },
+      "with_headline": {
+       "adds": "ADDS_A_REASON",
+       "note": "La headline introduit l’idée de reconnaissance instantanée, qui comble le manque de besoin visible."
+      }
+     },
+     {
+      "id": "P3",
+      "harmony": "HIGH",
+      "relevance": "VERY_HIGH",
+      "desirability": "HIGH",
+      "originality": "MEDIUM",
+      "feasibility": "HIGH",
+      "cues_in_scene": "ALL",
+      "brief_fit": "HIGH",
+      "scene_alone": {
+       "need_clear": "HIGH",
+       "benefit_clear": "HIGH",
+       "reading": "Gourde sur un bureau avec carnet, casque et ticket de tramway : elle est prête à être emportée immédiatement quand le planning change.",
+       "detail": "Gourde posée sur bureau avec poignée orientée vers l’avant, couvercle fermé avec mécanisme de verrouillage visible, ticket de tramway à côté, casque plié, carnet ouvert.",
+       "detail_shows": "THE_NEED",
+       "customer_understands": "Le changement soudain d’agenda exige de partir vite, et la gourde est déjà sûre, fermée et accessible — pas de temps perdu à vérifier ou à ajuster."
+      },
+      "with_headline": {
+       "adds": "ADDS_A_REASON",
+       "note": "La headline renforce le bénéfice temporel et émotionnel de la réactivité."
+      }
+     },
+     {
+      "id": "P4",
+      "harmony": "HIGH",
+      "relevance": "VERY_HIGH",
+      "desirability": "HIGH",
+      "originality": "HIGH",
+      "feasibility": "HIGH",
+      "cues_in_scene": "ALL",
+      "brief_fit": "VERY_HIGH",
+      "scene_alone": {
+       "need_clear": "HIGH",
+       "benefit_clear": "HIGH",
+       "reading": "Gourde verticale dans un sac à dos ouvert, encadrée par objets compacts : elle ne bouge pas, ne fuit pas, et reste stable même en mouvement.",
+       "detail": "Gourde verticale dans sac à dos ouvert, encadrée par objets compacts (pull roulé, carnet), aucune trace humide, poignée visible mais non tendue, forme cylindrique stable.",
+       "detail_shows": "THE_NEED",
+       "customer_understands": "Dans un sac en mouvement (course entre cours/réunion), la gourde ne roule pas ni ne fuit — elle reste en place sans effort ni surveillance."
+      },
+      "with_headline": {
+       "adds": "ADDS_A_REASON",
+       "note": "La headline précise le contexte dynamique (‘quand tu cours’) et le bénéfice (stabilité)."
+      }
+     }
+    ]
+   }
+  },
+  {
+   "n": 7,
+   "step": "AD_COMPOSE",
+   "component": "compose the advertisement FROM the chosen proposal (placement, light, decor, calm area, headline)",
+   "module": "src/creative-autonomy/ad-composition.js",
+   "kind": "LLM",
+   "provider": "REAL",
+   "model": "qwen3-vl-plus",
+   "cost_eur": 0.011123125000000001,
+   "ms": 16821,
+   "outcome": "COMPOSED",
+   "detail": {
+    "concept_conserve": "CONSERVED",
+    "concept_changes": "",
+    "headline": "Stable dans ton sac, même quand tu cours",
+    "placement": "LEFT_THIRD/MEDIUM",
+    "phone": null,
+    "normalised": [],
+    "repairs": 1
+   }
+  },
+  {
+   "n": 8,
+   "step": "PRODUCE",
+   "component": "concept chosen by SELECT",
+   "module": "src/creative-autonomy/run.js",
+   "kind": "DETERMINISTIC",
+   "provider": "NONE",
+   "model": null,
+   "cost_eur": 0,
+   "ms": 0,
+   "outcome": "SELECTED_CONCEPT_ONLY",
+   "detail": {
+    "selection_outcome": "SELECT",
+    "concept_id": "cnc_12714e700675da752d6991fed2ecf00f",
+    "reasons": "P4 est la seule où le besoin (gourde qui roule/fuit dans un sac en mouvement actif) et le bénéfice (stabilité passive grâce à sa forme et sa poignée intégrée) sont visibles sans texte, avec tous les cues annoncés présents ; P3 est forte mais moins spécifique au chaos du déplacement actif, tandis que P4 incarne exactement la promesse ‘pratique pour le sport.",
+    "tie_break": null,
+    "fallback_order": [],
+    "not_produced": [
+     "cnc_acdd663acae513ce9e2b42c477f6a455",
+     "cnc_39f44501ab1a7c0b73906992fd955e69",
+     "cnc_ed5a13abe9df1bd4bed06446c8d0fcca"
+    ]
+   }
+  },
+  {
+   "n": 9,
+   "step": "RENDER",
+   "concept_id": "cnc_12714e700675da752d6991fed2ecf00f",
+   "round": 0,
+   "component": "scène générée autour du produit réel (qwen-image-3.0-pro, édition, 1 variantes)",
+   "module": "src/creative-autonomy/scene-engine.js",
+   "kind": "GENERATIVE_IMAGE",
+   "provider": "alibaba-cloud-model-studio",
+   "model": null,
+   "cost_eur": 0,
+   "ms": 42477,
+   "outcome": "ERROR",
+   "detail": {
+    "code": "SCENE_NO_VARIANT_PASSED",
+    "message": "SCENE_NO_VARIANT_PASSED: v1 GHOST_EDGE_AROUND_PRODUCT",
+    "field": null,
+    "evidence": {
+     "variants": [
+      {
+       "variant": 1,
+       "pass": false,
+       "rejections": [
+        "GHOST_EDGE_AROUND_PRODUCT"
+       ],
+       "warnings": [
+        "NO_CONTACT_SHADOW_MEASURED",
+        "SCENE_PRODUCT_LIGHT_LEVEL_DIFFERS",
+        "BUSY_INTEGRATION_ZONE"
+       ],
+       "provider_sha256": "9da6440c42a2a399296f13fd3ea118c964624d36fadd8b2a1615514ccd595b6c",
+       "alignment": {
+        "dx": 10,
+        "dy": -86,
+        "scale": 0.92,
+        "edge_ncc": 0.3597
+       },
+       "ghost": {
+        "share": 0.3834,
+        "contrast": 0.7238
+       },
+       "duplicate": {
+        "shape_ncc": 0.1498,
+        "detail_ncc": 0.0767,
+        "at": [
+         15,
+         273
+        ],
+        "scale": 0.75
+       },
+       "contact_shadow": {
+        "ratio": 1.4084,
+        "present": false
+       },
+       "reflection": {
+        "ncc": -0.1408,
+        "present": false,
+        "expected": false
+       },
+       "light": {
+        "scene_lr": -0.0329,
+        "photo_lr": 0.0113,
+        "consistent": true
+       },
+       "product_level": 1,
+       "integration_zone": {
+        "structure_share": {
+         "left": 0.5187,
+         "right": 0.203
+        },
+        "busy": true,
+        "limit_for_warning": 0.1
+       }
+      }
+     ]
+    }
+   }
+  }
+ ],
+ "human_interventions": [
+  {
+   "when": "avant le passage",
+   "who": "opérateur",
+   "what": "a défini le produit, l'objectif commercial et le format",
+   "creative": false
+  }
+ ],
+ "engines": {
+  "text": "REAL",
+  "vision": "REAL",
+  "local": "REAL"
+ },
+ "cost_eur": {
+  "text_and_vision": 0.0808,
+  "local": 0,
+  "budget": {
+   "max_spend_eur": 0.2,
+   "reserved_eur": 0,
+   "settled_eur": 0.11793546099999999,
+   "images": 1,
+   "video_seconds": 0
+  }
+ },
+ "published": false,
+ "spent_without_authorisation": false,
+ "repairs": {
+  "used": 2,
+  "allowed": 4,
+  "reserved": {
+   "STAGE": 1
+  }
+ },
+ "headline_calls": {
+  "used": 0,
+  "allowed": 1
+ },
+ "mode": "FULL",
+ "frame": {
+  "source": "AD_V1",
+  "understanding": {
+   "characteristics": [
+    {
+     "characteristic": "Poignée de transport intégrée, ergonomique et facile à saisir en déplacement.",
+     "basis": "VERIFIED_FACT",
+     "why_it_can_interest": "Permet de la porter sans effort pendant les trajets, le sport ou les études, sans besoin d’un sac supplémentaire."
+    },
+    {
+     "characteristic": "Couvercle verrouillable qui évite les fuites lors du transport.",
+     "basis": "VERIFIED_FACT",
+     "why_it_can_interest": "Offre une sécurité pratique pour les personnes actives qui déplacent leur boisson dans un sac ou une poche."
+    },
+    {
+     "characteristic": "Coloris Mauve vif avec nuances claires (violet pâle, lavande, gris rosé), tonalité lumineuse et moderne.",
+     "basis": "VISIBLE_ON_PHOTO",
+     "why_it_can_interest": "Se distingue visuellement dans un environnement urbain ou naturel, tout en restant élégant et discret."
+    },
+    {
+     "characteristic": "Volume de 500 ml : capacité adaptée à une consommation quotidienne sans surcharge.",
+     "basis": "VERIFIED_FACT",
+     "why_it_can_interest": "Correspond à une ration raisonnable pour une journée active, facile à transporter sans encombre."
+    },
+    {
+     "characteristic": "Construction robuste, conçue pour résister aux chocs quotidiens du mode de vie actif.",
+     "basis": "VERIFIED_FACT",
+     "why_it_can_interest": "Rassure l’utilisateur sur la durabilité du produit face aux contraintes de déplacement répétées."
+    }
+   ],
+   "public_needs": [
+    "Un objet pratique qui s’intègre sans friction dans leur routine quotidienne entre sport, travail et études.",
+    "Une gourde qui ne fuit pas, qu’on peut emporter partout sans craindre les accidents.",
+    "Un accessoire personnel qui exprime une identité douce mais affirmée, sans tomber dans le décoratif ou le clinquant.",
+    "Un produit local, accessible à Namur, qui répond à un besoin réel sans superflu."
+   ],
+   "standing": "La gourde se distingue par son équilibre entre fonctionnalité (poignée, couvercle verrouillable, robustesse) et esthétique claire et contemporaine, sans recourir à des codes visuels génériques ou à du luxe factice.",
+   "rapprochements": [
+    {
+     "domain": "Musique",
+     "link": "Comme une note juste dans une mélodie quotidienne, elle s’intègre sans bruit mais avec précision à chaque moment actif."
+    },
+    {
+     "domain": "Architecture",
+     "link": "Elle évoque une façade sobre et bien proportionnée, où chaque détail a sa place et son utilité."
+    },
+    {
+     "domain": "Typographie",
+     "link": "Sa forme rappelle une police de caractères claire et lisible, pensée pour la lisibilité au premier coup d’œil."
+    },
+    {
+     "domain": "Météorologie",
+     "link": "Elle incarne la douceur d’un ciel matinal clair, ni trop vif ni trop neutre, juste assez présent pour être remarqué."
+    },
+    {
+     "domain": "Cinéma",
+     "link": "Elle ressemble à un accessoire de film réaliste : discret, fonctionnel, jamais mis en avant mais essentiel à la scène."
+    },
+    {
+     "domain": "Cuisine",
+     "link": "Comme un ustensile de cuisine minimaliste, elle fait son travail sans ostentation, avec fiabilité et simplicité."
+    },
+    {
+     "domain": "Transport public",
+     "link": "Elle partage l’esprit d’un arrêt bien signalé : clair, accessible, utile à tous sans chercher à impressionner."
+    },
+    {
+     "domain": "Langue des signes",
+     "link": "Son design communique directement, sans ambiguïté : poignée = prise en main, couvercle = sécurité, couleur = présence discrète."
+    }
+   ]
+  }
+ },
+ "concepts": [
+  {
+   "concept_id": "cnc_acdd663acae513ce9e2b42c477f6a455",
+   "name": "La gourde qui attend au bureau, prête à partir",
+   "central_idea": "Sur un bureau en chêne clair de l’Atelier du Quai (Namur), une gourde mauve repose près d’un carnet ouvert, d’un casque audio plié et d’un ticket de tramway froissé. La lumière du matin entre par la fenêtre côté Meuse, éclairant doucement la poignée orientée vers la main, le couvercle fermé mais pas scellé — on voit le mécanisme de verrouillage à l’œil nu. Aucune goutte, aucun bouchon détaché, rien ne traîne.",
+   "visual_metaphor": "La poignée orientée vers l’avant et le couvercle verrouillé montrent que la gourde est prête à être saisie et emportée sans préparation — exactement ce que permet sa poignée de transport et son couvercle verrouillable.",
+   "story": "Aux Namurois actifs qui passent de leur bureau au vélo en 5 minutes, cette scène dit : ‘Tu n’as pas besoin de tout ranger — elle est déjà prête pour toi.’",
+   "emotional_intent": "Aux Namurois actifs qui passent de leur bureau au vélo en 5 minutes, cette scène dit : ‘Tu n’as pas besoin de tout ranger — elle est déjà prête pour toi.’",
+   "product_role": "HERO_OF_THE_STORY",
+   "message_role": "FOLLOWS",
+   "memory_hook": "Prête quand tu changes de plan",
+   "distinctiveness_reason": "Les quatre propositions montrent des besoins distincts : 1) rapidité d’emport lors d’un changement de planning, 2) stabilité dans un sac en mouvement, 3) présence émotionnelle discrète en pause.",
+   "risks": [],
+   "from_rapprochement": "Transport public : clair, accessible, utile sans impressionner",
+   "starting_point": "BENEFIT",
+   "supported_by": [
+    "carry_handle",
+    "lockable_lid",
+    "sturdy"
+   ],
+   "source": "AD_V1"
+  },
+  {
+   "concept_id": "cnc_12714e700675da752d6991fed2ecf00f",
+   "name": "Dans le sac à dos, elle tient sa place",
+   "central_idea": "Vue en plongée douce sur un sac à dos ouvert en toile cirée bleu canard (style local namurois), posé sur un banc en bois de la Place Saint-Aubain. À l’intérieur, la gourde mauve repose verticalement, coincée entre un pull roulé et un carnet rigide — sa forme cylindrique et sa poignée intégrée la maintiennent stable. Aucun liquide n’a maculé le tissu, aucune trace de condensation. La lumière naturelle vient du nord, mettant en valeur la texture mate du métal et la couleur vraie du mauve.",
+   "visual_metaphor": "La stabilité de la gourde dans le sac, sans bouchon détaché ni fuite, illustre sa construction robuste et son couvercle verrouillable — deux faits vérifiés.",
+   "story": "Pour les étudiants et pros qui portent leur vie dans un sac, cela dit : ‘Elle ne te complique pas la journée — elle tient sa place, point.’",
+   "emotional_intent": "Pour les étudiants et pros qui portent leur vie dans un sac, cela dit : ‘Elle ne te complique pas la journée — elle tient sa place, point.’",
+   "product_role": "HERO_OF_THE_STORY",
+   "message_role": "FOLLOWS",
+   "memory_hook": "Stable dans ton sac, même quand tu cours",
+   "distinctiveness_reason": "Les quatre propositions montrent des besoins distincts : 1) rapidité d’emport lors d’un changement de planning, 2) stabilité dans un sac en mouvement, 3) présence émotionnelle discrète en pause.",
+   "risks": [],
+   "from_rapprochement": "Cuisine : un ustensile minimaliste, fiable sans ostentation",
+   "starting_point": "PRODUCT_NATURE",
+   "supported_by": [
+    "sturdy",
+    "lockable_lid",
+    "volume"
+   ],
+   "source": "AD_V1"
+  },
+  {
+   "concept_id": "cnc_39f44501ab1a7c0b73906992fd955e69",
+   "name": "Sur le banc du parc, elle respire avec toi",
+   "central_idea": "Gourde mauve posée sur un banc en bois brut du Parc des Sports à Namur, sous un ciel clair mais non ensoleillé. À côté, une paire de baskets blanches, un short plié. La gourde est centrée, légèrement inclinée vers la lumière venant de la gauche (compatible avec la lumière du packshot), sa couleur mauve contrastant avec le bois gris-bleuté du banc. Pas de gouttes, pas de capuchon à terre — juste la poignée accessible, le couvercle fermé, le volume compact.",
+   "visual_metaphor": "La simplicité de la scène met en avant la gourde comme un compagnon discret mais présent — sa couleur et sa forme expriment une identité douce mais affirmée, sans décoratif.",
+   "story": "Aux Namurois qui veulent un accessoire qui les représente sans faire de bruit — cette gourde dit ‘je suis là, avec toi’, pas ‘regarde-moi’.",
+   "emotional_intent": "Aux Namurois qui veulent un accessoire qui les représente sans faire de bruit — cette gourde dit ‘je suis là, avec toi’, pas ‘regarde-moi’.",
+   "product_role": "HERO_OF_THE_STORY",
+   "message_role": "FOLLOWS",
+   "memory_hook": "Une présence douce, quand tu fais une pause",
+   "distinctiveness_reason": "Les quatre propositions montrent des besoins distincts : 1) rapidité d’emport lors d’un changement de planning, 2) stabilité dans un sac en mouvement, 3) présence émotionnelle discrète en pause.",
+   "risks": [],
+   "from_rapprochement": "Météorologie : douceur d’un ciel matinal clair, ni trop vif ni trop neutre",
+   "starting_point": "ABSTRACT_INTENTION",
+   "supported_by": [
+    "active_lifestyle",
+    "volume"
+   ],
+   "source": "AD_V1"
+  },
+  {
+   "concept_id": "cnc_ed5a13abe9df1bd4bed06446c8d0fcca",
+   "name": "À la station Vélo, elle attend ton retour",
+   "central_idea": "Gourde mauve posée sur une tablette en acier galvanisé d’une station Vélo Namur (type Vélo2000), à hauteur de regard. Autour, des casques accrochés, un cadenas ouvert, une carte de stationnement posée à plat. La gourde est seule sur la tablette, centrée, sa poignée pointant vers la droite comme un geste d’invitation. La lumière est diffuse, typique d’un jour couvert namurois, mettant en valeur le mauve sans reflet agressif.",
+   "visual_metaphor": "La poignée orientée comme un signal visuel, combinée à la couleur distinctive, rend la gourde reconnaissable à distance — ce que permet sa forme et sa poignée de transport.",
+   "story": "Pour ceux qui partagent leur temps entre vélo, travail et ville, cela dit : ‘Tu la repères sans chercher — elle est faite pour ton rythme.’",
+   "emotional_intent": "Pour ceux qui partagent leur temps entre vélo, travail et ville, cela dit : ‘Tu la repères sans chercher — elle est faite pour ton rythme.’",
+   "product_role": "HERO_OF_THE_STORY",
+   "message_role": "FOLLOWS",
+   "memory_hook": "Tu la vois avant même de la chercher",
+   "distinctiveness_reason": "Les quatre propositions montrent des besoins distincts : 1) rapidité d’emport lors d’un changement de planning, 2) stabilité dans un sac en mouvement, 3) présence émotionnelle discrète en pause.",
+   "risks": [],
+   "from_rapprochement": "Langue des signes : design qui communique directement, sans ambiguïté",
+   "starting_point": "BENEFIT",
+   "supported_by": [
+    "carry_handle",
+    "sturdy",
+    "volume"
+   ],
+   "source": "AD_V1"
+  }
+ ],
+ "selection": {
+  "selection": {
+   "concept_id": "cnc_12714e700675da752d6991fed2ecf00f",
+   "outcome": "SELECT",
+   "order": [
+    "cnc_12714e700675da752d6991fed2ecf00f"
+   ],
+   "reasons": "P4 est la seule où le besoin (gourde qui roule/fuit dans un sac en mouvement actif) et le bénéfice (stabilité passive grâce à sa forme et sa poignée intégrée) sont visibles sans texte, avec tous les cues annoncés présents ; P3 est forte mais moins spécifique au chaos du déplacement actif, tandis que P4 incarne exactement la promesse ‘pratique pour le sport.",
+   "source": "AD_V1"
+  },
+  "evaluations": [
+   {
+    "concept_id": "cnc_39f44501ab1a7c0b73906992fd955e69",
+    "blind_id": "P1",
+    "harmony": "HIGH",
+    "relevance": "MEDIUM",
+    "desirability": "MEDIUM",
+    "originality": "LOW",
+    "feasibility": "HIGH",
+    "cues_in_scene": "SOME",
+    "brief_fit": "LOW",
+    "note": "Le décor est local et bien composé, mais la scène ne montre ni besoin réel ni bénéfice concret de la gourde dans l’instant ; elle reste décorative."
+   },
+   {
+    "concept_id": "cnc_ed5a13abe9df1bd4bed06446c8d0fcca",
+    "blind_id": "P2",
+    "harmony": "HIGH",
+    "relevance": "HIGH",
+    "desirability": "MEDIUM",
+    "originality": "MEDIUM",
+    "feasibility": "HIGH",
+    "cues_in_scene": "SOME",
+    "brief_fit": "MEDIUM",
+    "note": "L’idée de reconnaissance visuelle est pertinente, mais le besoin n’est pas *visible* — on ne voit pas de recherche, d’attente ou de confusion qui justifierait cette clarté."
+   },
+   {
+    "concept_id": "cnc_acdd663acae513ce9e2b42c477f6a455",
+    "blind_id": "P3",
+    "harmony": "HIGH",
+    "relevance": "VERY_HIGH",
+    "desirability": "HIGH",
+    "originality": "MEDIUM",
+    "feasibility": "HIGH",
+    "cues_in_scene": "ALL",
+    "brief_fit": "HIGH",
+    "note": "La scène montre clairement un besoin (départ rapide après une pause) et le bénéfice (sécurité + accessibilité), avec tous les éléments annoncés visibles."
+   },
+   {
+    "concept_id": "cnc_12714e700675da752d6991fed2ecf00f",
+    "blind_id": "P4",
+    "harmony": "HIGH",
+    "relevance": "VERY_HIGH",
+    "desirability": "HIGH",
+    "originality": "HIGH",
+    "feasibility": "HIGH",
+    "cues_in_scene": "ALL",
+    "brief_fit": "VERY_HIGH",
+    "note": "Seule proposition où le besoin (instabilité du sac en déplacement actif) et le bénéfice (stabilité passive de la gourde) sont visibles, concrets et directement liés à l’usage quotidien ciblé."
+   }
+  ]
+ },
+ "art_directions": {
+  "cnc_12714e700675da752d6991fed2ecf00f": {
+   "atmosphere": "Calm urban functionality, where every object has its place and nothing spills over — a scene of quiet reliability, not stress, just the simplicity of a well-made tool.",
+   "material_language": "Waxed canvas of the backpack, raw wood of the bench, matte metal of the mauve bottle, smooth fabric of the rolled sweater, rigid cover of the notebook — all textured authentically, without artifice.",
+   "lighting_intent": "Soft natural light from the north, evenly illuminating the scene without harsh shadows, highlighting the true mauve tone and matte metal finish without aggressive reflections.",
+   "rationale": "Vue en plongée douce sur un sac à dos ouvert en toile cirée bleu canard (style local namurois), posé sur un banc en bois de la Place Saint-Aubain. À l’intérieur, la gourde mauve repose verticalement, coincée entre un pull roulé et un carnet rigide — sa forme cylindrique et sa poignée intégrée la maintiennent stable. Aucun liquide n’a maculé le tissu, aucune trace de condensation. La lumière naturelle vient du nord, mettant en valeur la texture mate du métal et la couleur vraie du mauve.",
+   "depth_model": "LAYERED_DEPTH",
+   "visual_rhythm": "STILL",
+   "product_relationship": "GROUNDED_IN_SCENE",
+   "text_image_relationship": "TEXT_IN_CALM_ZONES",
+   "realism": "PHOTOREALISTIC",
+   "emotional_temperature": "NEUTRAL",
+   "visual_tension": "LOW",
+   "negative_space_strategy": "ASYMMETRIC_RESERVE",
+   "narrative_elements": [
+    {
+     "element": "Weathered wooden bench, positioned horizontally beneath the backpack.",
+     "reason": "Gourde verticale dans sac à dos ouvert, encadrée par objets compacts (pull roulé, carnet), aucune trace humide, poignée visible mais non tendue, forme cylindrique stable.",
+     "zone": "BACKGROUND"
+    },
+    {
+     "element": "Open waxed-canvas duck-egg-blue backpack resting on the bench, edges slightly raised.",
+     "reason": "Gourde verticale dans sac à dos ouvert, encadrée par objets compacts (pull roulé, carnet), aucune trace humide, poignée visible mais non tendue, forme cylindrique stable.",
+     "zone": "MIDGROUND"
+    },
+    {
+     "element": "Upright cylindrical object nestled between a rolled sweater on the left and a hardcover notebook on the right.",
+     "reason": "Gourde verticale dans sac à dos ouvert, encadrée par objets compacts (pull roulé, carnet), aucune trace humide, poignée visible mais non tendue, forme cylindrique stable.",
+     "zone": "FOREGROUND"
+    }
+   ],
+   "permitted_secondary_elements": [],
+   "forbidden_decorative_noise": [
+    "second product",
+    "duplicate product",
+    "extra cable",
+    "extra port",
+    "hands",
+    "people",
+    "plants",
+    "added text",
+    "extra letters",
+    "extra inscriptions",
+    "added brand marks",
+    "watermark",
+    "distorted product",
+    "redrawn artwork",
+    "changed printed marks"
+   ],
+   "source": "AD_V1",
+   "records_only_not_sent_to_the_generator": true
+  }
+ },
+ "stages": {
+  "cnc_12714e700675da752d6991fed2ecf00f": {
+   "backdrop": "WALL_AND_FLOOR",
+   "backdrop_tone": "COOL_GREY",
+   "floor_finish": "SATIN",
+   "key_light": {
+    "kind": "SOFTBOX",
+    "side": "LEFT",
+    "intensity": "MEDIUM",
+    "temperature": "NEUTRAL",
+    "purpose": "the light of the packshot (measured); the scene light is the composition's"
+   },
+   "accent_lights": [],
+   "camera": {
+    "height": "HIGH",
+    "framing": "MEDIUM",
+    "product_position": "LEFT_THIRD"
+   },
+   "props": [],
+   "headline": "Stable dans ton sac, même quand tu cours",
+   "text_placement": "TOP_RIGHT",
+   "show_price": "NO",
+   "rationale": "chosen by the framing rule of Nordla among 9 measured placements: the product keeps clear of the calm area (TOP_RIGHT), no phone is placed, and it takes the default scale (MEDIUM) on the side opposite the calm area when they allow it (LEFT_THIRD/MEDIUM)",
+   "source": "AD_V1",
+   "records_only_not_sent_to_the_generator": true
+  }
+ },
+ "proposals": [],
+ "stopped_at": {
+  "step": "RENDER",
+  "concept_id": "cnc_12714e700675da752d6991fed2ecf00f"
+ },
+ "error": {
+  "code": "SCENE_NO_VARIANT_PASSED",
+  "field": null,
+  "message": "SCENE_NO_VARIANT_PASSED: v1 GHOST_EDGE_AROUND_PRODUCT"
+ },
+ "asset_usable": true,
+ "exam": {
+  "source": {
+   "width": 2000,
+   "height": 2000
+  },
+  "background": {
+   "rgb": [
+    248,
+    248,
+    248
+   ],
+   "std": 0
+  },
+  "status": "CUT_OUT",
+  "bbox": {
+   "x": 800,
+   "y": 745,
+   "w": 466,
+   "h": 1051
+  },
+  "aspect_w_over_h": 0.4434,
+  "is_dark_object": false,
+  "tonal_class": "CLAIR",
+  "luminance": {
+   "mean": 0.72,
+   "p10": 0.667,
+   "p90": 0.779
+  },
+  "lit_side": {
+   "lr": 0.0121,
+   "side": null
+  },
+  "ground_contact": null,
+  "translucent_share": 0.0097,
+  "opaque_pixels": 408446,
+  "dominant_colours": [
+   {
+    "rgb": [
+     187,
+     174,
+     194
+    ],
+    "share": 0.739
+   },
+   {
+    "rgb": [
+     163,
+     151,
+     170
+    ],
+    "share": 0.157
+   },
+   {
+    "rgb": [
+     212,
+     202,
+     217
+    ],
+    "share": 0.105
+   }
+  ],
+  "recomposite_on_source_background_mean_error": 0,
+  "edge_pixels_recomposited_mean_error": 6.3654,
+  "edge_pixels": 5388,
+  "rules_applied": [
+   "plain background keyed",
+   "enclosed background kept transparent",
+   "base clamped to body width"
+  ]
+ },
+ "brain_calls_dir": "C:\\Users\\etaba\\nordla-private\\creator-live\\runs\\cr-f69714718fa1\\brain-calls",
+ "resume": {
+  "status": "STOPPED_ERROR",
+  "completed_steps": [
+   {
+    "step": "BRIEF",
+    "concept_id": null,
+    "outcome": "PROCEED"
+   },
+   {
+    "step": "EXAMINE",
+    "concept_id": null,
+    "outcome": "CUT_OUT"
+   },
+   {
+    "step": "OBSERVE",
+    "concept_id": null,
+    "outcome": "OBSERVED"
+   },
+   {
+    "step": "AD_UNDERSTAND",
+    "concept_id": null,
+    "outcome": "UNDERSTOOD"
+   },
+   {
+    "step": "AD_DEVELOP",
+    "concept_id": null,
+    "outcome": "FOUR_PROPOSALS"
+   },
+   {
+    "step": "AD_COMPARE",
+    "concept_id": null,
+    "outcome": "CHOSEN"
+   },
+   {
+    "step": "AD_COMPOSE",
+    "concept_id": null,
+    "outcome": "COMPOSED"
+   },
+   {
+    "step": "PRODUCE",
+    "concept_id": null,
+    "outcome": "SELECTED_CONCEPT_ONLY"
+   }
+  ],
+  "stopped_at": {
+   "step": "RENDER",
+   "concept_id": "cnc_12714e700675da752d6991fed2ecf00f"
+  },
+  "why": "SCENE_NO_VARIANT_PASSED: SCENE_NO_VARIANT_PASSED: v1 GHOST_EDGE_AROUND_PRODUCT",
+  "kept": {
+   "frame": true,
+   "concepts": [
+    "cnc_acdd663acae513ce9e2b42c477f6a455",
+    "cnc_12714e700675da752d6991fed2ecf00f",
+    "cnc_39f44501ab1a7c0b73906992fd955e69",
+    "cnc_ed5a13abe9df1bd4bed06446c8d0fcca"
+   ],
+   "selection": "SELECT",
+   "art_directions": [
+    "cnc_12714e700675da752d6991fed2ecf00f"
+   ],
+   "stages": [
+    "cnc_12714e700675da752d6991fed2ecf00f"
+   ],
+   "files": [
+    "faits.json",
+    "brain-calls"
+   ]
+  },
+  "next_step": {
+   "step": "RENDER",
+   "action": "resume at RENDER: the steps before it are kept (frame, 4 concepts, art direction, stage)",
+   "error_code": "SCENE_NO_VARIANT_PASSED"
+  }
+ }
+}

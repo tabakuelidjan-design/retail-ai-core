@@ -1,0 +1,21 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15520732905820",
+  "title": "Chargeur sans fil pliable 3-en-1 avec veilleuse",
+  "description": "Le Remax RP-W70 réunit la recharge du smartphone, de la montre et des écouteurs sur une seule station pliable. Sa veilleuse tactile à trois niveaux apporte une lumière douce au bureau ou sur la table de nuit, tandis que son format compact aide à garder l’espace net et organisé.",
+  "tags": [],
+  "productType": "",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57235118358876",
+     "title": "Default Title",
+     "price": "29.90",
+     "inventoryQuantity": 45
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,146 @@
+{
+ "product_key": "remax-fc02-bleu",
+ "title": "Batterie externe 20 000 mAh – 45W (Bleu)",
+ "photo": {
+  "status": "AVAILABLE",
+  "path_hint": "~/nordla-private/creator-live/uploads/8e47bf25c928fa2e/source-8e47bf25c928fa2e.png",
+  "size": [
+   1234,
+   1275
+  ]
+ },
+ "facts": [
+  {
+   "id": "capacity",
+   "claim": "20 000 mAh",
+   "source": {
+    "snapshot": "shopify-remax-fc02-20261107.json",
+    "excerpt": "20 000 mAh"
+   }
+  },
+  {
+   "id": "power",
+   "claim": "une sortie jusqu'à 45 W",
+   "source": {
+    "snapshot": "shopify-remax-fc02-20261107.json",
+    "excerpt": "45W"
+   }
+  },
+  {
+   "id": "integrated_cables",
+   "claim": "deux câbles intégrés",
+   "source": {
+    "snapshot": "shopify-remax-fc02-20261107.json",
+    "excerpt": "deux câbles intégrés"
+   }
+  },
+  {
+   "id": "digital_display",
+   "claim": "affichage numérique",
+   "source": {
+    "snapshot": "shopify-remax-fc02-20261107.json",
+    "excerpt": "affichage numérique"
+   }
+  }
+ ],
+ "confirmations": [
+  {
+   "id": "outputs_count",
+   "claim": "quatre sorties au total",
+   "value": 4,
+   "replaces": "trois sorties",
+   "source": "OWNER_CONFIRMED_IN_CHAT",
+   "confirmed_on": "2026-11-07",
+   "statement": "Le propriétaire confirme que cette Remax FC-02 possède quatre sorties au total.",
+   "contradicts": {
+    "snapshot": "shopify-remax-fc02-20261107.json",
+    "excerpt": "trois sorties"
+   },
+   "check_on_photo": true
+  }
+ ],
+ "held_wordings": [
+  "trois sorties"
+ ],
+ "invariants": [
+  {
+   "id": "mark_45w",
+   "kind": "MARK",
+   "item": "« 45W » (gris foncé, bas du boîtier)",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "mark_remax",
+   "kind": "MARK",
+   "item": "« REMAX » et « 20000mAh » à droite du trait vertical",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "ring_text",
+   "kind": "MARK",
+   "item": "anneau de l'écran : « FAST CHARGING POWER BANK 20000mAh »",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "display",
+   "kind": "MARK",
+   "item": "écran rond noir affichant « 100 % » avec l'éclair vert",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "port_usbc",
+   "kind": "PORT",
+   "item": "port USB-C du dessus",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "port_usba",
+   "kind": "PORT",
+   "item": "port USB-A orange du dessus",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "side_socket",
+   "kind": "PORT",
+   "item": "prise latérale (est-elle une sortie ?)",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "cable_loop",
+   "kind": "CABLE",
+   "item": "boucle de câble tissé en haut à gauche",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "cable_hanging",
+   "kind": "CABLE",
+   "item": "câble pendant avec connecteur USB-C",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "colour",
+   "kind": "COLOUR",
+   "item": "bleu pâle (teinte d'environ 210°)",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  }
+ ],
+ "coverage_missing": [],
+ "product_nouns": [
+  "batteries?",
+  "batterie externe",
+  "power ?banks?",
+  "powerbanks?",
+  "chargeurs?",
+  "chargers?"
+ ]
+}

@@ -1,0 +1,51 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15517247701340",
+  "title": "Boîte cadeau en cuir PU",
+  "description": "Un boîte cadeau en cuir PU sélectionné pour mettre en valeur cadeaux, accessoires et créations avec une présentation soignée, prête à offrir.",
+  "tags": [],
+  "productType": "",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57219079766364",
+     "title": "Rose",
+     "price": "6.90",
+     "inventoryQuantity": 193
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57219079799132",
+     "title": "Noir",
+     "price": "6.90",
+     "inventoryQuantity": 200
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57219079831900",
+     "title": "Orange",
+     "price": "6.90",
+     "inventoryQuantity": 200
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57219079864668",
+     "title": "Violet",
+     "price": "6.90",
+     "inventoryQuantity": 200
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57219079897436",
+     "title": "Rouge",
+     "price": "6.90",
+     "inventoryQuantity": 200
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57219079930204",
+     "title": "Vert",
+     "price": "6.90",
+     "inventoryQuantity": 199
+    }
+   ]
+  }
+ }
+}

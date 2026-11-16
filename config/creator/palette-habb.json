@@ -1,0 +1,13 @@
+{
+  "brand": "HABB",
+  "note": "The kit of the brand palette (identity colours of HABB: navy and terracotta, with cool neutrals). The director is FREE inside it: any colour may take any role in any scene. Beige, cream and sand are never used in a scene (the existing rule of Creator for HABB).",
+  "colours": {
+    "NAVY": { "hex": "#0f2a52", "note": "deep brand navy" },
+    "STEEL_NAVY": { "hex": "#183247", "note": "darker, bluer-grey navy" },
+    "TERRACOTTA": { "hex": "#c0392b", "note": "brand terracotta red" },
+    "SOFT_TERRACOTTA": { "hex": "#c56e54", "note": "softer, clay-like terracotta" },
+    "COOL_GREY": { "hex": "#8a949e", "note": "neutral cool grey" },
+    "WHITE": { "hex": "#f5f6f7", "note": "cool white" },
+    "NEAR_BLACK": { "hex": "#14171b", "note": "near-black, blue-tinted" }
+  }
+}

@@ -22,9 +22,13 @@ export const FORBIDDEN_SCENE_WORDS = Object.freeze(Object.values(SUBSTITUTE_LEXI
 
 export const SCENE_FORBIDDEN = Object.freeze(['a substitute for the product', 'a phone, a case or any device', 'a competing hero object', 'a misleading commercial object', 'text, letters, logos or watermarks']);
 
+// 'sleeve' is a product look-alike (a protective sleeve), but the sleeve of a garment ("the edge of a coat sleeve") describes a person's clothing, not the product: only these
+// garment + sleeve pairs are let through. A bare "sleeve", "phone sleeve", "protective sleeve"... stays refused.
+const GARMENT_SLEEVE = /\b(coat|jacket|shirt|blazer|sweater|jumper|hoodie|cardigan|dress|suit|manteau|veste|chemise|pull)s?\s+sleeves?\b/gi;
+
 /** The forbidden words found in a text (words matched whole, plurals included; a phrase of the lexicon is matched as a phrase). */
 export function substituteWordsIn(text) {
-  const words = wordsOf(text);
+  const words = wordsOf(String(text ?? '').replace(GARMENT_SLEEVE, ' '));
   const flat = ` ${words.join(' ')} `;
   const found = new Set(words.filter((w) => FORBIDDEN_SCENE_WORDS.some((s) => !s.includes(' ') && (w === s || w === `${s}s` || w === `${s}es`))));
   for (const phrase of FORBIDDEN_SCENE_WORDS.filter((s) => s.includes(' '))) if (flat.includes(` ${phrase} `)) found.add(phrase);

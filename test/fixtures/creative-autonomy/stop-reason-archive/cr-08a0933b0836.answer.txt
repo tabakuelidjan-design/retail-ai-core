@@ -1,0 +1,20 @@
+{
+  "verdict": "NONE",
+  "none_reason": "Aucun détail visible dans la scène ne montre un besoin concret que ce câble résout : sa longueur de deux mètres et sa connectique réversible ne peuvent être illustrés sans un appareil ou une prise, ce qui est interdit par les prohibitions (pas de phone, pas de device, pas de port ajouté). Le produit seul, posé sur un décor clair, ne permet pas de montrer le bénéfice de la liberté de mouvement ou de l’usage quotidien sans violer les règles.",
+  "benefit": "",
+  "need_shown": "",
+  "idea": "",
+  "setting": "",
+  "materials": "",
+  "atmosphere": "",
+  "light": "",
+  "text_reserve": {
+    "zone": "TOP_RIGHT",
+    "description": "Surface calme, légèrement texturée en blanc froid, sans aucun élément ni ombre portée du produit"
+  },
+  "elements": [],
+  "headline": "",
+  "headline_lines": "ONE",
+  "caption": "",
+  "palette_roles": []
+}

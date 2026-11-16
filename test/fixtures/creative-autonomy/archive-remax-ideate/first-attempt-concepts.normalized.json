@@ -1,0 +1,49 @@
+{
+ "concepts": [
+  {
+   "concept_id": "cnc_e0eb59642a1a8cfb794de80d0486c708",
+   "central_idea": "Une batterie bleue posée sur du béton namurois, ses deux câbles intégrés déployés en V ouvert vers un espace vide, évoquant une pause urbaine où l’autonomie est déjà assurée avant même que la personne n’arrive.",
+   "visual_metaphor": "Le V des câbles comme une porte ouverte sur une reconnexion silencieuse — le décor brut accueille l’absence, tandis que le produit tient la promesse de présence fiable.",
+   "story": "Dans une rue de Namur, un moment suspendu : quelqu’un vient de s’asseoir, a posé la batterie, déployé les câbles, et s’est éloigné — la recharge est prête, sans geste supplémentaire, sans sac à fouiller.",
+   "emotional_intent": "Un calme opérationnel, presque réconfortant : on se sent prêt, léger, sans stress technique, comme si la ville elle-même avait prévu ce besoin.",
+   "product_role": "HERO_OF_THE_STORY",
+   "message_role": "EMBEDDED_IN_THE_STORY",
+   "memory_hook": "La batterie bleue sur béton, avec ses deux câbles formant un V qui encadre un vide — comme une invitation muette à revenir, chargé, connecté.",
+   "distinctiveness_reason": "Aucune autre batterie ne propose ce V fonctionnel comme geste visuel unique ; le décor local brut et l’absence humaine renforcent l’autonomie sans artifice.",
+   "risks": [
+    "Le vide à droite pourrait être interprété comme un manque plutôt qu’une attente, si le contexte visuel n’est pas suffisamment ancré dans la pause urbaine.",
+    "Le bleu vif risque de paraître trop commercial si le béton n’est pas assez texturé ou authentique, rompant la sobriété premium."
+   ]
+  },
+  {
+   "concept_id": "cnc_99a75506591d76987f5c7d40dc2f8739",
+   "central_idea": "Une batterie bleue reposant sur une dalle de béton fissuré mais intact, ses câbles intégrés tendus comme des racines vers deux points distincts du sol — symbolisant la capacité à alimenter plusieurs appareils sans conflit ni encombrement.",
+   "visual_metaphor": "Les câbles comme racines d’un arbre urbain : ancrés dans la matière brute, ils distribuent l’énergie sans bruit ni tension, chaque branche alimentant un besoin différent.",
+   "story": "Sur une dalle usée par le passage des piétons, la batterie est restée là toute la matinée, ses deux câbles reliés à deux appareils invisibles — elle a tenu, sans fatigue, sans câble supplémentaire.",
+   "emotional_intent": "Une confiance tranquille, presque organique : le produit ne domine pas, il s’intègre, comme une infrastructure discrète mais indispensable au quotidien.",
+   "product_role": "PROOF_OF_THE_STORY",
+   "message_role": "FOLLOWS",
+   "memory_hook": "Les câbles tendus comme des racines sur le béton craquelé, la batterie bleue au centre — une image de résilience silencieuse, pas de force, mais de continuité.",
+   "distinctiveness_reason": "La métaphore botanique appliquée à un objet technique, ancrée dans la matière locale, évite tout cliché de technologie agressive ou de luxe superficiel.",
+   "risks": [
+    "L’analogie avec les racines peut sembler trop poétique si le décor n’est pas suffisamment réaliste et industriel.",
+    "Le risque de confusion avec une installation artistique plutôt qu’un produit fonctionnel, si la netteté du produit n’est pas absolue."
+   ]
+  },
+  {
+   "concept_id": "cnc_e5bab049fd278749a5a444f508ba3806",
+   "central_idea": "Une batterie bleue posée sur un seuil de pierre namuroise, ses deux câbles intégrés alignés parallèlement le long du bord, comme des rails d’accès prêts à recevoir deux appareils — l’image d’une interface simple, préparée, sans friction.",
+   "visual_metaphor": "Les câbles comme voies ferrées miniatures : une infrastructure minimaliste, conçue pour guider l’énergie sans embouteillage, sans choix à faire.",
+   "story": "À l’entrée d’un ancien atelier réhabilité, la batterie attend sur le seuil, câbles alignés, prête à servir deux personnes qui vont entrer — chacune avec son appareil, aucun câble à chercher.",
+   "emotional_intent": "Une sérénité logistique : on ressent l’efficacité d’un système conçu pour éviter les micro-stresses du quotidien, sans théâtre ni effort.",
+   "product_role": "TOOL_OF_THE_STORY",
+   "message_role": "LEADS",
+   "memory_hook": "Les deux câbles parallèles, comme des rails sur la pierre, la batterie bleue en point de départ — une image de préparation silencieuse, prête à l’usage immédiat.",
+   "distinctiveness_reason": "L’idée de ‘voie d’accès’ transforme les câbles en élément d’infrastructure urbaine, non pas décoratif mais fonctionnellement narratif, ancré dans le lieu.",
+   "risks": [
+    "Le parallélisme des câbles peut paraître trop rigide ou artificiel si la pierre n’a pas de texture naturelle contrastante.",
+    "Le risque de lire l’image comme une illustration technique plutôt qu’une scène émotionnelle, si l’ambiance n’est pas suffisamment humaine par absence."
+   ]
+  }
+ ]
+}

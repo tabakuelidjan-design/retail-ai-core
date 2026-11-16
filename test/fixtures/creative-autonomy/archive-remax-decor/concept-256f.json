@@ -1,0 +1,78 @@
+{
+ "concept": {
+  "concept_id": "cnc_256f3fccdbd848624cdf1eaf83c47f97",
+  "central_idea": "Une batterie bleue posée sur un sol de béton ciré, baignée d’une lumière douce venant de la gauche, dont la matière satinée et les angles arrondis évoquent une autonomie calme, sans accessoires superflus — le décor en briques blanchies et lisse renforce l’idée d’un outil pensé pour durer.",
+  "visual_metaphor": "Un objet de service autonome, posé sur un sol de béton ciré lisse, face à un mur de briques blanchies usées — la texture brute du mur contraste avec la douceur satinée du boîtier bleu, comme une outil artisanal dans un atelier calme.",
+  "story": "Dans un espace sobre aux matériaux choisis avec justesse — béton ciré, briques blanchies —, une batterie bleue repose, prête à servir : son design compact et ses formes douces disent qu’elle accompagne sans encombrer, sans câbles à chercher ni à ranger.",
+  "emotional_intent": "Confiance tranquille : le produit n’a pas besoin de bruit ni de geste pour justifier sa présence, il suffit qu’il soit là, complet, sans accessoires supplémentaires.",
+  "product_role": "HERO_OF_THE_STORY",
+  "message_role": "EMBEDDED_IN_THE_STORY",
+  "memory_hook": "Une seule batterie bleue, posée sur un sol gris clair, avec sa lumière de studio reproduite dans le décor — le bleu satiné se détache sans effort, comme un objet qui ne demande pas d’attention mais la mérite.",
+  "distinctiveness_reason": "Le décor met en scène l’autonomie par l’absence de tout ce qui n’est pas le produit : les câbles ne sont pas utilisés, mais leur pose fixe devient une signature visuelle de l’intégration totale.",
+  "risks": [
+   "Le mur de briques blanchies peut être lu comme un décor générique si la lumière ne souligne pas la texture contrastée avec le satiné du boîtier",
+   "L’absence totale d’action risque de faire paraître le produit passif plutôt qu’autonome",
+   "Le bleu satiné peut se fondre dans un gris trop froid si la température lumineuse n’est pas ajustée"
+  ]
+ },
+ "frame": {
+  "frame_id": "cpf_be413674a3a33b0505a986e48ba79472",
+  "what_we_show": "Une batterie externe Remax FC-02 bleue, posée sur un sol en béton ciré gris clair, baignée d’une lumière douce venant de la gauche, avec un mur texturé en briques blanchies en arrière-plan — le décor minimal met en valeur la forme arrondie, les câbles intégrés tels que photographiés.",
+  "audience": "Clients belges (surtout namurois) à la recherche d’un accessoire tech pratique, autonome et élégant, qui veulent éviter les câbles supplémentaires sans sacrifier la puissance ou le design.",
+  "understood_immediately": "C’est une batterie externe compacte, bleue, avec deux câbles intégrés visibles, un écran numérique actif et des ports exposés — conçue pour recharger sans accessoires superflus.",
+  "felt": "Une sensation de calme technologique : rien n’est superflu, tout est là quand on en a besoin, sans bruit ni complication — comme un outil qui sait rester discret jusqu’à ce qu’on en ait besoin.",
+  "remembered": "La batterie bleue, posée seule sur un sol sobre, avec ses deux câbles tressés fixés en boucle et en chute, comme si elle attendait tranquillement d’être prise en main.",
+  "commercial_objective": "Faire découvrir la Remax FC-02 bleue chez HABB en mettant en avant son autonomie (20 000 mAh), sa puissance (45W) et son avantage pratique : deux câbles intégrés, sans accessoires supplémentaires.",
+  "occasion_context": "Achat spontané ou réfléchi en boutique locale, souvent motivé par un besoin immédiat (voyage, journée chargée, cadeau utile) ou par l’envie d’un accessoire tech bien pensé, pas générique.",
+  "fixed": [
+   {
+    "kind": "PRODUCT_PIXELS",
+    "ref": "product://shopify/15500511084892/Bleu"
+   },
+   {
+    "kind": "PRODUCT_FIDELITY",
+    "ref": "product://shopify/15500511084892/Bleu"
+   },
+   {
+    "kind": "FORMAT",
+    "ref": "4:5"
+   },
+   {
+    "kind": "BRAND_HARD_RULES",
+    "ref": "brand-memory"
+   },
+   {
+    "kind": "APPROVED_TEXT",
+    "ref": "PRICE"
+   },
+   {
+    "kind": "APPROVED_CLAIM",
+    "ref": "claim://shopify/price/57117888119132"
+   }
+  ],
+  "may_change": [
+   "SCENE",
+   "MATERIALS",
+   "LIGHT",
+   "ATMOSPHERE",
+   "COMPOSITION",
+   "TYPOGRAPHIC_TREATMENT",
+   "NARRATIVE_ELEMENTS"
+  ],
+  "generic_risks": [
+   "Un décor neutre mais impersonnel (béton, blanc) qui pourrait servir à n’importe quelle batterie",
+   "L’absence de lien entre le décor et le bénéfice ‘sans câbles séparés’",
+   "Une lumière trop uniforme qui efface la texture du produit et des câbles",
+   "Un cadrage centré sans hiérarchie visuelle, rendant le produit banal",
+   "Une palette froide qui masque la chaleur du bleu satiné du boîtier"
+  ],
+  "distinctive_levers": [
+   "Le mur en briques blanchies : matière brute mais soignée, rappelant l’artisanat local de HABB sans tomber dans le décoratif",
+   "La lumière venant de la gauche, identique à celle de la photo produit, créant une continuité entre studio et décor réel",
+   "Le sol en béton ciré gris clair, lisse mais non réfléchissant, qui laisse le bleu du produit se détacher sans compétition",
+   "L’absence totale de personnes, écrans ou objets secondaires — le produit est seul, mais pas isolé : il occupe son espace avec autorité tranquille",
+   "La pose fixe des câbles, exactement comme photographiés, transformée en signature visuelle plutôt que comme détail technique"
+  ],
+  "rationale": "Ce cadre minimal, construit avant le produit, utilise lumière, matière et architecture pour évoquer l’autonomie et la sobriété du produit, tandis que la fidélité absolue à la photo garantit reconnaissance et crédibilité."
+ }
+}

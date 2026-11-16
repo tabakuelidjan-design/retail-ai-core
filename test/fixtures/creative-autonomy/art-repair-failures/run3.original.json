@@ -1,0 +1,42 @@
+{
+  "atmosphere": "A quiet pause in a public space where movement has just ceased, with the hum of city life softened into background presence",
+  "depth_model": "LAYERED_DEPTH",
+  "material_language": "Worn concrete, matte metal, soft fabric and skin tones—textures that speak of daily use without polish or embellishment",
+  "lighting_intent": "Natural directional light from a high overcast sky, casting soft shadows that define form without drama",
+  "visual_rhythm": "MEASURED",
+  "product_relationship": "EMBEDDED_IN_SCENE",
+  "text_image_relationship": "TEXT_IN_CALM_ZONES",
+  "realism": "PHOTOREALISTIC",
+  "emotional_temperature": "NEUTRAL",
+  "visual_tension": "MEDIUM",
+  "negative_space_strategy": "DIRECTIONAL_LEAD",
+  "narrative_elements": [
+    {
+      "element": "A slightly worn public bench with subtle grain and shadow lines",
+      "reason": "Grounds the scene in a real urban moment and supports the idea of a brief, active rest without travel clichés",
+      "zone": "BACKGROUND"
+    },
+    {
+      "element": "The hand mid-reach toward the battery, fingers extended but not yet touching",
+      "reason": "Captures the precise instant of intention before action, echoing the emotional intent of discreet relief",
+      "zone": "FOREGROUND"
+    },
+    {
+      "element": "A faint reflection on the battery’s screen showing ambient light and partial silhouette",
+      "reason": "Confirms the screen is active and integrated into the environment, reinforcing the verified feature of real-time status display",
+      "zone": "MIDGROUND"
+    }
+  ],
+  "permitted_secondary_elements": [
+    "A sliver of pavement texture under the bench leg",
+    "A distant blurred figure walking past, mid-stride",
+    "The edge of a coat sleeve resting on the thigh"
+  ],
+  "forbidden_decorative_noise": [
+    "beige, crème, cream, sable, sand, écru, taupe, ivory, heart, leaf, foliage, eucalyptus, marble, velvet, gold, glitter, luxury, paillette",
+    "any object resembling a phone, case, screen, cable housing, or branding element",
+    "decorative patterns, logos, text fragments, watermarks, or symbolic travel items",
+    "overly clean surfaces, artificial glow, or uniform textures that suggest retouching"
+  ],
+  "rationale": "The scene centers the battery as an active tool in a real pause, using layered depth and measured rhythm to guide the eye from context to gesture to product, all while honoring verified facts and avoiding decorative noise."
+}

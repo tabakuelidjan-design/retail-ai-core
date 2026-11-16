@@ -1,0 +1,27 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15500205523292",
+  "title": "Casque Bluetooth Remax RB-300HB pliable",
+  "description": "Le RX RB-300HB offre un son ample grâce à ses haut-parleurs de 40 mm dans un casque pliable, confortable et simple à transporter. Sa connexion Bluetooth 6.0, sa molette multifonction et son arceau réglable en font un choix pratique pour écouter de la musique, regarder des vidéos ou téléphoner au quotidien.",
+  "tags": [],
+  "productType": "Headphones",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57206416703836",
+     "title": "Mauve",
+     "price": "34.90",
+     "inventoryQuantity": 2
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57206453109084",
+     "title": "Bleu",
+     "price": "34.90",
+     "inventoryQuantity": 6
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,1156 @@
+{
+ "status": "STOPPED_ERROR",
+ "trace": [
+  {
+   "n": 1,
+   "step": "BRIEF",
+   "component": "buildAutonomousBrief + assessBrief",
+   "module": "src/creative-autonomy/brief.js, src/creative-brain/brief-assessment.js",
+   "kind": "DETERMINISTIC",
+   "provider": "NONE",
+   "model": null,
+   "cost_eur": 0,
+   "ms": 8,
+   "outcome": "PROCEED",
+   "detail": {
+    "issues": [],
+    "unknowns": [
+     "AUDIENCE_NOT_STATED",
+     "OCCASION_NOT_STATED"
+    ],
+    "claims": [
+     "PRICE: 49,00 €"
+    ],
+    "personalisation_offered": false
+   }
+  },
+  {
+   "n": 2,
+   "step": "EXAMINE",
+   "component": "examine_product",
+   "module": "scripts/creative-autonomy/examine_product.py",
+   "kind": "LOCAL_ENGINE",
+   "provider": "REAL",
+   "model": null,
+   "cost_eur": 0,
+   "ms": 10,
+   "outcome": "CUT_OUT",
+   "detail": {
+    "source": {
+     "width": 1234,
+     "height": 1275
+    },
+    "background": {
+     "rgb": [
+      255,
+      255,
+      255
+     ],
+     "std": 7.09
+    },
+    "status": "CUT_OUT",
+    "bbox": {
+     "x": 165,
+     "y": 6,
+     "w": 871,
+     "h": 1263
+    },
+    "aspect_w_over_h": 0.6896,
+    "is_dark_object": false,
+    "ground_contact": null,
+    "translucent_share": 0.0165,
+    "opaque_pixels": 619595,
+    "dominant_colours": [
+     {
+      "rgb": [
+       199,
+       220,
+       240
+      ],
+      "share": 0.675
+     },
+     {
+      "rgb": [
+       152,
+       177,
+       203
+      ],
+      "share": 0.222
+     },
+     {
+      "rgb": [
+       27,
+       27,
+       28
+      ],
+      "share": 0.103
+     }
+    ],
+    "recomposite_on_source_background_mean_error": 0,
+    "edge_pixels_recomposited_mean_error": 16.8244,
+    "edge_pixels": 11174,
+    "rules_applied": [
+     "plain background keyed",
+     "enclosed background kept transparent",
+     "base clamped to body width"
+    ]
+   }
+  },
+  {
+   "n": 3,
+   "step": "OBSERVE",
+   "component": "observeBrief",
+   "module": "src/creative-brain/problem-frame.js",
+   "kind": "DETERMINISTIC",
+   "provider": "NONE",
+   "model": null,
+   "cost_eur": 0,
+   "ms": 1,
+   "outcome": "OBSERVED",
+   "detail": {
+    "product_ref": "product://shopify/8e47bf25c928fa2e/Bleu",
+    "approved_text_roles": [
+     "PRICE"
+    ],
+    "format": {
+     "content_kind": "IMAGE",
+     "aspect_ratio": "4:5",
+     "locale": "fr-BE"
+    }
+   }
+  },
+  {
+   "n": 4,
+   "step": "FRAME",
+   "component": "createProblemFramer",
+   "module": "src/creative-brain/problem-frame.js",
+   "kind": "LLM",
+   "provider": "REAL",
+   "model": "qwen3-vl-plus",
+   "cost_eur": 0,
+   "ms": 15,
+   "outcome": "FRAMED",
+   "detail": {
+    "frame_id": "cpf_790bf51b7712f44a0c7cfbd9db6a4a92",
+    "what_we_show": "Une batterie externe bleue de 20 000 mAh – 45W, posée sur un sol texturé et sobre, entourée d’un décor minimaliste qui raconte une histoire de disponibilité silencieuse : un câble déroulé à distance, une ombre portée nette, une lumière douce mais affirmée, sans personne ni objet électronique.",
+    "audience": "Clients belges curieux de petite tech utile, habitués à des cadeaux pratiques et bien conçus, qui valorisent la sobriété, la clarté et l’authenticité locale (Namur), et qui ne croient pas aux promesses vides.",
+    "understood_immediately": "C’est une batterie puissante, bleue, vendue 49 € chez HABB à Namur — prête à remplacer l’anxiété de la batterie vide par une simple présence rassurante.",
+    "felt": "Un calme confiant, comme celui qu’on ressent quand on sait qu’on a ce qu’il faut, sans effort, sans bruit, sans artifice — juste une solution réelle, là où on en a besoin.",
+    "remembered": "Une batterie bleue, seule sur un sol brut, avec un câble qui s’éloigne comme une promesse tenue : elle est là quand on en a besoin, même si on ne la voit pas tout le temps.",
+    "commercial_objective": "Inciter les clients à venir découvrir cette batterie externe chez HABB à Namur, en rendant son utilité tangible et son prix justifié par une image qui ne ment pas et ne surenchérit pas.",
+    "occasion_context": "Achat spontané ou réfléchi d’un accessoire tech pratique, souvent en complément d’un autre cadeau, ou pour soi-même lorsqu’on anticipe un besoin réel (voyage, journée longue, usage intensif).",
+    "fixed": [
+     {
+      "kind": "PRODUCT_PIXELS",
+      "ref": "product://shopify/8e47bf25c928fa2e/Bleu"
+     },
+     {
+      "kind": "PRODUCT_FIDELITY",
+      "ref": "product://shopify/8e47bf25c928fa2e/Bleu"
+     },
+     {
+      "kind": "FORMAT",
+      "ref": "4:5"
+     },
+     {
+      "kind": "BRAND_HARD_RULES",
+      "ref": "brand-memory"
+     },
+     {
+      "kind": "APPROVED_TEXT",
+      "ref": "PRICE"
+     },
+     {
+      "kind": "APPROVED_CLAIM",
+      "ref": "claim://shopify/price/8e47bf25c928fa2e"
+     }
+    ],
+    "may_change": [
+     "SCENE",
+     "MATERIALS",
+     "LIGHT",
+     "ATMOSPHERE",
+     "COMPOSITION",
+     "TYPOGRAPHIC_TREATMENT",
+     "NARRATIVE_ELEMENTS"
+    ],
+    "generic_risks": [
+     "Un décor neutre qui devient impersonnel et interchangeable avec n’importe quelle autre batterie",
+     "Une mise en scène trop technique qui tue l’émotion et réduit le produit à une spécification",
+     "Une lumière ou une texture trop générique (ex. béton lisse, bois clair) qui rappelle les rendus IA standard",
+     "Le bleu du produit perdu dans un fond trop proche en teinte ou en saturation",
+     "L’absence totale de tension visuelle, rendant l’image passable mais invisible dans le feed"
+    ],
+    "distinctive_levers": [
+     "Le câble déroulé à distance, sans contact avec le produit, comme une trace d’usage anticipé — un geste visuel unique qui dit ‘elle a déjà servi, elle servira encore’",
+     "Un sol texturé local (ex. pavé namurois patiné, béton ciré brut) qui ancre le produit dans le territoire HABB sans le forcer",
+     "L’ombre portée précise et nette du produit, qui donne du poids et de la présence sans ajout d’élément",
+     "La composition asymétrique avec le produit au centre-gauche, laissant un espace respirant à droite — une invitation silencieuse à venir le chercher",
+     "Le contraste entre la pureté du bleu du produit et la neutralité brute du décor, sans aucun élément décoratif interdit"
+    ],
+    "rationale": "En séparant strictement le décor (qui raconte l’histoire) du produit (qui reste inchangé), on respecte les règles de Nordla tout en créant un seul geste visuel fort — le câble déroulé à distance — qui incarne l’utilité silencieuse de la batterie."
+   }
+  },
+  {
+   "n": 5,
+   "step": "IDEATE",
+   "component": "createConceptDirector (3, distinctness guard) + brand guard",
+   "module": "src/creative-brain/concept.js, src/creative-autonomy/brand-guard.js",
+   "kind": "LLM",
+   "provider": "REAL",
+   "model": "qwen3-vl-plus",
+   "cost_eur": 0,
+   "ms": 1284,
+   "outcome": "THREE_DISTINCT_CONCEPTS",
+   "detail": [
+    {
+     "concept_id": "cnc_3f84a1c44689d7835589b58533312fb9",
+     "central_idea": "Une batterie bleue repose sur un sol de pavé namurois usé, son câble déroulé en diagonale vers le vide comme une promesse silencieuse d’usage futur, sans personne ni appareil — la puissance est dans l’attente, pas dans l’action.",
+     "visual_metaphor": "Un câble tendu comme une ligne de fuite vers l’absence d’un téléphone, évoquant un lien invisible mais garanti, tandis que l’ombre nette de la batterie ancre sa présence réelle dans le décor brut."
+    },
+    {
+     "concept_id": "cnc_cb1943ccf5d546a6de20b03f3ace153f",
+     "central_idea": "Une batterie bleue est posée sur un plancher de chêne ancien, légèrement incliné, avec une fine fissure naturelle dans le bois qui mène à elle — non comme défaut, mais comme chemin emprunté par l’énergie, silencieusement transmise.",
+     "visual_metaphor": "Une fissure dans le bois, suivie par la lumière rasante, guide le regard vers la batterie comme un lit de rivière conduit l’eau vers une retenue calme."
+    },
+    {
+     "concept_id": "cnc_abd462b98767ababaf144439419efd24",
+     "central_idea": "Une batterie bleue repose sur un sol de béton ciré brut, sous une lumière oblique qui projette deux ombres distinctes : une courte, nette, de la batterie elle-même, et une longue, floue, de son câble — comme si l’ombre savait ce que le corps encore ne fait pas.",
+     "visual_metaphor": "Deux ombres séparées — l’une fidèle, l’autre anticipatrice — créant une dualité entre présence actuelle et utilité future, toutes deux portées par la même source lumineuse."
+    }
+   ]
+  },
+  {
+   "n": 6,
+   "step": "SELECT",
+   "component": "createConceptSelector (10 criteria, words only)",
+   "module": "src/creative-brain/concept-selection.js",
+   "kind": "LLM",
+   "provider": "REAL",
+   "model": "qwen3-vl-plus",
+   "cost_eur": 0.020124075999999998,
+   "ms": 34512,
+   "outcome": "SELECT",
+   "detail": {
+    "selection": {
+     "outcome": "SELECT",
+     "concept_id": "cnc_3f84a1c44689d7835589b58533312fb9",
+     "decisions": [
+      {
+       "concept_id": "cnc_3f84a1c44689d7835589b58533312fb9",
+       "decision": "SELECT",
+       "evidence": "CONCEPT_STRENGTH=MEETS: One strong idea: the cable as a silent promise of future use, visually expressed through diagonal tension and absence of device. | DISTINCTIVENESS=MEETS: Only this concept combines detached cable-as-promise, local pavement, and asymmetrical composition into a non-ge"
+      },
+      {
+       "concept_id": "cnc_cb1943ccf5d546a6de20b03f3ace153f",
+       "decision": "REJECT_CONCEPT",
+       "evidence": "CONCEPT_STRENGTH=PARTIAL: Strong metaphor (fissure as energy channel), but the idea competes with literal reading of wood defect, weakening singularity. | DISTINCTIVENESS=PARTIAL: Wood fissure is novel, but similar ‘natural path to object’ metaphors exist in sustainability campaigns, reduc"
+      },
+      {
+       "concept_id": "cnc_abd462b98767ababaf144439419efd24",
+       "decision": "REFINE_CONCEPT",
+       "evidence": "CONCEPT_STRENGTH=MEETS: One powerful idea: dual shadows as present/future duality—simple, visual, and expressible in a glance. | DISTINCTIVENESS=MEETS: Dual-shadow metaphor is unique in tech advertising; no competitor uses shadow duality to express anticipation without text. | GENERIC_RISK"
+      }
+     ],
+     "reasons": [
+      "ONE_CONCEPT_MEETS_THE_BAR_AND_IS_NOT_DOMINATED"
+     ],
+     "order": [
+      "cnc_3f84a1c44689d7835589b58533312fb9"
+     ],
+     "tie_break": null
+    },
+    "evaluations": [
+     {
+      "concept_id": "cnc_3f84a1c44689d7835589b58533312fb9",
+      "criteria": [
+       {
+        "criterion": "CONCEPT_STRENGTH",
+        "outcome": "MEETS",
+        "evidence": "One strong idea: the cable as a silent promise of future use, visually expressed through diagonal tension and absence of device.",
+        "refinement": "Ensure the cable’s direction is unmistakably intentional—not accidental—by reinforcing light and shadow alignment."
+       },
+       {
+        "criterion": "RELEVANCE_TO_BRIEF",
+        "outcome": "MEETS",
+        "evidence": "Directly answers the brief: a single visual gesture (cable to void), product as hero, local texture (pavé namurois), no people or electronics.",
+        "refinement": "Confirm pavé texture reads as authentic Namur material without over-indexing on regionalism for national audience."
+       },
+       {
+        "criterion": "EMOTIONAL_RESONANCE",
+        "outcome": "MEETS",
+        "evidence": "Evokes ‘prévoyance tranquille’—calm confidence in readiness—which matches the occasion’s need for practical anticipation.",
+        "refinement": "Balance stillness with subtle directional energy so the emotion feels active, not passive."
+       },
+       {
+        "criterion": "PRODUCT_RELATIONSHIP",
+        "outcome": "MEETS",
+        "evidence": "Product is hero; cable originates from it but never touches anything, fulfilling the ‘no contact’ rule while narrating utility.",
+        "refinement": "Validate that the cable’s origin point is unambiguously the product’s port, even at small scale."
+       },
+       {
+        "criterion": "DISTINCTIVENESS",
+        "outcome": "MEETS",
+        "evidence": "Only this concept combines detached cable-as-promise, local pavement, and asymmetrical composition into a non-generic narrative.",
+        "refinement": "Avoid over-stylizing the cable—keep its material and slack realistic to prevent stock-image association."
+       },
+       {
+        "criterion": "FEASIBILITY",
+        "outcome": "MEETS",
+        "evidence": "Uses real product photo, generated pavement texture, deterministic lighting; no forbidden elements or text dependencies.",
+        "refinement": "Test cable rendering for plausible slack and perspective consistency with product scale."
+       },
+       {
+        "criterion": "BRAND_COMPATIBILITY",
+        "outcome": "NOT_ASSESSED",
+        "evidence": "No brand rules provided beyond ‘restraint’ and ‘no false luxury’—concept aligns with those principles implicitly.",
+        "refinement": null
+       },
+       {
+        "criterion": "COMMERCIAL_CLARITY",
+        "outcome": "NOT_ASSESSED",
+        "evidence": "Layout not specified; product is clearly visible and central-left, but price/claim placement unknown.",
+        "refinement": null
+       },
+       {
+        "criterion": "NARRATIVE_COHESION",
+        "outcome": "MEETS",
+        "evidence": "Idea (anticipatory promise), metaphor (cable as line of intent), and story (she’s already there) form one coherent arc.",
+        "refinement": "Ensure the ‘void’ at cable’s end reads as intentional absence, not compositional emptiness."
+       },
+       {
+        "criterion": "GENERIC_RISK",
+        "outcome": "PARTIAL",
+        "evidence": "Pavé namurois reduces generic risk, but diagonal cable + minimal scene risks resembling common ‘tech still life’ tropes if texture lacks grit.",
+        "refinement": "Amplify surface imperfections in pavement and subtle dust on cable to resist AI-render sterility."
+       }
+      ]
+     },
+     {
+      "concept_id": "cnc_cb1943ccf5d546a6de20b03f3ace153f",
+      "criteria": [
+       {
+        "criterion": "CONCEPT_STRENGTH",
+        "outcome": "PARTIAL",
+        "evidence": "Strong metaphor (fissure as energy channel), but the idea competes with literal reading of wood defect, weakening singularity.",
+        "refinement": "Reinforce fissure’s continuity with light path and avoid any visual suggestion of damage—make it clearly a groove, not a crack."
+       },
+       {
+        "criterion": "RELEVANCE_TO_BRIEF",
+        "outcome": "PARTIAL",
+        "evidence": "Meets decor-first and no-electronics rules, but chêne ancien risks clashing with ‘sobriété tech’ and may read as decorative rather than functional.",
+        "refinement": "Use raw, unpolished oak with visible grain and tool marks to emphasize utility over vintage aesthetic."
+       },
+       {
+        "criterion": "EMOTIONAL_RESONANCE",
+        "outcome": "MEETS",
+        "evidence": "Serenity through continuity resonates with the brief’s ‘calme confiant’ and anti-anxiety utility framing.",
+        "refinement": "Ensure lighting emphasizes flow—not stagnation—so the energy feels active, not inert."
+       },
+       {
+        "criterion": "PRODUCT_RELATIONSHIP",
+        "outcome": "PARTIAL",
+        "evidence": "Product is destination, but the fissure’s narrative dominance risks making the battery feel like a payoff rather than protagonist.",
+        "refinement": "Shift composition so battery occupies more visual weight; let fissure guide but not dominate the eye path."
+       },
+       {
+        "criterion": "DISTINCTIVENESS",
+        "outcome": "PARTIAL",
+        "evidence": "Wood fissure is novel, but similar ‘natural path to object’ metaphors exist in sustainability campaigns, reducing uniqueness.",
+        "refinement": "Anchor the fissure uniquely to the product’s geometry—e.g., align with port orientation or edge contour."
+       },
+       {
+        "criterion": "FEASIBILITY",
+        "outcome": "MEETS",
+        "evidence": "Real product + generated wood texture + deterministic light; no forbidden elements or text dependencies.",
+        "refinement": "Verify fissure doesn’t intersect product base—must remain entirely in decor, per rules."
+       },
+       {
+        "criterion": "BRAND_COMPATIBILITY",
+        "outcome": "NOT_ASSESSED",
+        "evidence": "Not assessed.",
+        "refinement": null
+       },
+       {
+        "criterion": "COMMERCIAL_CLARITY",
+        "outcome": "NOT_ASSESSED",
+        "evidence": "Not assessed.",
+        "refinement": null
+       },
+       {
+        "criterion": "NARRATIVE_COHESION",
+        "outcome": "PARTIAL",
+        "evidence": "Metaphor (fissure = energy path) and story (quiet reservoir) cohere, but risk dissonance if fissure reads as flaw.",
+        "refinement": "Add micro-contrast: slight warmth in light along fissure vs cooler ambient to signal intentionality."
+       },
+       {
+        "criterion": "GENERIC_RISK",
+        "outcome": "FAILS",
+        "evidence": "Aged wood + minimalist tech product is a well-trodden trope in premium accessory ads, especially with ‘natural conduit’ metaphors.",
+        "refinement": "Replace chêne with an unexpected local industrial material (e.g., reclaimed steel plate with patina) to break template association."
+       }
+      ]
+     },
+     {
+      "concept_id": "cnc_abd462b98767ababaf144439419efd24",
+      "criteria": [
+       {
+        "criterion": "CONCEPT_STRENGTH",
+        "outcome": "MEETS",
+        "evidence": "One powerful idea: dual shadows as present/future duality—simple, visual, and expressible in a glance.",
+        "refinement": "Ensure shadow separation is physically plausible (e.g., two light sources or strong rim + fill) to avoid surrealism."
+       },
+       {
+        "criterion": "RELEVANCE_TO_BRIEF",
+        "outcome": "MEETS",
+        "evidence": "Fulfills all constraints: product hero, decor-first, no people/electronics, asymmetric composition, real product placement.",
+        "refinement": "Confirm concrete texture has visible aggregate or trowel marks to avoid generic render look."
+       },
+       {
+        "criterion": "EMOTIONAL_RESONANCE",
+        "outcome": "PARTIAL",
+        "evidence": "‘Assurance douce’ fits the register, but philosophical tone may feel distant for an audience seeking concrete utility.",
+        "refinement": "Ground the abstraction in tactile cues—e.g., slight dust disturbed near battery base—to reinforce physical presence."
+       },
+       {
+        "criterion": "PRODUCT_RELATIONSHIP",
+        "outcome": "MEETS",
+        "evidence": "Product is proof of the story; shadows originate from it, fulfilling ‘no contact’ while visually extending its role.",
+        "refinement": "Validate that short shadow aligns precisely with product geometry and long shadow diverges cleanly without ambiguity."
+       },
+       {
+        "criterion": "DISTINCTIVENESS",
+        "outcome": "MEETS",
+        "evidence": "Dual-shadow metaphor is unique in tech advertising; no competitor uses shadow duality to express anticipation without text.",
+        "refinement": "Avoid symmetrical shadow layouts—keep asymmetry pronounced to reinforce ‘promise vs presence’ tension."
+       },
+       {
+        "criterion": "FEASIBILITY",
+        "outcome": "PARTIAL",
+        "evidence": "Real product + generated concrete + deterministic lighting possible, but dual shadows require precise light setup to avoid artifact.",
+        "refinement": "Specify exact light angles and diffusion in brief to ensure reproducibility without post-production fixes."
+       },
+       {
+        "criterion": "BRAND_COMPATIBILITY",
+        "outcome": "NOT_ASSESSED",
+        "evidence": "Not assessed.",
+        "refinement": null
+       },
+       {
+        "criterion": "COMMERCIAL_CLARITY",
+        "outcome": "NOT_ASSESSED",
+        "evidence": "Not assessed.",
+        "refinement": null
+       },
+       {
+        "criterion": "NARRATIVE_COHESION",
+        "outcome": "MEETS",
+        "evidence": "Idea (reserve capacity), metaphor (two shadows), and story (she holds tomorrow in her light) form a tight loop.",
+        "refinement": "Ensure long shadow ends in a meaningful negative space—not dead air—to complete the narrative arc."
+       },
+       {
+        "criterion": "GENERIC_RISK",
+        "outcome": "PARTIAL",
+        "evidence": "Béton ciré is high-risk for AI-stock association; however, dual-shadow twist elevates it beyond template if executed with grit.",
+        "refinement": "Incorporate subtle imperfections: hairline scuffs, uneven sheen, or embedded sand grains to assert authenticity."
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "n": 7,
+   "step": "PRODUCE",
+   "component": "concept chosen by SELECT",
+   "module": "src/creative-autonomy/run.js",
+   "kind": "DETERMINISTIC",
+   "provider": "NONE",
+   "model": null,
+   "cost_eur": 0,
+   "ms": 0,
+   "outcome": "SELECTED_CONCEPT_ONLY",
+   "detail": {
+    "selection_outcome": "SELECT",
+    "concept_id": "cnc_3f84a1c44689d7835589b58533312fb9",
+    "reasons": [
+     "ONE_CONCEPT_MEETS_THE_BAR_AND_IS_NOT_DOMINATED"
+    ],
+    "tie_break": null,
+    "fallback_order": [],
+    "not_produced": [
+     "cnc_cb1943ccf5d546a6de20b03f3ace153f",
+     "cnc_abd462b98767ababaf144439419efd24"
+    ]
+   }
+  },
+  {
+   "n": 8,
+   "step": "ART_DIRECT",
+   "concept_id": "cnc_3f84a1c44689d7835589b58533312fb9",
+   "component": "createArtDirector + brand guard",
+   "module": "src/creative-brain/art-direction.js, src/creative-autonomy/brand-guard.js",
+   "kind": "LLM",
+   "provider": "REAL",
+   "model": "qwen3-vl-plus",
+   "cost_eur": 0.012347684,
+   "ms": 11367,
+   "outcome": "DIRECTED",
+   "detail": {
+    "art_direction_id": "art_df09298b703133e71247204255972558",
+    "concept_id": "cnc_3f84a1c44689d7835589b58533312fb9",
+    "atmosphere": "Un calme confiant, comme celui qu’on ressent quand on sait qu’on a ce qu’il faut, sans effort, sans bruit, sans artifice — juste une solution réelle, là où on en a besoin.",
+    "depth_model": "LAYERED_DEPTH",
+    "material_language": "Matériaux bruts et honnêtes : pavé namurois usé, béton ciré non poli, surface légèrement poreuse qui garde la trace du temps sans tomber dans le décoratif ou le rustique.",
+    "lighting_intent": "Lumière directionnelle douce mais affirmée, venant d’un angle bas et latéral pour sculpter l’ombre portée nette de la batterie et guider le regard le long du câble déroulé.",
+    "visual_rhythm": "MEASURED",
+    "product_relationship": "GROUNDED_IN_SCENE",
+    "text_image_relationship": "TEXT_IN_CALM_ZONES",
+    "realism": "PHOTOREALISTIC",
+    "emotional_temperature": "NEUTRAL",
+    "visual_tension": "MEDIUM",
+    "negative_space_strategy": "DIRECTIONAL_LEAD",
+    "narrative_elements": [
+     {
+      "element": "Câble déroulé en diagonale vers le vide, sans contact avec aucun objet",
+      "reason": "Il incarne la promesse silencieuse d’usage futur, aligné avec l’idée centrale de prévoyance tranquille et l’émotion de confiance anticipée.",
+      "zone": "MIDGROUND"
+     },
+     {
+      "element": "Ombre portée nette et précise sous la batterie",
+      "reason": "Elle ancre la présence réelle du produit dans le décor brut, renforçant la crédibilité matérielle et la sensation de poids utile, en lien avec l’intent émotionnel de sécurité.",
+      "zone": "FOREGROUND"
+     }
+    ],
+    "permitted_secondary_elements": [
+     "Traces discrètes d’usure sur le pavé namurois",
+     "Subtile variation de texture entre les dalles du sol",
+     "Légère irrégularité de la surface sous la batterie"
+    ],
+    "forbidden_decorative_noise": [
+     "beige, crème, sable, écru, taupe, ivoire",
+     "feuille, végétation, eucalyptus, botanique",
+     "doré, gold, glitter, paillette, luxe",
+     "marbre, velours, pétale, bokeh",
+     "logo, texte, prix, marque, étiquette",
+     "écran, téléphone, appareil, coque, câble enroulé",
+     "cœur, feuillage, frond, fougère",
+     "herbe, fleur, bois clair, béton lisse",
+     "a substitute for the product",
+     "a phone, a case or any device",
+     "a competing hero object",
+     "a misleading commercial object",
+     "text, letters, logos or watermarks"
+    ],
+    "rationale": "Le décor raconte l’histoire de disponibilité silencieuse par un seul geste visuel fort — le câble déroulé à distance — tandis que la batterie bleue, posée sur un sol local texturé, reste inchangée et centrée dans son rôle de héros réaliste, sans compétition ni artifice."
+   }
+  },
+  {
+   "n": 9,
+   "step": "STAGE",
+   "concept_id": "cnc_3f84a1c44689d7835589b58533312fb9",
+   "component": "createStageDirector + brand guard",
+   "module": "src/creative-autonomy/stage-contract.js, src/creative-autonomy/brand-guard.js",
+   "kind": "LLM",
+   "provider": "REAL",
+   "model": null,
+   "cost_eur": 0,
+   "ms": 12965,
+   "outcome": "ERROR",
+   "detail": {
+    "code": "BRAIN_RULE_VIOLATION",
+    "message": "prop 1 has no reason in the concept",
+    "field": "stage.props[1].reason",
+    "evidence": {
+     "stage": "STAGE",
+     "request_id": "chatcmpl-012000dd-5993-95bb-bc16-9550a2ae0233",
+     "model": "qwen3-vl-plus",
+     "key_repairs": [],
+     "repairs": [
+      {
+       "path": "STAGE.key_light.purpose",
+       "kind": "LENGTH_FIT",
+       "from": "170 characters",
+       "to": "121 characters, cut at the last whole clause",
+       "dropped": " reinforcing the 'promise silencieuse' narrative."
+      },
+      {
+       "path": "STAGE.props[0].word",
+       "kind": "OPTIONAL_EMPTY",
+       "from": "empty text",
+       "to": "absent"
+      },
+      {
+       "path": "STAGE.props[1].word",
+       "kind": "OPTIONAL_EMPTY",
+       "from": "empty text",
+       "to": "absent"
+      },
+      {
+       "path": "STAGE.props[1].reason",
+       "kind": "LENGTH_FIT",
+       "from": "228 characters",
+       "to": "170 characters, cut at the last whole clause",
+       "dropped": " supporting 'promesse' and 'diagonale' without literalism."
+      },
+      {
+       "path": "STAGE.props[2].word",
+       "kind": "OPTIONAL_EMPTY",
+       "from": "empty text",
+       "to": "absent"
+      },
+      {
+       "path": "STAGE.rationale",
+       "kind": "LENGTH_FIT",
+       "from": "321 characters",
+       "to": "258 characters, cut at the last whole clause",
+       "dropped": " tout en respectant les interdits visuels et la sobriété belge."
+      }
+     ],
+     "raw_answer": "{\n  \"backdrop\": \"WALL_AND_FLOOR\",\n  \"backdrop_tone\": \"CHARCOAL\",\n  \"floor_finish\": \"MATTE\",\n  \"key_light\": {\n    \"kind\": \"SOFTBOX\",\n    \"side\": \"LEFT\",\n    \"intensity\": \"MEDIUM\",\n    \"temperature\": \"NEUTRAL\",\n    \"purpose\": \"Sculpts a clean, directional shadow under the battery and guides the eye along the diagonal cable toward the empty space, reinforcing the 'promise silencieuse' narrative.\"\n  },\n  \"accent_lights\": [\n    {\n      \"kind\": \"RIM\",\n      \"side\": \"RIGHT\",\n      \"intensity\": \"LOW\",\n      \"temperature\": \"COOL\",\n      \"purpose\": \"Adds subtle separation between the blue battery and the charcoal backdrop, enhancing its presence without artificial glow or luxury cues.\"\n    },\n    {\n      \"kind\": \"STRIP\",\n      \"side\": \"TOP\",\n      \"intensity\": \"LOW\",\n      \"temperature\": \"NEUTRAL\",\n      \"purpose\": \"Softly illuminates the texture of the namurois pavement without flattening it, preserving material credibility and grounding the scene.\"\n    }\n  ],\n  \"camera\": {\n    \"height\": \"PRODUCT_CENTER\",\n    \"framing\": \"MEDIUM\",\n    \"product_position\": \"LEFT_THIRD\"\n  },\n  \"props\": [\n    {\n      \"shape\": \"PLINTH\",\n      \"material\": \"CONCRETE\",\n      \"placement\": \"BENEATH\",\n      \"scale\": \"LOW\",\n      \"word\": \"\",\n      \"reason\": \"A low concrete plinth grounds the battery on the namurois pavement without visual competition; its matte texture echoes the floor’s honesty and supports the 'repose' and 'usage' themes.\"\n    },\n    {\n      \"shape\": \"CYLINDER\",\n      \"material\": \"BRUSHED_STEEL\",\n      \"placement\": \"BEHIND\",\n      \"scale\": \"MEDIUM\",\n      \"word\": \"\",\n      \"reason\": \"A brushed-steel cylinder placed behind and slightly left of center suggests a distant utility pole or urban fixture—evoking Namur’s infrastructure while staying abstract, supporting 'promesse' and 'diagonale' without literalism.\"\n    },\n    {\n      \"shape\": \"BLOCK\",\n      \"material\": \"MATTE_BLACK\",\n      \"placement\": \"FOREGROUND_RIGHT\",\n      \"scale\": \"LOW\",\n      \"word\": \"\",\n      \"reason\": \"A small matte-black block anchors the right negative space, balancing the left-weighted product and cable; its absence of texture reinforces the calm, uncluttered 'silencieuse' mood.\"\n    }\n  ],\n  \"headline\": \"Une batterie bleue, prête sans bruit\",\n  \"text_placement\": \"RIGHT_COLUMN\",\n  \"show_price\": \"YES\",\n  \"rationale\": \"Le décor minimaliste en pavé namurois usé, le câble déroulé en diagonale vers le vide et l’ombre nette ancrent la batterie dans une histoire de disponibilité silencieuse ; la lumière directionnelle et les props discrets renforcent la confiance sans artifice, tout en respectant les interdits visuels et la sobriété belge.\",\n  \"wanted_but_not_available\": [\n    \"Un vrai pavé namurois usé (non simulé) pour la crédibilité matérielle totale\",\n    \"Un câble bleu exactement assorti au produit, déroulé avec tension naturelle (sans support visible)\",\n    \"Une légère patine d’usage sur le sol, vraie et non retouchée numériquement\"\n  ],\n  \"headline_alternatives\": [\n    \"Elle repose. Elle est là quand il faut\",\n    \"Batterie bleue : promesse tenue, sans bruit\",\n    \"Usage anticipé, silence assuré\"\n  ]\n}"
+    }
+   }
+  },
+  {
+   "n": 10,
+   "step": "STAGE_REPAIR",
+   "concept_id": "cnc_3f84a1c44689d7835589b58533312fb9",
+   "component": "createStageDirector + brand guard",
+   "module": "src/creative-autonomy/stage-contract.js, src/creative-autonomy/brand-guard.js",
+   "kind": "LLM",
+   "provider": "REAL",
+   "repair_of": {
+    "code": "BRAIN_RULE_VIOLATION",
+    "field": "stage.props[1].reason"
+   },
+   "repair_scope": "stage.props[1].reason",
+   "repairs_used": 1,
+   "repairs_allowed": 4,
+   "model": null,
+   "cost_eur": 0,
+   "ms": 12612,
+   "outcome": "REPAIR_REJECTED",
+   "detail": {
+    "code": "REPAIR_ARRAY_LENGTH_CHANGED",
+    "message": "the repair was REJECTED, nothing applied",
+    "field": "stage.props[1].reason",
+    "before": 3,
+    "after": 2
+   },
+   "repair_merge": {
+    "scope": "stage.props[1].reason",
+    "applied": false,
+    "form": null,
+    "patches": null,
+    "discarded_outside_scope": [],
+    "reason": "REPAIR_REJECTED",
+    "rejected": {
+     "code": "REPAIR_ARRAY_LENGTH_CHANGED",
+     "detail": {
+      "field": "stage.props[1].reason",
+      "before": 3,
+      "after": 2
+     }
+    }
+   }
+  }
+ ],
+ "human_interventions": [
+  {
+   "when": "avant le passage",
+   "who": "opérateur",
+   "what": "a défini le produit, l'objectif commercial et le format",
+   "creative": false
+  }
+ ],
+ "engines": {
+  "text": "REAL",
+  "vision": "REAL",
+  "local": "REAL"
+ },
+ "cost_eur": {
+  "text_and_vision": 0.0635,
+  "local": 0,
+  "budget": {
+   "max_spend_eur": 0.2,
+   "reserved_eur": 0,
+   "settled_eur": 0.06348675399999999,
+   "images": 0,
+   "video_seconds": 0
+  }
+ },
+ "published": false,
+ "spent_without_authorisation": false,
+ "repairs": {
+  "used": 1,
+  "allowed": 4,
+  "reserved": {
+   "STAGE": 1
+  }
+ },
+ "headline_calls": {
+  "used": 0,
+  "allowed": 1
+ },
+ "mode": "FULL",
+ "frame": {
+  "frame_id": "cpf_790bf51b7712f44a0c7cfbd9db6a4a92",
+  "what_we_show": "Une batterie externe bleue de 20 000 mAh – 45W, posée sur un sol texturé et sobre, entourée d’un décor minimaliste qui raconte une histoire de disponibilité silencieuse : un câble déroulé à distance, une ombre portée nette, une lumière douce mais affirmée, sans personne ni objet électronique.",
+  "audience": "Clients belges curieux de petite tech utile, habitués à des cadeaux pratiques et bien conçus, qui valorisent la sobriété, la clarté et l’authenticité locale (Namur), et qui ne croient pas aux promesses vides.",
+  "understood_immediately": "C’est une batterie puissante, bleue, vendue 49 € chez HABB à Namur — prête à remplacer l’anxiété de la batterie vide par une simple présence rassurante.",
+  "felt": "Un calme confiant, comme celui qu’on ressent quand on sait qu’on a ce qu’il faut, sans effort, sans bruit, sans artifice — juste une solution réelle, là où on en a besoin.",
+  "remembered": "Une batterie bleue, seule sur un sol brut, avec un câble qui s’éloigne comme une promesse tenue : elle est là quand on en a besoin, même si on ne la voit pas tout le temps.",
+  "commercial_objective": "Inciter les clients à venir découvrir cette batterie externe chez HABB à Namur, en rendant son utilité tangible et son prix justifié par une image qui ne ment pas et ne surenchérit pas.",
+  "occasion_context": "Achat spontané ou réfléchi d’un accessoire tech pratique, souvent en complément d’un autre cadeau, ou pour soi-même lorsqu’on anticipe un besoin réel (voyage, journée longue, usage intensif).",
+  "fixed": [
+   {
+    "kind": "PRODUCT_PIXELS",
+    "ref": "product://shopify/8e47bf25c928fa2e/Bleu"
+   },
+   {
+    "kind": "PRODUCT_FIDELITY",
+    "ref": "product://shopify/8e47bf25c928fa2e/Bleu"
+   },
+   {
+    "kind": "FORMAT",
+    "ref": "4:5"
+   },
+   {
+    "kind": "BRAND_HARD_RULES",
+    "ref": "brand-memory"
+   },
+   {
+    "kind": "APPROVED_TEXT",
+    "ref": "PRICE"
+   },
+   {
+    "kind": "APPROVED_CLAIM",
+    "ref": "claim://shopify/price/8e47bf25c928fa2e"
+   }
+  ],
+  "may_change": [
+   "SCENE",
+   "MATERIALS",
+   "LIGHT",
+   "ATMOSPHERE",
+   "COMPOSITION",
+   "TYPOGRAPHIC_TREATMENT",
+   "NARRATIVE_ELEMENTS"
+  ],
+  "generic_risks": [
+   "Un décor neutre qui devient impersonnel et interchangeable avec n’importe quelle autre batterie",
+   "Une mise en scène trop technique qui tue l’émotion et réduit le produit à une spécification",
+   "Une lumière ou une texture trop générique (ex. béton lisse, bois clair) qui rappelle les rendus IA standard",
+   "Le bleu du produit perdu dans un fond trop proche en teinte ou en saturation",
+   "L’absence totale de tension visuelle, rendant l’image passable mais invisible dans le feed"
+  ],
+  "distinctive_levers": [
+   "Le câble déroulé à distance, sans contact avec le produit, comme une trace d’usage anticipé — un geste visuel unique qui dit ‘elle a déjà servi, elle servira encore’",
+   "Un sol texturé local (ex. pavé namurois patiné, béton ciré brut) qui ancre le produit dans le territoire HABB sans le forcer",
+   "L’ombre portée précise et nette du produit, qui donne du poids et de la présence sans ajout d’élément",
+   "La composition asymétrique avec le produit au centre-gauche, laissant un espace respirant à droite — une invitation silencieuse à venir le chercher",
+   "Le contraste entre la pureté du bleu du produit et la neutralité brute du décor, sans aucun élément décoratif interdit"
+  ],
+  "rationale": "En séparant strictement le décor (qui raconte l’histoire) du produit (qui reste inchangé), on respecte les règles de Nordla tout en créant un seul geste visuel fort — le câble déroulé à distance — qui incarne l’utilité silencieuse de la batterie."
+ },
+ "concepts": [
+  {
+   "concept_id": "cnc_3f84a1c44689d7835589b58533312fb9",
+   "central_idea": "Une batterie bleue repose sur un sol de pavé namurois usé, son câble déroulé en diagonale vers le vide comme une promesse silencieuse d’usage futur, sans personne ni appareil — la puissance est dans l’attente, pas dans l’action.",
+   "visual_metaphor": "Un câble tendu comme une ligne de fuite vers l’absence d’un téléphone, évoquant un lien invisible mais garanti, tandis que l’ombre nette de la batterie ancre sa présence réelle dans le décor brut.",
+   "story": "Avant que le téléphone ne tombe en panne, elle est déjà là — posée, prête, discrète ; son câble s’étire comme une intention anticipée, non exécutée, mais certaine.",
+   "emotional_intent": "Un sentiment de prévoyance tranquille : la confiance que procure savoir qu’une solution existe, même hors champ, sans bruit ni spectacle.",
+   "product_role": "HERO_OF_THE_STORY",
+   "message_role": "FOLLOWS",
+   "memory_hook": "Le câble bleu qui part du produit et disparaît hors cadre, comme une promesse tenue avant même qu’on en ait besoin.",
+   "distinctiveness_reason": "Aucune autre batterie n’est montrée avec un câble déroulé *sans contact*, dans un décor local texturé, où l’absence d’appareil devient le cœur du récit.",
+   "risks": [
+    "Le câble peut être lu comme un défaut technique si le spectateur ne perçoit pas l’intention narrative",
+    "Le pavé namurois risque d’être trop régional pour un public national, diluant l’universalité de l’utilité",
+    "L’asymétrie forte peut déséquilibrer la composition si la lumière ne renforce pas la direction du câble"
+   ]
+  },
+  {
+   "concept_id": "cnc_cb1943ccf5d546a6de20b03f3ace153f",
+   "central_idea": "Une batterie bleue est posée sur un plancher de chêne ancien, légèrement incliné, avec une fine fissure naturelle dans le bois qui mène à elle — non comme défaut, mais comme chemin emprunté par l’énergie, silencieusement transmise.",
+   "visual_metaphor": "Une fissure dans le bois, suivie par la lumière rasante, guide le regard vers la batterie comme un lit de rivière conduit l’eau vers une retenue calme.",
+   "story": "L’énergie circule là où on ne la voit pas : la fissure n’est pas une rupture, mais un canal discret, et la batterie en est le réservoir paisible, prêt à alimenter ce qui suit.",
+   "emotional_intent": "Une sérénité fondée sur la continuité — l’idée que la puissance ne crie pas, elle coule, patiente, disponible quand le besoin se creuse.",
+   "product_role": "DESTINATION_OF_THE_STORY",
+   "message_role": "EMBEDDED_IN_THE_STORY",
+   "memory_hook": "La fissure dans le bois qui mène droit à la batterie, comme un ruisseau à son lac, sans eau mais avec intention.",
+   "distinctiveness_reason": "Le décor raconte un trajet énergétique physique sans aucun objet électronique, utilisant uniquement la texture du bois et la lumière pour signifier le transfert.",
+   "risks": [
+    "La fissure pourrait être interprétée comme un défaut structurel plutôt qu’un élément narratif",
+    "Le chêne ancien risque d’évoquer le vintage ou le décoratif, contredisant la sobriété tech du produit",
+    "Sans contraste suffisant entre le bleu et le bois, le produit perd en visibilité"
+   ]
+  },
+  {
+   "concept_id": "cnc_abd462b98767ababaf144439419efd24",
+   "central_idea": "Une batterie bleue repose sur un sol de béton ciré brut, sous une lumière oblique qui projette deux ombres distinctes : une courte, nette, de la batterie elle-même, et une longue, floue, de son câble — comme si l’ombre savait ce que le corps encore ne fait pas.",
+   "visual_metaphor": "Deux ombres séparées — l’une fidèle, l’autre anticipatrice — créant une dualité entre présence actuelle et utilité future, toutes deux portées par la même source lumineuse.",
+   "story": "Elle est là, immobile, mais son ombre s’étire déjà vers demain : la batterie n’attend pas d’être branchée pour jouer son rôle, elle le tient en réserve, dans la lumière même.",
+   "emotional_intent": "Une assurance douce, presque philosophique : la certitude que la capacité existe, même quand elle n’est pas activée — comme une promesse écrite dans l’ombre.",
+   "product_role": "PROOF_OF_THE_STORY",
+   "message_role": "LEADS",
+   "memory_hook": "Deux ombres distinctes projetées par un seul objet : l’une réelle, l’autre promise, toutes deux vraies.",
+   "distinctiveness_reason": "Aucun autre concept n’utilise la dualité d’ombre comme preuve visuelle de l’anticipation fonctionnelle, sans texte ni personne.",
+   "risks": [
+    "Les deux ombres peuvent sembler une erreur de lumière si la direction n’est pas parfaitement maîtrisée",
+    "Le béton ciré risque d’être confondu avec un rendu IA générique si la texture n’est pas suffisamment organique",
+    "Le message peut paraître trop abstrait pour un public cherchant une utilité concrète immédiate"
+   ]
+  }
+ ],
+ "selection": {
+  "selection": {
+   "outcome": "SELECT",
+   "concept_id": "cnc_3f84a1c44689d7835589b58533312fb9",
+   "decisions": [
+    {
+     "concept_id": "cnc_3f84a1c44689d7835589b58533312fb9",
+     "decision": "SELECT",
+     "evidence": "CONCEPT_STRENGTH=MEETS: One strong idea: the cable as a silent promise of future use, visually expressed through diagonal tension and absence of device. | DISTINCTIVENESS=MEETS: Only this concept combines detached cable-as-promise, local pavement, and asymmetrical composition into a non-ge"
+    },
+    {
+     "concept_id": "cnc_cb1943ccf5d546a6de20b03f3ace153f",
+     "decision": "REJECT_CONCEPT",
+     "evidence": "CONCEPT_STRENGTH=PARTIAL: Strong metaphor (fissure as energy channel), but the idea competes with literal reading of wood defect, weakening singularity. | DISTINCTIVENESS=PARTIAL: Wood fissure is novel, but similar ‘natural path to object’ metaphors exist in sustainability campaigns, reduc"
+    },
+    {
+     "concept_id": "cnc_abd462b98767ababaf144439419efd24",
+     "decision": "REFINE_CONCEPT",
+     "evidence": "CONCEPT_STRENGTH=MEETS: One powerful idea: dual shadows as present/future duality—simple, visual, and expressible in a glance. | DISTINCTIVENESS=MEETS: Dual-shadow metaphor is unique in tech advertising; no competitor uses shadow duality to express anticipation without text. | GENERIC_RISK"
+    }
+   ],
+   "reasons": [
+    "ONE_CONCEPT_MEETS_THE_BAR_AND_IS_NOT_DOMINATED"
+   ],
+   "order": [
+    "cnc_3f84a1c44689d7835589b58533312fb9"
+   ],
+   "tie_break": null
+  },
+  "evaluations": [
+   {
+    "concept_id": "cnc_3f84a1c44689d7835589b58533312fb9",
+    "criteria": [
+     {
+      "criterion": "CONCEPT_STRENGTH",
+      "outcome": "MEETS",
+      "evidence": "One strong idea: the cable as a silent promise of future use, visually expressed through diagonal tension and absence of device.",
+      "refinement": "Ensure the cable’s direction is unmistakably intentional—not accidental—by reinforcing light and shadow alignment."
+     },
+     {
+      "criterion": "RELEVANCE_TO_BRIEF",
+      "outcome": "MEETS",
+      "evidence": "Directly answers the brief: a single visual gesture (cable to void), product as hero, local texture (pavé namurois), no people or electronics.",
+      "refinement": "Confirm pavé texture reads as authentic Namur material without over-indexing on regionalism for national audience."
+     },
+     {
+      "criterion": "EMOTIONAL_RESONANCE",
+      "outcome": "MEETS",
+      "evidence": "Evokes ‘prévoyance tranquille’—calm confidence in readiness—which matches the occasion’s need for practical anticipation.",
+      "refinement": "Balance stillness with subtle directional energy so the emotion feels active, not passive."
+     },
+     {
+      "criterion": "PRODUCT_RELATIONSHIP",
+      "outcome": "MEETS",
+      "evidence": "Product is hero; cable originates from it but never touches anything, fulfilling the ‘no contact’ rule while narrating utility.",
+      "refinement": "Validate that the cable’s origin point is unambiguously the product’s port, even at small scale."
+     },
+     {
+      "criterion": "DISTINCTIVENESS",
+      "outcome": "MEETS",
+      "evidence": "Only this concept combines detached cable-as-promise, local pavement, and asymmetrical composition into a non-generic narrative.",
+      "refinement": "Avoid over-stylizing the cable—keep its material and slack realistic to prevent stock-image association."
+     },
+     {
+      "criterion": "FEASIBILITY",
+      "outcome": "MEETS",
+      "evidence": "Uses real product photo, generated pavement texture, deterministic lighting; no forbidden elements or text dependencies.",
+      "refinement": "Test cable rendering for plausible slack and perspective consistency with product scale."
+     },
+     {
+      "criterion": "BRAND_COMPATIBILITY",
+      "outcome": "NOT_ASSESSED",
+      "evidence": "No brand rules provided beyond ‘restraint’ and ‘no false luxury’—concept aligns with those principles implicitly.",
+      "refinement": null
+     },
+     {
+      "criterion": "COMMERCIAL_CLARITY",
+      "outcome": "NOT_ASSESSED",
+      "evidence": "Layout not specified; product is clearly visible and central-left, but price/claim placement unknown.",
+      "refinement": null
+     },
+     {
+      "criterion": "NARRATIVE_COHESION",
+      "outcome": "MEETS",
+      "evidence": "Idea (anticipatory promise), metaphor (cable as line of intent), and story (she’s already there) form one coherent arc.",
+      "refinement": "Ensure the ‘void’ at cable’s end reads as intentional absence, not compositional emptiness."
+     },
+     {
+      "criterion": "GENERIC_RISK",
+      "outcome": "PARTIAL",
+      "evidence": "Pavé namurois reduces generic risk, but diagonal cable + minimal scene risks resembling common ‘tech still life’ tropes if texture lacks grit.",
+      "refinement": "Amplify surface imperfections in pavement and subtle dust on cable to resist AI-render sterility."
+     }
+    ]
+   },
+   {
+    "concept_id": "cnc_cb1943ccf5d546a6de20b03f3ace153f",
+    "criteria": [
+     {
+      "criterion": "CONCEPT_STRENGTH",
+      "outcome": "PARTIAL",
+      "evidence": "Strong metaphor (fissure as energy channel), but the idea competes with literal reading of wood defect, weakening singularity.",
+      "refinement": "Reinforce fissure’s continuity with light path and avoid any visual suggestion of damage—make it clearly a groove, not a crack."
+     },
+     {
+      "criterion": "RELEVANCE_TO_BRIEF",
+      "outcome": "PARTIAL",
+      "evidence": "Meets decor-first and no-electronics rules, but chêne ancien risks clashing with ‘sobriété tech’ and may read as decorative rather than functional.",
+      "refinement": "Use raw, unpolished oak with visible grain and tool marks to emphasize utility over vintage aesthetic."
+     },
+     {
+      "criterion": "EMOTIONAL_RESONANCE",
+      "outcome": "MEETS",
+      "evidence": "Serenity through continuity resonates with the brief’s ‘calme confiant’ and anti-anxiety utility framing.",
+      "refinement": "Ensure lighting emphasizes flow—not stagnation—so the energy feels active, not inert."
+     },
+     {
+      "criterion": "PRODUCT_RELATIONSHIP",
+      "outcome": "PARTIAL",
+      "evidence": "Product is destination, but the fissure’s narrative dominance risks making the battery feel like a payoff rather than protagonist.",
+      "refinement": "Shift composition so battery occupies more visual weight; let fissure guide but not dominate the eye path."
+     },
+     {
+      "criterion": "DISTINCTIVENESS",
+      "outcome": "PARTIAL",
+      "evidence": "Wood fissure is novel, but similar ‘natural path to object’ metaphors exist in sustainability campaigns, reducing uniqueness.",
+      "refinement": "Anchor the fissure uniquely to the product’s geometry—e.g., align with port orientation or edge contour."
+     },
+     {
+      "criterion": "FEASIBILITY",
+      "outcome": "MEETS",
+      "evidence": "Real product + generated wood texture + deterministic light; no forbidden elements or text dependencies.",
+      "refinement": "Verify fissure doesn’t intersect product base—must remain entirely in decor, per rules."
+     },
+     {
+      "criterion": "BRAND_COMPATIBILITY",
+      "outcome": "NOT_ASSESSED",
+      "evidence": "Not assessed.",
+      "refinement": null
+     },
+     {
+      "criterion": "COMMERCIAL_CLARITY",
+      "outcome": "NOT_ASSESSED",
+      "evidence": "Not assessed.",
+      "refinement": null
+     },
+     {
+      "criterion": "NARRATIVE_COHESION",
+      "outcome": "PARTIAL",
+      "evidence": "Metaphor (fissure = energy path) and story (quiet reservoir) cohere, but risk dissonance if fissure reads as flaw.",
+      "refinement": "Add micro-contrast: slight warmth in light along fissure vs cooler ambient to signal intentionality."
+     },
+     {
+      "criterion": "GENERIC_RISK",
+      "outcome": "FAILS",
+      "evidence": "Aged wood + minimalist tech product is a well-trodden trope in premium accessory ads, especially with ‘natural conduit’ metaphors.",
+      "refinement": "Replace chêne with an unexpected local industrial material (e.g., reclaimed steel plate with patina) to break template association."
+     }
+    ]
+   },
+   {
+    "concept_id": "cnc_abd462b98767ababaf144439419efd24",
+    "criteria": [
+     {
+      "criterion": "CONCEPT_STRENGTH",
+      "outcome": "MEETS",
+      "evidence": "One powerful idea: dual shadows as present/future duality—simple, visual, and expressible in a glance.",
+      "refinement": "Ensure shadow separation is physically plausible (e.g., two light sources or strong rim + fill) to avoid surrealism."
+     },
+     {
+      "criterion": "RELEVANCE_TO_BRIEF",
+      "outcome": "MEETS",
+      "evidence": "Fulfills all constraints: product hero, decor-first, no people/electronics, asymmetric composition, real product placement.",
+      "refinement": "Confirm concrete texture has visible aggregate or trowel marks to avoid generic render look."
+     },
+     {
+      "criterion": "EMOTIONAL_RESONANCE",
+      "outcome": "PARTIAL",
+      "evidence": "‘Assurance douce’ fits the register, but philosophical tone may feel distant for an audience seeking concrete utility.",
+      "refinement": "Ground the abstraction in tactile cues—e.g., slight dust disturbed near battery base—to reinforce physical presence."
+     },
+     {
+      "criterion": "PRODUCT_RELATIONSHIP",
+      "outcome": "MEETS",
+      "evidence": "Product is proof of the story; shadows originate from it, fulfilling ‘no contact’ while visually extending its role.",
+      "refinement": "Validate that short shadow aligns precisely with product geometry and long shadow diverges cleanly without ambiguity."
+     },
+     {
+      "criterion": "DISTINCTIVENESS",
+      "outcome": "MEETS",
+      "evidence": "Dual-shadow metaphor is unique in tech advertising; no competitor uses shadow duality to express anticipation without text.",
+      "refinement": "Avoid symmetrical shadow layouts—keep asymmetry pronounced to reinforce ‘promise vs presence’ tension."
+     },
+     {
+      "criterion": "FEASIBILITY",
+      "outcome": "PARTIAL",
+      "evidence": "Real product + generated concrete + deterministic lighting possible, but dual shadows require precise light setup to avoid artifact.",
+      "refinement": "Specify exact light angles and diffusion in brief to ensure reproducibility without post-production fixes."
+     },
+     {
+      "criterion": "BRAND_COMPATIBILITY",
+      "outcome": "NOT_ASSESSED",
+      "evidence": "Not assessed.",
+      "refinement": null
+     },
+     {
+      "criterion": "COMMERCIAL_CLARITY",
+      "outcome": "NOT_ASSESSED",
+      "evidence": "Not assessed.",
+      "refinement": null
+     },
+     {
+      "criterion": "NARRATIVE_COHESION",
+      "outcome": "MEETS",
+      "evidence": "Idea (reserve capacity), metaphor (two shadows), and story (she holds tomorrow in her light) form a tight loop.",
+      "refinement": "Ensure long shadow ends in a meaningful negative space—not dead air—to complete the narrative arc."
+     },
+     {
+      "criterion": "GENERIC_RISK",
+      "outcome": "PARTIAL",
+      "evidence": "Béton ciré is high-risk for AI-stock association; however, dual-shadow twist elevates it beyond template if executed with grit.",
+      "refinement": "Incorporate subtle imperfections: hairline scuffs, uneven sheen, or embedded sand grains to assert authenticity."
+     }
+    ]
+   }
+  ]
+ },
+ "art_directions": {
+  "cnc_3f84a1c44689d7835589b58533312fb9": {
+   "art_direction_id": "art_df09298b703133e71247204255972558",
+   "concept_id": "cnc_3f84a1c44689d7835589b58533312fb9",
+   "atmosphere": "Un calme confiant, comme celui qu’on ressent quand on sait qu’on a ce qu’il faut, sans effort, sans bruit, sans artifice — juste une solution réelle, là où on en a besoin.",
+   "depth_model": "LAYERED_DEPTH",
+   "material_language": "Matériaux bruts et honnêtes : pavé namurois usé, béton ciré non poli, surface légèrement poreuse qui garde la trace du temps sans tomber dans le décoratif ou le rustique.",
+   "lighting_intent": "Lumière directionnelle douce mais affirmée, venant d’un angle bas et latéral pour sculpter l’ombre portée nette de la batterie et guider le regard le long du câble déroulé.",
+   "visual_rhythm": "MEASURED",
+   "product_relationship": "GROUNDED_IN_SCENE",
+   "text_image_relationship": "TEXT_IN_CALM_ZONES",
+   "realism": "PHOTOREALISTIC",
+   "emotional_temperature": "NEUTRAL",
+   "visual_tension": "MEDIUM",
+   "negative_space_strategy": "DIRECTIONAL_LEAD",
+   "narrative_elements": [
+    {
+     "element": "Câble déroulé en diagonale vers le vide, sans contact avec aucun objet",
+     "reason": "Il incarne la promesse silencieuse d’usage futur, aligné avec l’idée centrale de prévoyance tranquille et l’émotion de confiance anticipée.",
+     "zone": "MIDGROUND"
+    },
+    {
+     "element": "Ombre portée nette et précise sous la batterie",
+     "reason": "Elle ancre la présence réelle du produit dans le décor brut, renforçant la crédibilité matérielle et la sensation de poids utile, en lien avec l’intent émotionnel de sécurité.",
+     "zone": "FOREGROUND"
+    }
+   ],
+   "permitted_secondary_elements": [
+    "Traces discrètes d’usure sur le pavé namurois",
+    "Subtile variation de texture entre les dalles du sol",
+    "Légère irrégularité de la surface sous la batterie"
+   ],
+   "forbidden_decorative_noise": [
+    "beige, crème, sable, écru, taupe, ivoire",
+    "feuille, végétation, eucalyptus, botanique",
+    "doré, gold, glitter, paillette, luxe",
+    "marbre, velours, pétale, bokeh",
+    "logo, texte, prix, marque, étiquette",
+    "écran, téléphone, appareil, coque, câble enroulé",
+    "cœur, feuillage, frond, fougère",
+    "herbe, fleur, bois clair, béton lisse",
+    "a substitute for the product",
+    "a phone, a case or any device",
+    "a competing hero object",
+    "a misleading commercial object",
+    "text, letters, logos or watermarks"
+   ],
+   "rationale": "Le décor raconte l’histoire de disponibilité silencieuse par un seul geste visuel fort — le câble déroulé à distance — tandis que la batterie bleue, posée sur un sol local texturé, reste inchangée et centrée dans son rôle de héros réaliste, sans compétition ni artifice."
+  }
+ },
+ "stages": {},
+ "proposals": [],
+ "stopped_at": {
+  "step": "STAGE",
+  "concept_id": "cnc_3f84a1c44689d7835589b58533312fb9"
+ },
+ "error": {
+  "code": "REPAIR_ARRAY_LENGTH_CHANGED",
+  "field": "stage.props[1].reason",
+  "message": "the repair was REJECTED and nothing was applied: REPAIR_ARRAY_LENGTH_CHANGED {\"field\":\"stage.props[1].reason\",\"before\":3,\"after\":2}"
+ },
+ "asset_usable": true,
+ "exam": {
+  "source": {
+   "width": 1234,
+   "height": 1275
+  },
+  "background": {
+   "rgb": [
+    255,
+    255,
+    255
+   ],
+   "std": 7.09
+  },
+  "status": "CUT_OUT",
+  "bbox": {
+   "x": 165,
+   "y": 6,
+   "w": 871,
+   "h": 1263
+  },
+  "aspect_w_over_h": 0.6896,
+  "is_dark_object": false,
+  "ground_contact": null,
+  "translucent_share": 0.0165,
+  "opaque_pixels": 619595,
+  "dominant_colours": [
+   {
+    "rgb": [
+     199,
+     220,
+     240
+    ],
+    "share": 0.675
+   },
+   {
+    "rgb": [
+     152,
+     177,
+     203
+    ],
+    "share": 0.222
+   },
+   {
+    "rgb": [
+     27,
+     27,
+     28
+    ],
+    "share": 0.103
+   }
+  ],
+  "recomposite_on_source_background_mean_error": 0,
+  "edge_pixels_recomposited_mean_error": 16.8244,
+  "edge_pixels": 11174,
+  "rules_applied": [
+   "plain background keyed",
+   "enclosed background kept transparent",
+   "base clamped to body width"
+  ]
+ },
+ "brain_calls_dir": "C:\\Users\\etaba\\nordla-private\\creator-live\\runs\\cr-ddf27b48bdd4\\brain-calls"
+}

@@ -1,0 +1,21 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15522611102044",
+  "title": "Câble USB-C vers USB-C 2 m",
+  "description": "Ce câble USB-C vers USB-C de deux mètres est conçu pour offrir plus de confort au bureau, près du canapé ou en déplacement. Sa connectique réversible facilite les branchements quotidiens avec les chargeurs et appareils USB-C compatibles.",
+  "tags": [],
+  "productType": "",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57251738354012",
+     "title": "Default Title",
+     "price": "4.99",
+     "inventoryQuantity": 193
+    }
+   ]
+  }
+ }
+}

@@ -20,9 +20,13 @@ const MODEL_KEYS = ['central_idea', 'visual_metaphor', 'story', 'emotional_inten
 const CONCEPT_KEYS = ['concept_id', ...MODEL_KEYS];
 /** One concept as a model states it: the contract the answer is validated against AND the contract the instruction states. */
 export const CONCEPT_SPEC = obj({
-  central_idea: text(), visual_metaphor: text(), story: text(), emotional_intent: text(), product_role: word(CONCEPT_PRODUCT_ROLE), message_role: word(MESSAGE_ROLE),
-  memory_hook: text(), distinctiveness_reason: text(), risks: list(text({ max: 200 }), { min: 1, max: 4 }),
-});
+  central_idea: text({ fit: true }), visual_metaphor: text({ fit: true }), story: text({ fit: true }), emotional_intent: text({ fit: true }), product_role: word(CONCEPT_PRODUCT_ROLE), message_role: word(MESSAGE_ROLE),
+  memory_hook: text({ fit: true }), distinctiveness_reason: text({ fit: true }), risks: list(text({ max: 200, fit: true }), { min: 1, max: 4, fit: true }),
+  // 2026-11-07: the COMPOSITION of the set the concept proposes, and how it raises the perceived value of the product. Optional for the concept contract (older concepts have neither, their ids are unchanged);
+  // a route may REQUIRE them (concept-violations.js: the decor-first route does).
+  composition: text({ fit: true }), value_lever: text({ fit: true }),
+}, { optional: ['composition', 'value_lever'] });
+// a round holds EXACTLY the number asked: more or fewer concepts is a real contract failure (BB-10), never silently cut
 export const conceptsAnswerSpec = (count = { min: 3, max: 5 }) => obj({ concepts: list(CONCEPT_SPEC, { min: count.min, max: count.max }) });
 export const CONCEPT_COUNT = Object.freeze({ min: 3, max: 5 });
 
@@ -71,6 +75,8 @@ export function normalizeConcept(raw, where = 'concept') {
     memory_hook: v.memory_hook,
     distinctiveness_reason: v.distinctiveness_reason,
     risks: v.risks,
+    ...(v.composition !== undefined ? { composition: v.composition } : {}),
+    ...(v.value_lever !== undefined ? { value_lever: v.value_lever } : {}),
   };
   const content = new Set([...conceptualWords(body.central_idea), ...conceptualWords(body.visual_metaphor)]);
   if (content.size < MIN_CONCEPTUAL_WORDS) fail(BRAIN_ERROR.NOT_DISTINCT, `${where} is not a concept: once layout, colour and camera words are removed almost nothing is left`, where, { problem: 'CONCEPT_IS_A_LAYOUT_VARIANT' });

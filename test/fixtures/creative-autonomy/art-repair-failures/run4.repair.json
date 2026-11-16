@@ -1,0 +1,53 @@
+{
+  "atmosphere": "Une rue animée sous une lumière diurne franche, où chaque élément participe à un flux continu sans pause ni rupture",
+  "depth_model": "LAYERED_DEPTH",
+  "material_language": "Matériaux urbains authentiques : béton usé, métal patiné, tissu fonctionnel, sans artifice ni finition factice",
+  "lighting_intent": "Lumière naturelle directionnelle venant d’un angle bas, créant des contrastes nets qui soulignent la forme et le geste sans écraser les détails",
+  "visual_rhythm": "FLOWING",
+  "product_relationship": "ELEVATED_IN_SCENE",
+  "text_image_relationship": "TEXT_IN_CALM_ZONES",
+  "realism": "PHOTOREALISTIC",
+  "emotional_temperature": "NEUTRAL",
+  "visual_tension": "MEDIUM",
+  "negative_space_strategy": "DIRECTIONAL_LEAD",
+  "narrative_elements": [
+    {
+      "element": "Une main en mouvement, doigts tendus vers un point précis dans l’espace",
+      "reason": "Elle incarne la saisie fluide et réflexe, en lien direct avec le mot-clé 'saisie' du concept central",
+      "zone": "FOREGROUND"
+    },
+    {
+      "element": "Un fil fin, tendu entre deux points de contact sur le torse, suggérant un support porté contre la peau",
+      "reason": "Il matérialise le cordon tour de cou comme outil actif, en cohérence avec 'suspendue' et 'outil de survie urbaine'",
+      "zone": "MIDGROUND"
+    },
+    {
+      "element": "Une zone lumineuse discrète, légèrement floutée, au niveau du torse, indiquant un éclairage interne sans décrire un écran",
+      "reason": "Elle traduit visuellement l’état de charge confirmé par le mot 'numérique' dans le concept, sans nommer l’objet",
+      "zone": "MIDGROUND"
+    }
+  ],
+  "permitted_secondary_elements": [
+    "Une ombre portée nette suivant la direction de la lumière principale",
+    "Un reflet subtil sur une surface métallique proche, sans dorure ni brillance artificielle",
+    "Un léger flou de mouvement sur les vêtements, renforçant l’impression de déplacement continu"
+  ],
+  "forbidden_decorative_noise": [
+    "écran",
+    "texte",
+    "téléphone",
+    "logo",
+    "boîte",
+    "coque",
+    "étui",
+    "feuille",
+    "marbre",
+    "velours",
+    "or",
+    "paillette",
+    "luxury",
+    "heart",
+    "botanique"
+  ],
+  "rationale": "L’image concentre toute son intention sur le geste de saisie en mouvement, rendu crédible par des éléments narratifs indirects qui respectent les faits vérifiés et évitent tout vocabulaire interdit, tout en maintenant une tension visuelle contrôlée et une intégration scénique juste."
+}

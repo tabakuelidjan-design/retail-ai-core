@@ -1,0 +1,47 @@
+{
+  "atmosphere": "Urgence douce d’un moment urbain fluide, où chaque geste compte mais rien n’est forcé ni dramatisé",
+  "depth_model": "LAYERED_DEPTH",
+  "material_language": "Matériaux urbains authentiques : béton usé, verre réfléchissant, tissu de vêtement fonctionnel, métal froid sans poli excessif",
+  "lighting_intent": "Lumière du jour directe mais diffusée par les façades, créant des contrastes nets sans ombres dures, mettant en valeur l’écran numérique et la main en action",
+  "visual_rhythm": "FLOWING",
+  "product_relationship": "EMBEDDED_IN_SCENE",
+  "text_image_relationship": "TEXT_IN_CALM_ZONES",
+  "realism": "PHOTOREALISTIC",
+  "emotional_temperature": "NEUTRAL",
+  "visual_tension": "MEDIUM",
+  "negative_space_strategy": "DIRECTIONAL_LEAD",
+  "narrative_elements": [
+    {
+      "element": "Main qui saisit la batterie au vol, doigts en mouvement vers le câble USB-C",
+      "reason": "Le geste fluide incarne la confiance silencieuse et l’absence d’hésitation, central à l’émotion du concept",
+      "zone": "FOREGROUND"
+    },
+    {
+      "element": "Écran numérique allumé, affichant un chiffre clair sans texte supplémentaire",
+      "reason": "Il témoigne visuellement de l’état de charge, renforçant la crédibilité technique sans recourir à des mots",
+      "zone": "MIDGROUND"
+    },
+    {
+      "element": "Cordon tour de cou tendu légèrement par le mouvement, fixé à la batterie",
+      "reason": "Il matérialise le système de portabilité active, lien direct avec la métaphore du collier de secours",
+      "zone": "MIDGROUND"
+    },
+    {
+      "element": "Flou subtil d’un téléphone dont l’écran clignote en rouge dans la main opposée",
+      "reason": "Il indique le besoin immédiat sans montrer le produit, respectant la règle de non-compétition avec le héros",
+      "zone": "FOREGROUND"
+    }
+  ],
+  "permitted_secondary_elements": [
+    "Silhouette floue d’un piéton en arrière-plan, marchant dans la même direction",
+    "Reflet sur une vitrine montrant une partie du geste sans duplication",
+    "Bord d’un manteau ou d’une veste, légèrement froissé par le mouvement"
+  ],
+  "forbidden_decorative_noise": [
+    "Beige, crème, sable, écru, taupe, ivoire, doré, gold, marble, velvet, feuille, eucalyptus, bokeh, paillette, luxe",
+    "Logo, marque, étiquette, prix, texte, lettre, slogan, watermark",
+    "Objet ressemblant à une batterie, un téléphone, un chargeur ou un accessoire non mentionné dans les faits vérifiés",
+    "Cœurs, pétales, frondes, végétation, verdure, marbré, brillance artificielle"
+  ],
+  "rationale": "L’image concentre toute son énergie sur le geste réaliste et mémorable de saisie en mouvement, ancré dans une scène urbaine crédible, pour faire vivre la confiance silencieuse et la praticité vérifiée de la batterie sans jamais la détourner du rôle de héros."
+}

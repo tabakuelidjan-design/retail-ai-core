@@ -1,0 +1,31 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15547357004124",
+  "title": "Cadre Photo Ardoise Cœur",
+  "description": "Un support personnalisable avec votre photo et votre texte, préparé avec soin dans notre atelier à Namur.",
+  "tags": [
+   "ardoise cœur",
+   "ardoise personnalisée",
+   "ardoise pierre",
+   "cadeau photo",
+   "cadre coeur personnalisé",
+   "cadre photo coeur",
+   "impression UV ardoise",
+   "photo sur pierre",
+   "support sublimation"
+  ],
+  "productType": "Uv Printing",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57398932341084",
+     "title": "Default Title",
+     "price": "39.90",
+     "inventoryQuantity": 17
+    }
+   ]
+  }
+ }
+}

@@ -1,0 +1,25 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15684482171228",
+  "title": "Coque personnalisée – Apple iPhone 17",
+  "description": "Une coque Apple personnalisable avec vos images, votre texte et une mise en page créée directement à l'écran.",
+  "tags": [
+   "Apple",
+   "Coque",
+   "Personnalisable"
+  ],
+  "productType": "Coque personnalisée",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/58342699925852",
+     "title": "Default Title",
+     "price": "25.00",
+     "inventoryQuantity": 7
+    }
+   ]
+  }
+ }
+}

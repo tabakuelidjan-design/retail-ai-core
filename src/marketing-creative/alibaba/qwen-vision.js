@@ -43,8 +43,10 @@ export function createQwenVisionPort({
       calls += 1;
       if (calls > maxCalls) throw new Error(`the vision port makes at most ${maxCalls} completion(s) per run`);
       // every transmitted image needs its own scoped clearance: exact bytes, provider, region, purpose, operation
+      // `authorization` is ONE record (the usual case) or an ARRAY of records, one per distinct asset (a multi-image call: reference images and a product photograph); each image is checked against the record that names its exact bytes
+      const records = Array.isArray(authorization) ? authorization : [authorization];
       const clearances = images.map((image) => assertScopedExternalMediaUse({
-        authorization, asset: { ref: assetRefFor(sha256(image.bytes)), sha256: sha256(image.bytes) }, provider_id: PROVIDER_ID, region: config.region, purpose, operation: VISION_OPERATION,
+        authorization: records.find((r) => r?.asset?.asset_sha256 === sha256(image.bytes)) ?? records[0], asset: { ref: assetRefFor(sha256(image.bytes)), sha256: sha256(image.bytes) }, provider_id: PROVIDER_ID, region: config.region, purpose, operation: VISION_OPERATION,
       }));
       const operationId = randomUUID();
       // the image token estimate is h*w/1024 per image; the text estimate is chars/4: reserve generously rather than guess low

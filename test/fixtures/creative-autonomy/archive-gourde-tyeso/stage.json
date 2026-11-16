@@ -1,0 +1,68 @@
+{
+ "stage_id": "stg_caf0d752967c9dbfa69963a4856ca3f0",
+ "concept_id": "cnc_bbd7aa9940226ba95cf78b5cd186806e",
+ "backdrop": "WALL_AND_FLOOR",
+ "backdrop_tone": "CHARCOAL",
+ "floor_finish": "MATTE",
+ "key_light": {
+  "kind": "SLIT_SHEET",
+  "side": "RIGHT",
+  "intensity": "HIGH",
+  "temperature": "NEUTRAL",
+  "purpose": "A single oblique slit of light from high right casts a crisp shadow shaped like the raised lever handle."
+ },
+ "accent_lights": [
+  {
+   "kind": "RIM",
+   "side": "LEFT",
+   "intensity": "LOW",
+   "temperature": "COOL",
+   "purpose": "A faint rim light on the left edge of the gourde separates it from the charcoal backdrop and reinforces its cylindrical form without creating glare on the matte"
+  },
+  {
+   "kind": "SOFTBOX",
+   "side": "TOP",
+   "intensity": "LOW",
+   "temperature": "NEUTRAL",
+   "purpose": "Subtle top fill prevents total loss of detail in the embout transparent and under the cap while preserving the stark contrast needed for the shadow to read."
+  }
+ ],
+ "camera": {
+  "height": "PRODUCT_CENTER",
+  "framing": "MEDIUM",
+  "product_position": "LEFT_THIRD"
+ },
+ "support_surface": "FLOOR",
+ "props": [
+  {
+   "shape": "PLINTH",
+   "material": "CONCRETE",
+   "placement": "BENEATH",
+   "scale": "LOW",
+   "reason": "A low concrete plinth grounds the gourde on the stone slabs, echoing the raw texture of the floor and ensuring contact shadow matches the oblique light direction—reinforcing that the gourde repose on a surface as honest."
+  },
+  {
+   "shape": "BLOCK",
+   "material": "CONCRETE",
+   "placement": "BEHIND",
+   "scale": "HIGH",
+   "reason": "A tall asymmetrical concrete block behind and left of the product extends the wall junction’s 15° inward tilt, guiding the eye along the fuite toward the gourde while maintaining the passage’s narrow."
+  },
+  {
+   "shape": "PANEL",
+   "material": "BRUSHED_STEEL",
+   "placement": "BESIDE_RIGHT",
+   "scale": "MEDIUM",
+   "reason": "A vertical brushed-steel panel beside right reflects a controlled sliver of the slit light, subtly reinforcing the directionality of the rayon oblique and adding material contrast without competing with the shadow’s."
+  }
+ ],
+ "headline": "Boire sans effort, en mouvement",
+ "text_placement": "RIGHT_COLUMN",
+ "show_price": "YES",
+ "rationale": "L’ombre portée nette en forme de poignée relevée, projetée par un rayon oblique sur les dalles de pierre brute, incarne le geste quotidien sans montrer la main ni le corps — la gourde noire repose comme une réponse technique à cet espace exigeant.",
+ "wanted_but_not_available": [
+  "Une dalle de pierre réelle avec fissures naturelles et variations de hauteur visibles sous la lumière oblique",
+  "Un mur en béton brut avec une seule jointure irrégulière suivant la ligne de fuite exacte de la composition",
+  "Un effet de poussière fine suspendue dans le rayon lumineux, visible uniquement là où la lumière traverse l’air entre la fente et le sol"
+ ]
+}

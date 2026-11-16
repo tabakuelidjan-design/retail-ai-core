@@ -1,0 +1,43 @@
+{
+  "atmosphere": "A city street at midday where movement is constant but not chaotic, with the quiet certainty of a tool deployed without fanfare",
+  "depth_model": "LAYERED_DEPTH",
+  "material_language": "Matte black polymer with subtle tactile ridges, contrasted against worn urban textures: concrete, brushed metal, weathered fabric",
+  "lighting_intent": "Direct daylight with soft fill, casting clean shadows that define form and motion without flattening the scene",
+  "visual_rhythm": "FLOWING",
+  "product_relationship": "ELEVATED_IN_SCENE",
+  "text_image_relationship": "TEXT_IN_CALM_ZONES",
+  "realism": "EDITORIAL_STYLISED",
+  "emotional_temperature": "NEUTRAL",
+  "visual_tension": "MEDIUM",
+  "negative_space_strategy": "DIRECTIONAL_LEAD",
+  "narrative_elements": [
+    {
+      "element": "A hand releasing the battery from a neck strap in mid-motion",
+      "reason": "The gesture embodies the verified distinctive lever of detaching the battery as a reflex, directly tied to the cordon tour de cou functionality",
+      "zone": "FOREGROUND"
+    },
+    {
+      "element": "A faint arc of the USB-C cable unfurling toward an out-of-frame device",
+      "reason": "It visualises the integrated cable deployment without naming or showing the competing device, reinforcing the ‘system’ aspect of verified features",
+      "zone": "MIDGROUND"
+    },
+    {
+      "element": "A digital display glowing with a clear numerical charge indicator",
+      "reason": "It confirms the verified presence of the screen and its utility, anchoring the moment of reliability in the emotional intent of calm certainty",
+      "zone": "FOREGROUND"
+    }
+  ],
+  "permitted_secondary_elements": [
+    "A blurred figure in motion behind the action, suggesting urban flow without distraction",
+    "A textured pavement edge grounding the gesture in real space",
+    "A sliver of a public bench armrest implying transit context"
+  ],
+  "forbidden_decorative_noise": [
+    "beige, crème, cream, sable, sand, écru, taupe, ivory, heart, leaf, foliage, eucalyptus, fern, petal, gold, glitter, marble, velvet, bokeh",
+    "any object resembling a phone, screen, case, or packaging",
+    "logos, labels, price tags, watermarks, or typographic overlays on surfaces",
+    "decorative patterns, ornamental frames, or symbolic motifs unrelated to utility",
+    "static arrangements, posed subjects, or staged still-life compositions"
+  ],
+  "rationale": "The art direction channels the verified distinctiveness—the neck strap, digital screen, and integrated cable—into a single flowing gesture within layered urban depth, ensuring the product remains the elevated hero while every element serves the story of reliable reconnection."
+}

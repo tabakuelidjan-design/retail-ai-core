@@ -1,0 +1,76 @@
+{
+ "source": {
+  "width": 1234,
+  "height": 1275
+ },
+ "background": {
+  "rgb": [
+   255,
+   255,
+   255
+  ],
+  "std": 7.09
+ },
+ "status": "CUT_OUT",
+ "bbox": {
+  "x": 165,
+  "y": 6,
+  "w": 871,
+  "h": 1263
+ },
+ "aspect_w_over_h": 0.6896,
+ "is_dark_object": false,
+ "tonal_class": "CLAIR",
+ "luminance": {
+  "mean": 0.748,
+  "p10": 0.384,
+  "p90": 0.906
+ },
+ "lit_side": {
+  "lr": 0.1,
+  "side": "LEFT"
+ },
+ "ground_contact": {
+  "x": 0.585,
+  "y": 0.8361,
+  "w": 0.7015,
+  "drop": 0.1639,
+  "source": "BODY_WIDTH"
+ },
+ "translucent_share": 0.0074,
+ "opaque_pixels": 636795,
+ "dominant_colours": [
+  {
+   "rgb": [
+    199,
+    219,
+    240
+   ],
+   "share": 0.684
+  },
+  {
+   "rgb": [
+    152,
+    177,
+    204
+   ],
+   "share": 0.214
+  },
+  {
+   "rgb": [
+    29,
+    29,
+    30
+   ],
+   "share": 0.101
+  }
+ ],
+ "recomposite_on_source_background_mean_error": 0.0,
+ "edge_pixels_recomposited_mean_error": 10.2495,
+ "edge_pixels": 5389,
+ "rules_applied": [
+  "plain background keyed",
+  "enclosed background kept transparent",
+  "base clamped to body width"
+ ]
+}

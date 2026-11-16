@@ -1,0 +1,161 @@
+{
+ "canvas_px": [
+  1080,
+  1350
+ ],
+ "options": [
+  {
+   "product_position": "LEFT_THIRD",
+   "product_framing": "WIDE",
+   "box_share_of_frame": {
+    "left": 14,
+    "right": 40,
+    "top": 50,
+    "bottom": 88,
+    "width": 27,
+    "height": 38
+   },
+   "body_centre_x_share": 29,
+   "body_foot_y_share": 84,
+   "free_left_share_of_width": 14,
+   "free_right_share_of_width": 60,
+   "fits_in_frame": true
+  },
+  {
+   "product_position": "LEFT_THIRD",
+   "product_framing": "MEDIUM",
+   "box_share_of_frame": {
+    "left": 9,
+    "right": 44,
+    "top": 41,
+    "bottom": 90,
+    "width": 35,
+    "height": 49
+   },
+   "body_centre_x_share": 29,
+   "body_foot_y_share": 84,
+   "free_left_share_of_width": 9,
+   "free_right_share_of_width": 56,
+   "fits_in_frame": true
+  },
+  {
+   "product_position": "LEFT_THIRD",
+   "product_framing": "CLOSE",
+   "box_share_of_frame": {
+    "left": 4,
+    "right": 47,
+    "top": 30,
+    "bottom": 91,
+    "width": 43,
+    "height": 61
+   },
+   "body_centre_x_share": 29,
+   "body_foot_y_share": 84,
+   "free_left_share_of_width": 4,
+   "free_right_share_of_width": 53,
+   "fits_in_frame": true
+  },
+  {
+   "product_position": "CENTER",
+   "product_framing": "WIDE",
+   "box_share_of_frame": {
+    "left": 34,
+    "right": 61,
+    "top": 50,
+    "bottom": 88,
+    "width": 27,
+    "height": 38
+   },
+   "body_centre_x_share": 50,
+   "body_foot_y_share": 84,
+   "free_left_share_of_width": 34,
+   "free_right_share_of_width": 39,
+   "fits_in_frame": true
+  },
+  {
+   "product_position": "CENTER",
+   "product_framing": "MEDIUM",
+   "box_share_of_frame": {
+    "left": 30,
+    "right": 65,
+    "top": 41,
+    "bottom": 90,
+    "width": 35,
+    "height": 49
+   },
+   "body_centre_x_share": 50,
+   "body_foot_y_share": 84,
+   "free_left_share_of_width": 30,
+   "free_right_share_of_width": 35,
+   "fits_in_frame": true
+  },
+  {
+   "product_position": "CENTER",
+   "product_framing": "CLOSE",
+   "box_share_of_frame": {
+    "left": 25,
+    "right": 68,
+    "top": 30,
+    "bottom": 91,
+    "width": 43,
+    "height": 61
+   },
+   "body_centre_x_share": 50,
+   "body_foot_y_share": 84,
+   "free_left_share_of_width": 25,
+   "free_right_share_of_width": 32,
+   "fits_in_frame": true
+  },
+  {
+   "product_position": "RIGHT_THIRD",
+   "product_framing": "WIDE",
+   "box_share_of_frame": {
+    "left": 56,
+    "right": 82,
+    "top": 50,
+    "bottom": 88,
+    "width": 27,
+    "height": 38
+   },
+   "body_centre_x_share": 71,
+   "body_foot_y_share": 84,
+   "free_left_share_of_width": 56,
+   "free_right_share_of_width": 18,
+   "fits_in_frame": true
+  },
+  {
+   "product_position": "RIGHT_THIRD",
+   "product_framing": "MEDIUM",
+   "box_share_of_frame": {
+    "left": 51,
+    "right": 86,
+    "top": 41,
+    "bottom": 90,
+    "width": 35,
+    "height": 49
+   },
+   "body_centre_x_share": 71,
+   "body_foot_y_share": 84,
+   "free_left_share_of_width": 51,
+   "free_right_share_of_width": 14,
+   "fits_in_frame": true
+  },
+  {
+   "product_position": "RIGHT_THIRD",
+   "product_framing": "CLOSE",
+   "box_share_of_frame": {
+    "left": 46,
+    "right": 89,
+    "top": 30,
+    "bottom": 91,
+    "width": 43,
+    "height": 61
+   },
+   "body_centre_x_share": 71,
+   "body_foot_y_share": 84,
+   "free_left_share_of_width": 46,
+   "free_right_share_of_width": 11,
+   "fits_in_frame": true
+  }
+ ]
+}

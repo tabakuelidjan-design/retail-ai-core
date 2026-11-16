@@ -1,0 +1,37 @@
+{
+  "atmosphere": "A city street at midday where movement is constant but not chaotic, with a sense of immediate utility and quiet competence",
+  "depth_model": "LAYERED_DEPTH",
+  "material_language": "Matte black polymer with subtle tactile ridges, contrasted against urban textures: worn concrete, brushed metal railings, fabric of a light jacket",
+  "lighting_intent": "Direct daylight with soft fill, casting defined but gentle shadows that affirm the object’s presence without drama",
+  "visual_rhythm": "FLOWING",
+  "product_relationship": "ELEVATED_IN_SCENE",
+  "text_image_relationship": "TEXT_IN_CALM_ZONES",
+  "realism": "EDITORIAL_STYLISED",
+  "emotional_temperature": "NEUTRAL",
+  "visual_tension": "MEDIUM",
+  "negative_space_strategy": "DIRECTIONAL_LEAD",
+  "narrative_elements": [
+    {
+      "element": "A hand in motion, fingers releasing a compact black object from a neck loop",
+      "reason": "The gesture embodies the verified feature of the lanyard and the reflexive ease of deployment central to the concept’s distinctiveness",
+      "zone": "FOREGROUND"
+    },
+    {
+      "element": "A faint arc of thin cable extending mid-air toward an out-of-frame device",
+      "reason": "It visualises the integrated USB-C cable in action, reinforcing the ‘no extra parts’ practicality stated in the verified facts",
+      "zone": "MIDGROUND"
+    }
+  ],
+  "permitted_secondary_elements": [
+    "A blurred figure walking past in the background, mid-stride",
+    "A low-angle glimpse of pavement tiles receding diagonally",
+    "A sliver of a bus shelter frame with matte finish"
+  ],
+  "forbidden_decorative_noise": [
+    "beige, crème, cream, sable, sand, écru, taupe, ivory, heart, leaf, foliage, eucalyptus, fern, petal, gold, glitter, marble, velvet, bokeh",
+    "logo, brand, label, price, text, letter, caption, watermark, slogan",
+    "phone, smartphone, device, case, screen, écran, housing, coque, packaging",
+    "hero, centrepiece, protagonist, focal, main subject"
+  ],
+  "rationale": "The scene frames the verified product features—lanyard, digital display, integrated cable—as natural extensions of urban movement, using rhythm and depth to guide attention to the gesture, not the object itself."
+}

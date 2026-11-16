@@ -1,0 +1,21 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15522712846684",
+  "title": "Câble USB-C vers Lightning 2 m",
+  "description": "Avec ses deux mètres de longueur, ce câble USB-C vers Lightning offre davantage de liberté entre la prise et l’appareil. Sa finition blanche et sa connectique réversible en font une solution simple pour la recharge quotidienne des appareils Lightning compatibles.",
+  "tags": [],
+  "productType": "",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57252207886684",
+     "title": "Default Title",
+     "price": "6.99",
+     "inventoryQuantity": 97
+    }
+   ]
+  }
+ }
+}

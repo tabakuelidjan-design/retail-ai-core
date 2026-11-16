@@ -1,0 +1,42 @@
+{
+  "atmosphere": "A quiet urban pause where motion has just settled, with the faint hum of city life held at a distance and attention drawn to a single deliberate gesture",
+  "depth_model": "LAYERED_DEPTH",
+  "material_language": "Worn concrete, matte metal, soft fabric textures that show use without damage—materials that speak of daily reliability rather than newness or polish",
+  "lighting_intent": "Natural directional light from a low sun angle, casting long but soft shadows that define form without harsh contrast, suggesting late afternoon calm",
+  "visual_rhythm": "MEASURED",
+  "product_relationship": "EMBEDDED_IN_SCENE",
+  "text_image_relationship": "TEXT_IN_CALM_ZONES",
+  "realism": "EDITORIAL_STYLISED",
+  "emotional_temperature": "NEUTRAL",
+  "visual_tension": "MEDIUM",
+  "negative_space_strategy": "DIRECTIONAL_LEAD",
+  "narrative_elements": [
+    {
+      "element": "A hand reaching toward a small suspended object with a thin cord looped around the neck",
+      "reason": "It embodies the central idea of spontaneous, no-effort recharging without leaving one’s place, directly tied to the emotional intent of discreet relief",
+      "zone": "FOREGROUND"
+    },
+    {
+      "element": "A faint glow emanating from a compact form resting against the chest",
+      "reason": "It signals active readiness and autonomy, echoing the visual metaphor of a portable source, without naming or depicting any device or screen",
+      "zone": "MIDGROUND"
+    },
+    {
+      "element": "A second hand holding a dark rectangle that remains unlit and inert",
+      "reason": "It completes the cause-effect progression: the glow precedes the awakening, reinforcing the story of immediate restoration without movement",
+      "zone": "MIDGROUND"
+    }
+  ],
+  "permitted_secondary_elements": [
+    "A textured bench surface with subtle wear patterns",
+    "A sliver of distant traffic blur through a gap in architecture",
+    "The edge of a coat sleeve pulled slightly taut by the reaching motion"
+  ],
+  "forbidden_decorative_noise": [
+    "beige, crème, cream, sable, sand, écru, taupe, ivory, heart, leaf, foliage, eucalyptus, fern, petal, gold, glitter, marble, velvet, bokeh",
+    "screen, phone, device, logo, price, text, label, case, housing, cable, USB, charger, battery, écran, téléphone, produit",
+    "hero, centrepiece, protagonist, focal point, main subject, sujet principal",
+    "unprinted, unfinished, shell, casing, bumper, protector, étui, boîtier"
+  ],
+  "rationale": "The image constructs a self-contained moment where autonomy and ease are visible through gesture and light alone, making the product’s utility unforgettable without ever naming it."
+}

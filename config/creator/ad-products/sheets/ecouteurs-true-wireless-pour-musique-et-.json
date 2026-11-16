@@ -1,0 +1,74 @@
+{
+ "product_key": "ecouteurs-true-wireless-pour-musique-et-",
+ "title": "Écouteurs True Wireless pour musique et appels",
+ "photo": {
+  "status": "SHOPIFY_VARIANT_LINK",
+  "note": "Photo de la variante liée dans Shopify (aucun fichier local). Fiche construite le 2026-11-15 par Nordla à partir de la lecture seule du catalogue ; NON confirmée par le propriétaire."
+ },
+ "facts": [
+  {
+   "id": "d1",
+   "claim": "Les écouteurs RX PD-BT533N Pro offrent un format True Wireless léger",
+   "source": {
+    "snapshot": "shopify-ecouteurs-true-wireless-pour-musique-et--20261115.json",
+    "excerpt": "Les écouteurs RX PD-BT533N Pro offrent un format True Wireless léger"
+   }
+  },
+  {
+   "id": "d2",
+   "claim": "des haut-parleurs de 13 mm",
+   "source": {
+    "snapshot": "shopify-ecouteurs-true-wireless-pour-musique-et--20261115.json",
+    "excerpt": "des haut-parleurs de 13 mm"
+   }
+  },
+  {
+   "id": "d3",
+   "claim": "jusqu’à 5 à 6 heures d’écoute annoncées",
+   "source": {
+    "snapshot": "shopify-ecouteurs-true-wireless-pour-musique-et--20261115.json",
+    "excerpt": "jusqu’à 5 à 6 heures d’écoute annoncées"
+   }
+  },
+  {
+   "id": "d4",
+   "claim": "Leur boîtier compact prolonge l’autonomie au fil de la journée",
+   "source": {
+    "snapshot": "shopify-ecouteurs-true-wireless-pour-musique-et--20261115.json",
+    "excerpt": "Leur boîtier compact prolonge l’autonomie au fil de la journée"
+   }
+  },
+  {
+   "id": "d5",
+   "claim": "facilite leur utilisation pour la musique",
+   "source": {
+    "snapshot": "shopify-ecouteurs-true-wireless-pour-musique-et--20261115.json",
+    "excerpt": "facilite leur utilisation pour la musique"
+   }
+  },
+  {
+   "id": "d6",
+   "claim": "les déplacements",
+   "source": {
+    "snapshot": "shopify-ecouteurs-true-wireless-pour-musique-et--20261115.json",
+    "excerpt": "les déplacements"
+   }
+  }
+ ],
+ "pending": [
+  {
+   "id": "owner_confirmation",
+   "claim": "fiche produit construite automatiquement, non confirmée par le propriétaire",
+   "why": "les faits sont les phrases et les chiffres du texte du catalogue ; les éléments qui ne doivent jamais changer sur l'image n'ont pas été relevés (la photo n'est pas examinée ici)"
+  }
+ ],
+ "invariants": [],
+ "coverage_missing": [
+  "éléments invariants du produit : photo non examinée",
+  "confirmation du propriétaire"
+ ],
+ "product_nouns": [
+  "écouteurss?",
+  "rx pd-bt533n pro"
+ ]
+}

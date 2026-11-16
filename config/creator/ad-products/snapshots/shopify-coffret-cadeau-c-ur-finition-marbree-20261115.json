@@ -1,0 +1,56 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15547355791708",
+  "title": "Coffret cadeau cœur finition marbrée",
+  "description": "Un coffret cadeau cœur finition marbrée sélectionné pour mettre en valeur cadeaux, accessoires et créations avec une présentation soignée, prête à offrir.",
+  "tags": [
+   "8027--1",
+   "boîte cadeau",
+   "emballage cadeau",
+   "emballage premium"
+  ],
+  "productType": "Packaging",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57412270850396",
+     "title": "Blanc / S",
+     "price": "5.90",
+     "inventoryQuantity": 14
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57412270883164",
+     "title": "Blanc / M",
+     "price": "6.90",
+     "inventoryQuantity": 17
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57412270915932",
+     "title": "Blanc / L",
+     "price": "7.90",
+     "inventoryQuantity": 17
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57412270948700",
+     "title": "Noir / S",
+     "price": "5.90",
+     "inventoryQuantity": 14
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57412270981468",
+     "title": "Noir / M",
+     "price": "6.90",
+     "inventoryQuantity": 17
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57412271014236",
+     "title": "Noir / L",
+     "price": "7.90",
+     "inventoryQuantity": 17
+    }
+   ]
+  }
+ }
+}

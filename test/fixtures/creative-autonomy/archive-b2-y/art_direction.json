@@ -1,0 +1,52 @@
+{
+ "art_direction_id": "art_0324df6ecca73a74597d6ddd49f9f7c0",
+ "concept_id": "cnc_10af619cb81cf792140bad13c40a68f0",
+ "atmosphere": "A cleared artisan workshop where the weaving frame stands stripped of every thread, leaving only pale ash wood and open air to celebrate the absence of clutter.",
+ "depth_model": "LAYERED_DEPTH",
+ "material_language": "Pale ash wood with visible grain, smooth plaster floor, matte woven cord resting on a bare wooden beam, all chosen for their honest craft texture.",
+ "lighting_intent": "Soft directional light enters from the left, raking across the pale ash uprights and illuminating the plaster floor while the right side of the frame recedes into quiet shadow.",
+ "visual_rhythm": "MEASURED",
+ "product_relationship": "GROUNDED_IN_SCENE",
+ "text_image_relationship": "TEXT_IN_CALM_ZONES",
+ "realism": "PHOTOREALISTIC",
+ "emotional_temperature": "NEUTRAL",
+ "visual_tension": "LOW",
+ "negative_space_strategy": "ASYMMETRIC_RESERVE",
+ "narrative_elements": [
+  {
+   "element": "Tall pale ash wood uprights forming a rhythmic skeletal frame in the background",
+   "reason": "The bare loom structure embodies the central idea of an empty weaving frame celebrating the absence of loose cords",
+   "zone": "BACKGROUND"
+  },
+  {
+   "element": "Horizontal ash wood tension bars crossing between the uprights",
+   "reason": "These bars complete the dismantled weaving apparatus described in the story, proving the fabric is finished",
+   "zone": "MIDGROUND"
+  },
+  {
+   "element": "A single short length of matte woven cord resting on the lowest wooden beam",
+   "reason": "This trace recalls the braided texture of the concept, echoing the historical craft metaphor without competing",
+   "zone": "FOREGROUND"
+  }
+ ],
+ "permitted_secondary_elements": [
+  "Smooth pale plaster floor extending under the wooden frame",
+  "Faint dust motes suspended in the left-side light beam"
+ ],
+ "forbidden_decorative_noise": [
+  "Any substitute for the product or a competing hero object",
+  "A phone, tablet, camera, laptop or any electronic device",
+  "A protective case, cover, sleeve or housing",
+  "Misleading commercial objects such as price tags or shopping bags",
+  "Text, letters, logos, watermarks or captions",
+  "Beige, cream, sand, taupe or ivory surfaces",
+  "Marble, velvet, glitter or gold finishes",
+  "Botanical elements, leaves, ferns or foliage",
+  "a substitute for the product",
+  "a phone, a case or any device",
+  "a competing hero object",
+  "a misleading commercial object",
+  "text, letters, logos or watermarks"
+ ],
+ "rationale": "A stripped wooden weaving frame stands behind the FC-02 battery, its bare ash uprights proving that all necessary connections are already integrated, making the viewer feel the mental lightness of carrying twenty thousand mAh at forty-five watts without extra cords."
+}

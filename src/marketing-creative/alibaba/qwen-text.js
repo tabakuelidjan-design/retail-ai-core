@@ -125,6 +125,7 @@ export async function createMarketingCopy({
       estimated_cost_eur: reservation.reserved_eur,
       data_class: policy.classification,
       reason: error?.code ?? 'REQUEST_FAILED',
+      ...(error?.network ? { network: error.network } : {}),
       latency_ms: Date.now() - started,
     });
     throw error;

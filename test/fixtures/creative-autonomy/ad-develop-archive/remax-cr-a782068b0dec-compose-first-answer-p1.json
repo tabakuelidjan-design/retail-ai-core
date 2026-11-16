@@ -1,0 +1,96 @@
+{
+ "concept_conserve": "CONSERVED",
+ "concept_changes": "",
+ "starting_point": "BENEFIT",
+ "relation": "FUNCTIONAL",
+ "intention": "Montrer que la batterie Remax est prête à l’usage immédiat dans un moment réel de la vie namuroise : un café du matin, sans accessoires superflus, avec ses câbles intégrés visibles et son affichage clair — tout ce qu’il faut pour ne pas se soucier de la recharge pendant la journée.",
+ "visible_link": "Les deux câbles tressés bleus, dans leur pose fixe (boucle haute et câble pendu avec embout USB-C), sont présents sans être branchés, tandis que l’affichage rond indique « 100% » en vert — signe qu’elle est pleine et prête, sans action supplémentaire.",
+ "reason_to_care": "Tu pars avec ton téléphone. Elle, elle reste prête — pas de câble oublié, pas de sac à fouiller, juste une autonomie fiable dès le premier coup d’œil.",
+ "audience_use": "Personnes en déplacement constant entre travail, études et sorties, qui utilisent intensément leur smartphone et veulent éviter les oublis de câbles ; pas de tranche d’âge imposée, mais un besoin concret de simplicité et de fiabilité quotidienne.",
+ "supported_by": [
+  "capacity",
+  "integrated_cables",
+  "digital_display"
+ ],
+ "product_nature": "Batterie externe compacte, bleu clair satiné, aux angles très arrondis, avec affichage numérique rond actif (« 100% » en vert), deux ports visibles sur la tranche supérieure (USB-C et USB-A orange), et deux câbles tressés bleus intégrés dans une pose fixe : l’un en boucle au-dessus du boîtier, l’autre pendu le long du côté gauche avec embout USB-C.",
+ "idea": "Une table en bois brut d’un café namurois au matin, avec la batterie bleu clair posée près d’une tasse vide et d’un journal plié, un smartphone éteint à côté — lumière douce venant de la gauche, câbles intégrés visibles, affichage actif, zéro accessoire supplémentaire.",
+ "product_position": "LEFT_THIRD",
+ "product_framing": "MEDIUM",
+ "structure": "Composition en trois plans : fond flou d’un mur en briques peintes en cool grey, plan intermédiaire avec une table en bois brut texturé, plan avant avec la batterie Remax au tiers gauche, le smartphone éteint à sa droite, la tasse vide et le journal plié légèrement en retrait — tout aligné horizontalement, espace respirant à droite pour le texte.",
+ "setting": "Intérieur d’un café namurois authentique au petit matin : mur en briques peintes en cool grey, table en bois brut non traité, lumière naturelle douce entrant par une fenêtre à gauche, reflets discrets sur le bois et le boîtier satiné.",
+ "materials": "Bois brut non verni pour la table, brique peinte mate en arrière-plan, céramique froide pour la tasse vide, papier kraft pour le journal plié — tous contrastant avec le satiné bleu clair de la batterie.",
+ "atmosphere": "Calme matinal, fonctionnel et chaleureux sans mièvrerie : un moment de pause réaliste, où l’on prépare sa journée sans stress ni accessoires inutiles.",
+ "light": "Lumière naturelle douce venant de la gauche, comme sur la photo du produit, créant des ombres subtiles sous la batterie et le smartphone, mettant en valeur le satiné du boîtier et la texture des câbles tressés sans créer de reflets agressifs.",
+ "text_reserve": {
+  "zone": "RIGHT_COLUMN",
+  "description": "Surface verticale en cool grey uni, légèrement plus claire que le mur, sans texture ni détail, calme et neutre pour assurer un contraste net avec le texte blanc."
+ },
+ "elements": [
+  {
+   "zone": "BACKGROUND",
+   "element": "Mur en briques peintes en cool grey, légèrement flou pour garder le focus sur la table"
+  },
+  {
+   "zone": "MIDGROUND",
+   "element": "Table en bois brut avec grain visible, surface légèrement usée mais propre"
+  },
+  {
+   "zone": "FOREGROUND",
+   "element": "Tasse en céramique vide, posée à angle doux, et journal plié en deux, coin supérieur relevé"
+  }
+ ],
+ "resolution": "Aucune résolution nécessaire : le concept est directement réalisable avec le produit photographié tel quel, les câbles en pose fixe, et la lumière compatible avec celle de la photo.",
+ "placement_why": "Le produit est placé au tiers gauche en cadrage moyen pour laisser de l’espace à droite au texte, tout en respectant la hauteur de pied mesurée (84 %) — il repose sur la table en bois, avec son ombre portée discrète vers la droite, cohérente avec la lumière venant de la gauche.",
+ "headline": "Tu pars avec ton téléphone. Elle, elle reste prête.",
+ "headline_role": "Résumer le bénéfice central en deux phrases courtes, en français belge familier, qui renforcent l’idée de disponibilité immédiate et de confiance sans effort — exactement ce que montre la scène.",
+ "headline_lines": "TWO",
+ "palette_roles": [
+  {
+   "colour": "COOL_GREY",
+   "role": "DOMINANT",
+   "surfaces": "Mur en briques, surface de la table (tonalité neutre), réserve textuelle"
+  },
+  {
+   "colour": "NAVY",
+   "role": "SECONDARY",
+   "surfaces": "Ombres portées discrètes, bord inférieur de la tasse, détails du journal"
+  },
+  {
+   "colour": "TERRACOTTA",
+   "role": "ACCENT",
+   "surfaces": "Port USB-A orange visible sur la tranche supérieure du produit (seul élément coloré vif)"
+  },
+  {
+   "colour": "WHITE",
+   "role": "LIGHT_TINT",
+   "surfaces": "Reflets subtils sur le boîtier satiné et la tasse, zone lumineuse de la fenêtre"
+  },
+  {
+   "colour": "NEAR_BLACK",
+   "role": "SHADOW_TINT",
+   "surfaces": "Affichage rond noir, inscriptions discrètes sur le boîtier"
+  }
+ ],
+ "choices": [
+  {
+   "decision": "COMPOSITION",
+   "why": "Structure en trois plans avec le produit au tiers gauche permet de montrer clairement les câbles intégrés et l’affichage, tout en laissant de l’espace à droite pour le texte — fidèle au concept 'café du matin, sans câble oublié'."
+  },
+  {
+   "decision": "PRODUCT_PLACEMENT",
+   "why": "Position LEFT_THIRD + MEDIUM respecte les mesures de la boîte (body_foot_y_share = 84 %) et place la batterie sur la table en bois, avec son ombre cohérente avec la lumière venant de la gauche, comme sur la photo."
+  },
+  {
+   "decision": "LIGHT",
+   "why": "Lumière douce venant de la gauche reproduit exactement la condition de la photo du produit, mettant en valeur le satiné du boîtier et les câbles tressés sans créer de reflets gênants ou de zones noires."
+  },
+  {
+   "decision": "PALETTE",
+   "why": "COOL_GREY dominant crée un fond neutre et local (café namurois), NAVY secondaire ancre la marque, TERRACOTTA accentue le port orange visible, WHITE et NEAR_BLACK servent aux reflets et à l’affichage — aucun beige, crème ou sable, conforme aux prohibitions."
+  },
+  {
+   "decision": "TEXT_RESERVE",
+   "why": "RIGHT_COLUMN en cool grey uni offre un fond calme et contrasté pour le texte, sans empiéter sur le produit ni occuper trop d’espace — la hauteur disponible (de 50 % à 88 %) convient parfaitement à deux lignes de titre."
+  }
+ ]
+}

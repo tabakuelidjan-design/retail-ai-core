@@ -1,0 +1,196 @@
+{
+  "evaluations": [
+    {
+      "concept_id": "cnc_6c378d070845025924ead85c09fe7c0d",
+      "criteria": [
+        {
+          "criterion": "CONCEPT_STRENGTH",
+          "outcome": "MEETS",
+          "evidence": "One clear central idea: the instinctive, fluid gesture of detaching the neck-worn battery to rescue a dying phone in real time.",
+          "refinement": "Ensure the motion reads as reflexive, not choreographed—use subtle motion blur only on background, not product."
+        },
+        {
+          "criterion": "RELEVANCE_TO_BRIEF",
+          "outcome": "MEETS",
+          "evidence": "Directly addresses active urban users, urgent need, verified features (screen, strap, cable), and avoids generic travel tropes or decorative backdrops.",
+          "refinement": "Anchor the setting in a non-iconic, functional urban micro-scene (e.g. tram stop, bike lane edge) to avoid tourist cliché."
+        },
+        {
+          "criterion": "EMOTIONAL_RESONANCE",
+          "outcome": "MEETS",
+          "evidence": "Evokes calm competence and relief—not panic—aligning with the brief’s ‘discreet but concrete’ emotional register for active-day vulnerability.",
+          "refinement": "Avoid smiling or exaggerated expressions; keep facial neutrality to emphasize action over emotion."
+        },
+        {
+          "criterion": "PRODUCT_RELATIONSHIP",
+          "outcome": "MEETS",
+          "evidence": "Product is hero: the entire narrative hinges on its unique neck-worn deployment, visible screen, and integrated cable—no story without it.",
+          "refinement": "Ensure the unclipping mechanism is visible but not over-explained; the gesture implies function."
+        },
+        {
+          "criterion": "DISTINCTIVENESS",
+          "outcome": "MEETS",
+          "evidence": "Only this product combines neck strap, digital display, and integrated cable into a single rescue gesture—no competitor can replicate the action authentically.",
+          "refinement": "Highlight matte black finish against motion-blurred background to reinforce material authenticity."
+        },
+        {
+          "criterion": "FEASIBILITY",
+          "outcome": "MEETS",
+          "evidence": "Uses real product photo, deterministic scene (urban street mid-stride), readable screen (78% visible), and clear typography placement possible in 4:5 format.",
+          "refinement": "Test screen legibility at 15% image height; ensure USB-C plug end is visible when extended."
+        },
+        {
+          "criterion": "BRAND_COMPATIBILITY",
+          "outcome": "NOT_ASSESSED",
+          "evidence": ""
+        },
+        {
+          "criterion": "COMMERCIAL_CLARITY",
+          "outcome": "PARTIAL",
+          "evidence": "Product is dominant and recognizable, but price/claim placement must be ensured in layout; current concept doesn’t specify typographic integration.",
+          "refinement": "Reserve bottom third for clean price + claim block without competing with gesture focal point."
+        },
+        {
+          "criterion": "NARRATIVE_COHESION",
+          "outcome": "MEETS",
+          "evidence": "Idea (instinctive rescue), metaphor (pendant of readiness), and story (vulnerability → competence) align tightly around one moment.",
+          "refinement": "Ensure the phone’s red-low-battery icon is subtly visible to complete the cause-effect loop."
+        },
+        {
+          "criterion": "GENERIC_RISK",
+          "outcome": "MEETS",
+          "evidence": "Avoids stock travel imagery; the neck-detach gesture is specific to this product’s form and use case, not a template trope.",
+          "refinement": "Reject any background elements that read as ‘city aesthetic’ (e.g. graffiti walls, iconic bridges)."
+        }
+      ]
+    },
+    {
+      "concept_id": "cnc_fcf13f6a67031d6c0838992010e72111",
+      "criteria": [
+        {
+          "criterion": "CONCEPT_STRENGTH",
+          "outcome": "PARTIAL",
+          "evidence": "Strong visual (compass metaphor) but risks abstraction—the ‘directional instrument’ idea requires interpretation, not instant grasp.",
+          "refinement": "Replace compass framing with direct user glance at screen while walking; keep cable unfurling as proof of readiness."
+        },
+        {
+          "criterion": "RELEVANCE_TO_BRIEF",
+          "outcome": "PARTIAL",
+          "evidence": "Addresses verified features but leans into intellectual metaphor over urgent utility; brief demands ‘instinctive action’, not contemplation.",
+          "refinement": "Shift from static pavement shot to mid-motion step where user checks screen *while moving*, reinforcing active context."
+        },
+        {
+          "criterion": "EMOTIONAL_RESONANCE",
+          "outcome": "PARTIAL",
+          "evidence": "‘Measured control’ fits premium restraint, but feels detached from the high-stakes urgency of a dying phone in active use.",
+          "refinement": "Add subtle tension: phone screen flickering amber in periphery, user’s pace unchanged—confidence through preparedness."
+        },
+        {
+          "criterion": "PRODUCT_RELATIONSHIP",
+          "outcome": "MEETS",
+          "evidence": "Battery’s screen and cable are central to the metaphor; the ‘directional’ reading only works because of numeric display and integrated cable.",
+          "refinement": "Ensure screen shows exact % (e.g. 42%)—not symbolic icons—to ground metaphor in verified fact."
+        },
+        {
+          "criterion": "DISTINCTIVENESS",
+          "outcome": "PARTIAL",
+          "evidence": "The combo of screen + cable + neck strap is unique, but ‘compass’ framing is a known visual trope that could be reused generically.",
+          "refinement": "Abandon compass analogy; instead show battery held palm-up as user glances at it mid-stride—more authentic, less stylized."
+        },
+        {
+          "criterion": "FEASIBILITY",
+          "outcome": "PARTIAL",
+          "evidence": "Sun-dappled pavement risks glare on screen; digital display must remain legible under variable light without post-processing.",
+          "refinement": "Use overcast daylight or shaded alley lighting to guarantee screen visibility without retouching."
+        },
+        {
+          "criterion": "BRAND_COMPATIBILITY",
+          "outcome": "NOT_ASSESSED",
+          "evidence": ""
+        },
+        {
+          "criterion": "COMMERCIAL_CLARITY",
+          "outcome": "PARTIAL",
+          "evidence": "Product is visible but framed as an object of contemplation, not action—risk of downplaying urgency that drives store visit.",
+          "refinement": "Integrate price/claim near battery’s base, using same matte-black-on-light contrast as product finish."
+        },
+        {
+          "criterion": "NARRATIVE_COHESION",
+          "outcome": "PARTIAL",
+          "evidence": "Metaphor (compass) and story (checking charge) connect, but the ‘time passage via shadows’ adds a second layer that dilutes the core action.",
+          "refinement": "Remove shadow-time motif; focus solely on user’s glance → screen → continued movement."
+        },
+        {
+          "criterion": "GENERIC_RISK",
+          "outcome": "FAILS",
+          "evidence": "Sun-dappled pavement + held-object composition resembles stock ‘mindfulness tech’ imagery; lacks the urgent, physical specificity of the brief.",
+          "refinement": "Replace serene pavement with dynamic urban transition zone (e.g. crossing street, entering metro turnstile) to force action context."
+        }
+      ]
+    },
+    {
+      "concept_id": "cnc_f9c701d1a9141950b7cfb40f2a9b8a4e",
+      "criteria": [
+        {
+          "criterion": "CONCEPT_STRENGTH",
+          "outcome": "MEETS",
+          "evidence": "Single powerful idea: silent power exchange via pre-connected battery, emphasizing zero-friction sharing enabled by integrated design.",
+          "refinement": "Ensure both hands are equally lit and positioned to avoid implying donation vs. mutual aid."
+        },
+        {
+          "criterion": "RELEVANCE_TO_BRIEF",
+          "outcome": "MEETS",
+          "evidence": "Centers verified features (integrated cable, neck strap, 100% screen) in a real-use scenario (friend’s dead phone), avoiding generic gift or solo travel tropes.",
+          "refinement": "Specify both users are mid-activity (e.g. cycling, walking with bags) to reinforce ‘active day’ context."
+        },
+        {
+          "criterion": "EMOTIONAL_RESONANCE",
+          "outcome": "PARTIAL",
+          "evidence": "‘Shared resilience’ fits relationship-building, but risks sentimentality if hands are too posed; brief asks for ‘discreet relief’, not warmth.",
+          "refinement": "Keep faces out of frame; focus on hands, cable connection, and screen—emotion conveyed through efficiency, not expression."
+        },
+        {
+          "criterion": "PRODUCT_RELATIONSHIP",
+          "outcome": "MEETS",
+          "evidence": "Battery is the tool enabling the exchange; its neck strap explains why it’s instantly available, and screen confirms readiness—no substitute possible.",
+          "refinement": "Show cordon attachment point clearly between hands to prove neck-worn origin without showing full body."
+        },
+        {
+          "criterion": "DISTINCTIVENESS",
+          "outcome": "MEETS",
+          "evidence": "Only this model allows plug-and-play sharing without fumbling for cables or cases—gesture is physically impossible with other power banks.",
+          "refinement": "Emphasize the click of connection and cable tension to signal immediacy and reliability."
+        },
+        {
+          "criterion": "FEASIBILITY",
+          "outcome": "MEETS",
+          "evidence": "Real product, deterministic handshake composition, readable 100% screen, and 4:5 framing allow clean typography placement below hands.",
+          "refinement": "Use shallow depth of field to blur background but keep cable plug and screen in sharp focus."
+        },
+        {
+          "criterion": "BRAND_COMPATIBILITY",
+          "outcome": "NOT_ASSESSED",
+          "evidence": ""
+        },
+        {
+          "criterion": "COMMERCIAL_CLARITY",
+          "outcome": "MEETS",
+          "evidence": "Product is central and active; price/claim can occupy lower third without disrupting the hand-to-hand power transfer focal point.",
+          "refinement": "Place price left-aligned, claim right-aligned beneath hands—minimal, high-contrast, no decorative fonts."
+        },
+        {
+          "criterion": "NARRATIVE_COHESION",
+          "outcome": "MEETS",
+          "evidence": "Idea (silent exchange), metaphor (handshake of reliability), and story (mid-conversation rescue) form a tight, causal chain.",
+          "refinement": "Ensure phone screen is off or red-low-battery visible to justify urgency without text."
+        },
+        {
+          "criterion": "GENERIC_RISK",
+          "outcome": "MEETS",
+          "evidence": "No stock gestures or backdrops; the neck-to-hand transfer is unique to this product’s form factor and use case.",
+          "refinement": "Avoid any background signage, logos, or recognizable landmarks—keep environment neutral but textured (e.g. concrete wall, metal railing)."
+        }
+      ]
+    }
+  ]
+}

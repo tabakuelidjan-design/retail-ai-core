@@ -1,9 +1,11 @@
 export const ALIBABA_PRICE_USD = Object.freeze({
-  verified_at: '2026-10-07',
+  verified_at: '2026-10-07', // legacy text/video values were last checked on this date
+  image_verified_at: '2026-11-01', // Qwen Image 3.0 pro output pricing and area tiers
   text_input_per_million: 1.65,
   text_output_per_million: 4.951,
-  image_1k: 0.034,
-  image_2k: 0.069,
+  image_1k: 0.03438,
+  image_2k: 0.068761,
+  image_input: 0.00275, // per reference image sent to an edit (Frankfurt list price, 1K and 2K alike)
   video_per_second: Object.freeze({
     '480P': 0.041,
     '720P': 0.083,
@@ -14,7 +16,11 @@ export const ALIBABA_PRICE_USD = Object.freeze({
 function imagePriceUsd(size) {
   const normalized = String(size).replace('*', 'x').toLowerCase();
   const [width, height] = normalized.split('x').map(Number);
-  return Math.max(width || 0, height || 0) > 1024
+  // Qwen Image 3.0 Pro uses OUTPUT PIXEL AREA tiers, not the longest edge.
+  // Alibaba Model Studio API docs (2026-10-11): <= 2,250,000 pixels = 1K.
+  if (!Number.isInteger(width) || !Number.isInteger(height) ||
+      width < 1 || height < 1) throw new Error('UNPRICED_IMAGE_SIZE');
+  return width * height > 2_250_000
     ? ALIBABA_PRICE_USD.image_2k
     : ALIBABA_PRICE_USD.image_1k;
 }
@@ -27,8 +33,9 @@ export function priceTextEur({ inputTokens = 0, outputTokens = 0, usdToEur = 1 }
   return usd * usdToEur;
 }
 
-export function priceImagesEur({ n = 1, size = '1024x1024', usdToEur = 1 }) {
-  return imagePriceUsd(size) * n * usdToEur;
+export function priceImagesEur({ n = 1, size = '1024x1024', usdToEur = 1, inputImages = 0 }) {
+  if (!Number.isInteger(inputImages) || inputImages < 0) throw new TypeError('inputImages must be >= 0');
+  return (imagePriceUsd(size) * n + ALIBABA_PRICE_USD.image_input * inputImages) * usdToEur;
 }
 
 export function priceVideoEur({ duration, resolution, usdToEur = 1 }) {
@@ -119,10 +126,10 @@ export class SpendGuard {
     });
   }
 
-  reserveImages({ id, n, size = '1024x1024' }) {
+  reserveImages({ id, n, size = '1024x1024', inputImages = 0 }) {
     return this.#reserve({
       id,
-      eur: priceImagesEur({ n, size, usdToEur: this.usdToEur }),
+      eur: priceImagesEur({ n, size, usdToEur: this.usdToEur, inputImages }),
       images: n,
     });
   }

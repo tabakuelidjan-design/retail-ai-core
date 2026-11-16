@@ -1,0 +1,333 @@
+{
+ "status": "STOPPED_ERROR",
+ "trace": [
+  {
+   "n": 1,
+   "step": "BRIEF",
+   "component": "buildAutonomousBrief + assessBrief",
+   "module": "src/creative-autonomy/brief.js, src/creative-brain/brief-assessment.js",
+   "kind": "DETERMINISTIC",
+   "provider": "NONE",
+   "model": null,
+   "cost_eur": 0,
+   "ms": 7,
+   "outcome": "PROCEED",
+   "detail": {
+    "issues": [],
+    "unknowns": [],
+    "claims": [
+     "PRICE: 6,99 €"
+    ],
+    "personalisation_offered": false
+   }
+  },
+  {
+   "n": 2,
+   "step": "EXAMINE",
+   "component": "examine_product",
+   "module": "scripts/creative-autonomy/examine_product.py",
+   "kind": "LOCAL_ENGINE",
+   "provider": "REAL",
+   "model": null,
+   "cost_eur": 0,
+   "ms": 11,
+   "outcome": "CUT_OUT",
+   "detail": {
+    "source": {
+     "width": 1500,
+     "height": 1500
+    },
+    "background": {
+     "rgb": [
+      255,
+      255,
+      255
+     ],
+     "std": 0.8
+    },
+    "status": "CUT_OUT",
+    "bbox": {
+     "x": 11,
+     "y": 347,
+     "w": 1479,
+     "h": 839
+    },
+    "aspect_w_over_h": 1.7628,
+    "is_dark_object": false,
+    "tonal_class": "CLAIR",
+    "luminance": {
+     "mean": 0.831,
+     "p10": 0.69,
+     "p90": 0.945
+    },
+    "lit_side": {
+     "lr": 0.0048,
+     "side": null
+    },
+    "ground_contact": {
+     "x": 0.2863,
+     "y": 0.8772,
+     "w": 0.2725,
+     "drop": 0.1228,
+     "source": "BODY_WIDTH"
+    },
+    "translucent_share": 0.0519,
+    "opaque_pixels": 629643,
+    "dominant_colours": [
+     {
+      "rgb": [
+       233,
+       233,
+       233
+      ],
+      "share": 0.558
+     },
+     {
+      "rgb": [
+       194,
+       194,
+       194
+      ],
+      "share": 0.377
+     },
+     {
+      "rgb": [
+       132,
+       132,
+       132
+      ],
+      "share": 0.066
+     }
+    ],
+    "recomposite_on_source_background_mean_error": 0,
+    "edge_pixels_recomposited_mean_error": 9.4547,
+    "edge_pixels": 35003,
+    "rules_applied": [
+     "plain background keyed",
+     "enclosed background kept transparent",
+     "base clamped to body width"
+    ]
+   }
+  },
+  {
+   "n": 3,
+   "step": "OBSERVE",
+   "component": "observeBrief",
+   "module": "src/creative-brain/problem-frame.js",
+   "kind": "DETERMINISTIC",
+   "provider": "NONE",
+   "model": null,
+   "cost_eur": 0,
+   "ms": 0,
+   "outcome": "OBSERVED",
+   "detail": {
+    "product_ref": "product://shopify/15522712846684",
+    "approved_text_roles": [
+     "PRICE"
+    ],
+    "format": {
+     "content_kind": "IMAGE",
+     "aspect_ratio": "4:5",
+     "locale": "fr-BE"
+    }
+   }
+  },
+  {
+   "n": 4,
+   "step": "AD_SINGLE",
+   "component": "ONE answer: the benefit, the scene, the headline and the caption (or NONE); at most one targeted correction",
+   "module": "src/creative-autonomy/ad-single-pass.js",
+   "kind": "LLM",
+   "provider": "REAL",
+   "model": "qwen3-vl-plus",
+   "cost_eur": 0.007844348,
+   "ms": 3760,
+   "outcome": "NONE",
+   "detail": {
+    "worst_case_text": {
+     "first_worst_eur": 0.0384,
+     "correction_worst_eur": 0.0454,
+     "together_eur": 0.0838,
+     "ceiling_eur": 0.0932,
+     "correction_planned": true,
+     "maxRepairs": 1,
+     "margin_eur": 0.0094
+    },
+    "corrections_used": 0,
+    "normalised": [],
+    "none_reason": "Aucun détail visible dans la scène ne montre un besoin concret que ce câble résout : sa longueur de deux mètres et sa connectique réversible ne peuvent être illustrés sans un appareil ou une prise, ce qui est interdit par les prohibitions (pas de phone, pas de device, pas de port ajouté). Le produit"
+   }
+  }
+ ],
+ "human_interventions": [
+  {
+   "when": "avant le passage",
+   "who": "opérateur",
+   "what": "a défini le produit, l'objectif commercial et le format",
+   "creative": false
+  }
+ ],
+ "engines": {
+  "text": "REAL",
+  "vision": "REAL",
+  "local": "REAL"
+ },
+ "cost_eur": {
+  "text_and_vision": 0.0078,
+  "local": 0,
+  "budget": {
+   "max_spend_eur": 0.0932,
+   "reserved_eur": 0,
+   "settled_eur": 0.007844348,
+   "images": 0,
+   "video_seconds": 0
+  }
+ },
+ "published": false,
+ "spent_without_authorisation": false,
+ "repairs": {
+  "used": 0,
+  "allowed": 4,
+  "reserved": {
+   "STAGE": 1
+  }
+ },
+ "headline_calls": {
+  "used": 0,
+  "allowed": 1
+ },
+ "mode": "FULL",
+ "frame": null,
+ "concepts": null,
+ "selection": null,
+ "art_directions": {},
+ "stages": {},
+ "proposals": [],
+ "stopped_at": null,
+ "error": {
+  "code": "AD_NO_CONVINCING_IDEA",
+  "field": null,
+  "message": "AD_NO_CONVINCING_IDEA: Aucun détail visible dans la scène ne montre un besoin concret que ce câble résout : sa longueur de deux mètres et sa connectique réversible ne peuvent être illustrés sans un appareil ou une prise, ce qui est interdit par les prohibitions (pas de phone, pas de device, pas de p"
+ },
+ "asset_usable": true,
+ "exam": {
+  "source": {
+   "width": 1500,
+   "height": 1500
+  },
+  "background": {
+   "rgb": [
+    255,
+    255,
+    255
+   ],
+   "std": 0.8
+  },
+  "status": "CUT_OUT",
+  "bbox": {
+   "x": 11,
+   "y": 347,
+   "w": 1479,
+   "h": 839
+  },
+  "aspect_w_over_h": 1.7628,
+  "is_dark_object": false,
+  "tonal_class": "CLAIR",
+  "luminance": {
+   "mean": 0.831,
+   "p10": 0.69,
+   "p90": 0.945
+  },
+  "lit_side": {
+   "lr": 0.0048,
+   "side": null
+  },
+  "ground_contact": {
+   "x": 0.2863,
+   "y": 0.8772,
+   "w": 0.2725,
+   "drop": 0.1228,
+   "source": "BODY_WIDTH"
+  },
+  "translucent_share": 0.0519,
+  "opaque_pixels": 629643,
+  "dominant_colours": [
+   {
+    "rgb": [
+     233,
+     233,
+     233
+    ],
+    "share": 0.558
+   },
+   {
+    "rgb": [
+     194,
+     194,
+     194
+    ],
+    "share": 0.377
+   },
+   {
+    "rgb": [
+     132,
+     132,
+     132
+    ],
+    "share": 0.066
+   }
+  ],
+  "recomposite_on_source_background_mean_error": 0,
+  "edge_pixels_recomposited_mean_error": 9.4547,
+  "edge_pixels": 35003,
+  "rules_applied": [
+   "plain background keyed",
+   "enclosed background kept transparent",
+   "base clamped to body width"
+  ]
+ },
+ "brain_calls_dir": "C:\\Users\\etaba\\nordla-private\\creator-live\\runs\\cr-08a0933b0836\\brain-calls",
+ "resume": {
+  "status": "STOPPED_ERROR",
+  "completed_steps": [
+   {
+    "step": "BRIEF",
+    "concept_id": null,
+    "outcome": "PROCEED"
+   },
+   {
+    "step": "EXAMINE",
+    "concept_id": null,
+    "outcome": "CUT_OUT"
+   },
+   {
+    "step": "OBSERVE",
+    "concept_id": null,
+    "outcome": "OBSERVED"
+   },
+   {
+    "step": "AD_SINGLE",
+    "concept_id": null,
+    "outcome": "NONE"
+   }
+  ],
+  "stopped_at": null,
+  "why": "AD_NO_CONVINCING_IDEA: Aucun détail visible dans la scène ne montre un besoin concret que ce câble résout : sa longueur de deux mètres et sa connectique réversible ne peuvent être illustrés sans un appareil ou une prise, ce qui est interdit par les prohibitions (pas de phone, pas de device, pas de p",
+  "kept": {
+   "frame": false,
+   "concepts": [],
+   "selection": null,
+   "art_directions": [],
+   "stages": [],
+   "files": [
+    "faits.json",
+    "brain-calls"
+   ]
+  },
+  "next_step": {
+   "step": "",
+   "action": "resume at : the steps before it are kept (no frame)",
+   "error_code": "AD_NO_CONVINCING_IDEA"
+  }
+ }
+}

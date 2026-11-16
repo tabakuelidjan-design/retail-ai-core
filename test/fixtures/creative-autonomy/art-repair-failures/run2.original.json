@@ -1,0 +1,42 @@
+{
+  "atmosphere": "A fleeting urban moment captured in motion, where urgency meets calm resolution through a single purposeful gesture",
+  "depth_model": "LAYERED_DEPTH",
+  "material_language": "Matte black polymer with subtle tactile grain, contrasted by the crisp glow of a digital display and the soft sheen of woven neck strap fabric",
+  "lighting_intent": "Directional overcast light that models form without harsh shadows, highlighting the screen’s illumination as the sole active light source",
+  "visual_rhythm": "PUNCTUATED",
+  "product_relationship": "ELEVATED_IN_SCENE",
+  "text_image_relationship": "TEXT_IN_CALM_ZONES",
+  "realism": "EDITORIAL_STYLISED",
+  "emotional_temperature": "NEUTRAL",
+  "visual_tension": "MEDIUM",
+  "negative_space_strategy": "DIRECTIONAL_LEAD",
+  "narrative_elements": [
+    {
+      "element": "A hand mid-reach, fingers just contacting the battery casing",
+      "reason": "Embodies the 'human switch' metaphor by initiating the screen’s activation, directly linking gesture to function as stated in the central idea",
+      "zone": "FOREGROUND"
+    },
+    {
+      "element": "Digital display showing a clear numerical value, lit at the instant of contact",
+      "reason": "Visualizes real-time responsiveness, reinforcing the emotional intent of silent problem resolution and the verified feature of the digital screen",
+      "zone": "MIDGROUND"
+    },
+    {
+      "element": "USB-C cable unfurling naturally from its housing due to motion",
+      "reason": "Demonstrates integrated utility without staging, supporting the verified fact of the built-in cable and the story’s continuity of action",
+      "zone": "MIDGROUND"
+    }
+  ],
+  "permitted_secondary_elements": [
+    "Blurred pedestrian silhouettes suggesting urban flow without defining location",
+    "Subtle pavement texture indicating movement and ground contact",
+    "Soft edge of a coat sleeve implying active wear during transit"
+  ],
+  "forbidden_decorative_noise": [
+    "beige, crème, cream, sable, sand, écru, taupe, ivory, heart, leaf, foliage, eucalyptus, marble, velvet, gold, glitter, luxury, bokeh",
+    "any object resembling a phone, screen, case, or packaging",
+    "logos, labels, price tags, watermarks, or typographic overlays on the scene",
+    "static poses, staged compositions, or decorative props unrelated to motion or utility"
+  ],
+  "rationale": "The image centers the battery as an active participant in a real moment, using gesture, light and material to express its verified functions—integrated cable, digital display, neck strap—without decoration or misdirection."
+}

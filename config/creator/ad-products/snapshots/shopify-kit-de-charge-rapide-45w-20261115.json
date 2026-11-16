@@ -1,0 +1,21 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15522756067676",
+  "title": "Kit de charge rapide 45W",
+  "description": "Le kit 45W réunit le chargeur et son câble pour proposer une solution complète dès l’ouverture de la boîte. Une combinaison pratique pour recharger rapidement les appareils compatibles et éviter de multiplier les accessoires.",
+  "tags": [],
+  "productType": "",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57252629807452",
+     "title": "Default Title",
+     "price": "12.90",
+     "inventoryQuantity": 90
+    }
+   ]
+  }
+ }
+}

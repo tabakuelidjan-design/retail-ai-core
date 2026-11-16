@@ -1,0 +1,70 @@
+{
+ "proposals": [
+  {
+   "name": "Le trajet en bus, sans câble perdu",
+   "from_rapprochement": "Transport public : un ticket valable partout, toujours prêt",
+   "starting_point": "BENEFIT",
+   "need": "Pouvoir recharger son smartphone en déplacement sans emporter plusieurs câbles ni accessoires supplémentaires.",
+   "idea": "Sur un siège de bus en plastique gris, la batterie bleu clair repose à côté d’un smartphone éteint, écran vers le bas. La lumière douce du jour entre par la fenêtre, venant de la gauche comme sur la photo. Le câble tressé en boucle au-dessus du boîtier et l’autre pendante sont visibles, mais aucun n’est branché — leur présence suffit à dire qu’ils sont là quand on en a besoin. L’affichage rond montre « 100% » en vert, rassurant.",
+   "visible_cues": "Batterie bleu clair sur siège de bus gris ; smartphone éteint à côté ; câbles intégrés visibles en boucle et pendante ; affichage « 100% » allumé en vert ; lumière naturelle venant de la gauche.",
+   "cable_role": "Les deux câbles tressés, fixés au boîtier, montrent qu’on n’a pas besoin d’en chercher un dans le sac — ils sont déjà prêts, comme un outil rangé à portée de main.",
+   "link_to_product": "La batterie est posée exactement comme sur la photo (vue 3/4 depuis la gauche), avec ses deux câbles dans leur pose fixe, sa face avant visible, son affichage actif et ses ports en haut — rien n’est ajouté ni modifié.",
+   "speaks_to_the_public": "Pour ceux qui passent des heures en déplacement, cette scène dit : tu n’as pas à t’inquiéter du câble, il est déjà là, avec toi, sans encombre.",
+   "headline": "Recharge prête quand le bus démarre",
+   "supported_by": [
+    "capacity",
+    "integrated_cables",
+    "digital_display"
+   ]
+  },
+  {
+   "name": "La pause café, avec tout ce qu’il faut",
+   "from_rapprochement": "Cuisine minimaliste : un ustensile qui remplit plusieurs rôles sans encombrement",
+   "starting_point": "PRODUCT_NATURE",
+   "need": "Éviter les frustrations liées à des câbles perdus, incompatibles ou trop courts lorsqu’on est loin d’une prise secteur.",
+   "idea": "Sur une table en bois sombre d’un café namurois (grain visible, pas de décor), la batterie bleu clair repose près d’une tasse vide et d’un petit carnet fermé. Le câble en boucle est orienté vers le haut, le câble pendante descend le long du boîtier, comme s’il venait d’être utilisé. L’éclairage doux vient de la gauche, mettant en valeur le satiné du boîtier et l’anneau bleu de l’écran. Aucun autre objet n’entre en compétition — la batterie est le seul outil actif de la scène, autonome et complet.",
+   "visible_cues": "Batterie bleu clair sur table en bois foncé ; tasse vide et carnet fermé à proximité ; câbles intégrés en position fixe (boucle + pendante) ; affichage « 100% » visible ; lumière douce venant de la gauche.",
+   "cable_role": "Aucun câble n’est branché, mais leur position fixe et leur couleur assortie au boîtier montrent qu’ils font partie intégrante du dispositif — pas un accessoire, une extension du produit.",
+   "link_to_product": "Le produit est placé tel que photographié : vue 3/4, côtés visibles, câbles dans leur pose originale, sans modification ni ajout.",
+   "speaks_to_the_public": "Tu es en pause, pas en urgence — et pourtant, tout est déjà là, organisé, sans recherche ni compromis.",
+   "headline": "Deux câbles, zéro stress à la pause",
+   "supported_by": [
+    "integrated_cables",
+    "digital_display"
+   ]
+  },
+  {
+   "name": "Le bureau nomade, sans câble supplémentaire",
+   "from_rapprochement": "Cartographie urbaine : un repère fiable dans le flux continu de la journée",
+   "starting_point": "ABSTRACT_INTENTION",
+   "need": "Disposer d’un outil fiable et intuitif, dont l’état de charge est lisible au premier coup d’œil.",
+   "idea": "Sur un bureau en métal brossé (gris froid, surface légèrement réfléchissante), la batterie bleu clair est posée seule. L’éclairage studio doux, venant de la gauche, accentue le contraste entre le bleu satiné et le métal. L’affichage rond « 100% » en vert est nettement visible, comme un indicateur clair dans un environnement chargé. Les deux câbles sont en place — l’un en boucle, l’autre pendante — sans être connectés, mais leur présence signifie : tout est sous contrôle.",
+   "visible_cues": "Batterie bleu clair sur bureau métallique gris ; ordi fermé à côté ; affichage « 100% » lumineux ; câbles intégrés visibles en pose fixe ; lumière douce venant de la gauche.",
+   "cable_role": "AUCUN",
+   "link_to_product": "Le produit est reproduit exactement comme sur la photo : orientation, câbles, marquages et éclairage cohérent avec la source lumineuse de gauche.",
+   "speaks_to_the_public": "Dans un monde où tout change vite, avoir un état de charge clair et immédiat, c’est garder le cap sans effort.",
+   "headline": "L’état de charge, lu en un regard",
+   "supported_by": [
+    "digital_display",
+    "capacity"
+   ]
+  },
+  {
+   "name": "Le retour à pied, avec la charge intacte",
+   "from_rapprochement": "Langage des signes : une information directe, sans interprétation",
+   "starting_point": "BENEFIT",
+   "need": "Avoir une autonomie suffisante pour couvrir une journée entière, même avec une utilisation intensive.",
+   "idea": "Sur un banc en béton brut, au bord d’un trottoir namurois (pavés visibles en arrière-plan flou), la batterie bleu clair repose seule. Le soleil déclinant crée une lumière douce venant de la gauche, comme sur la photo. L’affichage indique « 100% », vert vif — un signal fort, sans ambiguïté. Les câbles sont en leur position fixe, témoignant de leur disponibilité, mais non utilisés. Rien ne touche le produit, pas même une ombre portée intrusive : la batterie est le point focal, calme et plein de réserve.",
+   "visible_cues": "Batterie bleu clair sur banc en béton ; pavés namurois en fond flou ; affichage « 100% » en vert bien visible ; câbles intégrés en pose fixe ; lumière douce venant de la gauche.",
+   "cable_role": "Les câbles tressés, de la même teinte que le boîtier, renforcent l’idée d’un tout cohérent — pas un gadget, un compagnon conçu pour durer toute la journée.",
+   "link_to_product": "Le produit est placé tel que photographié, sans altération : forme, couleurs, câbles, éclairage et marquages respectés à la lettre.",
+   "speaks_to_the_public": "Tu marches, tu parles, tu vis — et ta batterie, elle, reste pleine, prête, silencieuse, comme une promesse tenue.",
+   "headline": "Charge pleine, prête quand tu l’es",
+   "supported_by": [
+    "capacity",
+    "integrated_cables"
+   ]
+  }
+ ],
+ "how_they_differ": "Chaque proposition illustre un besoin différent : recharge sans câble (bus), éviter la frustration (café), lisibilité immédiate (bureau), et autonomie totale (marche) — avec des décors, éclairages et rapprochements distincts, jamais redondants."
+}

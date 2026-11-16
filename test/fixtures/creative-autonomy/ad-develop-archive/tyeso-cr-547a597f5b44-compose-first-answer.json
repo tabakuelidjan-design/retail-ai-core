@@ -1,0 +1,56 @@
+{
+ "concept_conserve": "CONSERVED",
+ "concept_changes": "",
+ "idea": "Une gourde mauve posée sur un banc d’arrêt de bus namurois, entourée d’objets de déplacement urbain — plan plié, ticket valide, sac à dos ouvert — baignée dans une lumière matinale douce, prête à être saisie sans préparation, incarnant la fluidité d’un changement de lieu.",
+ "setting": "Un banc en bois clair d’un arrêt de bus moderne à Namur, sans public ni éléments décoratifs superflus ; fond urbain discret avec façades sobres en gris clair et bleu pâle, quelques touches de vert urbain (grille métallique, signalétique), sous un ciel lumineux mais non ensoleillé.",
+ "materials": "Bois clair du banc, papier du plan plié, plastique rigide du ticket de transport, tissu technique du sac à dos ouvert, métal brossé du support de l’arrêt — tous texturés mais non réfléchissants, en harmonie avec la finition mate de la gourde mauve.",
+ "atmosphere": "Attente calme mais active, comme celle d’un trajet quotidien bien organisé : sérénité, confiance, absence de précipitation, le temps suspendu juste avant le départ.",
+ "light": "Lumière naturelle matinale douce venant de la gauche, créant des ombres courtes et nettes sans dureté, compatible avec l’éclairage neutre de la photographie du produit, mettant en valeur la teinte mauve sans la saturer.",
+ "text_reserve": {
+  "zone": "TOP_RIGHT",
+  "description": "Surface claire et homogène, légèrement plus pâle que le fond urbain, sans texture ni motif, offrant un espace calme pour le titre."
+ },
+ "elements": [
+  {
+   "zone": "BACKGROUND",
+   "element": "Façades urbaines discrètes en gris clair et bleu pâle, avec une signalétique métallique vert urbain au loin."
+  },
+  {
+   "zone": "MIDGROUND",
+   "element": "Banc en bois clair, surface lisse et légèrement usée, positionné en diagonale douce."
+  },
+  {
+   "zone": "FOREGROUND",
+   "element": "Gourde mauve posée à plat, poignée orientée vers l’avant, couvercle verrouillé, à côté d’un plan de Namur plié, d’un ticket valide et d’un sac à dos ouvert."
+  }
+ ],
+ "headline": "Prête quand le prochain arrêt sonne",
+ "headline_lines": "ONE",
+ "palette_roles": [
+  {
+   "colour": "COOL_GREY",
+   "role": "DOMINANT",
+   "surfaces": "Fond urbain, banc en bois clair, plan plié, ticket de transport"
+  },
+  {
+   "colour": "MAUVE",
+   "role": "ACCENT",
+   "surfaces": "Corps de la gourde Tyeso, seule couleur vive du cadre"
+  },
+  {
+   "colour": "WHITE",
+   "role": "LIGHT_TINT",
+   "surfaces": "Reflets subtils sur le couvercle, intérieur du sac à dos, bord du plan"
+  },
+  {
+   "colour": "STEEL_NAVY",
+   "role": "SHADOW_TINT",
+   "surfaces": "Ombres portées sous le banc, sous la gourde et le sac à dos"
+  },
+  {
+   "colour": "SOFT_TERRACOTTA",
+   "role": "SECONDARY",
+   "surfaces": "Détails discrets de la signalétique urbaine, coutures du sac à dos"
+  }
+ ]
+}

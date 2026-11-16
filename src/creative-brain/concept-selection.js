@@ -12,7 +12,16 @@ import {
 //   SELECT          one concept clearly stands above the others and meets the bar
 //   REFINE_CONCEPT  the best concept is promising but not yet strong enough: refine it before production
 //   REJECT_CONCEPT  every concept fails a decisive criterion
-//   NO_CLEAR_WINNER several concepts stand and none dominates: the round is not decided
+//   NO_CLEAR_WINNER kept for stored rounds only: Nordla no longer ENDS a round on a tie (see TIE-BREAK below), so selectConcept never returns it
+//
+// TIE-BREAK (after the fifth real attempt, trial-aeb232c41a2aec70, stopped with two concepts that both MET the bar and neither dominated the other). A tie among concepts that
+// are ALL eligible is a creative preference, not a safety condition, so it must not end production. Nordla orders the eligible concepts with fixed, explainable rules and takes
+// the first. The eligibility itself (decideConcept) is untouched: a concept below the bar is never brought in to "force a winner", and a tie is only ever broken inside the
+// group of the best decision (SELECT before REFINE_CONCEPT), never across groups. The rules, in order, over the words of the evaluation (no score, no weight):
+//   1 MORE_CRITERIA_MET     more criteria judged MEETS
+//   2 FEWER_FAILURES        fewer criteria judged FAILS
+//   3 PRIORITY_CRITERIA     the first criterion, in TIE_PRIORITY order, on which one concept is judged better than the other
+//   4 STABLE_ORDER          the smaller concept_id (a content hash: reproducible, with no creative meaning). Reached only when the two evaluations are word for word equal.
 
 export const CRITERION = Object.freeze({
   CONCEPT_STRENGTH: 'CONCEPT_STRENGTH',
@@ -25,6 +34,8 @@ export const CRITERION = Object.freeze({
   COMMERCIAL_CLARITY: 'COMMERCIAL_CLARITY',
   NARRATIVE_COHESION: 'NARRATIVE_COHESION',
   GENERIC_RISK: 'GENERIC_RISK', // MEETS = the risk of a generic or template output is low
+  COMPOSITION_STRENGTH: 'COMPOSITION_STRENGTH', // the concept states a recognisable composition of the set (added 2026-11-07)
+  PERCEIVED_VALUE: 'PERCEIVED_VALUE', // that composition raises the perceived value of the product (added 2026-11-07)
 });
 export const CRITERIA = Object.freeze(Object.values(CRITERION));
 export const CRITERION_QUESTIONS = Object.freeze({
@@ -38,6 +49,8 @@ export const CRITERION_QUESTIONS = Object.freeze({
   COMMERCIAL_CLARITY: 'Does the concept leave the offer, the approved claims and the price clear and easy to find?',
   NARRATIVE_COHESION: 'Do the idea, the metaphor and the story hold together as one coherent narrative?',
   GENERIC_RISK: 'Is the risk low that the result looks like a generic, template or stock-association image?',
+  COMPOSITION_STRENGTH: 'Does the concept state a recognisable COMPOSITION (the spatial structure: where the weight sits, how depth and scale are organised, where the light leads, what frames the place of the product) that a set designer could build, rather than a list of materials or a mood?',
+  PERCEIVED_VALUE: 'Does that composition raise the perceived value of the product (what the set does FOR it: staging, revealing light, richness of matter, space), so that the product looks worth more than on a plain background?',
 });
 export const OUTCOME = Object.freeze({ MEETS: 'MEETS', PARTIAL: 'PARTIAL', FAILS: 'FAILS', NOT_ASSESSED: 'NOT_ASSESSED' });
 export const SELECTION = Object.freeze({ SELECT: 'SELECT', REFINE_CONCEPT: 'REFINE_CONCEPT', REJECT_CONCEPT: 'REJECT_CONCEPT', NO_CLEAR_WINNER: 'NO_CLEAR_WINNER' });
@@ -52,6 +65,9 @@ const JUDGEABLE_BLOCKING = Object.freeze(BLOCKING.filter((c) => c !== CRITERION.
 const DECISIVE_CREATIVE = Object.freeze([CRITERION.CONCEPT_STRENGTH, CRITERION.DISTINCTIVENESS, CRITERION.GENERIC_RISK]);
 const MAX_PARTIAL_TO_SELECT = 2;
 const RANK = Object.freeze({ MEETS: 2, PARTIAL: 1, FAILS: 0, NOT_ASSESSED: 0 });
+// what matters first when two eligible concepts are otherwise level: that the real product can carry the image, then what the image is for, then what makes it memorable
+export const TIE_PRIORITY = Object.freeze([CRITERION.FEASIBILITY, CRITERION.PRODUCT_RELATIONSHIP, CRITERION.RELEVANCE_TO_BRIEF, CRITERION.GENERIC_RISK, CRITERION.DISTINCTIVENESS,
+  CRITERION.CONCEPT_STRENGTH, CRITERION.COMMERCIAL_CLARITY, CRITERION.BRAND_COMPATIBILITY, CRITERION.EMOTIONAL_RESONANCE, CRITERION.NARRATIVE_COHESION, CRITERION.COMPOSITION_STRENGTH, CRITERION.PERCEIVED_VALUE]);
 
 /** The judgment of one concept: every criterion exactly once, in words, with evidence. */
 export function normalizeEvaluation(raw, where = 'evaluation') {
@@ -73,7 +89,7 @@ export function normalizeEvaluation(raw, where = 'evaluation') {
 }
 
 /** One concept's judgment as a model states it: the contract the answer is validated against AND the contract the instruction states. */
-export const CRITERION_JUDGMENT_SPEC = obj({ criterion: word(CRITERION), outcome: word(OUTCOME), evidence: text({ max: 240 }), refinement: text({ min: 8, max: 240 }) }, { optional: ['evidence', 'refinement'] });
+export const CRITERION_JUDGMENT_SPEC = obj({ criterion: word(CRITERION), outcome: word(OUTCOME), evidence: text({ max: 240, fit: true }), refinement: text({ min: 8, max: 240, fit: true }) }, { optional: ['evidence', 'refinement'] });
 export const EVALUATION_SPEC = obj({ concept_id: text({ max: 80 }), criteria: list(CRITERION_JUDGMENT_SPEC, { min: 0, max: CRITERIA.length }) });
 export const evaluationsAnswerSpec = (count) => obj({ evaluations: list(EVALUATION_SPEC, { min: 1, max: count }) });
 export const EVIDENCE_MIN = 12;
@@ -86,8 +102,10 @@ export const SELECTION_RULES = Object.freeze([
 
 const outcomeOf = (evaluation, criterion) => evaluation.criteria.find((c) => c.criterion === criterion).outcome;
 
+/** The criteria a concept must MEET to be SELECTed. The default pair is the historical bar; a route may raise it (the decor-first route adds composition and perceived value). */
+export const DEFAULT_STRONG_CRITERIA = Object.freeze([CRITERION.CONCEPT_STRENGTH, CRITERION.DISTINCTIVENESS]);
 /** The decision for one concept, from its words only. */
-export function decideConcept(evaluation) {
+export function decideConcept(evaluation, strongCriteria = DEFAULT_STRONG_CRITERIA) {
   const outcomes = evaluation.criteria.map((c) => c.outcome);
   const fails = outcomes.filter((o) => o === OUTCOME.FAILS).length;
   const partials = outcomes.filter((o) => o === OUTCOME.PARTIAL).length;
@@ -96,7 +114,7 @@ export function decideConcept(evaluation) {
   const blockingUnassessed = JUDGEABLE_BLOCKING.some((c) => outcomeOf(evaluation, c) === OUTCOME.NOT_ASSESSED);
   // (only two criteria are neither blocking nor decisive, so three failures always include a blocking or decisive one)
   if (blockingFail || decisiveFail) return DECISION.REJECT_CONCEPT;
-  const strong = outcomeOf(evaluation, CRITERION.CONCEPT_STRENGTH) === OUTCOME.MEETS && outcomeOf(evaluation, CRITERION.DISTINCTIVENESS) === OUTCOME.MEETS;
+  const strong = strongCriteria.every((c) => outcomeOf(evaluation, c) === OUTCOME.MEETS);
   if (fails === 0 && !blockingUnassessed && partials <= MAX_PARTIAL_TO_SELECT && strong) return DECISION.SELECT;
   return DECISION.REFINE_CONCEPT;
 }
@@ -113,6 +131,34 @@ export function dominates(a, b) {
   return better;
 }
 
+const countOf = (evaluation, outcome) => evaluation.criteria.filter((c) => c.outcome === outcome).length;
+/** a before b: the first rule that tells them apart, or null when the two evaluations are level on rules 1-3. Returns { winner: 'a'|'b', rule, detail } or null. */
+function compareEligible(a, b) {
+  const meetsA = countOf(a, OUTCOME.MEETS); const meetsB = countOf(b, OUTCOME.MEETS);
+  if (meetsA !== meetsB) return { winner: meetsA > meetsB ? 'a' : 'b', rule: 'MORE_CRITERIA_MET', detail: `${Math.max(meetsA, meetsB)} against ${Math.min(meetsA, meetsB)} criteria judged MEETS` };
+  const failA = countOf(a, OUTCOME.FAILS); const failB = countOf(b, OUTCOME.FAILS);
+  if (failA !== failB) return { winner: failA < failB ? 'a' : 'b', rule: 'FEWER_FAILURES', detail: `${Math.min(failA, failB)} against ${Math.max(failA, failB)} criteria judged FAILS` };
+  for (const criterion of TIE_PRIORITY) {
+    const x = rankOf(a, criterion); const y = rankOf(b, criterion);
+    if (x !== y) return { winner: x > y ? 'a' : 'b', rule: 'PRIORITY_CRITERIA', detail: `${criterion} is judged better (${x > y ? outcomeOf(a, criterion) : outcomeOf(b, criterion)} against ${x > y ? outcomeOf(b, criterion) : outcomeOf(a, criterion)})` };
+  }
+  return null;
+}
+/**
+ * The eligible concepts in the order Nordla prefers them, and why the first one beats the next. A concept that dominates another is always ahead of it (dominance implies rules 1-3 never
+ * rank it behind), so a clear winner stays the winner; the rules only decide what dominance leaves open.
+ */
+export function orderEligible(candidates, evaluations) {
+  const compare = (idA, idB) => {
+    const r = compareEligible(evaluations.get(idA), evaluations.get(idB));
+    if (r) return r.winner === 'a' ? -1 : 1;
+    return idA < idB ? -1 : idA > idB ? 1 : 0;
+  };
+  const order = [...candidates].sort(compare);
+  const steps = order.slice(1).map((id, i) => { const r = compareEligible(evaluations.get(order[i]), evaluations.get(id)); return { ahead: order[i], behind: id, rule: r ? r.rule : 'STABLE_ORDER', detail: r ? r.detail : 'the evaluations are word for word equal: the smaller concept_id goes first' }; });
+  return { order, steps };
+}
+
 function unique(candidates, evaluations) {
   const nonDominated = candidates.filter((a) => !candidates.some((b) => b !== a && dominates(evaluations.get(b), evaluations.get(a))));
   return nonDominated.length === 1 ? nonDominated[0] : null;
@@ -127,28 +173,37 @@ const summary = (evaluation) => {
  * The outcome of a round of concepts, derived by Nordla from the per-criterion words.
  * @returns {{ outcome, concept_id, decisions: [{ concept_id, decision, evidence }], reasons }}
  */
-export function selectConcept({ concepts, evaluations }) {
+export function selectConcept({ concepts, evaluations, strongCriteria = DEFAULT_STRONG_CRITERIA }) {
   const byId = new Map(evaluations.map((e) => [e.concept_id, e]));
   for (const c of concepts) if (!byId.has(c.concept_id)) fail(BRAIN_ERROR.RULE_VIOLATION, 'a concept has no evaluation', 'evaluations');
   if (byId.size !== concepts.length) fail(BRAIN_ERROR.RULE_VIOLATION, 'an evaluation does not belong to a concept of this round', 'evaluations');
-  const decisions = concepts.map((c) => ({ concept_id: c.concept_id, decision: decideConcept(byId.get(c.concept_id)), evidence: summary(byId.get(c.concept_id)) }));
+  const decisions = concepts.map((c) => ({ concept_id: c.concept_id, decision: decideConcept(byId.get(c.concept_id), strongCriteria), evidence: summary(byId.get(c.concept_id)) }));
   const ofDecision = (d) => decisions.filter((x) => x.decision === d).map((x) => x.concept_id);
   const selectable = ofDecision(DECISION.SELECT);
   const refinable = ofDecision(DECISION.REFINE_CONCEPT);
-  let outcome; let conceptId = null; let reasons;
+  let outcome; let conceptId = null; let reasons; let order = []; let tieBreak = null;
+  const settle = (group, decided, undecided) => {
+    const ordered = orderEligible(group, byId);
+    const clear = unique(group, byId);
+    // a concept that dominates all the others (as good everywhere, better somewhere) is the winner whatever the tie-break rules would say: dominance is decided first, as before
+    order = clear ? [clear, ...ordered.order.filter((id) => id !== clear)] : ordered.order; conceptId = order[0];
+    if (clear) return [decided];
+    tieBreak = { tied: group.filter((id) => !group.some((other) => other !== id && dominates(byId.get(other), byId.get(id)))), decided_by: ordered.steps };
+    return [undecided];
+  };
   if (selectable.length) {
-    conceptId = unique(selectable, byId);
-    outcome = conceptId ? SELECTION.SELECT : SELECTION.NO_CLEAR_WINNER;
-    reasons = [conceptId ? 'ONE_CONCEPT_MEETS_THE_BAR_AND_IS_NOT_DOMINATED' : 'SEVERAL_CONCEPTS_MEET_THE_BAR_AND_NONE_DOMINATES'];
+    outcome = SELECTION.SELECT;
+    reasons = settle(selectable, 'ONE_CONCEPT_MEETS_THE_BAR_AND_IS_NOT_DOMINATED', 'SEVERAL_CONCEPTS_MEET_THE_BAR_NONE_DOMINATES_TIE_BROKEN_BY_FIXED_RULES');
   } else if (refinable.length) {
-    conceptId = unique(refinable, byId);
-    outcome = conceptId ? SELECTION.REFINE_CONCEPT : SELECTION.NO_CLEAR_WINNER;
-    reasons = [conceptId ? 'THE_BEST_CONCEPT_IS_PROMISING_BUT_NOT_YET_STRONG_ENOUGH' : 'SEVERAL_CONCEPTS_NEED_REFINEMENT_AND_NONE_DOMINATES'];
+    outcome = SELECTION.REFINE_CONCEPT;
+    reasons = settle(refinable, 'THE_BEST_CONCEPT_IS_PROMISING_BUT_NOT_YET_STRONG_ENOUGH', 'SEVERAL_CONCEPTS_NEED_REFINEMENT_NONE_DOMINATES_TIE_BROKEN_BY_FIXED_RULES');
   } else { outcome = SELECTION.REJECT_CONCEPT; reasons = ['EVERY_CONCEPT_FAILS_A_DECISIVE_CRITERION']; }
-  return deepFreeze({ outcome, concept_id: conceptId, decisions, reasons });
+  // order: the eligible concepts of the winning group, best first (the run may fall back to the next one if the first cannot be art-directed); never a concept of a lower decision
+  return deepFreeze({ outcome, concept_id: conceptId, decisions, reasons, order, tie_break: tieBreak });
 }
 
-export function buildEvaluationInstruction({ frame, concepts }) {
+/** `feasibility`: an optional replacement of the FEASIBILITY question (the caller knows the production route; this module does not). `routeNotes`: optional per-concept notes (clauses to verify), given as data next to the concepts. */
+export function buildEvaluationInstruction({ frame, concepts, feasibility = null, routeNotes = null }) {
   const system = [
     'You are the Nordla concept selector. You compare creative concepts for one problem frame, criterion by criterion, in words.',
     'Return ONLY one JSON object, described exactly by these lines (Nordla refuses an answer that does not follow them):',
@@ -156,29 +211,30 @@ export function buildEvaluationInstruction({ frame, concepts }) {
     ...renderRules(SELECTION_RULES),
     'outcome MEETS means the expectation is met, PARTIAL that it is arguable, FAILS that it clearly is not, NOT_ASSESSED that you cannot judge it.',
     'Judge only from what you are given. BRAND_COMPATIBILITY depends on brand rules you do not have, and COMMERCIAL_CLARITY on a layout that does not exist yet (later deterministic gates verify both): judge them only if the concept clearly breaks or clearly protects them, otherwise answer NOT_ASSESSED rather than guess.',
+    'Product properties must be in the facts; set materials and architecture are free, never a reason to reject (a gate applies the brand rules).',
     'Never give a score, a number, a rank or a winner: Nordla derives the decision. Be demanding: a clean idea that any competitor could publish is not distinctive, and a concept that hides the product does not meet the commercial criteria.',
     'The criteria:',
-    ...CRITERIA.map((c) => `- ${c}: ${CRITERION_QUESTIONS[c]}`),
+    ...CRITERIA.map((c) => `- ${c}: ${c === CRITERION.FEASIBILITY && feasibility ? feasibility : CRITERION_QUESTIONS[c]}`),
     'Reason with these principles of art direction:',
     principlesAsText(principlesFor({ stage: REASONING_STAGE.SELECT_CONCEPT })),
   ].join('\n');
-  return { system, user: JSON.stringify({ problem_frame: frame, concepts }) };
+  return { system, user: JSON.stringify({ problem_frame: frame, concepts, ...(routeNotes ? { route_notes: routeNotes } : {}) }) };
 }
 
 /** A model's whole answer for a round: closed, one evaluation per concept of the round, then Nordla's own decision. Everything that can refuse the answer happens here, so a refusal carries its evidence. */
-export function normalizeEvaluationsAnswer(raw, concepts) {
+export function normalizeEvaluationsAnswer(raw, concepts, { strongCriteria = DEFAULT_STRONG_CRITERIA } = {}) {
   closed(raw, ['evaluations'], 'answer');
   const evaluations = listOf(raw.evaluations, 'evaluations', { min: 1, max: concepts.length }, (e, w) => normalizeEvaluation(e, w));
-  return { evaluations, selection: selectConcept({ concepts, evaluations }) };
+  return { evaluations, selection: selectConcept({ concepts, evaluations, strongCriteria }) };
 }
 
 /** The SELECT stage: one model completion for the judgments, then Nordla's own decision. */
 export function createConceptSelector({ complete }) {
   return Object.freeze({
-    async select({ frame, concepts }) {
+    async select({ frame, concepts, feasibility = null, routeNotes = null, strongCriteria = DEFAULT_STRONG_CRITERIA }) {
       const { value, meta } = await askAndNormalize({
-        complete, instruction: buildEvaluationInstruction({ frame, concepts }), stage: 'SELECT_CONCEPT',
-        spec: evaluationsAnswerSpec(concepts.length), normalize: (raw) => normalizeEvaluationsAnswer(raw, concepts),
+        complete, instruction: buildEvaluationInstruction({ frame, concepts, feasibility, routeNotes }), stage: 'SELECT_CONCEPT',
+        spec: evaluationsAnswerSpec(concepts.length), normalize: (raw) => normalizeEvaluationsAnswer(raw, concepts, { strongCriteria }),
       });
       return { selection: value.selection, evaluations: value.evaluations, meta };
     },

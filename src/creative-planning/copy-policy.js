@@ -92,7 +92,7 @@ export function verifyGeneration({ generated, facts, usedRefs, purpose, capacity
 const refuse = (stage, problems) => fail(BRAIN_ERROR.RULE_VIOLATION, `${stage}: the text is refused by the copy policy`, stage, { problem: problems[0], words: problems });
 
 // ---- the two model contracts (spec-driven: the same spec validates the answer and is stated in the instruction)
-export const COPY_ADAPT_SPEC = obj({ text: text({ max: 1200 }), rationale: text() });
+export const COPY_ADAPT_SPEC = obj({ text: text({ max: 1200 }), rationale: text({ fit: true }) });
 export const COPY_ADAPT_RULES = Object.freeze([
   { id: 'ADAPT_FITS_THE_LIMIT', statement: 'the adapted text is not longer than the character limit given in the request', check: (v, ctx) => { if (codePoints(v.text) > ctx.capacity_chars) refuse('COPY_ADAPT', ['TOO_LONG']); } },
   {
@@ -108,7 +108,7 @@ export const COPY_ADAPT_RULES = Object.freeze([
 ]);
 export const COPY_ADAPT_CONTRACT = Object.freeze({ stage: 'COPY_ADAPT', spec: COPY_ADAPT_SPEC, rules: COPY_ADAPT_RULES });
 
-export const COPY_WRITE_SPEC = obj({ text: text({ max: 1200 }), uses_fact_refs: list(text({ max: 200 }), { min: 0, max: 8 }), rationale: text() });
+export const COPY_WRITE_SPEC = obj({ text: text({ max: 1200 }), uses_fact_refs: list(text({ max: 200 }), { min: 0, max: 8 }), rationale: text({ fit: true }) });
 export const COPY_WRITE_RULES = Object.freeze([
   { id: 'WRITE_FITS_THE_LIMIT', statement: 'the text is not longer than the character limit given in the request', check: (v, ctx) => { if (codePoints(v.text) > ctx.capacity_chars) refuse('COPY_WRITE', ['TOO_LONG']); } },
   {

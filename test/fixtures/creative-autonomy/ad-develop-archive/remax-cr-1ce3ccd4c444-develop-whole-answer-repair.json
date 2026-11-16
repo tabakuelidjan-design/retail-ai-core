@@ -1,0 +1,68 @@
+{
+ "proposals": [
+  {
+   "name": "Le café de la gare, avant le train",
+   "from_rapprochement": "Transport public : plusieurs sorties comme un ticket valable pour plusieurs trajets",
+   "starting_point": "BENEFIT",
+   "need": "Pouvoir recharger son smartphone en déplacement sans chercher ni emporter plusieurs câbles.",
+   "idea": "Sur une table en bois brut d’un café de la gare de Namur, la batterie bleue repose près d’un smartphone éteint, écran tourné vers le bas. La lumière douce du matin vient de la gauche, comme sur la photo studio. Le câble en boucle au-dessus du boîtier et l’autre pendante restent dans leur pose fixe, visibles mais non connectés. Aucun autre objet n’entre en scène — juste le produit, le téléphone secondaire (écran off), et la texture du bois qui suggère un lieu de transit rapide, où chaque seconde compte.",
+   "visible_cues": "Batterie bleue satinée posée sur bois brut, smartphone éteint à côté, câbles intégrés en pose fixe (boucle haute + câble pendu), lumière venant de la gauche, pas de mains ni d’autres objets.",
+   "cable_role": "Aucun câble n’est branché, mais leur présence fixe montre qu’ils sont toujours là, prêts — pas besoin de les chercher dans un sac.",
+   "link_to_product": "La batterie est montrée exactement comme photographiée : bleu clair, affichage à 100 %, ports visibles, câbles en pose fixe. Son autonomie (20 000 mAh) et ses deux câbles intégrés répondent directement au besoin de simplicité en déplacement.",
+   "speaks_to_the_public": "Aux gens qui courent entre deux trains ou deux réunions, ce produit dit : tu n’as pas besoin d’un sac à câbles, juste de ça — et tu es prêt.",
+   "headline": "Recharge sans chercher, même en déplacement",
+   "supported_by": [
+    "capacity",
+    "integrated_cables"
+   ]
+  },
+  {
+   "name": "La table de travail improvisée",
+   "from_rapprochement": "Cuisine de marché : un panier bien agencé, tous les outils prêts sans fouiller",
+   "starting_point": "PRODUCT_NATURE",
+   "need": "Disposer d’un outil fiable et intuitif, sans configuration ni geste compliqué au moment critique.",
+   "idea": "Sur une surface de stratifié gris clair, légèrement usée, la batterie est posée à angle, face avant visible. À sa droite, un smartphone éteint, écran vers le bas, sans contact avec la batterie. L’éclairage doux vient de la gauche, fidèle à la photo. Les deux câbles intégrés sont en leur position fixe : l’un en boucle au-dessus, l’autre pend le long du côté gauche. Rien d’autre — pas de chargeurs, pas de sacs. Le décor suggère un bureau temporaire, une pause productive, où tout doit fonctionner immédiatement.",
+   "visible_cues": "Batterie bleue sur stratifié gris, smartphone éteint à droite, câbles en pose fixe, éclairage de gauche, aucun autre objet ni main.",
+   "cable_role": "AUCUN",
+   "link_to_product": "Le produit tel que photographié — compact, avec affichage clair et câbles intégrés — incarne la simplicité opérationnelle : pas de branchements à deviner, pas de câbles perdus.",
+   "speaks_to_the_public": "Pour ceux qui travaillent sur le pouce, entre deux rendez-vous, cette batterie est une alliée silencieuse : elle ne demande rien, elle donne.",
+   "headline": "Prête quand tu l’es, sans préparation",
+   "supported_by": [
+    "digital_display",
+    "integrated_cables"
+   ]
+  },
+  {
+   "name": "Le banc du parc après la pluie",
+   "from_rapprochement": "Cartographie : une carte de poche qui indique clairement la réserve d’énergie restante",
+   "starting_point": "ABSTRACT_INTENTION",
+   "need": "Avoir une autonomie suffisante pour couvrir une journée entière, même avec une utilisation intensive.",
+   "idea": "La batterie repose sur un banc en bois sombre, légèrement humide, sous une lumière diffuse de fin d’après-midi (venant de la gauche, comme la photo). Un smartphone éteint est posé à distance, écran caché. L’affichage rond noir de la batterie montre « 100 % » en vert, visible sans effort. Les câbles restent en leur pose fixe — boucle haute, câble pendu — sans être reliés. Le décor minimal suggère une pause après un effort, un moment où on vérifie qu’on a encore de la marge.",
+   "visible_cues": "Batterie bleue sur banc humide, affichage « 100% » lumineux, smartphone éteint à l’écart, câbles en pose fixe, lumière douce de gauche.",
+   "cable_role": "AUCUN",
+   "link_to_product": "L’affichage numérique (« 100% ») et la capacité de 20 000 mAh sont visibles ou déductibles de la scène : le produit rassure par sa réserve, sans ambiguïté.",
+   "speaks_to_the_public": "À ceux qui vivent leur journée pleinement, cette batterie dit : tu peux continuer — ton énergie est encore là.",
+   "headline": "20 000 mAh pour toute la journée",
+   "supported_by": [
+    "capacity",
+    "digital_display"
+   ]
+  },
+  {
+   "name": "L’atelier de personnalisation HABB",
+   "from_rapprochement": "Couture : les câbles tressés évoquent un fil cousu dans le tissu",
+   "starting_point": "PRODUCT_NATURE",
+   "need": "Se sentir autonome face aux aléas de la batterie, sans stress ni dépendance à une prise murale.",
+   "idea": "Sur un plan de travail en acier brossé, typique de l’atelier HABB à Namur, la batterie bleue est posée en diagonale. À sa gauche, un smartphone éteint, écran vers le bas. Le fond est neutre, légèrement texturé, sans décor superflu. La lumière douce vient de la gauche, comme sur la photo. Les deux câbles tressés bleus sont en leur pose fixe — l’un en boucle, l’autre pendu — rappelant un fil intégré, jamais détaché. Rien ne touche les câbles ; ils sont simplement *là*, comme une partie du corps de l’objet.",
+   "visible_cues": "Batterie sur acier brossé, smartphone éteint à gauche, câbles tressés en pose fixe, lumière de gauche, pas de mains ni d’objets supplémentaires.",
+   "cable_role": "Les câbles tressés, de la même teinte que le boîtier, apparaissent comme une extension naturelle du produit — présents, utiles, mais jamais encombrants.",
+   "link_to_product": "Le design intégré (câbles tressés, couleur unifiée, angles arrondis) rend le produit familier et rassurant, comme un outil conçu pour durer dans la poche ou le sac.",
+   "speaks_to_the_public": "Pour les Namurois qui aiment le fait-main et l’utile, cette batterie est un compagnon discret, solide, toujours prêt — comme un bon outil de métier.",
+   "headline": "Intégrée comme un fil dans le tissu",
+   "supported_by": [
+    "integrated_cables"
+   ]
+  }
+ ],
+ "how_they_differ": "Chaque proposition part d’un besoin différent (simplicité de câble, intuitivité, autonomie, sentiment d’autonomie) et d’un décor spécifique (gare, bureau temporaire, parc, atelier HABB), sans jamais modifier le produit ni ses câbles."
+}

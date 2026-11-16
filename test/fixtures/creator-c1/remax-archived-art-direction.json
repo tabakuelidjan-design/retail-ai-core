@@ -1,0 +1,41 @@
+{
+ "atmosphere": "Un calme confiant, comme celui qu’on ressent quand on sait qu’on a ce qu’il faut, sans effort, sans bruit, sans artifice — juste une solution réelle, là où on en a besoin.",
+ "depth_model": "LAYERED_DEPTH",
+ "material_language": "Matériaux bruts et honnêtes : pavé namurois usé, béton ciré non poli, surface légèrement poreuse qui garde la trace du temps sans tomber dans le décoratif ou le rustique.",
+ "lighting_intent": "Lumière directionnelle douce mais affirmée, venant d’un angle bas et latéral pour sculpter l’ombre portée nette de la batterie et guider le regard le long du câble déroulé.",
+ "visual_rhythm": "MEASURED",
+ "product_relationship": "GROUNDED_IN_SCENE",
+ "text_image_relationship": "TEXT_IN_CALM_ZONES",
+ "realism": "PHOTOREALISTIC",
+ "emotional_temperature": "NEUTRAL",
+ "visual_tension": "MEDIUM",
+ "negative_space_strategy": "DIRECTIONAL_LEAD",
+ "narrative_elements": [
+  {
+   "element": "Câble déroulé en diagonale vers le vide, sans contact avec aucun objet",
+   "reason": "Il incarne la promesse silencieuse d’usage futur, aligné avec l’idée centrale de prévoyance tranquille et l’émotion de confiance anticipée.",
+   "zone": "MIDGROUND"
+  },
+  {
+   "element": "Ombre portée nette et précise sous la batterie",
+   "reason": "Elle ancre la présence réelle du produit dans le décor brut, renforçant la crédibilité matérielle et la sensation de poids utile, en lien avec l’intent émotionnel de sécurité.",
+   "zone": "FOREGROUND"
+  }
+ ],
+ "permitted_secondary_elements": [
+  "Traces discrètes d’usure sur le pavé namurois",
+  "Subtile variation de texture entre les dalles du sol",
+  "Légère irrégularité de la surface sous la batterie"
+ ],
+ "forbidden_decorative_noise": [
+  "beige, crème, sable, écru, taupe, ivoire",
+  "feuille, végétation, eucalyptus, botanique",
+  "doré, gold, glitter, paillette, luxe",
+  "marbre, velours, pétale, bokeh",
+  "logo, texte, prix, marque, étiquette",
+  "écran, téléphone, appareil, coque, câble enroulé",
+  "cœur, feuillage, frond, fougère",
+  "herbe, fleur, bois clair, béton lisse"
+ ],
+ "rationale": "Le décor raconte l’histoire de disponibilité silencieuse par un seul geste visuel fort — le câble déroulé à distance — tandis que la batterie bleue, posée sur un sol local texturé, reste inchangée et centrée dans son rôle de héros réaliste, sans compétition ni artifice."
+}

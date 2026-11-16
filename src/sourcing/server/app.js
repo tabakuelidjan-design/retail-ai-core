@@ -49,7 +49,7 @@ export function backupHealth(st, nowMs, { maxAgeH = 26, firstRunGraceMin = 30 } 
   return { ok: false, status: st.last_success_at == null ? 'NO_OFFSITE_COPY_YET' : 'STALE', ...base };
 }
 
-export function createSourcingApp({ backupStatus = null, token, gate = null, core = null, procurement = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
+export function createSourcingApp({ backupStatus = null, token, gate = null, core = null, procurement = null, creator = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
   if (!gate && (!token || String(token).length < 24)) throw new Error('a token of at least 24 characters is required'); // hosted: the session gate (Core identity) replaces the token
   // Host header allow-list (blocks DNS-rebinding on the loopback server). A tunnel's public host name must be added by the owner (SOURCING_ALLOWED_HOSTS).
   // `allowedHosts` may be a live array: the phone launcher adds the tunnel host name once it is known
@@ -154,6 +154,7 @@ export function createSourcingApp({ backupStatus = null, token, gate = null, cor
       if (url.pathname === '/shell-manifest.json' && req.method === 'GET') return json(res, 200, await shellManifest(), { 'cache-control': 'no-cache' });
       if (gate && url.pathname.startsWith('/api/auth/') && await gate.handle(req, res, url.pathname)) return;
       if (!gate && url.pathname === '/api/auth/session' && req.method === 'GET') return json(res, 200, { mode: 'token' }); // the page asks which sign-in: no data, no token check (would count as a failed attempt)
+      if (creator && await creator.handle(req, res, url)) return; // the Creator (staging module, only when built): its own paths, its own failures
       if (url.pathname.startsWith('/api/')) return await api(req, res, url);
       if (req.method !== 'GET') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
       if (procurement && (url.pathname === '/procurement' || url.pathname.startsWith('/procurement/'))) return await procurement.handleStatic(req, res, url); // Stock / Achats phone screens (static files only; its data stays behind /api/procurement/*)

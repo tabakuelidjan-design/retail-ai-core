@@ -16,6 +16,7 @@ export function safeCause(cause) {
   if (typeof cause?.name === 'string' && SAFE_TOKEN.test(cause.name)) out.name = cause.name;
   if (typeof cause?.code === 'string' && SAFE_TOKEN.test(cause.code)) out.code = cause.code;
   if (Number.isInteger(cause?.status) && cause.status >= 100 && cause.status <= 599) out.status = cause.status;
+  if (cause?.network && typeof cause.network === 'object') { const n = {}; for (const [k, v] of Object.entries(cause.network)) if (/^[a-z_]{1,24}$/.test(k) && typeof v === 'string' && /^[A-Za-z0-9_.:,-]{1,100}$/.test(v)) n[k] = v; if (Object.keys(n).length) out.network = n; }
   const requestId = cause?.requestId ?? cause?.request_id;
   if (typeof requestId === 'string' && SAFE_TOKEN.test(requestId)) out.request_id = requestId;
   return out;
@@ -27,8 +28,32 @@ function jsonSlice(text, where) {
   return slice;
 }
 
+/**
+ * Purely SYNTACTIC JSON slips, repaired locally and for free (no second model call): a comma before a closing bracket, and a raw line break or tab inside a string. Nothing outside a string
+ * is touched except those commas; no word, key or value is added, removed or reworded. Anything else stays invalid (and eligible for the one protocol repair).
+ */
+export function sanitizeJsonSyntax(s) {
+  let out = ''; let inString = false;
+  for (let i = 0; i < s.length; i += 1) {
+    const c = s[i];
+    if (inString) {
+      if (c === '\\') { out += c + (s[i + 1] ?? ''); i += 1; } else if (c === '"') { inString = false; out += c; } else if (c === '\n') out += '\\n'; else if (c === '\r') out += '\\r'; else if (c === '\t') out += '\\t'; else out += c;
+    } else if (c === '"') { inString = true; out += c; } else if (c === ',') {
+      let j = i + 1; while (j < s.length && /\s/.test(s[j])) j += 1;
+      if (s[j] !== '}' && s[j] !== ']') out += c;
+    } else out += c;
+  }
+  return out;
+}
+/** True when the reply is valid JSON only after sanitizeJsonSyntax (journaled as a JSON_SYNTAX repair). */
+export function needsJsonSyntaxRepair(text) {
+  try { const s = jsonSlice(text, 'answer'); try { JSON.parse(s); return false; } catch { JSON.parse(sanitizeJsonSyntax(s)); return true; } } catch { return false; }
+}
+
 export function parseJsonObject(text, where = 'answer') {
-  try { return JSON.parse(jsonSlice(text, where)); } catch (error) { if (error?.code === BRAIN_ERROR.MALFORMED) throw error; return fail(BRAIN_ERROR.MALFORMED, 'the model returned invalid JSON', where); }
+  const slice = jsonSlice(text, where);
+  try { return JSON.parse(slice); } catch { /* try the syntactic repair below */ }
+  try { return JSON.parse(sanitizeJsonSyntax(slice)); } catch { return fail(BRAIN_ERROR.MALFORMED, 'the model returned invalid JSON', where); }
 }
 
 // A key that is a name may carry an invisible character or another casing (a near miss the contract repairs); a key that holds a blank or punctuation, or is long, is prose.
@@ -152,6 +177,7 @@ export async function askAndNormalize({ complete, instruction, stage, schema = n
     const duplicate = findDuplicateKey(reply?.text, stage);
     if (duplicate) fail(BRAIN_ERROR.RULE_VIOLATION, `${stage}: the key "${duplicate.key}" appears twice in one object, so the answer does not say which of the two values it means`, stage, { problem: 'DUPLICATE_KEY', words: [duplicate.key] });
     let raw = parsed;
+    if (needsJsonSyntaxRepair(reply?.text)) meta.repairs.push({ path: stage, kind: REPAIR_KIND.JSON_SYNTAX, from: 'a comma before a closing bracket or a raw line break inside a text', to: 'valid JSON' });
     if (spec) {
       raw = normalizeNearMisses(spec, parsed, meta.repairs, stage);
       for (const r of meta.repairs) if (r.kind === REPAIR_KIND.KEY_NEAR_MISS) meta.key_repairs.push({ path: r.path, from: r.from, to: r.to });

@@ -1,0 +1,70 @@
+{
+ "product_key": "gourde-tyeso-ts8755c",
+ "title": "Gourde Tyeso TS-8755C avec poignée – 500 ml",
+ "photo": {
+  "status": "SHOPIFY_VARIANT_LINK",
+  "note": "Photo de la variante liée dans Shopify (aucun fichier local). Fiche ajoutée le 2026-11-15 par Claude à partir de la lecture seule du catalogue ; NON confirmée par le propriétaire."
+ },
+ "facts": [
+  {
+   "id": "active_lifestyle",
+   "claim": "pensée pour un mode de vie actif",
+   "source": {
+    "snapshot": "shopify-gourde-tyeso-ts8755c-20261115.json",
+    "excerpt": "pensée pour un mode de vie actif"
+   }
+  },
+  {
+   "id": "carry_handle",
+   "claim": "poignée de transport",
+   "source": {
+    "snapshot": "shopify-gourde-tyeso-ts8755c-20261115.json",
+    "excerpt": "poignée de transport"
+   }
+  },
+  {
+   "id": "lockable_lid",
+   "claim": "couvercle verrouillable",
+   "source": {
+    "snapshot": "shopify-gourde-tyeso-ts8755c-20261115.json",
+    "excerpt": "couvercle verrouillable"
+   }
+  },
+  {
+   "id": "sturdy",
+   "claim": "construction robuste",
+   "source": {
+    "snapshot": "shopify-gourde-tyeso-ts8755c-20261115.json",
+    "excerpt": "construction robuste"
+   }
+  },
+  {
+   "id": "volume",
+   "claim": "500 ml",
+   "source": {
+    "snapshot": "shopify-gourde-tyeso-ts8755c-20261115.json",
+    "excerpt": "500 ml"
+   }
+  }
+ ],
+ "pending": [
+  {
+   "id": "owner_confirmation",
+   "claim": "fiche produit ajoutée par Claude, non confirmée par le propriétaire",
+   "why": "les faits viennent de la description Shopify lue le 2026-11-15 ; les éléments qui ne doivent jamais changer sur l'image (marque imprimée, poignée, couvercle, finition) n'ont pas été relevés : la photo n'a pas été examinée"
+  }
+ ],
+ "invariants": [],
+ "coverage_missing": [
+  "éléments invariants du produit : photo non examinée",
+  "confirmation du propriétaire"
+ ],
+ "product_nouns": [
+  "gourdes?",
+  "bottles?",
+  "flasks?",
+  "bouteilles?",
+  "tyeso",
+  "ts-8755c"
+ ]
+}

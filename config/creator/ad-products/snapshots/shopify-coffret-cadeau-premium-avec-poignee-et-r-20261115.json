@@ -1,0 +1,56 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15547356250460",
+  "title": "Coffret cadeau Premium avec poignée et ruban",
+  "description": "Un coffret cadeau Premium avec poignée et ruban sélectionné pour mettre en valeur cadeaux, accessoires et créations avec une présentation soignée, prête à offrir.",
+  "tags": [
+   "9332--36",
+   "boîte cadeau",
+   "emballage cadeau",
+   "emballage premium"
+  ],
+  "productType": "Packaging",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57444461740380",
+     "title": "Rouge Cramoisi / S",
+     "price": "12.90",
+     "inventoryQuantity": 11
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57444461773148",
+     "title": "Rouge Cramoisi / M",
+     "price": "14.90",
+     "inventoryQuantity": 10
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57444461805916",
+     "title": "Rouge Cramoisi / L",
+     "price": "16.90",
+     "inventoryQuantity": 11
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57444461838684",
+     "title": "Blanc / S",
+     "price": "12.90",
+     "inventoryQuantity": 12
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57444461871452",
+     "title": "Blanc / M",
+     "price": "14.90",
+     "inventoryQuantity": 12
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57444461904220",
+     "title": "Blanc / L",
+     "price": "16.90",
+     "inventoryQuantity": 12
+    }
+   ]
+  }
+ }
+}

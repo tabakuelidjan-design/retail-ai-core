@@ -1,0 +1,9 @@
+# OpenAI Remax replay (2026-11-15)
+Archived data of the ONE real OpenAI request made on the blue Remax FC-02 (plan oa-761d8f9efc1de219, `gpt-image-2.5-sunburst`, 1024x1280, quality high, 0.05921 USD). Used by test/creator-openai-engine.test.js to drive the
+normal Creator entry with the archived render supplied in place of a network call. NOTHING here is a Tyeso result.
+- `remax-photo.jpg`: the owner-confirmed blue Remax photo (sha256 e2945061...), the product photo of the replay.
+- `frame_t1.png` + `frame_t1.plate.json`: the frame (grey background + authentic cut-out) the render was made from, 1080x1350, and its description in the shape of a Creator plate.
+- `sent_frame.png`: the 1024x1280 image that was SENT (sha256 b751d06980e372ca...). Creator's own resize (scripts/creative-autonomy/resize_image.py) reproduces it byte for byte from `frame_t1.png`: that equality is the check that the render matches the expected frame.
+- `native_openai.png`: the image OpenAI RETURNED (1024x1280). `usage.json`: the usage block of that response (733 text + 1280 image input tokens, 1510 image output tokens).
+The replay double (test only) answers an OpenAI request with `native_openai.png` ONLY when the received frame has the SHA-256 of `sent_frame.png`; any other frame is refused.
+- `exam_t1.json` + `produit_rgba_t1.png`: the examination and the CORRECTED cut-out (1234x1275, bbox 871x1263, aspect 0.69) that the archived frame was built from. Creator's own examination of the Shopify photo (1000x1000) gives another shape (bbox 547x963, aspect 0.568): with that cut-out the archived render is REFUSED by Creator's scene check (PRODUCT_NOT_FOUND_WHERE_EXPECTED, seen on the first replay). The replay therefore supplies the cut-out the render was made from. This only concerns the replay of an archived render: a real run builds its frame from Creator's own cut-out.

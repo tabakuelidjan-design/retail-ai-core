@@ -1,0 +1,35 @@
+{
+ "canvas": [
+  1080,
+  1350
+ ],
+ "bottom_front": [
+  513,
+  893
+ ],
+ "top_front": [
+  513,
+  380
+ ],
+ "box": {
+  "x0": 336,
+  "y0": 380,
+  "w": 354,
+  "h": 513
+ },
+ "contact_front": [
+  540,
+  837
+ ],
+ "body_anchor": {
+  "x": 540,
+  "y": 837,
+  "source": "DARK_PIXELS",
+  "anchored": true,
+  "drop_px": 56,
+  "base_w_px": 354
+ },
+ "plate_grey": 118,
+ "product_photo_untouched": true,
+ "note": "REPLAY FRAME: the frame the archived OpenAI Remax render was made from (frame_t1.png, 1080x1350), described like scene_plate.py describes a plate: box (336,380,354,513) from frame_t1.json, bottom_front/top_front = the box foot and top at its centre x (513), contact_front = the body contact (planned body centre 540, lowest point 837)."
+}

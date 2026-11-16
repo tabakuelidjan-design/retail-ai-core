@@ -1,0 +1,199 @@
+{
+ "evaluations": [
+  {
+   "concept_id": "cnc_256f3fccdbd848624cdf1eaf83c47f97",
+   "criteria": [
+    {
+     "criterion": "CONCEPT_STRENGTH",
+     "outcome": "MEETS",
+     "evidence": "One clear idea: autonomy through sobriety and integration, expressed via material contrast (brutal wall vs. satin blue), fixed cable pose as signature, and studio-light continuity.",
+     "refinement": "Sharpen the metaphor by ensuring the wall’s texture reads as ‘enduring craft’ not just ‘neutral backdrop’—light must sculpt the contrast, not flatten it."
+    },
+    {
+     "criterion": "RELEVANCE_TO_BRIEF",
+     "outcome": "MEETS",
+     "evidence": "Directly answers the brief: minimal set built first, product unchanged, benefit evoked via light/materials; targets Namurois seeking practical elegance without clutter.",
+     "refinement": "Ensure the ‘no extra cables’ promise is visually legible—not just implied by absence, but reinforced by how the fixed cables sit as integrated design elements."
+    },
+    {
+     "criterion": "EMOTIONAL_RESONANCE",
+     "outcome": "MEETS",
+     "evidence": "Evokes ‘calm technological confidence’—a quiet authority fitting for spontaneous or considered local purchase, matching the occasion’s low-drama utility focus.",
+     "refinement": "Avoid over-sobering: the warmth of the blue satin must feel inviting, not cold; test lighting to preserve tactile softness against grey concrete."
+    },
+    {
+     "criterion": "PRODUCT_RELATIONSHIP",
+     "outcome": "MEETS",
+     "evidence": "Product is hero, its form, color, cables, and display are central; décor exists to amplify recognition and desirability without obscuring or competing.",
+     "refinement": "Confirm that the fixed cable loops read as intentional design (not accidental) — their pose must feel like a deliberate signature, not an afterthought."
+    },
+    {
+     "criterion": "DISTINCTIVENESS",
+     "outcome": "PARTIAL",
+     "evidence": "Béton + briques blanchies is common in minimalist tech; distinctiveness relies on subtle execution (light, texture contrast), not unique elements.",
+     "refinement": "Anchor distinctiveness in HABB’s local identity: e.g., reference Namur’s limestone or workshop heritage in the brick texture’s grain or mortar tone."
+    },
+    {
+     "criterion": "FEASIBILITY",
+     "outcome": "MEETS",
+     "evidence": "Set is empty first (concrete floor, whitewashed bricks), product placed unchanged with fixed cables; benefit carried by light and material contrast alone.",
+     "refinement": "None needed—the route is fully respected: no touching, no reshaping, no dependency on cable position beyond its fixed photo state."
+    },
+    {
+     "criterion": "BRAND_COMPATIBILITY",
+     "outcome": "NOT_ASSESSED",
+     "evidence": "Not assessed.",
+     "refinement": null
+    },
+    {
+     "criterion": "COMMERCIAL_CLARITY",
+     "outcome": "NOT_ASSESSED",
+     "evidence": "Not assessed.",
+     "refinement": null
+    },
+    {
+     "criterion": "NARRATIVE_COHESION",
+     "outcome": "MEETS",
+     "evidence": "Idea (autonomy through integration), metaphor (artisan tool in calm workshop), and story (ready, complete, unburdened) align tightly around one emotional core.",
+     "refinement": "Ensure the ‘waiting to be taken in hand’ memory hook doesn’t drift into passivity—add subtle directional light or shadow to imply readiness, not dormancy."
+    },
+    {
+     "criterion": "GENERIC_RISK",
+     "outcome": "PARTIAL",
+     "evidence": "Minimalist concrete/brick setups are widely used for tech; risk is mitigated only if lighting and texture make the blue satin pop uniquely and meaningfully.",
+     "refinement": "Intensify the material dialogue: let the brick’s micro-roughness catch light differently than the product’s satin, creating a visual ‘conversation’ no stock image replicates."
+    }
+   ]
+  },
+  {
+   "concept_id": "cnc_43db31bdfbb61f9aedf480383049644a",
+   "criteria": [
+    {
+     "criterion": "CONCEPT_STRENGTH",
+     "outcome": "MEETS",
+     "evidence": "Strong central idea: 20 000 mAh as enduring journey, visualized via continuous inclined floor and ‘100%’ as beacon—simple, graspable in a glance.",
+     "refinement": "Clarify that the incline is optical (via lighting/shadow), not literal geometry, to avoid implying physical slope that could confuse product stability."
+    },
+    {
+     "criterion": "RELEVANCE_TO_BRIEF",
+     "outcome": "MEETS",
+     "evidence": "Fulfills all route constraints: empty set first (inclined plane), product added unchanged; benefit evoked via architecture (continuity = duration).",
+     "refinement": "Ensure the ‘road’ metaphor doesn’t overshadow product recognition—the battery must remain the sole focal object, not a detail in a landscape."
+    },
+    {
+     "criterion": "EMOTIONAL_RESONANCE",
+     "outcome": "MEETS",
+     "evidence": "‘Sérénité anticipée’ fits the occasion: buyers seek reassurance that energy is already secured, not promised—a quiet proof, not hype.",
+     "refinement": "Guard against clinical detachment: the ‘100%’ phare must feel warm and human, not robotic; use soft falloff to keep it inviting."
+    },
+    {
+     "criterion": "PRODUCT_RELATIONSHIP",
+     "outcome": "PARTIAL",
+     "evidence": "Product is proof, but the ‘100%’ display risks being read as generic status indicator unless tied explicitly to autonomy (e.g., via light halo or scale contrast).",
+     "refinement": "Use lighting to make the display glow subtly—not brighter, but more *present*—so it reads as ‘full capacity ready’, not just ‘on’."
+    },
+    {
+     "criterion": "DISTINCTIVENESS",
+     "outcome": "PARTIAL",
+     "evidence": "Inclined floor is uncommon but not unique; without strong local or material specificity, it risks feeling like a generic ‘journey’ trope.",
+     "refinement": "Root the incline in something tangible: e.g., mimic the gentle slope of the Meuse riverbank near Namur, making the geometry locally resonant."
+    },
+    {
+     "criterion": "FEASIBILITY",
+     "outcome": "MEETS",
+     "evidence": "No product modification; incline achieved via set geometry and lighting alone; cables untouched, no added elements—fully compliant with route.",
+     "refinement": "None needed—the concept lives entirely in the set’s architecture and light, satisfying the deterministic placement rule."
+    },
+    {
+     "criterion": "BRAND_COMPATIBILITY",
+     "outcome": "NOT_ASSESSED",
+     "evidence": "Not assessed.",
+     "refinement": null
+    },
+    {
+     "criterion": "COMMERCIAL_CLARITY",
+     "outcome": "NOT_ASSESSED",
+     "evidence": "Not assessed.",
+     "refinement": null
+    },
+    {
+     "criterion": "NARRATIVE_COHESION",
+     "outcome": "MEETS",
+     "evidence": "Story (long journey), metaphor (phare on silent road), and idea (timeless autonomy) cohere tightly; no competing threads.",
+     "refinement": "Ensure the left-placement of the product doesn’t create visual imbalance—use shadow or floor texture to anchor it as the origin point, not an afterthought."
+    },
+    {
+     "criterion": "GENERIC_RISK",
+     "outcome": "PARTIAL",
+     "evidence": "‘Empty space with glowing object’ is a known generative trope; distinctiveness hinges on avoiding clichéd minimalism through precise material treatment.",
+     "refinement": "Reject sterile emptiness: add micro-texture to the floor (e.g., faint trowel marks) so the surface feels worked, not manufactured—tying to HABB’s craftsmanship."
+    }
+   ]
+  },
+  {
+   "concept_id": "cnc_2174ebb849fb486b5a78e6863c29193a",
+   "criteria": [
+    {
+     "criterion": "CONCEPT_STRENGTH",
+     "outcome": "MEETS",
+     "evidence": "One powerful idea: resilience through calm presence, embodied by intact battery vs. fissured wall—clear, visual, emotionally grounded.",
+     "refinement": "Ensure fissures read as poetic time-marks, not damage; lighting must render them as delicate veins, not cracks needing repair."
+    },
+    {
+     "criterion": "RELEVANCE_TO_BRIEF",
+     "outcome": "PARTIAL",
+     "evidence": "Set is built first, product unchanged—but ‘micro-ruptures of the day’ metaphor risks over-interpreting the occasion; brief emphasizes utility, not existential struggle.",
+     "refinement": "Reframe the wall not as ‘world wearing down’ but as ‘daily rhythm made visible’—keeping the emotion grounded in lived experience, not abstraction."
+    },
+    {
+     "criterion": "EMOTIONAL_RESONANCE",
+     "outcome": "PARTIAL",
+     "evidence": "‘Résilience douce’ is compelling, but may feel slightly moralizing if the wall’s imperfection isn’t balanced by warmth or humor in the product’s presence.",
+     "refinement": "Let the blue satin reflect ambient warmth—avoid stark contrast; the product should feel companionable, not judgmental, amid imperfection."
+    },
+    {
+     "criterion": "PRODUCT_RELATIONSHIP",
+     "outcome": "MEETS",
+     "evidence": "Product is destination—its full charge and integrity resolve the narrative; décor sets the stakes, product delivers the answer without action.",
+     "refinement": "Confirm the fissures don’t visually compete: keep wall texture matte and low-contrast, letting the product’s satin and blue dominate via chroma, not size."
+    },
+    {
+     "criterion": "DISTINCTIVENESS",
+     "outcome": "MEETS",
+     "evidence": "Fissured wall as metaphor for daily wear—uncommon for power banks—is distinctive when tied to local materiality (e.g., Namur’s aged stone), not generic decay.",
+     "refinement": "Specify the fissure pattern: irregular but rhythmic, like weathered limestone joints, to root it in place and avoid stock ‘cracked wall’ imagery."
+    },
+    {
+     "criterion": "FEASIBILITY",
+     "outcome": "MEETS",
+     "evidence": "Set (fissured plaster wall, concrete base) generated first; product placed unchanged; no interaction with cables or surfaces—fully route-compliant.",
+     "refinement": "None needed—the concept relies solely on set texture and lighting, with no dependency on product pose beyond its fixed photo state."
+    },
+    {
+     "criterion": "BRAND_COMPATIBILITY",
+     "outcome": "NOT_ASSESSED",
+     "evidence": "Not assessed.",
+     "refinement": null
+    },
+    {
+     "criterion": "COMMERCIAL_CLARITY",
+     "outcome": "NOT_ASSESSED",
+     "evidence": "Not assessed.",
+     "refinement": null
+    },
+    {
+     "criterion": "NARRATIVE_COHESION",
+     "outcome": "MEETS",
+     "evidence": "Metaphor (wall = time’s traces), story (battery stands firm), and idea (quiet resilience) form a unified arc—no dissonance or drift.",
+     "refinement": "Avoid over-literality: the battery shouldn’t ‘defy’ the wall; it should coexist peacefully—emphasize harmony, not opposition."
+    },
+    {
+     "criterion": "GENERIC_RISK",
+     "outcome": "PARTIAL",
+     "evidence": "Fissured walls appear in many campaigns; risk is reduced only if the fissures are uniquely scaled, lit, and culturally anchored—not decorative.",
+     "refinement": "Make the fissures echo the cable tresses’ rhythm—subtle visual echo between wall and product to create a bespoke, non-stock dialogue."
+    }
+   ]
+  }
+ ]
+}

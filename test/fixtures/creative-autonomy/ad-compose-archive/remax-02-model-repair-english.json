@@ -1,0 +1,83 @@
+{
+  "concept_conserve": "CONSERVED",
+  "concept_changes": "",
+  "starting_point": "PRODUCT_NATURE",
+  "relation": "VISUAL",
+  "intention": "Show the power bank as an integrated part of daily mobility gear—resting on a functional urban textile surface, its compact form and integrated cables echoing the smart, no-fuss design of modern outerwear.",
+  "visible_link": "The two fixed integrated cables—looped and pendant—mirror the look of drawstrings or stowed straps on a technical jacket, reinforcing that everything needed is already in place, without clutter.",
+  "reason_to_care": "For people constantly on the move, this battery solves the daily friction of forgotten cables and bulky chargers: it’s ready, self-contained, and designed to travel with you like a trusted pocket accessory.",
+  "audience_use": "People who rely heavily on their smartphones and spend most of their day moving between work, study, and outings—needing reliable, cable-free charging without adding bulk or hassle.",
+  "supported_by": ["integrated_cables", "capacity"],
+  "product_nature": "A compact, satin-finish light blue power bank (20 000 mAh, 45W), rectangular with softly rounded corners, featuring a digital display showing 100%, two visible ports (USB-C and orange USB-A) on top, and two fixed integrated blue braided cables—one looped above, one hanging below—exactly as photographed.",
+  "idea": "A close-up of a folded technical fabric surface in cool grey-blue, resembling a lightweight urban jacket, with the battery resting slightly tilted as if slipped into an exterior pocket, lit softly from the left to highlight texture and product finish.",
+  "product_position": "LEFT_THIRD",
+  "product_framing": "CLOSE",
+  "structure": "Vertical composition with the folded fabric occupying the lower two-thirds, creating a clean plane; the battery sits on the upper edge of the fold, angled toward the viewer, leaving open space on the right for text reserve; no background elements, no depth tricks—just material, product, and negative space.",
+  "setting": "A single piece of soft, matte technical fabric in cool grey-blue, folded once to form a flat platform, evoking a modern city jacket’s inner lining or exterior pocket flap—no seams, no logos, no hardware visible.",
+  "materials": "Matte, non-reflective technical textile with fine woven texture, dyed in a cool neutral tone that complements the product’s light blue satin finish without competing; no leather, metal, or synthetic sheen.",
+  "atmosphere": "Calm, urban-ready utility—like stepping out with everything you need already in place, no last-minute scrambling, just quiet confidence in your kit.",
+  "light": "Soft, diffused studio light coming from the left, matching the photograph’s lighting direction, casting a gentle shadow to the right of the battery and emphasizing the fabric’s texture and the product’s rounded edges without harsh contrast.",
+  "text_reserve": {
+    "zone": "RIGHT_COLUMN",
+    "description": "A smooth, untextured vertical band of near-black, calm and deep, offering strong contrast for white headline text without visual noise."
+  },
+  "elements": [
+    {
+      "zone": "MIDGROUND",
+      "element": "Folded technical fabric surface, cool grey-blue, matte, with subtle weave texture"
+    },
+    {
+      "zone": "FOREGROUND",
+      "element": "Battery resting on the fold, slightly inclined, cables in fixed photographed pose"
+    }
+  ],
+  "resolution": "No resolution needed—the concept fits the product’s real appearance and constraints exactly; the scene requires no adjustment to accommodate the fixed cable positions or lighting.",
+  "placement_why": "Left-third close framing centers attention on the product’s form and integrated cables while leaving ample right-side space for the headline reserve; the tilt mimics natural placement in a pocket, reinforcing the ‘already there, ready to go’ idea.",
+  "headline": "Ce qu’il te faut, déjà dedans.",
+  "headline_role": "Reinforces the visual metaphor: the battery is not carried separately but belongs naturally in your everyday gear, like a pocket feature—no extra steps, no missing parts.",
+  "headline_lines": "ONE",
+  "palette_roles": [
+    {
+      "colour": "COOL_GREY",
+      "role": "DOMINANT",
+      "surfaces": "Folded fabric surface, covering most of the midground"
+    },
+    {
+      "colour": "NEAR_BLACK",
+      "role": "SECONDARY",
+      "surfaces": "Text reserve zone on the right, providing contrast and calm"
+    },
+    {
+      "colour": "STEEL_NAVY",
+      "role": "ACCENT",
+      "surfaces": "Subtle undertone in fabric shadow areas, grounding the cool palette"
+    },
+    {
+      "colour": "WHITE",
+      "role": "LIGHT_TINT",
+      "surfaces": "Highlight reflections on the battery’s satin surface and display bezel"
+    }
+  ],
+  "choices": [
+    {
+      "decision": "COMPOSITION",
+      "why": "Vertical close framing on left third emphasizes the product’s compactness and integrates it into a wearable context; the fold creates a natural ‘pocket’ illusion without adding props or misleading cues."
+    },
+    {
+      "decision": "PRODUCT_PLACEMENT",
+      "why": "Tilted placement on the fabric fold mirrors how one might casually slip the battery into a jacket pocket—suggesting ease of access and integration, while respecting the fixed cable pose."
+    },
+    {
+      "decision": "LIGHT",
+      "why": "Matching the photograph’s left-side soft lighting ensures visual continuity and highlights the satin finish and cable texture without creating false shadows or reflections."
+    },
+    {
+      "decision": "PALETTE",
+      "why": "Using COOL_GREY as dominant keeps focus on the product’s light blue; NEAR_BLACK reserve ensures headline legibility; STEEL_NAVY adds depth without warmth, aligning with HABB’s cool, local identity."
+    },
+    {
+      "decision": "TEXT_RESERVE",
+      "why": "Right-column near-black reserve offers maximum contrast for white text, stays clear of the product, and uses minimal space—honoring the ‘no clutter, just what you need’ message."
+    }
+  ]
+}

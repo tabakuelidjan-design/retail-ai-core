@@ -1,0 +1,37 @@
+{
+ "_provenance": "READING BY CLAUDE (2026-11-14) of the four archived proposals of cr-bffaa93bffef, for the CODE tests of the brief-fit rule only. need, visible_cues and cable_role say what each archived `idea` text describes as visible (AUCUN where the text shows nothing). This is NOT an output of Nordla and NOT an artistic judgment: a real model must fill these fields in a new real run.",
+ "readings": [
+  {
+   "name": "Le module urbain autonome",
+   "need": "AUCUN besoin de recharge mis en scène (un objet emporté « comme une carte »)",
+   "visible_cues": "Une carte papier de la ville posée à plat sur une table ; rien ne montre un besoin de recharge",
+   "cable_role": "AUCUN",
+   "cues_in_scene": "NONE",
+   "brief_fit": "LOW"
+  },
+  {
+   "name": "L’affichage sans parole",
+   "need": "Lire son niveau de charge d'un coup d'œil",
+   "visible_cues": "L'écran rond « 100 % » sur un fond uni ; aucune situation",
+   "cable_role": "AUCUN",
+   "cues_in_scene": "SOME",
+   "brief_fit": "LOW"
+  },
+  {
+   "name": "Le vêtement technique du quotidien",
+   "need": "Transporter un seul objet dans un sac",
+   "visible_cues": "Un sac à dos ouvert sur un banc, la batterie posée sur son bord, les câbles comme sur la photo ; rien n'indique qu'on ait besoin de recharger",
+   "cable_role": "Visible comme sur la photo ; son utilité n'est pas montrée",
+   "cues_in_scene": "ALL",
+   "brief_fit": "LOW"
+  },
+  {
+   "name": "La signalétique fiable",
+   "need": "Lire son niveau de charge d'un coup d'œil",
+   "visible_cues": "Un mur et une ligne bleue peinte à la hauteur de l'écran ; aucune situation",
+   "cable_role": "AUCUN",
+   "cues_in_scene": "SOME",
+   "brief_fit": "LOW"
+  }
+ ]
+}

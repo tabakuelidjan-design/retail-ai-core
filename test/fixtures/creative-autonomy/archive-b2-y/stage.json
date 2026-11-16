@@ -1,0 +1,74 @@
+{
+ "stage_id": "stg_d0b28c3f654e91e23283ff4206bb6551",
+ "concept_id": "cnc_10af619cb81cf792140bad13c40a68f0",
+ "backdrop": "WALL_AND_FLOOR",
+ "backdrop_tone": "COOL_GREY",
+ "floor_finish": "MATTE",
+ "key_light": {
+  "kind": "SOFTBOX",
+  "side": "LEFT",
+  "intensity": "MEDIUM",
+  "temperature": "NEUTRAL",
+  "purpose": "Rakes across the pale ash uprights and illuminates the plaster floor, matching the packshot lit side on the left."
+ },
+ "accent_lights": [
+  {
+   "kind": "STRIP",
+   "side": "RIGHT",
+   "intensity": "LOW",
+   "temperature": "COOL",
+   "purpose": "Fills the right side just enough to keep the quiet shadow legible without flattening the empty loom depth."
+  },
+  {
+   "kind": "SPOT",
+   "side": "TOP",
+   "intensity": "LOW",
+   "temperature": "NEUTRAL",
+   "purpose": "Casts a soft contact shadow beneath the plinth so the product stands grounded in the cleared workshop."
+  }
+ ],
+ "camera": {
+  "height": "HIGH",
+  "framing": "MEDIUM",
+  "product_position": "RIGHT_THIRD"
+ },
+ "support_surface": "FLOOR",
+ "props": [
+  {
+   "shape": "PLINTH",
+   "material": "CONCRETE",
+   "placement": "BENEATH",
+   "scale": "LOW",
+   "reason": "A smooth concrete base that stands as the cleared workshop floor, celebrating the absence of clutter beneath the battery."
+  },
+  {
+   "shape": "PANEL",
+   "material": "PAPER_WHITE",
+   "placement": "BEHIND",
+   "scale": "HIGH",
+   "reason": "Tall pale panels forming the skeletal frame of the empty loom, where all threads are removed and only structure remains."
+  },
+  {
+   "shape": "CYLINDER",
+   "material": "PAPER_WHITE",
+   "placement": "BEHIND",
+   "scale": "MEDIUM",
+   "reason": "Horizontal bars crossing between the uprights, completing the dismantled weaving apparatus because the fabric is finished."
+  },
+  {
+   "shape": "CYLINDER",
+   "material": "BRAND_NAVY",
+   "placement": "FOREGROUND_LEFT",
+   "scale": "LOW",
+   "reason": "A short length of matte woven cord resting loose on the lowest beam, echoing the braided texture of the necessary cables."
+  }
+ ],
+ "headline": "Tout est déjà tissé.",
+ "text_placement": "LEFT_COLUMN",
+ "show_price": "YES",
+ "rationale": "The bare wooden frame behind the blue battery makes the integrated cables visible as the only necessary threads, turning an empty loom into proof of total autonomy and clearing the visual field for mental lightness.",
+ "wanted_but_not_available": [
+  "Pale ash wood material with visible grain for the loom uprights, replaced by PAPER_WHITE panels to avoid forbidden warm tones",
+  "A true three-dimensional skeletal loom structure built from multiple intersecting props beyond the four allowed"
+ ]
+}

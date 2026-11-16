@@ -1,0 +1,37 @@
+{
+  "atmosphere": "A fleeting urban moment captured in motion, where urgency meets calm resolution, no decoration, only purposeful action and light",
+  "depth_model": "LAYERED_DEPTH",
+  "material_language": "Matte black polymer with subtle tactile grain, contrasted by the crisp glow of a digital display and the soft sheen of woven nylon cord",
+  "lighting_intent": "Directional overcast light that sculpts form without harsh shadows, highlighting the screen’s illumination as the sole active light source",
+  "visual_rhythm": "PUNCTUATED",
+  "product_relationship": "ELEVATED_IN_SCENE",
+  "text_image_relationship": "TEXT_IN_CALM_ZONES",
+  "realism": "PHOTOREALISTIC",
+  "emotional_temperature": "NEUTRAL",
+  "visual_tension": "MEDIUM",
+  "negative_space_strategy": "DIRECTIONAL_LEAD",
+  "narrative_elements": [
+    {
+      "element": "A hand entering from midframe, fingers closing around a suspended object with a lit numeric display",
+      "reason": "The gesture embodies the visual metaphor of the human switch—action triggers visibility and function, directly echoing 'interrupteur humain'",
+      "zone": "FOREGROUND"
+    },
+    {
+      "element": "A blurred figure in motion, torso slightly turned, suggesting forward momentum without identifying features",
+      "reason": "It grounds the scene in the occasion context of an active day outside, supporting the emotional intent of seamless autonomy",
+      "zone": "MIDGROUND"
+    }
+  ],
+  "permitted_secondary_elements": [
+    "A faint reflection on wet pavement beneath the figure",
+    "A diagonal shadow cast by the raised arm",
+    "Subtle motion blur on the edge of the cord"
+  ],
+  "forbidden_decorative_noise": [
+    "beige, crème, cream, sable, sand, écru, taupe, ivory, heart, leaf, foliage, eucalyptus, fern, petal, gold, glitter, marble, velvet, bokeh",
+    "casing, housing, shell, device, phone, screen, logo, brand, price, text, label",
+    "unprinted surface, blank panel, half-finished object",
+    "hero, centrepiece, protagonist, focal point, main subject"
+  ],
+  "rationale": "The image centers on a single reactive gesture where light and movement reveal function, making the battery’s presence felt through action rather than display, fulfilling the need for a memorable, non-decorative urban moment."
+}

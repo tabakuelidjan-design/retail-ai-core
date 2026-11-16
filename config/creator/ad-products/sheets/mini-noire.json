@@ -1,0 +1,166 @@
+{
+ "product_key": "batterie-mini-noire",
+ "title": "Batterie externe Mini 10 000 mAh – 22,5W (Noir)",
+ "photo": {
+  "status": "AVAILABLE",
+  "path_hint": "~/nordla-trials/batterie/batterie-noir.png",
+  "size": [
+   800,
+   799
+  ]
+ },
+ "facts": [
+  {
+   "id": "capacity",
+   "claim": "10 000 mAh",
+   "source": {
+    "snapshot": "shopify-batterie-mini-noir-20261105.json",
+    "excerpt": "10 000 mAh"
+   }
+  },
+  {
+   "id": "compact",
+   "claim": "format compact",
+   "source": {
+    "snapshot": "shopify-batterie-mini-noir-20261105.json",
+    "excerpt": "format compact"
+   }
+  },
+  {
+   "id": "fast_charge",
+   "claim": "charge rapide jusqu'à 22,5 W (selon la connexion et l'appareil)",
+   "source": {
+    "snapshot": "shopify-batterie-mini-noir-20261105.json",
+    "excerpt": "22,5"
+   }
+  }
+ ],
+ "conflicts": [
+  {
+   "id": "integrated_cables",
+   "claim": "câbles intégrés",
+   "observations": [
+    {
+     "source": "fiche Shopify du 2026-11-05",
+     "snapshot": "shopify-batterie-mini-noir-20261105.json",
+     "excerpt": "deux câbles intégrés"
+    },
+    {
+     "source": "fiche Shopify antérieure",
+     "snapshot": "shopify-batterie-mini-noir.json",
+     "excerpt": "câble USB-C intégré"
+    },
+    {
+     "source": "photo (lecture de Claude)",
+     "observation": "deux câbles tressés visibles, avec connecteurs USB-C et Lightning"
+    }
+   ],
+   "held": [
+    "deux câbles intégrés",
+    "un câble USB-C intégré",
+    "USB-C et Lightning"
+   ],
+   "what_to_confirm": "Combien de câbles intégrés et lesquels ? La fiche du 2026-11-05 et la photo disent deux (USB-C et Lightning), la fiche antérieure dit un seul câble USB-C."
+  },
+  {
+   "id": "neck_cord",
+   "claim": "cordon tour de cou",
+   "observations": [
+    {
+     "source": "fiche Shopify antérieure",
+     "snapshot": "shopify-batterie-mini-noir.json",
+     "excerpt": "cordon tour de cou"
+    },
+    {
+     "source": "fiche Shopify du 2026-11-05",
+     "observation": "ne mentionne aucun cordon"
+    },
+    {
+     "source": "photo (lecture de Claude)",
+     "observation": "aucun cordon tour de cou visible ; une agrafe métallique à droite"
+    }
+   ],
+   "held": [
+    "around a neck",
+    "around the neck",
+    "cordon tour de cou",
+    "neck cord",
+    "tour de cou"
+   ],
+   "what_to_confirm": "La batterie est-elle livrée avec un cordon tour de cou ?"
+  }
+ ],
+ "pending": [
+  {
+   "id": "led_display",
+   "claim": "affichage numérique LED",
+   "why": "Cité par les deux fiches mais NON VISIBLE sur la photo : confirmer qu'il existe sur ce coloris et comment le montrer.",
+   "sources": [
+    {
+     "source": "fiches Shopify",
+     "observation": "affichage / écran numérique"
+    },
+    {
+     "source": "photo",
+     "observation": "aucun écran visible"
+    }
+   ]
+  }
+ ],
+ "held_wordings": [
+  "affichage LED"
+ ],
+ "invariants": [
+  {
+   "id": "body",
+   "kind": "SHAPE",
+   "item": "coque noire brillante translucide aux reflets d'arête, angles arrondis",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "clip",
+   "kind": "SHAPE",
+   "item": "agrafe métallique à droite",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "cable_a",
+   "kind": "CABLE",
+   "item": "câble tressé noir avec connecteur USB-C",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "cable_b",
+   "kind": "CABLE",
+   "item": "câble tressé noir avec connecteur Lightning",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "no_marks",
+   "kind": "MARK",
+   "item": "aucune inscription visible sur la photo (à confirmer sur les autres faces)",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  },
+  {
+   "id": "colour",
+   "kind": "COLOUR",
+   "item": "noir (coloris Noir)",
+   "status": "PENDING_CONFIRMATION",
+   "basis": "lecture de la photo (Claude, 2026-11-07), à confirmer par le propriétaire"
+  }
+ ],
+ "coverage_missing": [],
+ "product_nouns": [
+  "batteries?",
+  "batterie externe",
+  "power ?banks?",
+  "powerbanks?",
+  "chargeurs?",
+  "chargers?"
+ ]
+}

@@ -1,0 +1,70 @@
+{
+ "proposals": [
+  {
+   "name": "Le café du matin, sans câble oublié",
+   "from_rapprochement": "Transport public : un ticket valable partout, prêt à l’usage immédiat",
+   "starting_point": "BENEFIT",
+   "need": "Pouvoir recharger son smartphone pendant la journée sans se soucier d’oublier ou de perdre des câbles.",
+   "idea": "Sur une table en bois brut d’un café namurois, la batterie bleu clair repose près d’une tasse vide et d’un journal plié. À côté, un smartphone éteint, écran vers le bas. La lumière douce du matin vient de la gauche, comme sur la photo, soulignant la boucle du câble tressé au-dessus du boîtier et le câble pendu avec son embout USB-C — prêts, mais pas encore branchés. L’affichage rond indique « 100% » en vert, visible sans effort. Rien d’autre n’est présent : pas de sac, pas de chargeur, pas de câble supplémentaire.",
+   "visible_cues": "Batterie bleu clair posée sur table en bois, smartphone éteint à côté, câbles intégrés visibles dans leur pose fixe (boucle haute + câble pendu), affichage « 100% » allumé, lumière venant de la gauche.",
+   "cable_role": "Les deux câbles tressés, dans leur position fixe, montrent qu’ils sont déjà là — pas besoin de chercher, pas de risque d’oubli avant de quitter la maison.",
+   "link_to_product": "La batterie est exactement comme photographiée : bleu satiné, angles arrondis, affichage actif, câbles intégrés en pose fixe. Le décor minimaliste met en valeur sa disponibilité immédiate.",
+   "speaks_to_the_public": "Aux Namurois pressés qui partent avec leur téléphone et rien d’autre, cette scène dit : tu as tout ce qu’il faut, dès le premier coup d’œil — même si tu es déjà assis au café.",
+   "headline": "Tu pars avec ton téléphone. Elle, elle reste prête.",
+   "supported_by": [
+    "capacity",
+    "integrated_cables",
+    "digital_display"
+   ]
+  },
+  {
+   "name": "Le trajet entre deux cours",
+   "from_rapprochement": "Cartographie urbaine : un point de repère fiable dans le flux quotidien",
+   "starting_point": "PRODUCT_NATURE",
+   "need": "Avoir une batterie externe qui reste facile à transporter et à utiliser sans préparation supplémentaire.",
+   "idea": "Dans un coin de banc en béton brut d’un passage couvert namurois (style Sart-Tilman ou Gare), la batterie repose sur une serviette en toile cirée grise, légèrement froissée. À côté, un cahier fermé, un stylo posé dessus. Aucun autre objet. La lumière diffuse du jour filtre par les vitrages hauts, venant de la gauche, comme sur la photo. Les câbles intégrés sont visibles dans leur pose fixe — aucun n’est tendu ni connecté — et l’écran affiche « 100% ». Le contraste bleu clair/noir/orange est net, comme un panneau clair dans un lieu fonctionnel.",
+   "visible_cues": "Batterie sur serviette grise, cahier fermé et stylo à côté, câbles intégrés en pose fixe, affichage « 100% », lumière venant de la gauche, fond de béton brut et vitrage diffus.",
+   "cable_role": "Aucun câble n’est branché, mais leur présence intégrée signifie qu’aucune préparation n’est nécessaire : on sort le boîtier, et c’est bon.",
+   "link_to_product": "Le produit est placé tel que photographié — même angle, même éclairage, mêmes câbles — et le décor urbain fonctionnel renforce son rôle de compagnon discret mais toujours présent.",
+   "speaks_to_the_public": "Pour les étudiants ou salariés qui traversent la ville entre deux rendez-vous, cette batterie est un repère : toujours là, toujours prête, sans geste supplémentaire.",
+   "headline": "Pas de configuration. Juste un coup d’œil — et tu repars.",
+   "supported_by": [
+    "integrated_cables",
+    "digital_display"
+   ]
+  },
+  {
+   "name": "La pause déjeuner, sans stress",
+   "from_rapprochement": "Cuisine de base : un ustensile multi-usage dans un petit espace",
+   "starting_point": "ABSTRACT_INTENTION",
+   "need": "Éviter le désordre des accessoires multiples tout en restant autonome sur plusieurs heures.",
+   "idea": "Sur une planche à découper en bois clair, posée sur une table de cuisine industrielle (acier brossé, arrière-plan neutre), la batterie bleu clair occupe le centre. Autour : un sandwich emballé dans du papier kraft, une bouteille d’eau en verre, rien d’autre. La lumière douce vient de la gauche, mettant en valeur la surface satinée et les câbles tressés dans leur pose fixe. L’affichage rond indique « 78% » (chiffre réaliste, non 100%, pour montrer qu’elle a déjà servi). Pas de sac, pas de câble détaché, pas de chargeur — juste l’essentiel, organisé comme un bon outil de cuisine.",
+   "visible_cues": "Batterie au centre d’une planche en bois, sandwich et bouteille d’eau à proximité, câbles intégrés visibles en pose fixe, affichage numérique à « 78% », lumière venant de la gauche.",
+   "cable_role": "Les câbles tressés, intégrés et non connectés, montrent qu’ils font partie du système — pas un accessoire à gérer, mais une extension naturelle du boîtier.",
+   "link_to_product": "Le produit est identique à la photo : même forme, même couleurs, même câbles en pose fixe. Le décor évoque l’efficacité sans surplus, comme une bonne cuisine.",
+   "speaks_to_the_public": "À ceux qui veulent simplifier leur quotidien, cette scène dit : moins d’objets, plus de liberté — et la batterie fait le travail sans ajouter du chaos.",
+   "headline": "Tout ce dont tu as besoin, en un seul objet.",
+   "supported_by": [
+    "capacity",
+    "integrated_cables",
+    "digital_display"
+   ]
+  },
+  {
+   "name": "L’attente à la gare, en pleine lumière",
+   "from_rapprochement": "Horlogerie : un cadran minimaliste qui dit juste ce qu’il faut",
+   "starting_point": "BENEFIT",
+   "need": "Savoir rapidement combien de charge il reste, sans avoir à allumer l’appareil ou à chercher une application.",
+   "idea": "Sur un banc en métal gris de la gare de Namur, la batterie repose à plat, face visible. Derrière, les rails flous, une horloge murale analogique en arrière-plan (sans chiffres, juste aiguilles). La lumière du jour, venant de la gauche, illumine l’anneau bleu clair de l’affichage rond, où « 42% » clignote doucement en vert. Les deux câbles tressés sont visibles dans leur pose fixe — l’un en boucle au-dessus, l’autre pendu — mais aucun n’est utilisé. Pas de téléphone, pas de sac, pas de main. Seul le regard porté sur l’écran suffit à comprendre l’état.",
+   "visible_cues": "Batterie sur banc métallique, affichage « 42% » visible en vert, câbles intégrés en pose fixe, lumière venant de la gauche, horloge analogique floue en arrière-plan.",
+   "cable_role": "AUCUN",
+   "link_to_product": "Le produit est exactement comme photographié — y compris l’affichage actif et les câbles en position fixe — et le décor met en avant la lisibilité immédiate de l’écran, comme un cadran.",
+   "speaks_to_the_public": "Pour ceux qui vérifient leur batterie en un instant, sans interaction, cette scène rappelle que l’information est là — claire, silencieuse, fiable.",
+   "headline": "Un coup d’œil. Et tu sais.",
+   "supported_by": [
+    "digital_display"
+   ]
+  }
+ ],
+ "how_they_differ": "Chaque proposition répond à un besoin distinct : 1) ne pas oublier les câbles, 2) transport sans préparation, 3) simplicité contre le désordre, 4) lecture rapide de la charge — avec des décors (café, passage couvert, cuisine, gare) et des rapprochements (transport public, cartographie, cuisine, horlogerie) totalement différents en nature."
+}

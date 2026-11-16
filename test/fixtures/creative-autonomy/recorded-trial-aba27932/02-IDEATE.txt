@@ -1,0 +1,49 @@
+{
+  "concepts": [
+    {
+      "central_idea": "Une batterie noire compacte devient un prolongement du corps lors d’un déplacement actif, son cordon tour de cou la rendant accessible comme une montre ou un pendentif, sans jamais quitter la main.",
+      "visual_metaphor": "Le cordon tour de cou est tendu par le mouvement de la main qui saisit la batterie, créant une ligne diagonale dynamique qui relie le cou à l’écran lumineux, comme un fil électrique vivant.",
+      "story": "Au moment où le téléphone clignote en rouge, la main attrape la batterie noire déjà suspendue au cou, l’écran s’allume instantanément à 78 % et le câble USB-C se déploie avec un léger ressort naturel.",
+      "emotional_intent": "Une assurance silencieuse, presque instinctive : le geste est si fluide qu’il semble réfléchi par le corps avant même que le cerveau ne décide de recharger.",
+      "product_role": "HERO_OF_THE_STORY",
+      "message_role": "EMBEDDED_IN_THE_STORY",
+      "memory_hook": "La batterie noire pendante, écran allumé, tirée vers le haut par une main en mouvement — comme un battement de cœur visible.",
+      "distinctiveness_reason": "Aucune autre batterie n’est présentée comme un accessoire porté en action, avec le cordon non pas posé mais tendu par le geste, reliant corps et technologie sans intermédiaire.",
+      "risks": [
+        "Le cordon peut être mal interprété comme un simple accessoire si la tension du geste n’est pas nette",
+        "L’absence de contexte urbain ou naturel risque de sembler trop abstrait pour certains clients",
+        "L’écran numérique doit être lisible sans zoom, sinon il perd son rôle de preuve visuelle"
+      ]
+    },
+    {
+      "central_idea": "La batterie noire est un objet de transition entre deux états : épuisement du téléphone et autonomie retrouvée, matérialisée par le passage d’un écran noir à un écran lumineux sur la batterie elle-même.",
+      "visual_metaphor": "Deux écrans face à face — celui du téléphone éteint, celui de la batterie allumé — séparés par le câble USB-C qui s’étire comme un pont lumineux dans la lumière du jour.",
+      "story": "Un téléphone éteint repose sur une surface brute, tandis qu’une main introduit la batterie noire avec son câble déployé ; au contact, l’écran de la batterie affiche 100 % et le téléphone vibre doucement, sans son.",
+      "emotional_intent": "Un soulagement discret, presque intime : la reconnexion n’est pas bruyante ni spectaculaire, juste fiable, immédiate et sans effort.",
+      "product_role": "PROOF_OF_THE_STORY",
+      "message_role": "FOLLOWS",
+      "memory_hook": "Les deux écrans en miroir — l’un mort, l’autre vivant — reliés par un câble qui semble porter la lumière lui-même.",
+      "distinctiveness_reason": "Le contraste entre les deux écrans crée une narration visuelle autonome, où la batterie ne se contente pas de fournir de l’énergie mais *démontre* sa capacité en temps réel, sans texte ni explication.",
+      "risks": [
+        "Le téléphone éteint pourrait être confondu avec un objet décoratif si son état n’est pas clairement visible",
+        "La lumière du jour risque d’aveugler l’écran de la batterie si l’angle n’est pas précis",
+        "Le câble USB-C doit apparaître intégré, pas détaché, pour éviter la confusion avec un accessoire externe"
+      ]
+    },
+    {
+      "central_idea": "La batterie noire est un objet de rupture temporelle : elle interrompt le stress de la décharge en un geste bref, comme une pause respiratoire dans une journée dense.",
+      "visual_metaphor": "La main saisit la batterie au moment exact où l’ombre portée du poing recouvre partiellement l’écran du téléphone, créant un cadre naturel où l’écran de la batterie brille comme un point focal isolé.",
+      "story": "Dans la lumière vive d’une rue, une ombre de main tombe sur un téléphone en fin de charge ; la batterie noire surgit du bas du cadre, écran allumé, câble prêt, et l’ombre se déplace pour la libérer.",
+      "emotional_intent": "Un apaisement physique : le geste est court, précis, sans hésitation — comme une respiration profonde prise entre deux tâches.",
+      "product_role": "TOOL_OF_THE_STORY",
+      "message_role": "LEADS",
+      "memory_hook": "L’ombre de la main qui encadre l’écran du téléphone, tandis que la batterie noire émerge en contre-jour, écran brillant comme une lampe de poche miniature.",
+      "distinctiveness_reason": "L’utilisation de l’ombre comme cadre narratif est rare dans la publicité tech, et ici elle transforme un geste technique en moment humain, tout en mettant en valeur la luminosité de l’écran numérique.",
+      "risks": [
+        "L’ombre peut masquer le produit si elle n’est pas calibrée avec précision",
+        "Le contraste trop fort entre ombre et lumière risque de rendre l’écran illisible",
+        "Le geste doit rester réaliste — pas théâtral — pour préserver la sobriété premium"
+      ]
+    }
+  ]
+}

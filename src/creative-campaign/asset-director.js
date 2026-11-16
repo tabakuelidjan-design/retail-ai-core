@@ -10,7 +10,7 @@ import { BRAIN_ERROR, fail } from '../creative-brain/validation.js';
 // only, so that the brief of an asset depends on nothing else and one asset can be redone alone. The answer holds no figure and never replaces the real product: the product is "the product", placed by
 // Nordla; a scene is described around it.
 
-export const ASSET_BRIEF_SPEC = obj({ imagery_brief: text({ max: 300, geometry: true }), composition_note: text({ max: 200, geometry: true }), rationale: text() });
+export const ASSET_BRIEF_SPEC = obj({ imagery_brief: text({ max: 300, geometry: true }), composition_note: text({ max: 200, geometry: true }), rationale: text({ fit: true }) });
 
 const ALLOWED_PRODUCT_WORDS = ['product', 'produit'];
 const refuse = (words) => fail(BRAIN_ERROR.FORBIDDEN_CONTENT, 'the imagery brief speaks of a substitute for the product, a competing hero object or text', 'asset_brief', { problem: 'ASSET_BRIEF_SUBSTITUTES_THE_PRODUCT', words });

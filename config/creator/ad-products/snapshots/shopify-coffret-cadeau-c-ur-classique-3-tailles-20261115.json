@@ -1,0 +1,92 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15547355627868",
+  "title": "Coffret cadeau cœur classique – 3 tailles",
+  "description": "Un coffret cadeau cœur classique – 3 tailles sélectionné pour mettre en valeur cadeaux, accessoires et créations avec une présentation soignée, prête à offrir.",
+  "tags": [
+   "8022-53",
+   "boîte cadeau",
+   "emballage cadeau",
+   "emballage premium"
+  ],
+  "productType": "Packaging",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57410735636828",
+     "title": "Rose / S",
+     "price": "4.90",
+     "inventoryQuantity": 9
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57410735669596",
+     "title": "Rose / M",
+     "price": "5.90",
+     "inventoryQuantity": 8
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57410735702364",
+     "title": "Rose / L",
+     "price": "6.90",
+     "inventoryQuantity": 8
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57410735735132",
+     "title": "Blanc / S",
+     "price": "4.90",
+     "inventoryQuantity": 9
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57410735767900",
+     "title": "Blanc / M",
+     "price": "5.90",
+     "inventoryQuantity": 9
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57410735800668",
+     "title": "Blanc / L",
+     "price": "6.90",
+     "inventoryQuantity": 9
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57410735833436",
+     "title": "Rouge / S",
+     "price": "4.90",
+     "inventoryQuantity": 8
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57410735866204",
+     "title": "Rouge / M",
+     "price": "5.90",
+     "inventoryQuantity": 8
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57410735898972",
+     "title": "Rouge / L",
+     "price": "6.90",
+     "inventoryQuantity": 7
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57410735931740",
+     "title": "Noir / S",
+     "price": "4.90",
+     "inventoryQuantity": 9
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57410735964508",
+     "title": "Noir / M",
+     "price": "5.90",
+     "inventoryQuantity": 9
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57410735997276",
+     "title": "Noir / L",
+     "price": "6.90",
+     "inventoryQuantity": 8
+    }
+   ]
+  }
+ }
+}

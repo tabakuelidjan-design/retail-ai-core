@@ -1,0 +1,27 @@
+{
+ "canvas": [
+  1080,
+  1350
+ ],
+ "background_grey": 118,
+ "placement": {
+  "x0": 504,
+  "y0": 551,
+  "w": 457,
+  "h": 662
+ },
+ "scale": 0.5241488519398259,
+ "product_cutout_sha256": "370aaab876f5abb8de26386187af529f145f7e8d2795843d8b15d9705cab0299",
+ "frame_sha256": "8ff49cf6439a910a668fe8696db2e1144c8992a3f356791f70715206a70891e7",
+ "planned_body_center_x": 767.0,
+ "planned_body_lowest_point_y": 1134.0,
+ "note": "The product pixels of the frame are the authentic cut-out, premultiplied and scaled with LANCZOS (same rule as the compositor); only the grey background is invented.",
+ "built_from_stage": {
+  "product_position": "RIGHT_THIRD",
+  "framing": "MEDIUM",
+  "cx": 767,
+  "body_foot_y": 1134,
+  "height_px": 662,
+  "constants": "scene_plate.py PRODUCT_X / PRODUCT_SHARE / BASE_Y"
+ }
+}

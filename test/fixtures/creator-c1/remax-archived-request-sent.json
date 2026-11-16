@@ -1,0 +1,45 @@
+{
+ "plate": {
+  "canvas": [
+   1080,
+   1350
+  ],
+  "box": {
+   "x0": 84,
+   "y0": 472,
+   "w": 457,
+   "h": 662
+  },
+  "bottom_front": [
+   313,
+   1134
+  ]
+ },
+ "request_scene_sent": "a photorealistic commercial photograph, real materials, real optics, seen at mid height. Atmosphere: Un calme confiant, comme celui qu’on ressent quand on sait qu’on a ce qu’il faut, sans effort, sans bruit, sans artifice. juste une solution réelle, là où on en a besoin. Materials: Matériaux bruts et honnêtes. pavé namurois usé, béton ciré non poli, surface légèrement poreuse qui garde la trace du temps sans tomber dans le décoratif ou le rustique. Light: Lumière directionnelle douce mais affirmée; the key light comes from the left, neutral in colour. Setting: a wall meeting the floor behind it in charcoal grey, a floor of a matte surface. Depth: a clear foreground, middle ground and background; the composition leads the eye towards the reserved area. Keep the middle of the frame plain: the wall and the floor there are smooth and calm. All the visual interest (light trails, structure, reflections) stays in the upper 32% of the frame and along the outer 6% of each side. Leave calm space on the side opposite the reserved area, for a headline added later",
+ "request_product_role": "an empty area of the floor where an object will stand later, between 8% and 50% of the frame width and between 35% and 84% of the frame height (its lower edge rests on the floor); nothing stands, lies, leans or hangs there or in front of it, and no window, lamp or bright source is placed there",
+ "execution": {
+  "narrative_elements_requested": [],
+  "wanted_requested": [
+   "Pavé namurois réel avec usure authentique (photographié sur site à Namur)",
+   "Câble bleu exactement assorti au produit, tendu sans support visible",
+   "Ombre portée générée par lumière naturelle basse (pas de studio)"
+  ],
+  "concept_text_withheld_for": [],
+  "people_or_hands_withheld": [
+   "Câble déroulé en diagonale vers le vide, sans contact avec aucun objet",
+   "Ombre portée nette et précise sous la batterie"
+  ],
+  "product_words_withheld": [
+   "venant d’un angle bas et latéral pour sculpter l’ombre portée nette de la batterie et guid",
+   "Une batterie bleue repose sur un sol de pavé namurois usé",
+   "son câble déroulé en diagonale vers le vide comme une promesse silencieuse d’usage futur",
+   "sans personne ni appareil",
+   "Un câble tendu comme une ligne de fuite vers l’absence d’un téléphone",
+   "tandis que l’ombre nette de la batterie ancre sa présence réelle dans le décor brut",
+   "Câble bleu exactement assorti au produit",
+   "Ombre portée générée par lumière naturelle basse (pas de studio)"
+  ],
+  "product_in_reference": false,
+  "verified_in_image": false
+ }
+}

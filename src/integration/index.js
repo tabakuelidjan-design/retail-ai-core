@@ -1,6 +1,8 @@
 // Nordla integration (pre-China): wires the EXISTING modules behind one hub, one identity registry, one approval policy and one trace ledger.
 // It does not move, rewrite or replace any module. Every adapter below calls the module's own exported functions; the few new objects the platform lacked
 // (BUY_CANDIDATE, PurchasePlan, IncomingExpectation, CampaignContract, TrackingDefinition) live in an in-memory store here and are listed as NOT_PERSISTED.
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { MODULE as M, ID_KIND as K, ERR, IntegrationError, fail, INTEGRATION_VERSION } from './constants.js';
 import { createIdentityRegistry, ref, parseRef } from './ids.js';
 import { createTraceLedger } from './ledger.js';
@@ -13,8 +15,11 @@ import { analyzePurchase, compareScenarios } from '../finance/purchase-analysis.
 import { assess as sourcingAssess } from '../sourcing/core/case.js';
 import { dealIntelligence, compareDeals } from '../sourcing/core/field/deal.js';
 import { runCreativeEndToEnd } from '../creative-e2e/index.js';
+import { runAutonomousWithShopifyMedia } from '../creative-autonomy/product-media.js';
+import { deriveStopReason } from '../creative-autonomy/stop-reason.js';
 import { eurOfSupplier } from '../finance/currency.js';
 import { mergeProcurementAdapters } from './procurement.js';
+import { createSocialAdapter } from './social.js';
 
 export * from './constants.js';
 export { createIdentityRegistry, ref, parseRef } from './ids.js';
@@ -41,10 +46,14 @@ export function createIntegrationStore() {
  *  brand                { tenant_id, brand_ref, approved_claims:[{ref, wording}] }  -> Branding
  *  creativeWorld        ports + base brief/request for Creative, or a factory returning a fresh one per run (fakes in tests; no provider is ever created here)
  *  analytics            { explainChange(args) }               -> optional; absent => MODULE_NOT_AVAILABLE
+ *  social               { service, credentialPort? } of Social Publishing (createSocialService): adds the SOCIAL_PUBLISHING reads and the proposal command; absent => MODULE_NOT_AVAILABLE
  *  procurement          the assistant of createProcurement()   -> optional; adds `proc_*` read/proposal commands to STOCK_SALES and BUYING (nothing existing is replaced)
+ *  creativeProduction   { shopify, ledger, policyId, providers, runCeilingEur, brand, workdirFor(run_id), nonProduction? } -> the customer
+ *                       "create a visual for this product" workflow (src/creative-autonomy/product-media.js). Absent => the command is not available.
+ *                       providers MUST be simulated (providers.simulated === true): live provider execution is deferred by NDR-D02 and blocked here.
  *  unavailable          modules to simulate as down
  */
-export function createIntegration({ tenant_id, finance = null, readOnHand = () => undefined, brand = null, creativeWorld = null, analytics = null, procurement = null, unavailable = [], now = () => new Date().toISOString() }) {
+export function createIntegration({ tenant_id, finance = null, readOnHand = () => undefined, brand = null, creativeWorld = null, creativeProduction = null, analytics = null, procurement = null, social = null, unavailable = [], now = () => new Date().toISOString() }) {
   const registry = createIdentityRegistry({ tenant_id });
   const ledger = createTraceLedger({ tenant_id, now });
   const store = createIntegrationStore();
@@ -92,7 +101,33 @@ export function createIntegration({ tenant_id, finance = null, readOnHand = () =
     [M.MARKETING]: { available: avail(M.MARKETING), commands: {
       build_campaign_contract: (a) => { const c = buildCampaignContract({ tenant_id, brand, availability: availabilityFor(a.product_ref), ...a }); store.campaigns.set(c.campaign_ref, c); return c; },
     } },
-    [M.CREATIVE]: { available: avail(M.CREATIVE, Boolean(creativeWorld)), commands: {
+    [M.CREATIVE]: { available: avail(M.CREATIVE, Boolean(creativeWorld) || Boolean(creativeProduction)), commands: {
+      // The customer picked a product variant and asked for a visual. Nordla finds and verifies the photo itself (no source-photo question, ever),
+      // checks the tenant's accepted policy, reserves the ceiling, builds providers bound to that photo, creates, checks and returns the finished
+      // result for the customer's review. Nothing is published.
+      produce_product_visual: async ({ product_id, variant_id, expected_variant_title = null, objective, format = 'INSTAGRAM_FEED_4_5', run_id, staged_media = null, campaign = null }) => {
+        if (!creativeProduction) fail(ERR.MODULE_NOT_AVAILABLE, 'creative production is not configured');
+        // NDR-D02 is lifted by the owner ONLY for a LIVE_LOCAL world (local loopback, single tenant, admin only): BOTH the world and its providers must declare it. A hosted world never does.
+        const liveLocal = creativeProduction.live_local === true && creativeProduction.providers?.live_local === true;
+        if (creativeProduction.providers?.simulated !== true && !liveLocal) fail(ERR.PROVIDER_CALL_REFUSED, 'NDR-D02: real provider execution is deferred; only simulated providers (or the owner-authorised LIVE_LOCAL world) can run');
+        if (staged_media && !liveLocal) fail(ERR.PROVIDER_CALL_REFUSED, 'an uploaded photo is only accepted by the LIVE_LOCAL world');
+        if (typeof objective !== 'string' || !objective.trim()) fail(ERR.HANDOFF_INVALID, 'a commercial objective is required');
+        const c = creativeProduction;
+        let r;
+        try {
+          r = await runAutonomousWithShopifyMedia({ shopify: c.shopify, request: { merchantId: tenant_id, productId: product_id, variantId: variant_id, expectedVariantTitle: expected_variant_title, ownerMediaConfirmation: c.mediaConfirmations?.find(product_id, variant_id) ?? null },
+            objective, brand: c.brand, format, workdir: c.workdirFor(run_id), ledger: c.ledger, policyId: c.policyId, providers: c.providers, runCeilingEur: c.runCeilingEur,
+            runId: run_id, nonProduction: c.nonProduction === true, ...(staged_media ? { staged: staged_media } : {}), ...(liveLocal && campaign ? { campaign } : {}), ...(liveLocal && c.run ? { run: c.run } : {}), ...(c.fetchImpl ? { fetchImpl: c.fetchImpl } : {}), ...(c.now ? { now: c.now } : {}) });
+        } catch (e) { fail(ERR.HANDOFF_INVALID, `${e.code ?? 'CREATIVE_FAILED'}: ${String(e.message).slice(0, 200)}`, { code: e.code ?? null }); }
+        const shown = (r.proposals ?? []).filter((p) => p.image && p.technical_quality?.state === 'PASS');
+        // WHY a run ended without a result: the last stage error the Brain journaled (a code and a short message that never carries a key or a provider body)
+        let stop_reason = null; // NONE (Creator's own reason), a stage error, or proposals withheld by the checks: three different ends, see stop-reason.js
+        if (liveLocal) stop_reason = deriveStopReason({ r, shown, readJournaledError: () => { try { const dir = join(c.workdirFor(run_id), 'brain-calls'); const f = readdirSync(dir).filter((x) => x.endsWith('.error.json')).sort().at(-1); return f ? JSON.parse(readFileSync(join(dir, f), 'utf8')) : null; } catch { return null; } } });
+        return { run_id, status: r.status, published: false, customer_review: 'PENDING', live_provider: liveLocal,
+          product_id, variant_id, media_id: r.media_selection.media_id, source_sha256: r.media_selection.sha256, policy_version: r.policy.version,
+          ...(stop_reason ? { stop_reason } : {}), results: shown.map((p) => ({ image: p.image, technical: p.technical_quality.state, creative: p.creative_quality?.state ?? null, ...(p.mobile_preview ? { mobile_preview: p.mobile_preview } : {}), ...(p.route ? { route: p.route, headline: p.stage?.headline ?? null, caption: p.caption ?? null, concept_name: p.concept?.name ?? null, review: p.review ?? null, final_review: p.final_review ?? null } : {}) })),
+          withheld: (r.proposals ?? []).length - shown.length, reservation: r.reservation };
+      },
       produce_draft: async ({ campaign_ref, run_id, at, ceiling_eur = 2 }) => {
         const contract = store.campaigns.get(campaign_ref); if (!contract) fail(ERR.HANDOFF_INVALID, 'unknown campaign contract');
         const world = typeof creativeWorld === 'function' ? await creativeWorld() : creativeWorld; // scripted ports are single-use: one fresh world per run
@@ -108,6 +143,8 @@ export function createIntegration({ tenant_id, finance = null, readOnHand = () =
     } },
     [M.PARLE_A_NORDLA]: { available: avail(M.PARLE_A_NORDLA), commands: {} },
   };
+
+  adapters[M.SOCIAL_PUBLISHING] = social ? { ...createSocialAdapter(social), available: avail(M.SOCIAL_PUBLISHING) } : { available: () => false, commands: {} }; // absent => MODULE_NOT_AVAILABLE, never a crash
 
   if (procurement) mergeProcurementAdapters(adapters, procurement);
 

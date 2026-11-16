@@ -1,0 +1,42 @@
+{
+ "scores": [
+  {
+   "id": "P1",
+   "harmony": "MEDIUM",
+   "relevance": "LOW",
+   "desirability": "LOW",
+   "originality": "MEDIUM",
+   "feasibility": "HIGH",
+   "note": "Le décor urbain minimaliste est propre mais trop neutre : il ne montre pas pourquoi on emporte la batterie ni l’avantage des câbles intégrés, et le lien avec Namur reste vague."
+  },
+  {
+   "id": "P2",
+   "harmony": "HIGH",
+   "relevance": "HIGH",
+   "desirability": "HIGH",
+   "originality": "MEDIUM",
+   "feasibility": "HIGH",
+   "note": "Le sac à dos en toile cirée et le banc béton évoquent un déplacement réel à Namur ; les câbles visibles renforcent l’idée d’un accessoire autonome, sans surcharge."
+  },
+  {
+   "id": "P3",
+   "harmony": "VERY_HIGH",
+   "relevance": "MEDIUM",
+   "desirability": "MEDIUM",
+   "originality": "HIGH",
+   "feasibility": "LOW",
+   "note": "L’idée de la signalétique est forte, mais la ligne bleue peinte sur le mur viole les prohibitions (élément ajouté non autorisé) et n’est pas justifiée par la photo du produit."
+  },
+  {
+   "id": "P4",
+   "harmony": "HIGH",
+   "relevance": "LOW",
+   "desirability": "MEDIUM",
+   "originality": "MEDIUM",
+   "feasibilité": "HIGH",
+   "note": "Le fond gris met en valeur l’écran, mais l’absence totale de contexte rend l’usage et le besoin flous — ce n’est pas une scène de vie, juste un packshot stylisé."
+  }
+ ],
+ "choice": "P2",
+ "why_this_one": "P2 est la seule proposition qui lie clairement le produit à un besoin réel de déplacement (sac à dos, pause rapide), montre les câbles intégrés tels qu’ils sont sur la photo, respecte toutes les prohibitions, et ancre l’image à Namur sans artifice ; P3, bien que plus originale, est infaisable à cause de l’ajout de la ligne bleue."
+}

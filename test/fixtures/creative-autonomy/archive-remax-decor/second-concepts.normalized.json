@@ -1,0 +1,52 @@
+{
+ "concepts": [
+  {
+   "concept_id": "cnc_256f3fccdbd848624cdf1eaf83c47f97",
+   "central_idea": "Une batterie bleue posée sur un sol de béton ciré, baignée d’une lumière douce venant de la gauche, dont la matière satinée et les angles arrondis évoquent une autonomie calme, sans accessoires superflus — le décor en briques blanchies et lisse renforce l’idée d’un outil pensé pour durer.",
+   "visual_metaphor": "Un objet de service autonome, posé sur un sol de béton ciré lisse, face à un mur de briques blanchies usées — la texture brute du mur contraste avec la douceur satinée du boîtier bleu, comme une outil artisanal dans un atelier calme.",
+   "story": "Dans un espace sobre aux matériaux choisis avec justesse — béton ciré, briques blanchies —, une batterie bleue repose, prête à servir : son design compact et ses formes douces disent qu’elle accompagne sans encombrer, sans câbles à chercher ni à ranger.",
+   "emotional_intent": "Confiance tranquille : le produit n’a pas besoin de bruit ni de geste pour justifier sa présence, il suffit qu’il soit là, complet, sans accessoires supplémentaires.",
+   "product_role": "HERO_OF_THE_STORY",
+   "message_role": "EMBEDDED_IN_THE_STORY",
+   "memory_hook": "Une seule batterie bleue, posée sur un sol gris clair, avec sa lumière de studio reproduite dans le décor — le bleu satiné se détache sans effort, comme un objet qui ne demande pas d’attention mais la mérite.",
+   "distinctiveness_reason": "Le décor met en scène l’autonomie par l’absence de tout ce qui n’est pas le produit : les câbles ne sont pas utilisés, mais leur pose fixe devient une signature visuelle de l’intégration totale.",
+   "risks": [
+    "Le mur de briques blanchies peut être lu comme un décor générique si la lumière ne souligne pas la texture contrastée avec le satiné du boîtier",
+    "L’absence totale d’action risque de faire paraître le produit passif plutôt qu’autonome",
+    "Le bleu satiné peut se fondre dans un gris trop froid si la température lumineuse n’est pas ajustée"
+   ]
+  },
+  {
+   "concept_id": "cnc_43db31bdfbb61f9aedf480383049644a",
+   "central_idea": "Une batterie conçue pour traverser le temps sans se fatiguer : 20 000 mAh incarnés par la continuité d’un sol en béton ciré qui s’étend hors-cadre, comme une route silencieuse vers la prochaine charge.",
+   "visual_metaphor": "Un plancher uni, légèrement incliné vers la droite, baigné d’une lumière douce venant de la gauche, où la batterie bleue repose comme un point d’ancrage — son écran affichant ‘100%’ comme un phare dans un paysage minimal.",
+   "story": "Le décor est une surface continue, sans joint ni rupture, évoquant une durée soutenue ; la batterie, posée à gauche, marque le début d’un trajet dont on sait qu’il sera long, parce que l’énergie est déjà là, pleine et visible.",
+   "emotional_intent": "Sérénité anticipée : le sentiment que le besoin futur est déjà couvert, non par une promesse, mais par une preuve visuelle — l’affichage actif, le volume compact, la matière stable.",
+   "product_role": "PROOF_OF_THE_STORY",
+   "message_role": "FOLLOWS",
+   "memory_hook": "L’écran rond noir affichant ‘100%’ au milieu d’un décor vide, comme un signal clair dans le silence d’un espace qui n’attend plus rien.",
+   "distinctiveness_reason": "Le sol incliné crée une dynamique de durée sans mouvement réel, rendant tangible l’autonomie de 20 000 mAh par la géométrie du décor seul, sans personne ni action.",
+   "risks": [
+    "L’inclinaison du sol peut sembler artificielle si elle n’est pas subtilement suggérée par la lumière et les ombres",
+    "L’affichage ‘100%’ risque d’être lu comme une simple indication technique, pas comme un symbole de préparation",
+    "Le décor trop neutre peut masquer la chaleur du bleu satiné si la lumière n’est pas calibrée pour le faire ressortir"
+   ]
+  },
+  {
+   "concept_id": "cnc_2174ebb849fb486b5a78e6863c29193a",
+   "central_idea": "Une batterie qui ne se cache pas derrière la technologie : son bleu clair satiné est mis en valeur par un mur de plâtre fissuré, où chaque craquelure rappelle les micro-ruptures de la journée — et la capacité du produit à les traverser sans faiblir.",
+   "visual_metaphor": "Un mur de briques blanchies, légèrement irrégulier, dont les joints fins et la surface mate forment un contraste subtil avec le bleu satiné du boîtier — comme une structure solide qui laisse la place à ce qui est utile, sans bruit ni décoration.",
+   "story": "Le mur porte les traces discrètes du temps passé, mais la batterie, intacte et pleine, y fait face sans défense ni ostentation — elle ne corrige pas les fissures, elle les ignore, parce qu’elle a assez d’énergie pour continuer.",
+   "emotional_intent": "Résilience douce : le produit ne crie pas sa puissance, il la démontre par sa présence calme dans un environnement imparfait, comme un compagnon discret mais inébranlable.",
+   "product_role": "DESTINATION_OF_THE_STORY",
+   "message_role": "LEADS",
+   "memory_hook": "Le mur fissuré en arrière-plan, contrastant avec la surface lisse et intacte de la batterie bleue — comme si le monde usait, mais elle restait pleine.",
+   "distinctiveness_reason": "Les fissures du mur ne sont pas décoratives mais symboliques : elles incarnent les aléas quotidiens que la batterie traverse grâce à son autonomie, sans que le produit soit montré en action.",
+   "risks": [
+    "Les fissures peuvent être interprétées comme un défaut de construction plutôt que comme une métaphore du temps si la lumière ne les rend pas poétiques",
+    "Le socle de béton brut risque de dominer visuellement si sa taille ou sa teinte entre en compétition avec le bleu du produit",
+    "Le contraste entre imperfection du mur et perfection du produit peut sembler moralisateur si l’émotion n’est pas ancrée dans la sobriété"
+   ]
+  }
+ ]
+}

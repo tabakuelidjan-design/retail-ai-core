@@ -1,0 +1,56 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15547355365724",
+  "title": "Coffret cadeau transparent avec poignée – 3 formats",
+  "description": "Un coffret cadeau transparent avec poignée – 3 formats sélectionné pour mettre en valeur cadeaux, accessoires et créations avec une présentation soignée, prête à offrir.",
+  "tags": [
+   "1026",
+   "boîte cadeau",
+   "emballage cadeau",
+   "emballage premium"
+  ],
+  "productType": "Packaging",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57399021404508",
+     "title": "Noir / S",
+     "price": "8.00",
+     "inventoryQuantity": 12
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57399021437276",
+     "title": "Noir / M",
+     "price": "10.00",
+     "inventoryQuantity": 12
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57399021470044",
+     "title": "Noir / L",
+     "price": "12.00",
+     "inventoryQuantity": 12
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57399021699420",
+     "title": "Rouge / S",
+     "price": "8.00",
+     "inventoryQuantity": 5
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57399021732188",
+     "title": "Rouge / M",
+     "price": "10.00",
+     "inventoryQuantity": 6
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57399021764956",
+     "title": "Rouge / L",
+     "price": "12.00",
+     "inventoryQuantity": 6
+    }
+   ]
+  }
+ }
+}

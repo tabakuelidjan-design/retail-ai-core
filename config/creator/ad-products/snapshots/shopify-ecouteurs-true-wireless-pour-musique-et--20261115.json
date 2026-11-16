@@ -1,0 +1,24 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15500363170140",
+  "title": "Écouteurs True Wireless pour musique et appels",
+  "description": "Les écouteurs RX PD-BT533N Pro offrent un format True Wireless léger, des haut-parleurs de 13 mm et jusqu’à 5 à 6 heures d’écoute annoncées. Leur boîtier compact prolonge l’autonomie au fil de la journée et facilite leur utilisation pour la musique, les appels et les déplacements.",
+  "tags": [
+   "Airpod",
+   "remax"
+  ],
+  "productType": "",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57116365554012",
+     "title": "Default Title",
+     "price": "39.00",
+     "inventoryQuantity": 38
+    }
+   ]
+  }
+ }
+}

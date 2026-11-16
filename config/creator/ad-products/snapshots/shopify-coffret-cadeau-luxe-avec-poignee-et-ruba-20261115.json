@@ -1,0 +1,56 @@
+{
+ "read_at": "2026-11-15",
+ "product": {
+  "id": "gid://shopify/Product/15547356315996",
+  "title": "Coffret cadeau Luxe avec poignée et ruban",
+  "description": "Un coffret cadeau Luxe avec poignée et ruban sélectionné pour mettre en valeur cadeaux, accessoires et créations avec une présentation soignée, prête à offrir.",
+  "tags": [
+   "9335--18",
+   "boîte cadeau",
+   "emballage cadeau",
+   "emballage premium"
+  ],
+  "productType": "Packaging",
+  "status": "ACTIVE",
+  "variants": {
+   "nodes": [
+    {
+     "id": "gid://shopify/ProductVariant/57444541333852",
+     "title": "Rose / S",
+     "price": "15.90",
+     "inventoryQuantity": 7
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57444541366620",
+     "title": "Rose / M",
+     "price": "17.90",
+     "inventoryQuantity": 7
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57444541399388",
+     "title": "Rose / L",
+     "price": "19.90",
+     "inventoryQuantity": 8
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57444541432156",
+     "title": "Blanc / S",
+     "price": "15.90",
+     "inventoryQuantity": 8
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57444541464924",
+     "title": "Blanc / M",
+     "price": "17.90",
+     "inventoryQuantity": 8
+    },
+    {
+     "id": "gid://shopify/ProductVariant/57444541497692",
+     "title": "Blanc / L",
+     "price": "19.90",
+     "inventoryQuantity": 6
+    }
+   ]
+  }
+ }
+}

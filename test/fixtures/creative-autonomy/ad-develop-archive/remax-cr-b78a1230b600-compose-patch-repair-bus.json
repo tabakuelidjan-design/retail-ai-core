@@ -1,0 +1,57 @@
+{
+ "patches": [
+  {
+   "path": "idea",
+   "value": "A light blue power bank rests on a black backpack beside a turned-off smartphone, on a grey plastic bus seat, with a fogged window in the background — soft left-side light, no text, no people, realistic urban commute setting."
+  },
+  {
+   "path": "atmosphere",
+   "value": "Calm, practical, everyday — a quiet moment in transit where everything is ready without effort, no stress or searching for accessories."
+  },
+  {
+   "path": "light",
+   "value": "Soft, diffuse light coming from the left, matching the studio lighting of the photograph, casting gentle shadows under the device and its integrated cable, highlighting the satin finish of the body."
+  },
+  {
+   "path": "setting",
+   "value": "Interior of an urban bus: grey matte plastic seat, fogged window showing a blurred bus stop, natural daylight filtering through from the left, functional and uncluttered."
+  },
+  {
+   "path": "structure",
+   "value": "Three-layer composition: blurred background with fogged window and faint stop reflection, midground with textured grey plastic seat, foreground with black nylon backpack, power bank, and smartphone placed side by side, its integrated cable visible in fixed photographed pose."
+  },
+  {
+   "path": "materials",
+   "value": "Matte grey plastic of the seat, black nylon of the backpack, satin light blue finish of the power bank, its integrated cable in matching blue braid, fogged glass of the window."
+  },
+  {
+   "path": "text_reserve.description",
+   "value": "Clean, uniform surface slightly lighter than the seat grey, texture-free and calm, providing clear contrast for the headline without touching the product or phone."
+  },
+  {
+   "path": "resolution",
+   "value": "No conflict to resolve: the concept aligns fully with photo constraints, placement rules, and permitted elements — the integrated cables remain as photographed, no added objects or text."
+  },
+  {
+   "path": "elements",
+   "value": [
+    {
+     "zone": "BACKGROUND",
+     "element": "Fogged bus window with blurred reflection of a stop"
+    },
+    {
+     "zone": "MIDGROUND",
+     "element": "Slightly worn grey matte plastic bus seat"
+    },
+    {
+     "zone": "FOREGROUND",
+     "element": "Black nylon backpack, lying flat"
+    },
+    {
+     "zone": "FOREGROUND",
+     "element": "Turned-off smartphone with black screen, placed right of the power bank"
+    }
+   ]
+  }
+ ]
+}

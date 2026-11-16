@@ -1,0 +1,49 @@
+{
+  "concepts": [
+    {
+      "central_idea": "Une batterie noire compacte devient un outil de secours silencieux quand une main la saisit au vol pour recharger un téléphone en pleine lumière du jour, sans chercher ni déballer.",
+      "visual_metaphor": "Un geste de sauvetage discret : la batterie, suspendue au cou par son cordon, est attrapée en mouvement comme un objet familier et toujours à portée, exactement au moment où le téléphone clignote.",
+      "story": "Pendant une journée active, un téléphone menace de s’éteindre — une main tendue saisit la batterie noire déjà prête, avec son câble USB-C déployé et son écran allumé, et la branche en deux secondes.",
+      "emotional_intent": "Une assurance calme et immédiate : pas d’urgence paniquée, juste la confiance que l’outil est là, fonctionnel, sans complication ni attente.",
+      "product_role": "HERO_OF_THE_STORY",
+      "message_role": "EMBEDDED_IN_THE_STORY",
+      "memory_hook": "La batterie noire, suspendue au cou, saisie en plein vol par une main alors que son écran lumineux affiche le pourcentage restant pendant qu’elle charge le téléphone.",
+      "distinctiveness_reason": "Le cordon n’est pas décoratif mais opérationnel, le geste est réactif et non posé, et l’écran numérique agit comme témoin visuel de l’autonomie — trois éléments vérifiés utilisés comme moteurs narratifs.",
+      "risks": [
+        "Le mouvement de la main peut sembler trop théâtral si la dynamique n’est pas fidèle à un geste réel de secours",
+        "L’absence de contexte extérieur risque d’être perçue comme un studio si la lumière du jour n’est pas crue et texturée",
+        "L’écran allumé pourrait être mal lu si le contraste avec le noir mat n’est pas suffisant"
+      ]
+    },
+    {
+      "central_idea": "Une batterie noire repose sur une surface brute, son écran numérique affichant 100 % tandis qu’un câble USB-C sort naturellement de son corps — comme un objet qui se prépare tout seul avant d’être utilisé.",
+      "visual_metaphor": "Une machine en veille attentive : le produit, isolé, semble respirer avec son écran allumé et son câble déployé, prêt à entrer en action sans intervention humaine.",
+      "story": "Avant le départ, la batterie noire attend sur une table de bois brut, son écran indiquant pleine charge, son câble USB-C légèrement déroulé, comme si elle anticipait la prochaine urgence de recharge.",
+      "emotional_intent": "Une présence rassurante et autonome : le produit ne demande rien, il est simplement là, fiable, sans bruit ni spectacle.",
+      "product_role": "PROOF_OF_THE_STORY",
+      "message_role": "FOLLOWS",
+      "memory_hook": "L’écran numérique brillant sur le noir mat, avec le câble USB-C qui s’enroule doucement hors du boîtier comme une langue prête à parler.",
+      "distinctiveness_reason": "Le produit est montré dans un état de préparation active (écran allumé, câble sorti), non pas en usage mais en disponibilité immédiate — une rareté dans les visuels tech.",
+      "risks": [
+        "L’absence de main ou d’interaction humaine peut rendre le concept trop statique si la lumière et la matière ne donnent pas du rythme",
+        "Le câble déployé pourrait être interprété comme un défaut de rangement plutôt qu’une fonctionnalité intentionnelle",
+        "Le fond brut risque d’être confondu avec un décor générique si la texture n’est pas marquée par l’usage"
+      ]
+    },
+    {
+      "central_idea": "Une batterie noire est passée d’une main à l’autre dans un échange rapide entre deux personnes, le cordon tour de cou glissant autour du poignet comme une chaîne de relais — la recharge devient un geste partagé, pas un besoin individuel.",
+      "visual_metaphor": "Un relais humain : la batterie circule comme un objet de confiance entre deux mains, son écran lumineux visible au passage, son cordon jouant le rôle d’un lien physique temporaire.",
+      "story": "Dans un espace public neutre, une personne tend la batterie noire à une autre dont le téléphone vient de s’éteindre ; le cordon glisse autour du poignet receveur pendant que l’écran confirme la charge en cours.",
+      "emotional_intent": "Une solidarité discrète et pratique : le produit facilite un acte simple de générosité, sans parole, sans mise en scène.",
+      "product_role": "TOOL_OF_THE_STORY",
+      "message_role": "LEADS",
+      "memory_hook": "Le cordon tour de cou qui passe d’un poignet à l’autre comme une courroie de transmission, tandis que l’écran numérique clignote pendant le transfert.",
+      "distinctiveness_reason": "Le produit est utilisé comme médiateur social, pas comme accessoire personnel — le cordon devient un symbole de partage, non de portabilité individuelle.",
+      "risks": [
+        "L’échange entre deux personnes peut diluer le focus sur le produit si les mains ne sont pas stylisées pour guider le regard vers la batterie",
+        "Le message de partage risque d’être mal lu comme une fonctionnalité sociale non vérifiée, alors qu’il repose sur l’usage réel du cordon",
+        "La scène pourrait évoquer un don ou une vente informelle, ce qui contredit le registre premium sobre demandé"
+      ]
+    }
+  ]
+}
