@@ -11,7 +11,8 @@ export function createModulesPanel({ S, api, refresh }) {
   const st = (S.nx ??= { modules: null, branding: null, campaigns: null, creation: null, photo: null, answer: null, check: null, busy: false, error: '' });
   const fail = (e) => { st.error = coreErrorMessage(e); };
   async function load({ preserveError = false } = {}) {
-    try { const [m, b, c, v] = await Promise.all([api('/api/core/modules'), api('/api/core/branding'), api('/api/core/campaigns'), api('/api/core/creation')]); st.modules = m.modules; st.branding = b; st.campaigns = c.campaigns; st.creation = v; if (!preserveError) st.error = ''; } catch (e) { if (!preserveError || !st.error) fail(e); }
+    try { const [m, b, c, v] = await Promise.all([api('/api/core/modules'), api('/api/core/branding'), api('/api/core/campaigns'), api('/api/core/creation')]); st.modules = m.modules; st.branding = b; st.campaigns = c.campaigns; st.creation = v;
+      st.financeInbox = m.modules.find((x) => x.key === 'finance')?.state === 'LECTURE SEULE' ? await api('/api/core/finance/inbox').catch(() => null) : null; /* read-only, own session: no token */ if (!preserveError) st.error = ''; } catch (e) { if (!preserveError || !st.error) fail(e); }
     refresh();
   }
   async function post(path, body, after) { st.busy = true; st.error = ''; refresh(); let failed = false; try { const r = await api(path, { method: 'POST', body: JSON.stringify(body ?? {}) }); after?.(r); /* NOT after?.(await api()): optional chaining would skip the request itself when there is no callback */ } catch (e) { failed = true; fail(e); } st.busy = false; await load({ preserveError: failed }); }
@@ -52,6 +53,8 @@ export function createModulesPanel({ S, api, refresh }) {
     <label class="small">Titre (80 caractères max.)<input id="nx-headline" maxlength="80"></label><button class="btn" data-act="nx-render">Composer le visuel</button>
     ${(st.creation.creations ?? []).slice(0, 5).map(creationCard).join('')}`);
 
+  const FIN_STATUS = { RECEIVED: 'reçue', TO_REVIEW: 'à vérifier', VALIDATED: 'validée', TO_PAY: 'à payer', PAID: 'payée', REJECTED: 'rejetée' };
+  const financeInboxCard = () => { const i = st.financeInbox; if (!i) return ''; const money = (c, cur) => (Number.isInteger(c) ? `${(c / 100).toFixed(2)} ${esc(cur ?? '')}` : 'montant à saisir'); return `<div class="card" data-nx-finance-inbox><p class="small"><b>Boîte factures fournisseurs</b> — ${i.total} fiche(s), ${i.toReview} à vérifier <span class="muted">(${esc(i.source)})</span></p>${i.items.slice(0, 10).map((r) => `<p class="small">${esc(FIN_STATUS[r.status] ?? r.status)} · ${esc(r.supplier ?? 'fournisseur ?')} · ${esc(r.invoiceNumber ?? 'n° de facture à saisir')}${r.orderReference ? ` · bon ${esc(r.orderReference)}` : ''} · ${money(r.grossCents, r.currency)}</p>`).join('') || '<p class="small muted">Aucune fiche.</p>'}<p class="small muted">Lecture seule : rien n’est validé ni payé depuis Nordla.</p></div>`; };
   function section() {
     const head = '<h2 id="nx-head">Nordla</h2>';
     if (!S.online || !S.token) return `${head}<p class="small muted">Hors ligne : seul China Sourcing fonctionne (vos dossiers et photos restent sur ce téléphone). Les six autres modules demandent le serveur.</p>`;
@@ -65,7 +68,7 @@ export function createModulesPanel({ S, api, refresh }) {
     const form = `<label class="small">Produit<input id="nx-product"></label><label class="small">Objectif<input id="nx-objective" placeholder="ex. ventes en boutique à Namur"></label><label class="small">Public<input id="nx-audience" placeholder="ex. parents cherchant un cadeau"></label><label class="small">Canal<input id="nx-channel" placeholder="ex. Instagram"></label><label class="small">Texte proposé<textarea id="nx-copy" rows="2"></textarea></label><div class="row"><button class="btn sec" data-act="nx-check">Vérifier la marque</button><button class="btn" data-act="nx-campaign">Préparer la proposition</button></div>`;
     return `${head}${st.error ? `<p class="warn" role="status">${esc(st.error)}</p>` : ''}<p class="small muted">État réel des modules sur ce serveur. Rien n’est publié, payé ni commandé par Nordla.</p>
       ${mod(by.core, '<p class="small muted">Voir « Nordla Core » plus bas (décisions d’achat, suivi).</p>')}
-      ${mod(by.finance, quick('finance'))}${mod(by.analytics, quick('analytics'))}
+      ${mod(by.finance, quick('finance') + financeInboxCard())}${mod(by.analytics, quick('analytics'))}
       ${mod(by.sourcing, '<p class="small muted">Écran principal de l’application.</p>')}
       ${mod(by.branding, brandBody)}${mod(by.marketing, `${form}${check}${(st.campaigns ?? []).slice(0, 5).map(campaignCard).join('')}`)}${mod(by.creative, creationBody())}
       ${st.answer ? answerCard(st.answer) : ''}`;
