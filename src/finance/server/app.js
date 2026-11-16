@@ -14,6 +14,7 @@ import { clientIpOf } from './hosting.js';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { readNordlaShared } from '../../shared/nordla-static.js';
+import { createTicketVerifier } from '../sso-ticket.js';
 import { createStaticAssets } from './static-assets.js';
 import { createRequestReadCache } from './request-read-cache.js';
 import { createSessionStore } from './session-store.js';
@@ -91,6 +92,8 @@ export function createFinanceApp(deps) {
   const failures = new Map();
   const packCache = new Map();
   const tokenHash = sha(token);
+  // Single sign-on from the Nordla server (src/finance/sso-ticket.js): only when the launcher gives a secret; otherwise /sso does not exist.
+  const ssoVerifier = deps.sso?.secret ? createTicketVerifier({ secret: deps.sso.secret, merchantId, now: () => (deps.nowMs ?? Date.now)() }) : null;
   const cookieFlags = deps.secureCookie ? '; Secure' : ''; // hosted mode: HTTPS is terminated by the platform
 
   // ---------- plumbing ----------
@@ -1413,6 +1416,25 @@ export function createFinanceApp(deps) {
     return json(res, 500, { error: { code: 'INTERNAL_ERROR' } });
   }
 
+  /** GET /sso?t=<ticket>: a valid, unused, unexpired ticket for THIS merchant opens a normal dashboard session (same cookie, same CSRF) and lands on the dashboard; anything else is refused. */
+  async function handleSso(req, res, url) {
+    if (!ssoVerifier) throw new HttpError(404, 'NOT_FOUND');
+    const ip = clientIpOf(req, deps.trustProxyHops ?? 0);
+    const f = failures.get(ip) ?? { n: 0, until: 0 };
+    if (f.until > Date.now()) throw new HttpError(429, 'TOO_MANY_ATTEMPTS');
+    const r = ssoVerifier.verify(url.searchParams.get('t') ?? '');
+    if (!r.ok) {
+      f.n += 1; if (f.n >= 5) { f.until = Date.now() + 5 * 60_000; f.n = 0; } failures.set(ip, f);
+      await audit({ at: clock.now(), action: 'LOGIN_SSO_REFUSED', code: r.code });
+      throw new HttpError(403, r.code);
+    }
+    failures.delete(ip);
+    const sid = randomBytes(32).toString('hex');
+    sessions.set(sid, { csrf: randomBytes(24).toString('hex'), expires: Date.now() + SESSION_MS });
+    await audit({ at: clock.now(), action: 'LOGIN_SSO' });
+    send(res, 302, '', { Location: '/', 'Cache-Control': 'no-store', 'Set-Cookie': `${COOKIE}=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${cookieFlags}` });
+  }
+
   const handler = (req, res) => readCache.run(() => handleRequest(req, res));
   async function handleRequest(req, res) {
     try {
@@ -1420,6 +1442,7 @@ export function createFinanceApp(deps) {
       if (!(deps.allowedHosts ? deps.allowedHosts.includes(host.toLowerCase()) : LOCAL_HOST.test(host))) throw new HttpError(403, 'HOST_NOT_ALLOWED');
       const url = new URL(req.url, `http://${host}`);
       // Static files (shared Nordla files first, then Finance's own): compressed, validated, versioned - see static-assets.js.
+      if (req.method === 'GET' && url.pathname === '/sso') return await handleSso(req, res, url);
       if (req.method === 'GET' && await staticAssets.serve(req, res, url, send)) return;
       if (!url.pathname.startsWith('/api/')) throw new HttpError(404, 'NOT_FOUND');
       const route = routes.map((r) => ({ r, m: r.method === req.method ? r.re.exec(url.pathname) : null })).find((x) => x.m);

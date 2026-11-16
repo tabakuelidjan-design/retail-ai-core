@@ -28,6 +28,8 @@ export function createModulesPanel({ S, api, refresh }) {
     const t = ev.target.closest?.('[data-act^="nx-"]'); if (!t || st.busy) return;
     const a = t.dataset.act; st.open = t.closest('[data-nx-module]')?.dataset.nxModule ?? st.open; // keep the section the person works in open after the redraw
     if (a === 'nx-load') return load();
+    if (a === 'nx-open-finance') { const w = window.open('', '_blank'); if (w) w.opener = null; st.busy = true; st.error = ''; refresh(); return api('/api/core/finance/open', { method: 'POST', body: '{}' }).then((r) => { if (w) w.location.href = r.url; else window.location.href = r.url; }, (e) => { if (w) w.close(); fail(e); }).finally(() => { st.busy = false; refresh(); });
+    }
     if (a === 'nx-ask') return post('/api/core/ask', { text: t.dataset.q }, (r) => { st.answer = { q: t.dataset.label, ...r }; });
     if (a === 'nx-check') return post('/api/core/branding/check', { text: val('nx-copy') }, (r) => { st.check = r; });
     if (a === 'nx-approve-brand') { if (!window.confirm('Approuver ces règles de marque comme règles OFFICIELLES de votre marque ?')) return; return post('/api/core/branding/approve', {}); }
@@ -53,6 +55,7 @@ export function createModulesPanel({ S, api, refresh }) {
     <label class="small">Titre (80 caractères max.)<input id="nx-headline" maxlength="80"></label><button class="btn" data-act="nx-render">Composer le visuel</button>
     ${(st.creation.creations ?? []).slice(0, 5).map(creationCard).join('')}`);
 
+  const financeOpenButton = (m) => (m?.dashboard ? ` <button class="btn" data-act="nx-open-finance">Ouvrir le tableau de bord Finance</button>` : '');
   const FIN_STATUS = { RECEIVED: 'reçue', TO_REVIEW: 'à vérifier', VALIDATED: 'validée', TO_PAY: 'à payer', PAID: 'payée', REJECTED: 'rejetée' };
   const financeInboxCard = () => { const i = st.financeInbox; if (!i) return ''; const money = (c, cur) => (Number.isInteger(c) ? `${(c / 100).toFixed(2)} ${esc(cur ?? '')}` : 'montant à saisir'); return `<div class="card" data-nx-finance-inbox><p class="small"><b>Boîte factures fournisseurs</b> — ${i.total} fiche(s), ${i.toReview} à vérifier <span class="muted">(${esc(i.source)})</span></p>${i.items.slice(0, 10).map((r) => `<p class="small">${esc(FIN_STATUS[r.status] ?? r.status)} · ${esc(r.supplier ?? 'fournisseur ?')} · ${esc(r.invoiceNumber ?? 'n° de facture à saisir')}${r.orderReference ? ` · bon ${esc(r.orderReference)}` : ''} · ${money(r.grossCents, r.currency)}</p>`).join('') || '<p class="small muted">Aucune fiche.</p>'}<p class="small muted">Lecture seule : rien n’est validé ni payé depuis Nordla.</p></div>`; };
   function section() {
@@ -68,7 +71,7 @@ export function createModulesPanel({ S, api, refresh }) {
     const form = `<label class="small">Produit<input id="nx-product"></label><label class="small">Objectif<input id="nx-objective" placeholder="ex. ventes en boutique à Namur"></label><label class="small">Public<input id="nx-audience" placeholder="ex. parents cherchant un cadeau"></label><label class="small">Canal<input id="nx-channel" placeholder="ex. Instagram"></label><label class="small">Texte proposé<textarea id="nx-copy" rows="2"></textarea></label><div class="row"><button class="btn sec" data-act="nx-check">Vérifier la marque</button><button class="btn" data-act="nx-campaign">Préparer la proposition</button></div>`;
     return `${head}${st.error ? `<p class="warn" role="status">${esc(st.error)}</p>` : ''}<p class="small muted">État réel des modules sur ce serveur. Rien n’est publié, payé ni commandé par Nordla.</p>
       ${mod(by.core, '<p class="small muted">Voir « Nordla Core » plus bas (décisions d’achat, suivi).</p>')}
-      ${mod(by.finance, quick('finance') + financeInboxCard())}${mod(by.analytics, quick('analytics'))}
+      ${mod(by.finance, quick('finance') + financeOpenButton(by.finance) + financeInboxCard())}${by.procurement ? mod(by.procurement, '<p class="small"><a href="/procurement/">Ouvrir Stock / Achats</a></p>') : ''}${mod(by.analytics, quick('analytics'))}
       ${mod(by.sourcing, '<p class="small muted">Écran principal de l’application.</p>')}
       ${mod(by.branding, brandBody)}${mod(by.marketing, `${form}${check}${(st.campaigns ?? []).slice(0, 5).map(campaignCard).join('')}`)}${mod(by.creative, creationBody())}
       ${st.answer ? answerCard(st.answer) : ''}`;

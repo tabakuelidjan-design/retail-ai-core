@@ -10,6 +10,7 @@
 //   GET/POST /api/core/creation, GET /api/core/creation/<id>.png, POST /api/core/creation/<id>/decision   local visual (no provider)
 import { CoreError } from './runtime.js';
 import { askNordla, NOT_CONNECTED } from './ask.js';
+import { issueTicket } from '../finance/sso-ticket.js';
 import { validateConversation } from './field-context.js';
 import { creativeCapability } from './campaign.js';
 
@@ -36,7 +37,7 @@ export function presentDecision(v) {
   };
 }
 
-export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null, procurement = null, branding = null, campaigns = null, creation = null, env = process.env }) {
+export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null, procurement = null, branding = null, campaigns = null, creation = null, financeSso = null, env = process.env }) {
   const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
   async function body(req, max = MAX) {
     const chunks = []; let n = 0;
@@ -53,7 +54,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
     const row = (key, label, state, detail, offline = false) => ({ key, label, state, detail, offline });
     return { modules: [
       row('core', 'Nordla Core', runtime ? 'DISPONIBLE' : 'NON CONFIGURÉ', runtime ? 'Sujets d’achat, décisions humaines, suivi, journal.' : String(configError ?? '')),
-      row('finance', 'Finance', finance ? 'LECTURE SEULE' : 'NON RACCORDÉ', finance ? `Factures à payer, échéances, trésorerie, achats — ${finance.source}. Aucun paiement.` : NOT_CONNECTED.FINANCE),
+      { dashboard: Boolean(finance && financeSso), ...row('finance', 'Finance', finance ? 'LECTURE SEULE' : 'NON RACCORDÉ', finance ? `Factures à payer, échéances, trésorerie, achats — ${finance.source}. Aucun paiement.` : NOT_CONNECTED.FINANCE) },
       row('analytics', 'Analytics', analytics ? 'LECTURE SEULE' : 'NON RACCORDÉ', analytics ? `Évolution des ventes, produits et canaux — ${analytics.source}.` : NOT_CONNECTED.ANALYTICS),
       row('procurement', 'Stock / Achats', procurement ? 'DISPONIBLE' : 'NON RACCORDÉ', procurement ? 'Commandes d’achat, réceptions, stock : consultation par Parle à Nordla ; commander, approuver et réceptionner passent par l’écran Achats (approbation nommée).' : NOT_CONNECTED.STOCK_SALES),
       row('sourcing', 'China Sourcing', 'DISPONIBLE', 'Dossiers, photos, analyses d’achat ; fonctionne hors ligne.', true),
@@ -79,6 +80,12 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
         const conversation = 'conversation' in b ? validateConversation(b.conversation) : undefined; // opt-in; client state is rebuilt, never trusted
         json(res, 200, await askNordla({ text: String(b.text ?? '').slice(0, 1000), caseId: typeof b.caseId === 'string' ? b.caseId : null }, { runtime, getCase: (id) => store.get(id), externals: await externals(), actor, finance, analytics, procurement, conversation }));
         return true;
+      }
+      if (p === '/api/core/finance/open' && m === 'POST') { // a one-time ticket to open the Finance dashboard on its own domain with THIS session: no token typed, no secret sent
+        if (!financeSso) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
+        if (!['OWNER', 'ADMIN', 'ACCOUNTANT'].includes(String(actor?.role ?? ''))) { json(res, 403, { error: 'FORBIDDEN', message: 'the Finance dashboard is for the owner, an administrator or the accountant' }); return true; }
+        const ticket = issueTicket({ secret: financeSso.secret, merchantId: financeSso.merchantId, ttlSeconds: 60 });
+        json(res, 200, { url: `${financeSso.publicUrl}/sso?t=${ticket}`, expiresInSeconds: 60 }); return true;
       }
       if (p === '/api/core/finance/inbox' && m === 'GET') { // read-only list of the Finance supplier-invoice inbox of THIS server's merchant; owner, administrator and accountant only
         if (!finance?.inbox) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
