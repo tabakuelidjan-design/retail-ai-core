@@ -49,11 +49,22 @@ export function createFinanceReader({ store, merchantId, timeZone, now = () => n
     return { ...meta(), horizonDays, position: f.position, forecast: f.forecast, warnings: f.warnings ?? [], undated: (f.undated ?? []).length };
   }
 
+  /** The supplier-invoice inbox of this merchant, as Finance holds it (read-only): what is waiting for a person (RECEIVED / TO_REVIEW), then the rest, newest first.
+   *  Amounts and numbers are the ones on the record: a record created from a purchase order has none until a person reads them from the real invoice. */
+  async function inbox({ limit = 50 } = {}) {
+    const rows = await store.listSupplierInvoices(merchantId);
+    const rank = (r) => (NOT_YET_VALIDATED.includes(r.status) ? 0 : 1);
+    const items = rows.sort((a, b) => rank(a) - rank(b) || String(b.receivedAt ?? '').localeCompare(String(a.receivedAt ?? ''))).slice(0, limit)
+      .map((r) => ({ id: r.id, status: r.status, source: r.source ?? null, supplier: r.supplierName ?? null, invoiceNumber: r.invoiceNumber ?? null, orderReference: r.orderReference ?? null,
+        currency: r.currency ?? null, grossCents: r.grossCents ?? null, receivedAt: r.receivedAt ?? null }));
+    return { ...meta(), total: rows.length, toReview: rows.filter((r) => NOT_YET_VALIDATED.includes(r.status)).length, items };
+  }
+
   /** Purchases (supplier documents) of a period, from Finance's purchase analytics. */
   async function purchases({ from, to, currency = 'EUR' }) {
     const rows = await store.listSupplierInvoices(merchantId);
     return { ...meta(), period: { from, to }, report: buildPurchaseAnalytics(rows, { from, to, currency, m: (c) => money(c, 'fr') }) };
   }
 
-  return Object.freeze({ kind: 'finance', source, payables, treasury, purchases, today: () => clock.today() });
+  return Object.freeze({ kind: 'finance', source, payables, treasury, purchases, inbox, today: () => clock.today() });
 }

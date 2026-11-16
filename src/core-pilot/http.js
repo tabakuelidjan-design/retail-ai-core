@@ -80,6 +80,11 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
         json(res, 200, await askNordla({ text: String(b.text ?? '').slice(0, 1000), caseId: typeof b.caseId === 'string' ? b.caseId : null }, { runtime, getCase: (id) => store.get(id), externals: await externals(), actor, finance, analytics, procurement, conversation }));
         return true;
       }
+      if (p === '/api/core/finance/inbox' && m === 'GET') { // read-only list of the Finance supplier-invoice inbox of THIS server's merchant; owner, administrator and accountant only
+        if (!finance?.inbox) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
+        if (!['OWNER', 'ADMIN', 'ACCOUNTANT'].includes(String(actor?.role ?? ''))) { json(res, 403, { error: 'FORBIDDEN', message: 'the Finance inbox is for the owner, an administrator or the accountant' }); return true; }
+        json(res, 200, await finance.inbox()); return true;
+      }
       if (p === '/api/core/modules' && m === 'GET') { json(res, 200, await modules()); return true; }
       if (p === '/api/core/branding' && m === 'GET') { json(res, 200, branding ? await branding.status() : { status: 'NOT_CONNECTED' }); return true; }
       if (p === '/api/core/branding/check' && m === 'POST') { if (!branding) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } const b = await body(req); json(res, 200, await branding.checkText(String(b.text ?? '').slice(0, 4000))); return true; }
