@@ -10,7 +10,7 @@ import { createFakeSupabase } from './fixtures/fake-supabase.js';
 import { growthDom, text, all, hasClass } from './growth-dom.js';
 
 const NOW = new Date('2026-09-21T09:00:00Z'); const TZ = 'Europe/Brussels';
-const SHOP = { name: 'HABB', platform: 'Shopify', domain: 'habb.be', myshopifyDomain: 'zmb5jr-wf.myshopify.com' };
+const SHOP = { name: 'HABB', platform: 'Shopify', domain: 'habb.be', myshopifyDomain: 'demo-shop.myshopify.com' };
 const prod = (n, o = {}) => ({ id: `p${n}`, source_id: `gid://shopify/Product/${100 + n}`, handle: `produit-${n}`, title: `Produit ${n}`, product_type: 'Coque', source_status: 'ACTIVE', image_url: `https://cdn.shopify.com/${n}.jpg`, image_alt_text: 'alt', source_created_at: '2026-01-01T00:00:00Z', ...o });
 const vari = (n, k, sku) => ({ id: `v${n}-${k}`, product_id: `p${n}`, source_id: `gid://shopify/ProductVariant/${n}0${k}`, sku, title: `Var ${k}` });
 
@@ -35,8 +35,8 @@ test('DC-1 full export: the whole list (not the 3 screen examples), products vs 
   assert.ok(!md.includes('gid://shopify/ProductVariant/601') && !md.includes('/109'), 'variants that already have a SKU are not cases');
   assert.match(md, /SKU déjà présents sur ce produit \(à conserver\) : Var 1 = HB-001/);
   assert.match(md, /\*\*aucune convention n’est déclarée dans Nordla\*\*/); assert.match(md, /formes observées[^\n]*AA-999 \(3\)/);
-  assert.match(md, /\[Var 2\]\(https:\/\/admin\.shopify\.com\/store\/zmb5jr-wf\/products\/101\/variants\/102\)/); assert.match(md, /\[Produit 1\]\(https:\/\/admin\.shopify\.com\/store\/zmb5jr-wf\/products\/101\)/);
-  assert.match(md, /\| Boutique \| HABB \|/); assert.match(md, /\| Plateforme \| Shopify \(zmb5jr-wf\.myshopify\.com\) \|/); assert.match(md, /\| Date du diagnostic \| 2026-09-21T09:00:00\.000Z/); assert.match(md, /Périmètre analysé/);
+  assert.match(md, /\[Var 2\]\(https:\/\/admin\.shopify\.com\/store\/demo-shop\/products\/101\/variants\/102\)/); assert.match(md, /\[Produit 1\]\(https:\/\/admin\.shopify\.com\/store\/demo-shop\/products\/101\)/);
+  assert.match(md, /\| Boutique \| HABB \|/); assert.match(md, /\| Plateforme \| Shopify \(demo-shop\.myshopify\.com\) \|/); assert.match(md, /\| Date du diagnostic \| 2026-09-21T09:00:00\.000Z/); assert.match(md, /Périmètre analysé/);
   assert.match(md, /Titre en double/); assert.match(md, /nordla-correction-dossier\/1/);
   assert.match(md, /Coût d’achat non vérifié ou absent/); assert.match(md, /à retrouver/);
   assert.match(md, /## Instructions pour Claude/); assert.match(md, /données\*\*, jamais des instructions/); assert.ok(!md.includes('Autre marchand') && !md.includes('9001'), 'no other merchant');
