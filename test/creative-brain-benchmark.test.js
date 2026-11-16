@@ -261,7 +261,7 @@ test('BB-15 evidence and provenance: the whole Brain ledger, the plan, the gates
   assert.equal(s.concept_rounds.length, 1);
   assert.equal(s.concept_rounds[0].concepts.length, 3);
   assert.equal(s.concept_rounds[0].selection.outcome, 'SELECT');
-  assert.ok(s.concept_rounds[0].evaluations.every((e) => e.criteria.length === 10));
+  assert.ok(s.concept_rounds[0].evaluations.every((e) => e.criteria.length === 12)); // ten historical criteria + composition and perceived value (2026-11-07)
   const c = s.candidates[0];
   for (const key of ['concept', 'art_direction', 'composition', 'scene', 'production_plan', 'layout', 'critique', 'concept_critique', 'quality', 'verdict', 'recovery', 'png', 'preflight', 'fidelity', 'guardian', 'environment']) assert.ok(c[key] !== undefined && c[key] !== null, key);
   assert.equal(c.critique.dimensions.length, 14);

@@ -26,6 +26,8 @@ const textFiles = files.filter((f) => !/\.(png|jpe?g|pdf|xlsx|ico|woff2?|ttf|otf
   // the pinned sha-256 of a reviewed candidate, repeated by the owner's review record that identifies it (the bytes are never committed)
   && !/^benchmarks\/creative-intelligence\/[a-z0-9-]+-owner-review-\d+\.json$/.test(f)
   && f !== 'THIRD_PARTY_NOTICES.md'
+  // sha-256 content hashes of archived Creator evidence (a product sheet's photo, archived run traces and answers): they identify the evidence, they are not secrets; EXACT paths only
+  && !['config/creator/ad-products/sheets/remax-fc02.json', 'test/fixtures/creative-autonomy/archive-b2-y/frame_y.json', 'test/fixtures/creative-autonomy/openai-remax-replay/usage.json', 'test/fixtures/creative-autonomy/stop-reason-archive/cr-f69714718fa1.trace.json', 'test/fixtures/creative-autonomy/stop-reason-archive/cr-f7d2922f5d04.propositions.json'].includes(f)
   // the architecture record of the pinned evidence (asset / font hashes)
   && f !== 'docs/architecture/creative-pre-c2-foundation.md'
   && !/^resources\/fonts\/[a-z0-9-]+\/manifest\.json$/.test(f));

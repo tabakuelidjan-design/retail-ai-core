@@ -20,7 +20,7 @@ test('CS-1 an evaluation has every criterion exactly once, in words with evidenc
   assert.deepEqual(ev.criteria.map((c) => c.criterion), [...CRITERIA]);
   assert.ok(ev.criteria.every((c) => c.outcome === 'MEETS' && c.evidence.length > 12));
   const partial = normalizeEvaluation({ concept_id: a.concept_id, criteria: [{ criterion: 'CONCEPT_STRENGTH', outcome: 'MEETS', evidence: 'The central idea is clear and singular.' }] });
-  assert.equal(partial.criteria.filter((c) => c.outcome === 'NOT_ASSESSED').length, 9);
+  assert.equal(partial.criteria.filter((c) => c.outcome === 'NOT_ASSESSED').length, CRITERIA.length - 1);
   code(() => normalizeEvaluation({ concept_id: a.concept_id, criteria: [{ criterion: 'BEAUTY', outcome: 'MEETS', evidence: 'A judgment with evidence.' }] }), 'BRAIN_ENUM_INVALID');
   code(() => normalizeEvaluation({ concept_id: a.concept_id, criteria: [{ criterion: 'GENERIC_RISK', outcome: 'GREAT', evidence: 'A judgment with evidence.' }] }), 'BRAIN_ENUM_INVALID');
   code(() => normalizeEvaluation({ concept_id: a.concept_id, criteria: [{ criterion: 'GENERIC_RISK', outcome: 'MEETS', evidence: 'ok' }] }), 'BRAIN_TEXT_INVALID');
@@ -30,7 +30,7 @@ test('CS-1 an evaluation has every criterion exactly once, in words with evidenc
   code(() => normalizeEvaluation({ concept_id: a.concept_id, criteria: [{ ...dup, rank: 'first' }] }), 'BRAIN_UNKNOWN_KEY');
   code(() => normalizeEvaluation({ concept_id: a.concept_id, criteria: [], winner: 'x' }), 'BRAIN_UNKNOWN_KEY');
   assert.ok(Object.isFrozen(ev) && Object.isFrozen(ev.criteria[0]));
-  assert.equal(CRITERIA.length, 10);
+  assert.equal(CRITERIA.length, 12); // ten historical criteria + composition and perceived value (2026-11-07)
 });
 
 test('CS-2 the decision of one concept is a fixed function of its words', () => {
@@ -50,7 +50,7 @@ test('CS-2 the decision of one concept is a fixed function of its words', () => 
   assert.equal(decide({ EMOTIONAL_RESONANCE: 'NOT_ASSESSED' }), 'SELECT');
 });
 
-test('CS-3 the outcome of a round: SELECT, REFINE_CONCEPT, REJECT_CONCEPT or NO_CLEAR_WINNER, derived by Nordla with no score', () => {
+test('CS-3 the outcome of a round: SELECT, REFINE_CONCEPT, REJECT_CONCEPT or NO_CLEAR_WINNER, derived by Nordla with no score; a tie among eligible concepts is broken by fixed rules', () => {
   const [a, b, c] = concepts();
   const run = (perConcept) => selectConcept({ concepts: [a, b, c], evaluations: [a, b, c].map((x, i) => evalOf(x, perConcept[i])) });
   // one concept clearly meets the bar and dominates the others
@@ -63,18 +63,23 @@ test('CS-3 the outcome of a round: SELECT, REFINE_CONCEPT, REJECT_CONCEPT or NO_
   const better = run([{ EMOTIONAL_RESONANCE: 'PARTIAL' }, {}, { GENERIC_RISK: 'FAILS' }]);
   assert.equal(better.outcome, SELECTION.SELECT);
   assert.equal(better.concept_id, b.concept_id);
-  // two selectable concepts that trade off (each better somewhere): no clear winner
+  // two selectable concepts that trade off (each better somewhere): no dominance, so the fixed tie-break decides: equal MEETS and FAILS counts, then the first priority criterion
   const trade = run([{ EMOTIONAL_RESONANCE: 'PARTIAL' }, { NARRATIVE_COHESION: 'PARTIAL' }, { GENERIC_RISK: 'FAILS' }]);
-  assert.equal(trade.outcome, SELECTION.NO_CLEAR_WINNER);
-  assert.equal(trade.concept_id, null);
-  // two identical selectable concepts: no one dominates
-  assert.equal(run([{}, {}, { GENERIC_RISK: 'FAILS' }]).outcome, SELECTION.NO_CLEAR_WINNER);
+  assert.equal(trade.outcome, SELECTION.SELECT);
+  assert.equal(trade.concept_id, b.concept_id); // TIE_PRIORITY puts EMOTIONAL_RESONANCE before NARRATIVE_COHESION: b is judged MEETS on the first, a only PARTIAL
+  assert.equal(trade.tie_break.decided_by[0].rule, 'PRIORITY_CRITERIA');
+  // two identical selectable concepts: nothing but the stable order separates them, and it is said so
+  const same = run([{}, {}, { GENERIC_RISK: 'FAILS' }]);
+  assert.equal(same.outcome, SELECTION.SELECT);
+  assert.deepEqual(same.order, [a.concept_id, b.concept_id].sort());
+  assert.equal(same.tie_break.decided_by[0].rule, 'STABLE_ORDER');
   // nothing meets the bar but one is promising: refine it
   const refine = run([{ CONCEPT_STRENGTH: 'PARTIAL' }, { CONCEPT_STRENGTH: 'PARTIAL', EMOTIONAL_RESONANCE: 'PARTIAL' }, { GENERIC_RISK: 'FAILS' }]);
   assert.equal(refine.outcome, SELECTION.REFINE_CONCEPT);
   assert.equal(refine.concept_id, a.concept_id);
-  // several refinable concepts and none dominates
-  assert.equal(run([{ CONCEPT_STRENGTH: 'PARTIAL', EMOTIONAL_RESONANCE: 'PARTIAL' }, { CONCEPT_STRENGTH: 'PARTIAL', NARRATIVE_COHESION: 'PARTIAL' }, { GENERIC_RISK: 'FAILS' }]).outcome, SELECTION.NO_CLEAR_WINNER);
+  // several refinable concepts and none dominates: still ordered by the fixed rules (within the REFINE group only; the concept below the bar stays out)
+  const refineTie = run([{ CONCEPT_STRENGTH: 'PARTIAL', EMOTIONAL_RESONANCE: 'PARTIAL' }, { CONCEPT_STRENGTH: 'PARTIAL', NARRATIVE_COHESION: 'PARTIAL' }, { GENERIC_RISK: 'FAILS' }]);
+  assert.equal(refineTie.outcome, SELECTION.REFINE_CONCEPT); assert.equal(refineTie.order.length, 2); assert.ok(!refineTie.order.includes(c.concept_id));
   // every concept fails a decisive criterion
   const reject = run([{ DISTINCTIVENESS: 'FAILS' }, { GENERIC_RISK: 'FAILS' }, { FEASIBILITY: 'FAILS' }]);
   assert.equal(reject.outcome, SELECTION.REJECT_CONCEPT);

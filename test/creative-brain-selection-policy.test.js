@@ -42,7 +42,7 @@ test('SP-2 the bar is NOT lowered: a judged failure of brand or commercial clari
   assert.equal(decide({ CONCEPT_STRENGTH: 'NOT_ASSESSED' }, ['BRAND_COMPATIBILITY']), 'REFINE_CONCEPT'); // an unjudged central idea is not a pass
 });
 
-test('SP-3 a round is decided on the same grounds: one selectable concept wins, one that dominates the other selectable wins, incomparable selectable concepts stay NO_CLEAR_WINNER (documented, unchanged)', () => {
+test('SP-3 a round is decided on the same grounds: one selectable concept wins, one that dominates the other selectable wins, incomparable selectable concepts are ordered by the fixed tie-break, never left undecided', () => {
   const [a, b, c] = concepts;
   const hide = ['BRAND_COMPATIBILITY', 'COMMERCIAL_CLARITY'];
   const round = (perConcept) => selectConcept({ concepts: [a, b, c], evaluations: [a, b, c].map((x, i) => evalOf(x, perConcept[i], hide)) });
@@ -51,7 +51,14 @@ test('SP-3 a round is decided on the same grounds: one selectable concept wins, 
   assert.deepEqual(live.decisions.map((d) => d.decision), ['SELECT', 'SELECT', 'REFINE_CONCEPT']);
   assert.equal(dominates(evalOf(a, { FEASIBILITY: 'PARTIAL' }, hide), evalOf(b, { FEASIBILITY: 'PARTIAL', RELEVANCE_TO_BRIEF: 'PARTIAL', NARRATIVE_COHESION: 'NOT_ASSESSED' }, hide)), true);
   const tradeoff = round([{ FEASIBILITY: 'PARTIAL' }, { RELEVANCE_TO_BRIEF: 'PARTIAL' }, { GENERIC_RISK: 'FAILS' }]); // a is worse on relevance, b worse on feasibility
-  assert.deepEqual([tradeoff.outcome, tradeoff.concept_id], [SELECTION.NO_CLEAR_WINNER, null]); // each is better somewhere: still no arbitrary pick
+  // each is better somewhere: no concept dominates, so the fixed tie-break (not an arbitrary pick) orders them; both are SELECT-grade and the loser is never produced first
+  assert.equal(tradeoff.outcome, SELECTION.SELECT); assert.ok(tradeoff.concept_id);
+  assert.deepEqual(tradeoff.decisions.map((d) => d.decision), ['SELECT', 'SELECT', 'REJECT_CONCEPT']);
+  assert.equal(tradeoff.order.length, 2); assert.ok(!tradeoff.order.includes(c.concept_id), 'a concept below the bar is never brought into the order');
+  assert.deepEqual(tradeoff.reasons, ['SEVERAL_CONCEPTS_MEET_THE_BAR_NONE_DOMINATES_TIE_BROKEN_BY_FIXED_RULES']);
+  // equal MEETS and FAILS counts: the first priority criterion decides, and FEASIBILITY (the real product can carry the image) comes first: b is judged MEETS there, a only PARTIAL
+  assert.equal(tradeoff.tie_break.decided_by[0].rule, 'PRIORITY_CRITERIA'); assert.equal(tradeoff.concept_id, b.concept_id);
+  assert.match(tradeoff.tie_break.decided_by[0].detail, /^FEASIBILITY is judged better/);
   const none = round([{ CONCEPT_STRENGTH: 'PARTIAL' }, { CONCEPT_STRENGTH: 'PARTIAL', EMOTIONAL_RESONANCE: 'PARTIAL' }, { GENERIC_RISK: 'FAILS' }]);
   assert.equal(none.outcome, SELECTION.REFINE_CONCEPT);
 });
@@ -61,7 +68,8 @@ test('SP-4 property: SELECT always means a strong, distinct, non-failing concept
   const RANK = { NOT_ASSESSED: 0, FAILS: 0, PARTIAL: 1, MEETS: 2 }; const WORDS = ['MEETS', 'PARTIAL', 'FAILS', 'NOT_ASSESSED'];
   let selected = 0;
   for (let i = 0; i < 6000; i += 1) {
-    const outcomes = Object.fromEntries(CRITERIA.map((c) => [c, WORDS[Math.floor(random() ** 1.6 * 4)]]));
+    // the ten historical criteria are drawn; the two route criteria (composition, perceived value) are not part of the default bar and stay MEETS here (their bar is tested in creative-selection-bar.test.js)
+    const outcomes = Object.fromEntries(CRITERIA.map((c) => [c, c === 'COMPOSITION_STRENGTH' || c === 'PERCEIVED_VALUE' ? 'MEETS' : WORDS[Math.floor(random() ** 1.6 * 4)]]));
     const decision = decideConcept(evalOf(concepts[0], outcomes));
     if (decision === 'SELECT') {
       selected += 1;

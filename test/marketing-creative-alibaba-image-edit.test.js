@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   assertScopedExternalMediaUse,
-  buildProductEditPrompt,
+  buildProductEditPrompt, NEGATIVE_PROMPT_MAX_CHARS,
   editProductImage,
   evaluateProviderEdit,
   FileOutputStore,
@@ -182,7 +182,8 @@ test('Critical text never goes into provider pixels, and the provider prompt is 
   assert.match(prompt, /The only text allowed is the text already printed on the product/);
   assert.match(prompt, /camera module and its three lens openings/);
   assert.match(prompt, /same orientation, the same viewing angle and the same proportions/);
-  assert.match(negative, /hearts.*leaves.*fake gold.*extra lens.*missing lens.*added text.*watermark/);
+  // the product protections FIRST (never the part the provider's 500-character truncation would cut), then the request's own exclusions
+  assert.match(negative, /distorted product.*changed printed text.*extra lens.*missing lens.*added text.*watermark.*hearts.*leaves.*fake gold/);
   assert.throws(() => buildProductEditPrompt(request({ preserve: [] })), /preserve/);
   assert.throws(() => buildProductEditPrompt(request({ scene: '' })), /scene/);
   // IE-15 the prompt text is not part of what is returned or journaled (only its hash)
@@ -438,4 +439,69 @@ test('A provider-side 403 Endpoint.AccessDenied is a real, non-transient provide
   // IE-43 the script takes its lock through the helper, before any provider call
   const script = await readFile(new URL('scripts/run-c2-habb-edit.mjs', root), 'utf8');
   assert.ok(script.indexOf('takeLiveCallLock(lockPath)') > 0 && script.indexOf('takeLiveCallLock(lockPath)') < script.indexOf('editProductImage({'));
+});
+
+test('negative prompt: at most 500 characters (the provider truncates silently beyond), product protections kept first, the rest REPORTED as dropped', () => {
+  const many = Array.from({ length: 60 }, (_, i) => `unwanted element number ${String.fromCharCode(97 + (i % 26))}${i}`);
+  const { negative_prompt: negative, negative_dropped: dropped } = buildProductEditPrompt({ ...request(), forbid: many });
+  assert.ok(negative.length <= NEGATIVE_PROMPT_MAX_CHARS, `${negative.length} chars`);
+  assert.match(negative, /^distorted product, changed printed text, redrawn artwork, altered camera module, extra lens, missing lens, added text, watermark/);
+  assert.ok(dropped.length > 0); for (const d of dropped) assert.ok(!negative.includes(d), d);
+  assert.equal(new Set(negative.split(', ')).size, negative.split(', ').length, 'no duplicates');
+  const dup = buildProductEditPrompt({ ...request(), forbid: ['watermark', 'Watermark', 'hearts', 'hearts'] });
+  assert.equal(dup.negative_prompt.match(/watermark/g).length, 1); assert.equal(dup.negative_prompt.match(/hearts/g).length, 1); assert.deepEqual(dup.negative_dropped, []);
+});
+
+// ---- OPTION C (2026-11-08): the product photograph AND a quality reference, in this order, each with its OWN clearance, its own SHA-256 and its own billing (`// IE-C` markers)
+const REFERENCE_ASSET = 'asset://habb/direction/r1-quality-reference';
+const REFERENCE = new Uint8Array([...SOURCE.slice(0, SOURCE.length - 2), 7, 9]);
+const refAuthorization = () => ({ ...committed, authorization_id: 'authz://test/reference', asset: { ...committed.asset, asset_ref: REFERENCE_ASSET, asset_sha256: sha(REFERENCE) } });
+const reference = (over = {}) => ({ asset: { ref: REFERENCE_ASSET, bytes: REFERENCE, media_type: 'image/png' }, authorization: refAuthorization(), ...over });
+const twoImages = (over = {}) => setup({ references: [reference()], budget: new SpendGuard({ maxSpendEur: 0.5, maxImages: 2, maxVideoSeconds: 0 }), request: request({ n: 2 }), fetchImpl: fakeFetch({ payload: okPayload({ output: { choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: [{ image: SIGNED }, { image: SIGNED.replace('edit-1', 'edit-2') }] } }] } }) }), ...over });
+
+test('IE-C1 the images are sent in this order: the product photograph, then the reference, then the single text; each image is the exact bytes', async () => {
+  const input = twoImages(); const result = await editProductImage(input);
+  const post = input.fetchImpl.calls.find((c) => c.method === 'POST'); const content = JSON.parse(post.body).input.messages[0].content;
+  assert.equal(content.length, 3, 'two images and one text');
+  assert.equal(content[0].image, `data:image/png;base64,${Buffer.from(SOURCE).toString('base64')}`, 'image 1 is the product photograph');
+  assert.equal(content[1].image, `data:image/png;base64,${Buffer.from(REFERENCE).toString('base64')}`, 'image 2 is the reference');
+  assert.equal(typeof content[2].text, 'string'); assert.equal(content.filter((c) => c.text !== undefined).length, 1, 'only one text object');
+  assert.equal(result.input_images, 2);
+});
+
+test('IE-C2 each image has its own clearance and its own SHA-256 in the journal; the reference is cleared on its OWN bytes', async () => {
+  const input = twoImages(); const result = await editProductImage(input);
+  const events = input.journal.list(); assert.deepEqual(events.map((e) => e.event), ['RESERVED', 'SUCCEEDED']);
+  assert.equal(events[0].input_sha256, sha(SOURCE)); assert.deepEqual(events[0].reference_sha256s, [sha(REFERENCE)]); assert.deepEqual(events[1].reference_sha256s, [sha(REFERENCE)]);
+  assert.deepEqual(result.reference_sha256s, [sha(REFERENCE)]); assert.equal(result.reference_clearance_ids[0], 'authz://test/reference'); assert.notEqual(result.clearance_id, result.reference_clearance_ids[0]);
+  assert.doesNotMatch(dump(events), /base64/);
+});
+
+test('IE-C3 a reference without its own clearance (another image, a revoked record, no record) is refused BEFORE anything is reserved or sent', async () => {
+  const wrong = [
+    ['the record names the product photograph, not the reference', reference({ authorization })],
+    ['no record', reference({ authorization: null })],
+    ['a revoked record', reference({ authorization: { ...refAuthorization(), authorization: { revoked: true } } })],
+    ['other bytes than the record names', reference({ asset: { ref: REFERENCE_ASSET, bytes: new Uint8Array([...REFERENCE.slice(0, REFERENCE.length - 1), 1]), media_type: 'image/png' } })],
+  ];
+  for (const [name, ref] of wrong) {
+    const input = twoImages({ references: [ref] });
+    assert.ok(await code(editProductImage(input)), name);
+    assert.equal(input.fetchImpl.calls.length, 0, `${name}: nothing sent`); assert.equal(input.journal.list().length, 0, `${name}: nothing reserved`); assert.equal(input.budget.snapshot().reserved_eur, 0);
+  }
+});
+
+test('IE-C4 the budget covers BOTH input images (one more input image than a single-image call) and settles the same amount', async () => {
+  const one = setup({ request: request({ n: 2 }), budget: new SpendGuard({ maxSpendEur: 0.5, maxImages: 2, maxVideoSeconds: 0 }), fetchImpl: fakeFetch({ payload: okPayload({ output: { choices: [{ finish_reason: 'stop', message: { role: 'assistant', content: [{ image: SIGNED }, { image: SIGNED.replace('edit-1', 'edit-2') }] } }] } }) }) });
+  await editProductImage(one); const two = twoImages(); await editProductImage(two);
+  const r1 = one.journal.list()[0].estimated_cost_eur; const r2 = two.journal.list()[0].estimated_cost_eur;
+  assert.ok(Math.abs((r2 - r1) - 0.00275 * one.budget.usdToEur) < 1e-9, `reserved ${r2} vs ${r1}`);
+  assert.ok(Math.abs(two.budget.snapshot().settled_eur - r2) < 1e-9); assert.equal(two.budget.snapshot().reserved_eur, 0);
+});
+
+test('IE-C5 a call without references is unchanged (one image, one text), and more than two references are refused', async () => {
+  const input = setup(); await editProductImage(input);
+  const content = JSON.parse(input.fetchImpl.calls.find((c) => c.method === 'POST').body).input.messages[0].content; assert.equal(content.length, 2); assert.ok(content[0].image && content[1].text);
+  const three = twoImages({ references: [reference(), reference(), reference()] }); assert.match(await code(editProductImage(three)), /at most 2/);
+  assert.equal(three.fetchImpl.calls.length, 0);
 });

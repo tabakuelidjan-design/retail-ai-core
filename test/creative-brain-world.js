@@ -89,7 +89,7 @@ export const OTHER_CONCEPTS = [
   },
 ];
 export const criteriaOf = (outcomes = {}, evidence = 'Concrete evidence that supports this judgment.') => [
-  'CONCEPT_STRENGTH', 'RELEVANCE_TO_BRIEF', 'EMOTIONAL_RESONANCE', 'PRODUCT_RELATIONSHIP', 'DISTINCTIVENESS', 'FEASIBILITY', 'BRAND_COMPATIBILITY', 'COMMERCIAL_CLARITY', 'NARRATIVE_COHESION', 'GENERIC_RISK',
+  'CONCEPT_STRENGTH', 'RELEVANCE_TO_BRIEF', 'EMOTIONAL_RESONANCE', 'PRODUCT_RELATIONSHIP', 'DISTINCTIVENESS', 'FEASIBILITY', 'BRAND_COMPATIBILITY', 'COMMERCIAL_CLARITY', 'NARRATIVE_COHESION', 'GENERIC_RISK', 'COMPOSITION_STRENGTH', 'PERCEIVED_VALUE',
 ].map((criterion) => ({ criterion, outcome: outcomes[criterion] ?? 'MEETS', evidence, ...(outcomes[criterion] && outcomes[criterion] !== 'MEETS' ? { refinement: 'Make this point stronger in plain terms.' } : {}) }));
 
 export const evaluationsAnswer = (concepts, perConcept) => ({ evaluations: concepts.map((c, i) => ({ concept_id: c.concept_id, criteria: criteriaOf(perConcept[i] ?? {}) })) });

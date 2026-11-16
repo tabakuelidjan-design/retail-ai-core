@@ -32,3 +32,18 @@ test('errors are explicit and an empty question is refused without calling the s
   await panel.ask('ma trésorerie'); assert.equal(called, 1); assert.match(panel.section(), /data-nx-ask-error/); assert.match(panel.section(), /Session expirée/);
   assert.doesNotMatch(panel.section(), /Nordla cherche la réponse/);
 });
+
+test('the Creator link is shown on the Création module only when the server built the Creator module (creator_screen), and points at /creator', async () => {
+  const withFlag = (flag) => async (path) => {
+    if (path === '/api/core/modules') return { modules: ['core', 'sourcing', 'finance', 'analytics', 'branding', 'marketing', 'creative'].map((key) => ({ key, label: key, state: 'LIMITÉ', detail: 'x', ...(key === 'creative' ? { creator_screen: flag } : {}) })) };
+    if (path === '/api/core/branding') return { status: 'NOT_CONNECTED' };
+    if (path === '/api/core/campaigns') return { campaigns: [] };
+    return { status: 'NOT_CONNECTED' };
+  };
+  for (const [flag, expected] of [[true, true], [false, false]]) {
+    const { panel } = make(withFlag(flag)); await panel.load();
+    const html = panel.section();
+    assert.equal(/href="\/creator"/.test(html), expected, `creator_screen=${flag}`);
+    if (expected) assert.match(html, /mode TEST : résultats archivés, aucun fournisseur/);
+  }
+});

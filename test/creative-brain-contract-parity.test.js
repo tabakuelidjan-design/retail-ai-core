@@ -314,9 +314,10 @@ const FAILURES_A = {
   envelope_answer: (t) => JSON.stringify({ answer: JSON.parse(t) }),
   envelope_response_cased: (t) => JSON.stringify({ Response: JSON.parse(t) }),
   envelope_stage_name: (t) => JSON.stringify({ the_result_object: JSON.parse(t) }),
+  // purely syntactic slips are read LOCALLY (journaled as JSON_SYNTAX, no second call): a comma before a closing bracket
+  trailing_comma: (t) => t.replace(/}$/, ',}'),
 };
 const FAILURES_B = {
-  trailing_comma: (t) => t.replace(/\}$/, ',}'),
   truncated: (t) => t.slice(0, Math.max(10, t.length - 25)),
   missing_closing_brace: (t) => t.slice(0, -1),
   smart_quoted_keys: (t) => t.replace(/"([a-z_]+)":/, '“$1”:'),
