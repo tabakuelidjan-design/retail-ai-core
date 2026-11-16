@@ -271,3 +271,14 @@ test('HOS-10 FR / NL / EN: the sign-in and bar texts exist in the three language
     }
   } finally { await srv.close(); }
 });
+
+test('HOS-sign-in-button: the page element helper writes ANY value as an attribute, so a boolean disabled:false would disable the button for good; the UI must pass "disabled" or null', async () => {
+  const { readdir, readFile: rf } = await import('node:fs/promises');
+  const dir = new URL('../src/growth/ui/', import.meta.url);
+  for (const f of (await readdir(dir)).filter((n) => n.endsWith('.js'))) {
+    const src = await rf(new URL(f, dir), 'utf8');
+    for (const m of src.matchAll(/\bdisabled:\s*([^,}]+)/g)) assert.match(m[1].trim(), /\?\s*'disabled'\s*:\s*null$|^null$|^'disabled'$/, `${f}: "disabled: ${m[1].trim()}" would be written as disabled="false" by h()`);
+  }
+  const app = await rf(new URL('app.js', dir), 'utf8');
+  assert.match(app, /else if \(v != null\) el\.setAttribute\(k, v\)/); // the reason for the rule
+});

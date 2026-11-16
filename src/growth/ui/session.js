@@ -118,7 +118,7 @@ var growthHosted = (() => {
       state.loginError ? h('p', { class: 'gr-login-error', role: 'alert' }, state.loginError) : null,
       h('label', { for: 'gr-login-email' }, t('gr.session.email')), h('input', { id: 'gr-login-email', class: 'gr-login-input', type: 'email', autocomplete: 'username' }),
       h('label', { for: 'gr-login-password' }, t('gr.session.password')), h('input', { id: 'gr-login-password', class: 'gr-login-input', type: 'password', autocomplete: 'current-password' }),
-      h('button', { id: 'gr-login-go', type: 'button', class: 'btn-primary-sm', disabled: state.busy, on: { click: signIn } }, state.busy ? t('gr.session.busy') : t('gr.session.submit')))));
+      h('button', { id: 'gr-login-go', type: 'button', class: 'btn-primary-sm', disabled: state.busy ? 'disabled' : null, on: { click: signIn } }, state.busy ? t('gr.session.busy') : t('gr.session.submit')))));
     if (state.bar) state.bar.replaceChildren();
   }
   /** The screen does not open: say why, offer a retry when it can help, and the way out. */
