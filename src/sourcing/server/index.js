@@ -191,13 +191,18 @@ export async function buildNotifications({ env, gate, hosted, log = console.log,
     const { createNotificationsHost } = await import('./notifications-host.js');
     const { createNotificationsService } = await import('../../settings-notifications/service.js');
     const { createSupabaseNotificationsRepository } = await import('../../settings-notifications/repository.js');
-    const { createConnectionReauthEmitter } = await import('../../settings-notifications/emitters.js');
+    const { createConnectionReauthEmitter, createGrowthReviewEmitter, combineEmitters } = await import('../../settings-notifications/emitters.js');
     const client = await import('../../supabase/client.js');
     const supabase = injected ?? client.createSupabaseClient(client.loadSupabaseConfigFromEnv(env));
-    const service = createNotificationsService({ repo: createSupabaseNotificationsRepository({ supabase }) });
-    const emitter = listConnections ? createConnectionReauthEmitter({ service, merchantId: hosted.merchantId, listConnections, log }) : null;
+    const growthUrl = /^https:\/\/[a-z0-9.-]+(?::\d+)?\/?$/i.test(String(env.NORDLA_GROWTH_PUBLIC_URL ?? '').trim()) ? String(env.NORDLA_GROWTH_PUBLIC_URL).trim().replace(/\/$/, '') + '/' : null; // the page an "Action à revoir" alert leads to (Growth is its own service)
+    const service = createNotificationsService({ repo: createSupabaseNotificationsRepository({ supabase }), links: growthUrl ? { growth_action_review: growthUrl } : {} });
+    const tz = String(env.MERCHANT_TIMEZONE ?? '').trim() || 'Europe/Brussels';
+    const today = () => { try { return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date()); } catch { return new Date().toISOString().slice(0, 10); } };
+    const sources = [listConnections ? createConnectionReauthEmitter({ service, merchantId: hosted.merchantId, listConnections, log }) : null,
+      growthUrl ? createGrowthReviewEmitter({ service, merchantId: hosted.merchantId, today, log, listEntries: async (m) => (await supabase.select('growth_follow_up', { merchant_id: `eq.${m}`, select: 'entry_key,value', limit: '2000' })) ?? [] }) : null]; // read only
+    const emitter = sources.some(Boolean) ? combineEmitters(sources) : null;
     const host = await createNotificationsHost({ gate, merchantId: hosted.merchantId, service, emitter, shellOf, sweepEveryMs });
-    log(`Notifications: ON (Paramètres > Notifications; in Nordla only, e-mail unavailable; event wired: connection to renew${emitter ? '' : ' - NOT active: Connexions is off'})`);
+    log(`Notifications: ON (Paramètres > Notifications; in Nordla only, e-mail unavailable; events wired: connection to renew${listConnections ? '' : ' (OFF: Connexions is off)'}, growth action to review${growthUrl ? '' : ' (OFF: NORDLA_GROWTH_PUBLIC_URL not set)'})`);
     return host;
   } catch (e) { log(`Notifications: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
 }

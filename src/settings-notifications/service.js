@@ -5,7 +5,7 @@
 //   - an alert is addressed only to an ACTIVE, not removed member whose role may view the item (canView), and is checked again when it is listed, counted, read or opened;
 //   - a member whose access was removed or suspended no longer has a session, so every route refuses before reaching this service.
 // IDEMPOTENCE. An event has a stable key (dedupeKey); the storage refuses a second row for the same (merchant, recipient, key), so a replay adds nothing.
-import { ALERT_TYPES, DIGEST_STATE, EMAIL_STATE, MODULES, NOTE_ACCOUNT, PREF_DEFAULT, TYPE_IDS, canView, describe, isType } from './model.js';
+import { ALERT_TYPES, DIGEST_STATE, EMAIL_STATE, MODULES, NOTE_ACCOUNT, PREF_DEFAULT, TYPE_IDS, canView, describe, isType, isWired } from './model.js';
 
 export class NotificationsError extends Error {
   constructor(code, message, extra = {}) { super(message ?? code); this.name = 'NotificationsError'; this.code = code; Object.assign(this, extra); }
@@ -13,7 +13,7 @@ export class NotificationsError extends Error {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** @param {{ repo: object }} o */
-export function createNotificationsService({ repo }) {
+export function createNotificationsService({ repo, links = {} }) {
   const need = (v, code) => { if (!v) throw new NotificationsError(code); return v; };
   const merchantOf = (tenant) => need(tenant?.merchantId, 'TENANT_REQUIRED');
   const prefMap = async (merchantId, userId) => new Map((await repo.preferences({ merchantId, userId })).map((p) => [p.type, p.in_app]));
@@ -25,7 +25,7 @@ export function createNotificationsService({ repo }) {
       const merchantId = merchantOf(tenant); need(actor, 'ACTOR_REQUIRED');
       const prefs = await prefMap(merchantId, actor);
       const alerts = TYPE_IDS.filter((t) => canView(t, role)).map((id) => {
-        const t = ALERT_TYPES[id]; const wired = t.wired;
+        const t = ALERT_TYPES[id]; const wired = isWired(id, links);
         return {
           id, label: t.label, module: t.module, moduleLabel: MODULES[t.module].label, trigger: t.trigger, wired,
           state: wired ? 'RACCORDEE' : 'NON_RACCORDEE', stateLabel: wired ? 'Raccordée' : 'Pas encore raccordée', reason: wired ? null : t.notWiredReason,
@@ -47,7 +47,7 @@ export function createNotificationsService({ repo }) {
       if (channel === 'email') throw new NotificationsError('CHANNEL_UNAVAILABLE', EMAIL_STATE.label);
       if (channel !== 'in_app') throw new NotificationsError('CHANNEL_UNKNOWN', 'Canal inconnu.');
       if (typeof enabled !== 'boolean') throw new NotificationsError('VALIDATION', 'Valeur invalide.');
-      if (!ALERT_TYPES[type].wired) throw new NotificationsError('NOT_WIRED', 'Cette alerte n’est pas encore raccordée.');
+      if (!isWired(type, links)) throw new NotificationsError('NOT_WIRED', 'Cette alerte n’est pas encore raccordée.');
       await repo.setPreference({ merchantId, userId: actor, type, inApp: enabled });
       return this.overview({ tenant, role, actor });
     },
@@ -56,7 +56,7 @@ export function createNotificationsService({ repo }) {
     async inbox({ tenant, role, actor, unreadOnly = false, limit = 50 }) {
       const merchantId = merchantOf(tenant); need(actor, 'ACTOR_REQUIRED');
       const rows = await repo.list({ merchantId, userId: actor, unreadOnly, limit: Math.min(200, Math.max(1, Number(limit) || 50)) });
-      const items = rows.filter((r) => isType(r.type) && canView(r.type, role)).map(describe);
+      const items = rows.filter((r) => isType(r.type) && canView(r.type, role)).map((r) => describe(r, links));
       return { items, unread: items.filter((i) => !i.read).length };
     },
 
@@ -67,7 +67,7 @@ export function createNotificationsService({ repo }) {
       const row = await repo.get({ merchantId, userId: actor, id });
       if (!row || !isType(row.type) || !canView(row.type, role)) throw new NotificationsError('NOT_FOUND');
       await repo.markRead({ merchantId, userId: actor, ids: [id] });
-      const d = describe({ ...row, read_at: row.read_at ?? new Date().toISOString() });
+      const d = describe({ ...row, read_at: row.read_at ?? new Date().toISOString() }, links);
       return { item: d, link: d.link };
     },
 
@@ -92,7 +92,7 @@ export function createNotificationsService({ repo }) {
      */
     async emit({ merchantId, type, dedupeKey, data = {} }) {
       need(merchantId, 'TENANT_REQUIRED');
-      if (!isType(type) || !ALERT_TYPES[type].wired) throw new NotificationsError('TYPE_NOT_WIRED', 'Type d’alerte non raccordé.');
+      if (!isWired(type, links)) throw new NotificationsError('TYPE_NOT_WIRED', 'Type d’alerte non raccordé.');
       if (typeof dedupeKey !== 'string' || dedupeKey.length < 3 || dedupeKey.length > 200) throw new NotificationsError('VALIDATION', 'Clé d’événement invalide.');
       const out = { created: 0, duplicate: 0, skipped: 0 };
       for (const m of await repo.activeMembers({ merchantId })) {

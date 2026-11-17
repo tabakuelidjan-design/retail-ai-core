@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { createNotificationsService, NotificationsError } from '../src/settings-notifications/service.js';
 import { createMemoryNotificationsRepository } from '../src/settings-notifications/repository.js';
-import { createConnectionReauthEmitter } from '../src/settings-notifications/emitters.js';
-import { ALERT_TYPES, TYPE_IDS, canView } from '../src/settings-notifications/model.js';
+import { createConnectionReauthEmitter, createGrowthReviewEmitter, combineEmitters } from '../src/settings-notifications/emitters.js';
+import { ALERT_TYPES, TYPE_IDS, canView, isWired } from '../src/settings-notifications/model.js';
 import { createNotificationsHost } from '../src/sourcing/server/notifications-host.js';
 import { createSessionGate } from '../src/sourcing/server/session-gate.js';
 
@@ -17,14 +17,16 @@ const t1 = { merchantId: M1 };
 const reauth = (n = 1) => ({ merchantId: M1, type: 'connection_reauth', dedupeKey: `connection_reauth:conn-1:${n}`, data: { provider: 'Instagram' } });
 
 test('NT-1 registry: only the connection event is wired; the two others say why they are not; e-mail and digest are inactive with a reason', async () => {
-  assert.deepEqual(TYPE_IDS.filter((t) => ALERT_TYPES[t].wired), ['connection_reauth']);
-  for (const t of TYPE_IDS.filter((x) => !ALERT_TYPES[x].wired)) assert.ok(ALERT_TYPES[t].notWiredReason.length > 40, t);
+  assert.deepEqual(TYPE_IDS.filter((t) => isWired(t)), ['connection_reauth'], 'without a Growth address only the connection event is wired');
+  assert.deepEqual(TYPE_IDS.filter((t) => isWired(t, { growth_action_review: 'https://g.example/' })), ['connection_reauth', 'growth_action_review']);
+  for (const t of ['receipt_recorded', 'growth_action_review']) assert.ok(ALERT_TYPES[t].notWiredReason.length > 40, t);
   const svc = createNotificationsService({ repo: createMemoryNotificationsRepository({ members: members() }) });
   const ov = await svc.overview({ tenant: t1, role: 'VIEWER', actor: U.viewer });
   assert.equal(ov.alerts.length, 3); assert.equal(ov.email.available, false); assert.match(ov.email.label, /E-mail indisponible/); assert.equal(ov.digest.available, false);
   const wired = ov.alerts.find((a) => a.id === 'connection_reauth'); assert.equal(wired.state, 'RACCORDEE'); assert.equal(wired.channels.find((c) => c.id === 'in_app').enabled, true);
   assert.equal(wired.channels.find((c) => c.id === 'email').available, false);
   const off = ov.alerts.find((a) => a.id === 'receipt_recorded'); assert.equal(off.state, 'NON_RACCORDEE'); assert.equal(off.channels[0].available, false);
+  assert.equal(ov.alerts.find((a) => a.id === 'growth_action_review').state, 'NON_RACCORDEE', 'no Growth address configured: honest, not wired');
 });
 
 test('NT-2 personal choices: per account and per merchant, a read-only member may set them, e-mail and unwired alerts are refused', async () => {
@@ -34,7 +36,7 @@ test('NT-2 personal choices: per account and per merchant, a read-only member ma
   const owner = await svc.overview({ tenant: t1, role: 'OWNER', actor: U.owner }); assert.equal(owner.alerts.find((a) => a.id === 'connection_reauth').channels[0].enabled, true, 'the owner is not affected');
   const other = await svc.overview({ tenant: { merchantId: M2 }, role: 'OWNER', actor: U.owner }); assert.equal(other.alerts.find((a) => a.id === 'connection_reauth').channels[0].enabled, true, 'another merchant is not affected');
   await assert.rejects(svc.setPreference({ tenant: t1, role: 'OWNER', actor: U.owner, type: 'connection_reauth', channel: 'email', enabled: true }), { code: 'CHANNEL_UNAVAILABLE' });
-  await assert.rejects(svc.setPreference({ tenant: t1, role: 'OWNER', actor: U.owner, type: 'receipt_recorded', channel: 'in_app', enabled: true }), { code: 'NOT_WIRED' });
+  await assert.rejects(svc.setPreference({ tenant: t1, role: 'OWNER', actor: U.owner, type: 'growth_action_review', channel: 'in_app', enabled: true }), { code: 'NOT_WIRED' });
   await assert.rejects(svc.setPreference({ tenant: t1, role: 'OWNER', actor: U.owner, type: 'nope', channel: 'in_app', enabled: true }), { code: 'TYPE_UNKNOWN' });
   await assert.rejects(svc.setPreference({ tenant: t1, role: 'OWNER', actor: U.owner, type: 'connection_reauth', channel: 'in_app', enabled: 'yes' }), { code: 'VALIDATION' });
 });
@@ -132,3 +134,28 @@ test('NT-7 HTTP end to end: the sweep raises ONE alert per authorised member, op
 });
 
 test('NT-8 the error class carries a code (host answers with it)', () => { const e = new NotificationsError('NOT_FOUND'); assert.equal(e.code, 'NOT_FOUND'); assert.ok(e instanceof Error); });
+
+test('NT-9 Growth review: due only for an APPLIED plan whose review date is reached and not yet reviewed; one alert per plan; the link is the configured address', async () => {
+  const repo = createMemoryNotificationsRepository({ members: members() }); const G = 'https://growth.example/';
+  const svc = createNotificationsService({ repo, links: { growth_action_review: G } });
+  const key = (id) => `nordla.growth.follow-up.v1:${'a'.repeat(64)}:${id}`;
+  const plan = (at, reviewDate, action = 'Mettre en avant la coque') => ({ at, type: 'plan', action, reviewDate });
+  const applied = (planAt) => ({ at: '2026-11-02T10:00:00.000Z', type: 'applied', planAt, date: '2026-11-02' });
+  const entries = [
+    { entry_key: key('due'), value: { events: [plan('P1', '2026-11-10'), applied('P1')] } },
+    { entry_key: key('future'), value: { events: [plan('P2', '2026-12-15'), applied('P2')] } },
+    { entry_key: key('not-applied'), value: { events: [plan('P3', '2026-11-10')] } },
+    { entry_key: key('reviewed'), value: { events: [plan('P4', '2026-11-10'), applied('P4'), { type: 'review', at: 'R', planAt: 'P4' }] } },
+    { entry_key: key('no-date'), value: { events: [{ type: 'plan', at: 'P5', text: 'x' }, applied('P5')] } },
+    { entry_key: 'nordla.growth.pipeline.v1:' + 'a'.repeat(64), value: { v: 1, requests: {} } },
+  ];
+  const em = createGrowthReviewEmitter({ service: svc, merchantId: M1, listEntries: async () => entries, today: () => '2026-11-18' });
+  const a = await em.run(); assert.equal(a.seen, 1); assert.equal(a.created, 3);
+  assert.equal((await em.run()).created, 0, 'a replay adds nothing'); assert.equal(repo._rows.length, 3);
+  const item = (await svc.inbox({ tenant: t1, role: 'OWNER', actor: U.owner })).items[0];
+  assert.equal(item.link, G); assert.match(item.title, /Mettre en avant la coque/);
+  entries[0].value.events.push(plan('P1b', '2026-11-11'), applied('P1b')); // re-planned and applied again: a new event
+  assert.equal((await em.run()).created, 3);
+  const both = combineEmitters([em, null]); assert.equal((await both.run()).length, 1);
+  const bad = createGrowthReviewEmitter({ service: svc, merchantId: M1, listEntries: async () => { throw new Error('down'); }, log: () => {} }); assert.equal(await bad.run(), null);
+});

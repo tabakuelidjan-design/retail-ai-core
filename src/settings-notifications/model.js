@@ -34,17 +34,19 @@ export const ALERT_TYPES = Object.freeze({
     title: () => 'Réception d’achat enregistrée', body: () => '',
   }),
   growth_action_review: Object.freeze({
-    id: 'growth_action_review', module: 'growth', wired: false,
+    id: 'growth_action_review', module: 'growth', wired: true,
     label: 'Action à revoir',
-    trigger: 'Une action de Développement des ventes attend une relecture.',
+    trigger: 'Une action de suivi de Développement des ventes, déjà appliquée, a atteint sa date de revue et n’a pas encore été revue.',
     channels: Object.freeze(['in_app']), defaultInApp: true,
-    viewers: ALL_ROLES, link: '/growth', linkLabel: 'Ouvrir Développement des ventes',
-    notWiredReason: 'Développement des ventes garde ses actions dans le navigateur de chaque utilisateur : le serveur n’en a aucune trace, donc aucun événement fiable à relayer.',
-    title: () => 'Action à revoir', body: () => '',
+    viewers: ALL_ROLES, link: null, linkEnv: 'NORDLA_GROWTH_PUBLIC_URL', linkLabel: 'Ouvrir Développement des ventes',
+    notWiredReason: 'L’adresse de Développement des ventes n’est pas configurée sur ce serveur (NORDLA_GROWTH_PUBLIC_URL) : l’alerte ne pourrait pas renvoyer vers l’élément.',
+    title: (d) => `Action à revoir${d.action ? ` : ${d.action}` : ''}`, body: () => 'La date de revue prévue est atteinte : comparez le résultat à l’objectif.',
   }),
 });
 export const TYPE_IDS = Object.freeze(Object.keys(ALERT_TYPES));
 export const isType = (t) => Object.hasOwn(ALERT_TYPES, t);
+/** Wired = the registry says so AND the alert has a page to lead to (a type with `linkEnv` needs that address configured). */
+export const isWired = (type, links = {}) => isType(type) && ALERT_TYPES[type].wired && Boolean(ALERT_TYPES[type].link || links[type]);
 export const canView = (type, role) => isType(type) && ALERT_TYPES[type].viewers.includes(role);
 
 /** Channels other than "in Nordla": their REAL state on this server. E-mail has no sending channel on Nordla today; the digest needs one and a periodic job. */
@@ -54,8 +56,8 @@ export const DIGEST_STATE = Object.freeze({ available: false, label: 'Récapitul
 export const NOTE_ACCOUNT = 'Les messages indispensables à la connexion et à la récupération du compte (réinitialisation du mot de passe, invitation, double authentification) sont gérés dans Paramètres › Sécurité et ne se règlent pas ici.';
 
 /** Wording of one stored alert, from the registry only. `row.data` is the small non-secret object of the row. */
-export function describe(row) {
+export function describe(row, links = {}) {
   const t = ALERT_TYPES[row.type]; const d = row.data && typeof row.data === 'object' ? row.data : {};
-  return { id: row.id, type: row.type, module: t.module, moduleLabel: MODULES[t.module].label, title: String(t.title(d)).slice(0, 160), body: String(t.body(d)).slice(0, 300), link: t.link, linkLabel: t.linkLabel, createdAt: row.created_at, readAt: row.read_at ?? null, read: row.read_at != null };
+  return { id: row.id, type: row.type, module: t.module, moduleLabel: MODULES[t.module].label, title: String(t.title(d)).slice(0, 160), body: String(t.body(d)).slice(0, 300), link: t.link ?? links[row.type] ?? null, linkLabel: t.linkLabel, createdAt: row.created_at, readAt: row.read_at ?? null, read: row.read_at != null };
 }
 export const PREF_DEFAULT = (type) => ALERT_TYPES[type]?.defaultInApp ?? false;
