@@ -157,6 +157,8 @@ test('HOS-5 the Supabase store: every query names the merchant; writes are condi
   const mem = createMemoryFollowUpStore(); await mem.put(M, `nordla.growth.follow-up.v1:${SO}:op-1`, plan(), 0, 'x');
   const srv = await boot({ store: mem }); try { assert.deepEqual((await srv.req('/api/growth/follow-up', { token: 'tok-owner' })).json.entries, []); } finally { await srv.close(); }
   assert.ok(followUpKeyOk(OPKEY, S) && followUpKeyOk(PIPEKEY, S) && !followUpKeyOk(OPKEY, SO));
+  assert.ok(followUpKeyOk(`nordla.growth.follow-up.v1:${S}:${encodeURIComponent('product:7e570001-0000-4000-8000-000000000001')}`, S), 'an opportunity id with ":" is written percent-encoded by the screen (a product opportunity could not be saved)');
+  assert.ok(!followUpKeyOk(`nordla.growth.follow-up.v1:${S}:op%zz`, S) && !followUpKeyOk(`nordla.growth.follow-up.v1:${S}:op%2`, S) && !followUpKeyOk(`nordla.growth.follow-up.v1:${S}:a b`, S), 'a bare or malformed % is still refused');
 });
 
 test('HOS-6 hosted start: complete configuration or nothing; the gate is built for the growth module only', async () => {

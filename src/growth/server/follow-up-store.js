@@ -12,7 +12,7 @@
 
 export const MAX_ENTRY_BYTES = 256 * 1024;
 export const MAX_ENTRIES = 5000;
-const KEY = /^nordla\.growth\.(follow-up|pipeline)\.v1:([0-9a-f]{64})(?::([A-Za-z0-9_.:@/-]{1,200}))?$/;
+const KEY = /^nordla\.growth\.(follow-up|pipeline)\.v1:([0-9a-f]{64})(?::((?:[A-Za-z0-9_.:@/-]|%[0-9A-Fa-f]{2}){1,200}))?$/; // the screen writes encodeURIComponent(id): a product id "product:<uuid>" arrives as "product%3A<uuid>"
 
 /** Is this key one of the follow-up keys of THIS merchant's scope? follow-up keys carry an opportunity id, the pipeline key none. */
 export function followUpKeyOk(key, historyScope) {
