@@ -60,9 +60,9 @@ const IMG = { svg: 'image/svg+xml', png: 'image/png', webp: 'image/webp' };
 // productPotential: the tenant's Potentiel produits source (server/products.js), created from the Growth server's context
 // (NORDLA_MERCHANT_ID). Nothing in a request can choose or change the merchant: the route reads no parameter at all.
 // audience / content / store: the tenant's Audience, Contenu and Croissance magasin sources (server/*.js), same contract.
-export function createGrowthApp({ now = () => new Date(), productPotential = null, audience = null, content = null, store = null, merchantId = null, review = null, corrections = null, ads = null, site = null, siteReview = null, social = null, socialReview = null, inbox = null, inboxReview = null, guide = null, hosted = false } = {}) {
+export function createGrowthApp({ now = () => new Date(), generalContext = null, productPotential = null, audience = null, content = null, store = null, merchantId = null, review = null, corrections = null, ads = null, site = null, siteReview = null, social = null, socialReview = null, inbox = null, inboxReview = null, guide = null, hosted = false } = {}) {
   const historyScope = merchantId ? createHash('sha256').update(String(merchantId)).digest('hex') : null;
-  const priorities = createPrioritiesSource({ productPotential, audience, content, store, ads, site, social, inbox, now });
+  const priorities = createPrioritiesSource({ productPotential, audience, content, store, ads, site, social, inbox, general: generalContext, now });
   const send = (res, status, type, body) => { res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', ...SECURITY_HEADERS }); res.end(body); };
   const json = (res, status, obj) => send(res, status, 'application/json', JSON.stringify(obj));
   return async function handle(req, res) {

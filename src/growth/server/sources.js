@@ -15,11 +15,13 @@ import { createInboxSource, createInboxReviewSource, fileInboxLoader } from './i
 import { readMerchantIdFromEnv } from '../../tenant/index.js';
 import { resolveToolTenant } from '../../tenant/tool-context.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/client.js';
-import { resolveBusinessProfile } from '../../metrics/profile.js';
+import { resolveBusinessProfile, liveTimeZone } from '../../metrics/profile.js';
+import { createGeneralService } from '../../settings-general/service.js';
+import { createSupabaseGeneralRepository } from '../../settings-general/repository.js';
 
 /** @returns the sources of createGrowthApp (all null when NORDLA_MERCHANT_ID is not set: nothing is ever guessed). Throws the tenant / timezone refusals. */
 export async function buildGrowthSources(env = process.env, { log = console.log } = {}) {
-  let merchantId = null; let supabase = null; let timeZone = null;
+  let merchantId = null; let supabase = null; let timeZone = null; let generalContext = null;
   let productPotential = null; let audience = null; let content = null; let store = null; let review = null; let corrections = null; let ads = null; let site = null; let siteReview = null; let social = null; let socialReview = null; let inbox = null; let inboxReview = null;
   if (readMerchantIdFromEnv(env)) {
     supabase = createSupabaseClient(loadSupabaseConfigFromEnv(env));
@@ -27,10 +29,13 @@ export async function buildGrowthSources(env = process.env, { log = console.log 
     merchantId = tenant.merchantId;
     // The merchant's local zone (merchant_profile.timezone, else MERCHANT_TIMEZONE, reported): missing or invalid -> TIMEZONE_NOT_CONFIGURED / TIMEZONE_INVALID, nothing is served. UTC is never assumed.
     ({ timezone: timeZone } = await resolveBusinessProfile({ supabase, merchantId: tenant.merchantId, env }));
-    productPotential = createProductPotentialSource({ supabase, merchantId: tenant.merchantId, timeZone });
-    audience = createAudienceSource({ supabase, merchantId: tenant.merchantId, timeZone });
-    content = createContentSource({ supabase, merchantId: tenant.merchantId, timeZone });
-    store = createStoreSource({ supabase, merchantId: tenant.merchantId, timeZone });
+    // the four engines follow the zone set in Général without a restart (re-read at most once a minute, then their own 5-minute cache); the other sources below still use the zone read at start
+    const liveTz = liveTimeZone({ supabase, merchantId: tenant.merchantId, env, onError: (e) => log(`growth: time zone re-read failed, keeping the last one: ${e.message}`) });
+    productPotential = createProductPotentialSource({ supabase, merchantId: tenant.merchantId, timeZone: liveTz });
+    audience = createAudienceSource({ supabase, merchantId: tenant.merchantId, timeZone: liveTz });
+    content = createContentSource({ supabase, merchantId: tenant.merchantId, timeZone: liveTz });
+    store = createStoreSource({ supabase, merchantId: tenant.merchantId, timeZone: liveTz });
+    { const general = createGeneralService({ repo: createSupabaseGeneralRepository({ supabase }) }); generalContext = () => general.contextFor({ tenant: { merchantId: tenant.merchantId }, module: 'growth' }); } // READ ONLY: Growth never writes Général
     review = createReviewSource({ supabase, merchantId: tenant.merchantId, timeZone });
     // Optional shop identity for the correction file (names/links only; nothing is guessed when absent).
     site = createSiteSource({ timeZone, load: fileSiteLoader() }); siteReview = createSiteReviewSource({ timeZone, load: fileSiteLoader() }); // no GA4 / Search Console connector yet: only an import file (data/local/marketing/site-funnel.json); absent = NOT_CONNECTED
@@ -38,5 +43,5 @@ export async function buildGrowthSources(env = process.env, { log = console.log 
     ads = createAdsSource({ timeZone }); // no ad account is connected to Nordla yet: the block says so (NOT_CONNECTED), nothing is invented
     corrections = createCorrectionsSource({ supabase, merchantId: tenant.merchantId, timeZone, productPotential, shop: { name: env.NORDLA_SHOP_NAME || tenant.merchant?.name, platform: 'Shopify', domain: env.NORDLA_SHOP_DOMAIN, myshopifyDomain: env.NORDLA_MYSHOPIFY_DOMAIN || (/\.myshopify\.com$/i.test(env.SHOPIFY_SHOP_DOMAIN ?? '') ? env.SHOPIFY_SHOP_DOMAIN : undefined) } });
   }
-  return { merchantId, supabase, timeZone, productPotential, audience, content, store, review, corrections, ads, site, siteReview, social, socialReview, inbox, inboxReview };
+  return { merchantId, supabase, timeZone, generalContext, productPotential, audience, content, store, review, corrections, ads, site, siteReview, social, socialReview, inbox, inboxReview };
 }

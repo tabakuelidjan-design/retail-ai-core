@@ -3,6 +3,7 @@
 // (priorities/priorities.js). Read-only: it calls the sources, nothing else. A failing source is reported as unavailable, the
 // others still count. Nothing is stored: the priorities are recomputed from the engines on every request.
 import { buildPriorities } from '../priorities/priorities.js';
+import { orientWithGeneral } from './general-orientation.js';
 import { prepareOpportunityAction } from '../priorities/actions.js';
 import { rankWeeklyActions, prerequisitesOf } from '../priorities/weekly.js';
 import { targetOf } from '../priorities/targets.js';
@@ -11,7 +12,7 @@ import { targetOf } from '../priorities/targets.js';
  * @param {{ productPotential?: Function|null, audience?: Function|null, content?: Function|null, store?: Function|null, now?: () => Date }} p
  * @returns {null | (() => Promise<object>)} null when no source is configured (no tenant): the route answers TENANT_NOT_CONFIGURED.
  */
-export function createPrioritiesSource({ productPotential = null, audience = null, content = null, store = null, ads = null, site = null, social = null, inbox = null, now = () => new Date() } = {}) {
+export function createPrioritiesSource({ productPotential = null, audience = null, content = null, store = null, ads = null, site = null, social = null, inbox = null, general = null, now = () => new Date() } = {}) {
   if (!productPotential && !audience && !content && !store) return null;
   const call = async (name, f) => {
     if (!f) return null;
@@ -34,6 +35,7 @@ export function createPrioritiesSource({ productPotential = null, audience = nul
       item.prerequisites = prerequisitesOf(item.preparedAction);
     }
     result.weekly = rankWeeklyActions(result.sections.commercial, { sources: result.sources });
+    orientWithGeneral(result, general ? await call('general', general) : null); // context from Paramètres > Général (read only, additive): featured offers are flagged, nothing is re-ranked
     // Ad campaigns (lot _06): present only when an ad source is wired (connected or explicitly NOT_CONNECTED). They are NOT commercial candidates (never ranked with
     // sales actions): their own block, with the same follow-up. Without the `ads` source the payload is exactly what it was.
     if (ads) result.ads = await call('ads', ads) ?? { state: 'UNAVAILABLE', channel: null, campaigns: [], items: [] };
