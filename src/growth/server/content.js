@@ -12,13 +12,14 @@ const DAY = 86400000;
 
 export function createContentSource({ supabase, merchantId, timeZone, config = mergeConfig(), now = () => new Date(), cacheMs = 5 * 60_000 }) {
   if (typeof merchantId !== 'string' || !merchantId) throw new TypeError('createContentSource: merchantId is required (server context)');
-  requireTimeZone(timeZone, 'createContentSource'); // the merchant's local zone, explicit (merchant_profile or MERCHANT_TIMEZONE): never an assumed UTC
+  if (typeof timeZone !== 'function') requireTimeZone(timeZone, 'createContentSource'); // a string, or a getter that follows Général (see liveTimeZone) // the merchant's local zone, explicit (merchant_profile or MERCHANT_TIMEZONE): never an assumed UTC
   let cached = null; let cachedAt = 0;
   return async function content() {
     const t = now();
     if (cached && t.getTime() - cachedAt < cacheMs) return cached;
+    const tz = typeof timeZone === 'function' ? requireTimeZone(await timeZone(), 'createContentSource') : timeZone;
     const data = await loadDataset(supabase, merchantId, { since: new Date(t.getTime() - (WEEKS * 7 + 2) * DAY) });
-    const f = contentFacts({ data, now: t, timeZone, config });
+    const f = contentFacts({ data, now: t, timeZone: tz, config });
     const payload = { generatedAt: t.toISOString(), ...buildContent(f) };
     cached = payload; cachedAt = t.getTime();
     return payload;

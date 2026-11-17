@@ -16,14 +16,15 @@ const DAY = 86400000;
 
 export function createStoreSource({ supabase, merchantId, timeZone, config = mergeConfig(), now = () => new Date(), cacheMs = 5 * 60_000 }) {
   if (typeof merchantId !== 'string' || !merchantId) throw new TypeError('createStoreSource: merchantId is required (server context)');
-  requireTimeZone(timeZone, 'createStoreSource'); // the merchant's local zone, explicit (merchant_profile or MERCHANT_TIMEZONE): never an assumed UTC
+  if (typeof timeZone !== 'function') requireTimeZone(timeZone, 'createStoreSource'); // a string, or a getter that follows Général (see liveTimeZone) // the merchant's local zone, explicit (merchant_profile or MERCHANT_TIMEZONE): never an assumed UTC
   let cached = null; let cachedAt = 0;
   return async function store() {
     const t = now();
     if (cached && t.getTime() - cachedAt < cacheMs) return cached;
+    const tz = typeof timeZone === 'function' ? requireTimeZone(await timeZone(), 'createStoreSource') : timeZone;
     const data = await loadDataset(supabase, merchantId, { since: new Date(t.getTime() - HISTORY_DAYS * DAY) });
-    const f = storeFacts({ data, now: t, timeZone, config });
-    const pf = productPotentialFacts({ data, now: t, timeZone, config });
+    const f = storeFacts({ data, now: t, timeZone: tz, config });
+    const pf = productPotentialFacts({ data, now: t, timeZone: tz, config });
     const pot = buildProductPotential(pf.facts, { config, currency: pf.currency, window: pf.window, dataQuality: pf.dataQuality });
     const potential = new Map(pot.rows.map((r) => [r.id, { status: r.status, action: r.action }]));
     const payload = { generatedAt: t.toISOString(), ...buildStore({ ...f, potential, config }) };

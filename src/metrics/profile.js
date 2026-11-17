@@ -68,3 +68,17 @@ export function applyProfileToConfig(config, profile) {
   if (profile?.posChannelHandles) next.marketing.posChannelHandles = [...profile.posChannelHandles];
   return next;
 }
+
+/**
+ * A time zone that FOLLOWS Général without a restart: it re-reads merchant_profile at most once per `ttlMs`. The first read is strict (a missing or invalid zone throws, UTC is never assumed);
+ * if a later read fails (a database hiccup) the last zone that was really read keeps being used, so the module does not go dark for a transient error.
+ * @returns {() => Promise<string>}
+ */
+export function liveTimeZone({ supabase, merchantId, env = process.env, ttlMs = 60_000, now = () => Date.now(), onError = () => {} }) {
+  let value = null; let at = 0;
+  return async () => {
+    const t = now(); if (value && t - at < ttlMs) return value;
+    try { const { timezone } = await resolveBusinessProfile({ supabase, merchantId, env }); value = timezone; at = t; return value; }
+    catch (e) { if (value && !(e instanceof ProfileError)) { onError(e); at = t; return value; } throw e; }
+  };
+}

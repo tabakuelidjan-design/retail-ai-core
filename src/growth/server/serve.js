@@ -15,7 +15,7 @@ import { createStoreSource } from './store.js';
 import { readMerchantIdFromEnv } from '../../tenant/index.js';
 import { resolveToolTenant } from '../../tenant/tool-context.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/client.js';
-import { resolveBusinessProfile } from '../../metrics/profile.js';
+import { resolveBusinessProfile, liveTimeZone } from '../../metrics/profile.js';
 
 const port = Number(process.env.GROWTH_PORT || 4413);
 try {
@@ -24,7 +24,8 @@ try {
     const supabase = createSupabaseClient(loadSupabaseConfigFromEnv());
     const tenant = await resolveToolTenant({ env: process.env, supabase, tool: 'growth', log: console.log });
     // The merchant's local zone (merchant_profile.timezone, else MERCHANT_TIMEZONE, reported): missing or invalid -> TIMEZONE_NOT_CONFIGURED / TIMEZONE_INVALID, nothing is served. UTC is never assumed.
-    const { timezone: timeZone } = await resolveBusinessProfile({ supabase, merchantId: tenant.merchantId, env: process.env });
+    await resolveBusinessProfile({ supabase, merchantId: tenant.merchantId, env: process.env }); // strict check at start: a missing or invalid zone refuses to start
+    const timeZone = liveTimeZone({ supabase, merchantId: tenant.merchantId, env: process.env, onError: (e) => console.error(`time zone re-read failed, keeping the last one: ${e.message}`) }); // then it follows Général (at most once a minute; the sources cache 5 minutes)
     productPotential = createProductPotentialSource({ supabase, merchantId: tenant.merchantId, timeZone });
     audience = createAudienceSource({ supabase, merchantId: tenant.merchantId, timeZone });
     content = createContentSource({ supabase, merchantId: tenant.merchantId, timeZone });

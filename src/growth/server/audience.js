@@ -13,13 +13,14 @@ export const HISTORY_DAYS = 400; // same history depth as Potentiel produits: th
 
 export function createAudienceSource({ supabase, merchantId, timeZone, config = mergeConfig(), now = () => new Date(), cacheMs = 5 * 60_000 }) {
   if (typeof merchantId !== 'string' || !merchantId) throw new TypeError('createAudienceSource: merchantId is required (server context)');
-  requireTimeZone(timeZone, 'createAudienceSource'); // the merchant's local zone, explicit (merchant_profile or MERCHANT_TIMEZONE): never an assumed UTC
+  if (typeof timeZone !== 'function') requireTimeZone(timeZone, 'createAudienceSource'); // a string, or a getter that follows Général (see liveTimeZone) // the merchant's local zone, explicit (merchant_profile or MERCHANT_TIMEZONE): never an assumed UTC
   let cached = null; let cachedAt = 0;
   return async function audience() {
     const t = now();
     if (cached && t.getTime() - cachedAt < cacheMs) return cached;
+    const tz = typeof timeZone === 'function' ? requireTimeZone(await timeZone(), 'createAudienceSource') : timeZone;
     const data = await loadDataset(supabase, merchantId, { since: new Date(t.getTime() - HISTORY_DAYS * DAY) });
-    const f = audienceFacts({ data, now: t, timeZone, config });
+    const f = audienceFacts({ data, now: t, timeZone: tz, config });
     const payload = { generatedAt: t.toISOString(), ...buildAudience({ orders: f.orders, window: f.window, historyStart: f.historyStart, config, currency: f.currency }) };
     cached = payload; cachedAt = t.getTime();
     return payload;
