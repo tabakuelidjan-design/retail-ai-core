@@ -86,7 +86,7 @@ export async function buildConnections({ env, gate, hosted, log = console.log, s
     const registry = createRegistry();
     const origin = String(env.NORDLA_PUBLIC_ORIGIN ?? '').trim();
     const service = createConnectionsService({
-      disabledSections: String(env.NORDLA_TEAM_MODULE ?? '') === '1' ? [] : ['team'], // a card whose page is not built must not lead to a 404
+      disabledSections: [...(String(env.NORDLA_TEAM_MODULE ?? '') === '1' ? [] : ['team']), ...(String(env.NORDLA_NOTIFICATIONS_MODULE ?? '') === '1' ? [] : ['notifications'])], // a card whose page is not built must not lead to a 404
       registry, center: runtime.connectionCenter, connectorRepository: runtime.connectorRepository, appConfigPresent: runtime.appConfigPresent, appEnvNames: APP_ENV,
       redirectUriOf: (key) => { try { return runtime.appConfigFor(key).redirectUri; } catch { return origin ? `${origin}/api/connections/${key}/callback` : null; } },
       shopifySync: async (merchantId) => { const rows = await supabase.select('sync_runs', { merchant_id: `eq.${merchantId}`, order: 'started_at.desc', limit: '1' }); const r = rows?.[0]; return r ? { status: r.status, startedAt: r.started_at, finishedAt: r.finished_at } : null; },
@@ -99,7 +99,7 @@ export async function buildConnections({ env, gate, hosted, log = console.log, s
     const reads = createInstagramReadService({ connectorRepository: runtime.connectorRepository, readerFor: ({ merchantId, connectorId, grantedScopes }) => createInstagramReaderFor({ tokenManager: runtime.tokenManager, merchantId, connectorId, graphVersion: runtime.appConfigFor('instagram').graphVersion, grantedScopes, fetchImpl }) });
     const host = await createConnectionsHost({ gate, merchantId: hosted.merchantId, runtime, service, registry, reads });
     log('Connections: ON (read-only; Instagram and TikTok ask read scopes only)');
-    return Object.freeze({ ...host, settings: ({ tenant, role }) => service.settings({ tenant, role }) }); // the same menu, merchant name and environment are reused by Paramètres > Général
+    return Object.freeze({ ...host, settings: ({ tenant, role }) => service.settings({ tenant, role }), listConnections: ({ tenant }) => runtime.connectionCenter.listConnections({ tenant }) }); // the same menu, merchant name and environment are reused by Paramètres > Général
   } catch (e) { log(`Connections: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
 }
 
@@ -181,6 +181,25 @@ export async function buildTeam({ env, gate, hosted, log = console.log, supabase
     log('Team: ON (Paramètres > Équipe et accès; invitations by one-time link, no e-mail sending)');
     return host;
   } catch (e) { log(`Team: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
+}
+
+/** Paramètres > Notifications (staging module): built only when asked for AND hosted behind the Core identity. Reads Connexions (read only) to raise "connexion à renouveler". Any problem is logged and the server runs without it. */
+export async function buildNotifications({ env, gate, hosted, log = console.log, supabase: injected = null, shellOf = null, listConnections = null, sweepEveryMs = 60_000 }) {
+  if (String(env.NORDLA_NOTIFICATIONS_MODULE ?? '') !== '1') return null;
+  if (!hosted || !gate) { log('Notifications: NOT built (needs the hosted Core identity)'); return null; }
+  try {
+    const { createNotificationsHost } = await import('./notifications-host.js');
+    const { createNotificationsService } = await import('../../settings-notifications/service.js');
+    const { createSupabaseNotificationsRepository } = await import('../../settings-notifications/repository.js');
+    const { createConnectionReauthEmitter } = await import('../../settings-notifications/emitters.js');
+    const client = await import('../../supabase/client.js');
+    const supabase = injected ?? client.createSupabaseClient(client.loadSupabaseConfigFromEnv(env));
+    const service = createNotificationsService({ repo: createSupabaseNotificationsRepository({ supabase }) });
+    const emitter = listConnections ? createConnectionReauthEmitter({ service, merchantId: hosted.merchantId, listConnections, log }) : null;
+    const host = await createNotificationsHost({ gate, merchantId: hosted.merchantId, service, emitter, shellOf, sweepEveryMs });
+    log(`Notifications: ON (Paramètres > Notifications; in Nordla only, e-mail unavailable; event wired: connection to renew${emitter ? '' : ' - NOT active: Connexions is off'})`);
+    return host;
+  } catch (e) { log(`Notifications: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
 }
 
 /** The video drafts (staging module, "Ajouter une vidéo"): built only when asked for AND hosted behind the Core identity. Any problem is logged and the server runs without it. */
@@ -285,10 +304,11 @@ export async function startSourcingServer({ env = process.env, log = console.log
   const general = await buildGeneral({ env, gate, hosted, log, shellOf: connections?.settings ?? null, service: generalService }); // optional, isolated: null unless NORDLA_GENERAL_MODULE=1
   const team = await buildTeam({ env, gate, hosted, log, shellOf: connections?.settings ?? null }); // optional, isolated: null unless NORDLA_TEAM_MODULE=1
   const security = await buildSecurity({ env, gate, hosted, log, shellOf: connections?.settings ?? null, services }); // optional, isolated: null unless NORDLA_SECURITY_MODULE=1
+  const notifications = await buildNotifications({ env, gate, hosted, log, shellOf: connections?.settings ?? null, listConnections: connections?.listConnections ?? null }); // optional, isolated: null unless NORDLA_NOTIFICATIONS_MODULE=1
   const marketingContext = generalService ? () => generalService.contextFor({ tenant: { merchantId: merchantKey }, module: 'marketing' }) : null;
   const videos = await buildVideos({ env, gate, hosted, log, contextOf: marketingContext }); // optional, isolated: null unless NORDLA_VIDEO_DRAFTS_MODULE=1
   const gbp = await buildGbp({ env, gate, hosted, log, contextOf: marketingContext }); // optional, isolated: null unless NORDLA_GBP_DRAFTS_MODULE=1
-  const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, videos, connections, general, security, team, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
+  const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, videos, connections, general, security, team, notifications, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
   const server = http.createServer(app.handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); });
   const addr = server.address();

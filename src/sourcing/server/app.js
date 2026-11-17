@@ -53,7 +53,7 @@ export function backupHealth(st, nowMs, { maxAgeH = 26, firstRunGraceMin = 30 } 
 export const SOURCING_WRITERS = new Set(['OWNER', 'ADMIN', 'COLLABORATOR']);
 /** POST routes that only compute or read (no stored change): open to every member. */
 export const READ_ONLY_POSTS = new Set(['/api/safety/check', '/api/core/ask', '/api/core/finance/open']);
-export function createSourcingApp({ backupStatus = null, token, gate = null, core = null, procurement = null, creator = null, gbp = null, videos = null, connections = null, general = null, security = null, team = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
+export function createSourcingApp({ backupStatus = null, token, gate = null, core = null, procurement = null, creator = null, gbp = null, videos = null, connections = null, general = null, security = null, team = null, notifications = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
   if (!gate && (!token || String(token).length < 24)) throw new Error('a token of at least 24 characters is required'); // hosted: the session gate (Core identity) replaces the token
   // Host header allow-list (blocks DNS-rebinding on the loopback server). A tunnel's public host name must be added by the owner (SOURCING_ALLOWED_HOSTS).
   // `allowedHosts` may be a live array: the phone launcher adds the tunnel host name once it is known
@@ -166,6 +166,7 @@ export function createSourcingApp({ backupStatus = null, token, gate = null, cor
       if (general && await general.handle(req, res, url)) return; // Paramètres > Général (staging module, only when built): /settings/general*, /general-assets/*, /api/general*
       if (security && await security.handle(req, res, url)) return; // Paramètres > Sécurité (staging module, only when built): /settings/security*, /security-assets/*, /api/security*
       if (team && await team.handle(req, res, url)) return; // Paramètres > Équipe et accès (staging module, only when built): /settings/team*, /team-assets/*, /api/team*, /invitation/<token>, /api/invitations/*
+      if (notifications && await notifications.handle(req, res, url)) return; // Paramètres > Notifications (staging module, only when built): /settings/notifications*, /notifications-assets/*, /api/notifications*
       if (videos && await videos.handle(req, res, url)) return; // the video drafts (staging module, only when built): /videos, /video-assets/*, /api/videos*
       if (url.pathname.startsWith('/api/')) return await api(req, res, url);
       if (req.method !== 'GET') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
