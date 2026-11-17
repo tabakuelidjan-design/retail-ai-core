@@ -10,7 +10,7 @@ import { readNordlaShared } from '../../shared/nordla-static.js';
 
 const UI = new URL('../../gbp-drafts/ui/', import.meta.url);
 const DS = new URL('../../creative-autonomy/creator/ui/ds/', import.meta.url);
-const DRAFTS_DIR = new URL('../../../config/gbp-drafts/habb/', import.meta.url);
+const DRAFTS_DIR = new URL('../../../config/gbp-drafts/current/', import.meta.url);
 const CSS = 'text/css; charset=utf-8'; const JS = 'text/javascript; charset=utf-8';
 const ASSETS = Object.freeze({ 'gbp.js': [UI, 'gbp.js', JS], 'gbp.css': [UI, 'gbp.css', CSS], 'nordla-ds.css': [DS, 'nordla-ds.css', CSS], 'nordla-tokens.css': [DS, 'nordla-tokens.css', CSS] });
 const HEADERS = { 'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'", 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-cache' };

@@ -97,7 +97,7 @@ test('GD-4 rights: a read-only role reads but never decides, another merchant is
 });
 
 test('GD-5 an approval applies to ONE version: when the text of a draft changes, the draft is back to "À examiner" and must be approved again', async () => {
-  const dataDir = tmp(); const draftsDir = join(tmp(), 'drafts'); cpSync(new URL('../config/gbp-drafts/habb/', import.meta.url), draftsDir, { recursive: true });
+  const dataDir = tmp(); const draftsDir = join(tmp(), 'drafts'); cpSync(new URL('../config/gbp-drafts/current/', import.meta.url), draftsDir, { recursive: true });
   const url = () => pathToFileURL(`${draftsDir}${draftsDir.endsWith('/') || draftsDir.endsWith('\\') ? '' : '/'}`);
   let s = await boot(dataDir, { draftsDir: url() });
   try {
