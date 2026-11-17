@@ -58,6 +58,32 @@ export async function buildCreator({ env, gate, hosted, log = console.log }) {
   } catch (e) { log(`Creator: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
 }
 
+/** Paramètres -> Connexions (staging module): built only when asked for AND hosted behind the Core identity. READ-ONLY provider scopes are forced. Any problem is logged and the server runs without it. */
+export async function buildConnections({ env, gate, hosted, log = console.log, supabase: injected = null, fetchImpl = globalThis.fetch }) {
+  if (String(env.NORDLA_CONNECTIONS_MODULE ?? '') !== '1') return null;
+  if (!hosted || !gate) { log('Connections: NOT built (needs the hosted Core identity)'); return null; }
+  try {
+    const { createConnectionsHost } = await import('./connections-host.js');
+    const { createRegistry } = await import('../../connections/registry.js');
+    const { createConnectionsService } = await import('../../connections/service.js');
+    const { createProviderConnectionsRuntime, APP_ENV } = await import('../../provider-connections/index.js');
+    const { BELGIAN_BANKS } = await import('../../finance/bank-catalog-be.js');
+    const supabase = injected ?? (await import('../../supabase/client.js')).createSupabaseClient((await import('../../supabase/client.js')).loadSupabaseConfigFromEnv(env));
+    const runtime = createProviderConnectionsRuntime({ supabase, fetch: fetchImpl, env: { ...env, NORDLA_PROVIDER_SCOPE_MODE: 'read' } }); // read-only, whatever the environment says
+    const registry = createRegistry();
+    const origin = String(env.NORDLA_PUBLIC_ORIGIN ?? '').trim();
+    const service = createConnectionsService({
+      registry, center: runtime.connectionCenter, connectorRepository: runtime.connectorRepository, appConfigPresent: runtime.appConfigPresent, appEnvNames: APP_ENV,
+      redirectUriOf: (key) => { try { return runtime.appConfigFor(key).redirectUri; } catch { return origin ? `${origin}/api/connections/${key}/callback` : null; } },
+      shopifySync: async (merchantId) => { const rows = await supabase.select('sync_runs', { merchant_id: `eq.${merchantId}`, order: 'started_at.desc', limit: '1' }); const r = rows?.[0]; return r ? { status: r.status, startedAt: r.started_at, finishedAt: r.finished_at } : null; },
+      bankCatalog: BELGIAN_BANKS, bankProvider: { id: 'enable-banking', label: 'Enable Banking' },
+    });
+    const host = await createConnectionsHost({ gate, merchantId: hosted.merchantId, runtime, service, registry });
+    log('Connections: ON (read-only; Instagram and TikTok ask read scopes only)');
+    return host;
+  } catch (e) { log(`Connections: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
+}
+
 /** The video drafts (staging module, "Ajouter une vidéo"): built only when asked for AND hosted behind the Core identity. Any problem is logged and the server runs without it. */
 export async function buildVideos({ env, gate, hosted, log = console.log }) {
   if (String(env.NORDLA_VIDEO_DRAFTS_MODULE ?? '') !== '1') return null;
@@ -155,9 +181,10 @@ export async function startSourcingServer({ env = process.env, log = console.log
   const core = await buildCore({ env, dir, merchantId: merchantKey, store, safety, log, readers: services?.readers ?? null, procurement: proc.assistant });
   let backups = null;
   const creator = await buildCreator({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_CREATOR_MODULE=1
+  const connections = await buildConnections({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_CONNECTIONS_MODULE=1
   const videos = await buildVideos({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_VIDEO_DRAFTS_MODULE=1
   const gbp = await buildGbp({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_GBP_DRAFTS_MODULE=1
-  const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, videos, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
+  const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, videos, connections, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
   const server = http.createServer(app.handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); });
   const addr = server.address();

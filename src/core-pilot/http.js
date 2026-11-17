@@ -63,7 +63,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
       creation && creation.status().status === 'LOCAL_AVAILABLE'
         ? row('creative', 'Création', 'LIMITÉ', `Visuel local disponible : votre photo telle quelle + un titre (${creation.status().typography}), PNG et contrôles de fidélité. Génération IA : ${c.status === 'PROVIDER_NOT_CONNECTED' ? 'aucun fournisseur connecté' : 'à vérifier'}.`)
         : row('creative', 'Création', c.status === 'PROVIDER_NOT_CONNECTED' ? 'BLOQUÉ' : 'À VÉRIFIER', c.status === 'PROVIDER_NOT_CONNECTED' ? `Aucun fournisseur de génération connecté (${c.missing.join(', ') || c.error}). Rien n’est produit ni simulé.` : c.note),
-    ].map((m) => (m.key === 'creative' ? { ...m, creator_screen: env?.NORDLA_CREATOR_MODULE === '1' } : m.key === 'marketing' ? { ...m, gbp_screen: env?.NORDLA_GBP_DRAFTS_MODULE === '1', video_screen: env?.NORDLA_VIDEO_DRAFTS_MODULE === '1' } : m)) }; // the Creator screen exists only where the isolated module is built
+    ].map((m) => (m.key === 'core' ? { ...m, connections_screen: env?.NORDLA_CONNECTIONS_MODULE === '1' } : m.key === 'creative' ? { ...m, creator_screen: env?.NORDLA_CREATOR_MODULE === '1' } : m.key === 'marketing' ? { ...m, gbp_screen: env?.NORDLA_GBP_DRAFTS_MODULE === '1', video_screen: env?.NORDLA_VIDEO_DRAFTS_MODULE === '1' } : m)) }; // the Creator screen exists only where the isolated module is built
   }
 
   /** @returns {Promise<boolean>} true when the request was a /api/core route (answered). `actor` = { userId?, role, label? } from the server's authorisation. */
