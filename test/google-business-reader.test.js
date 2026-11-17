@@ -43,3 +43,17 @@ test('GBR-4 inputs are validated before any call; no write method exists; the re
   assert.deepEqual(Object.keys(reader(f)).sort(), ['indicators', 'reviews']);
   assert.throws(() => createGoogleBusinessReader({}), TypeError);
 });
+
+test('GBR-5 the reader of a connector gets its token from the token manager (merchant + connector + provider), and a connector without credential is refused, never answered empty', async () => {
+  const { createGoogleBusinessReaderFor } = await import('../src/provider-connections/google-business-reader.js');
+  const asked = [];
+  const tokenManager = { async getValidCredential(a) { asked.push(a); return { tokens: { access_token: { reveal: () => 'synthetic-token-from-manager' } } }; } };
+  const f = double(() => ({ status: 200, body: { totalReviewCount: 0, reviews: [] } }));
+  const r = createGoogleBusinessReaderFor({ tokenManager, merchantId: 'm-1', connectorId: 'c-1', fetchImpl: f, now: NOW });
+  await r.reviews({ location: LOC });
+  assert.deepEqual(asked, [{ merchantId: 'm-1', connectorId: 'c-1', provider: 'google_business_profile' }]);
+  assert.equal(f.calls[0].init.headers.authorization, 'Bearer synthetic-token-from-manager');
+  const none = createGoogleBusinessReaderFor({ tokenManager: { async getValidCredential() { throw Object.assign(new Error('no credential'), { code: 'PC_CREDENTIAL_NOT_FOUND' }); } }, merchantId: 'm-1', connectorId: 'c-1', fetchImpl: f, now: NOW });
+  await assert.rejects(() => none.reviews({ location: LOC }), (e) => e.code === 'PC_CREDENTIAL_NOT_FOUND');
+  assert.throws(() => createGoogleBusinessReaderFor({ tokenManager, merchantId: '', connectorId: 'c' }), TypeError);
+});

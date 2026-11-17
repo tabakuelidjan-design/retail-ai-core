@@ -52,3 +52,20 @@ export function createGoogleBusinessReader({ getAccessToken, fetchImpl = globalT
     },
   });
 }
+
+/**
+ * The reader of ONE merchant connector, supplied by the Provider Token Manager (the only place that sees a refresh token). A connector that was never connected, was
+ * disconnected or needs a new consent surfaces the token manager's own error (CREDENTIAL_NOT_FOUND / CREDENTIAL_REVOKED / REAUTH_REQUIRED): never an empty answer.
+ * @param {{ tokenManager: { getValidCredential: Function }, merchantId: string, connectorId: string, fetchImpl?: Function, now?: () => Date }} o
+ */
+export function createGoogleBusinessReaderFor({ tokenManager, merchantId, connectorId, fetchImpl, now }) {
+  if (!tokenManager?.getValidCredential) throw new TypeError('tokenManager is required');
+  if (!merchantId || !connectorId) throw new TypeError('merchantId and connectorId are required');
+  return createGoogleBusinessReader({
+    getAccessToken: async () => {
+      const { tokens } = await tokenManager.getValidCredential({ merchantId, connectorId, provider: 'google_business_profile' });
+      return tokens.access_token.reveal();
+    },
+    ...(fetchImpl ? { fetchImpl } : {}), ...(now ? { now } : {}),
+  });
+}
