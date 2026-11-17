@@ -105,7 +105,7 @@ test('SG-9 the name written here is the name every module already reads (merchan
   const { consumers } = await svc.overview({ tenant: ta, role: 'OWNER' });
   const by = (st) => consumers.filter((c) => c.state === st).map((c) => c.module);
   assert.deepEqual(by('VERIFIED'), ['Core', 'Marketing (brouillons Google et vidéo)']); assert.deepEqual(by('API_VERIFIED'), ['Stock, Achats et Sourcing']); assert.deepEqual(by('WAITING_SUPPLIER'), ['Connexions']);
-  assert.ok(!consumers.some((c) => c.state === 'READS'), 'no claim without a proof level'); assert.ok(consumers.filter((c) => c.state === 'AWAITS_SESSION').length >= 2 && consumers.filter((c) => c.state === 'TO_CONNECT').length >= 3);
+  assert.ok(!consumers.some((c) => c.state === 'READS'), 'no claim without a proof level'); assert.ok(consumers.filter((c) => c.state === 'AWAITS_SESSION').length >= 2 && consumers.filter((c) => c.state === 'TO_CONNECT').length >= 2); assert.deepEqual(by('WIRED'), ['Growth (objectifs)']);
 });
 
 test('SG-10 objectives: one priority (Autre needs its label), valid date, up to 10 distinct offers, budget needs its period; modules read only their allowlisted fields', async () => {
@@ -164,5 +164,7 @@ test('SG-13 legal check: read only comparison with Finance seller profile; absen
   c = await svc.legalCheck({ tenant: ta, role: 'OWNER' }); assert.deepEqual(c.differences.map((d) => d.field).sort(), ['legalName', 'vatNumber']); assert.match(c.note, /rien n’est remplacé/);
   assert.equal((await svc.read({ tenant: ta, role: 'OWNER', section: 'legal' })).data.legal_name, 'Alpha SRL', 'Général is untouched by the check');
   assert.equal(await code(svc.legalCheck({ tenant: ta, role: 'VIEWER' })), 'FORBIDDEN_ROLE');
+  assert.deepEqual(c.proposedSellerProfile && [c.proposedSellerProfile.legalName, c.proposedSellerProfile.vatRegistered, c.proposedSellerProfile.billingAddress], ['Alpha SRL', true, 'ESTABLISHMENT_MAIN'], 'a proposal for the NEXT version, only when the facts are complete');
+  assert.ok(!('saveSellerProfile' in repo) && !('recordSellerProfile' in repo), 'Général has no way to write Finance: issued documents keep their identity');
   const empty = await svc.legalCheck({ tenant: tb, role: 'OWNER' }); assert.deepEqual([empty.readyForNewDocuments, empty.missing.includes('legal_name')], [false, true]);
 });
