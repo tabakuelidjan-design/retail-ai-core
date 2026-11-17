@@ -172,3 +172,9 @@ test('SG-13 legal check: read only comparison with Finance seller profile; absen
   assert.ok(!('saveSellerProfile' in repo) && !('recordSellerProfile' in repo), 'Général has no way to write Finance: issued documents keep their identity');
   const empty = await svc.legalCheck({ tenant: tb, role: 'OWNER' }); assert.deepEqual([empty.readyForNewDocuments, empty.missing.includes('legal_name')], [false, true]);
 });
+
+test('SG-14 the growth module receives the featured offers (allowlist regression found on the real staging)', async () => {
+  const { svc } = mk();
+  await svc.save({ tenant: ta, role: 'OWNER', actor: 'u', section: 'objectives', data: { priority: { value: 'sales' }, featured_offers: [{ label: 'Coque personnalisée' }] } });
+  const g = await svc.contextFor({ tenant: ta, module: 'growth' }); assert.deepEqual(g.objectives.featured_offers, [{ label: 'Coque personnalisée' }]);
+});
