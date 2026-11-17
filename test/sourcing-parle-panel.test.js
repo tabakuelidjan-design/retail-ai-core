@@ -47,3 +47,18 @@ test('the Creator link is shown on the Création module only when the server bui
     if (expected) assert.match(html, /mode TEST : résultats archivés, aucun fournisseur/);
   }
 });
+
+test('the Google Business drafts link is shown on the Marketing module only when the server built the drafts module (gbp_screen), points at /gbp and says Nordla publishes nothing', async () => {
+  const withFlag = (flag) => async (path) => {
+    if (path === '/api/core/modules') return { modules: ['core', 'sourcing', 'finance', 'analytics', 'branding', 'marketing', 'creative'].map((key) => ({ key, label: key, state: 'LIMITÉ', detail: 'x', ...(key === 'marketing' ? { gbp_screen: flag } : {}) })) };
+    if (path === '/api/core/branding') return { status: 'NOT_CONNECTED' };
+    if (path === '/api/core/campaigns') return { campaigns: [] };
+    return { status: 'NOT_CONNECTED' };
+  };
+  for (const [flag, expected] of [[true, true], [false, false]]) {
+    const { panel } = make(withFlag(flag)); await panel.load();
+    const html = panel.section();
+    assert.equal(/href="\/gbp"/.test(html), expected, `gbp_screen=${flag}`);
+    if (expected) assert.match(html, /Nordla ne publie rien sur Google/);
+  }
+});

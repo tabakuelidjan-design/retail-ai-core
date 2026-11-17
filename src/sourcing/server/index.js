@@ -58,6 +58,18 @@ export async function buildCreator({ env, gate, hosted, log = console.log }) {
   } catch (e) { log(`Creator: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
 }
 
+/** The Google Business post drafts (staging module): built only when asked for AND hosted behind the Core identity. Any problem is logged and the server runs without it. */
+export async function buildGbp({ env, gate, hosted, log = console.log }) {
+  if (String(env.NORDLA_GBP_DRAFTS_MODULE ?? '') !== '1') return null;
+  if (!hosted || !gate) { log('GBP drafts: NOT built (needs the hosted Core identity)'); return null; }
+  try {
+    const { createGbpHost } = await import('./gbp-host.js');
+    const host = await createGbpHost({ gate, merchantId: hosted.merchantId, dataDir: hosted.dataDir });
+    log('GBP drafts: ON (review and approval only, nothing is published by Nordla)');
+    return host;
+  } catch (e) { log(`GBP drafts: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
+}
+
 /** Nordla Core on this server: the merchant's core-decision.json + the decision journal in the data directory. Any problem (no config,
  *  a journal that does not verify) disables the Core with its reason and leaves China Sourcing working; the journal is never touched. */
 export async function buildCore({ env, dir, merchantId, store, safety, log = () => {}, readers: injected = null, procurement = null, root = join(HERE, '..', '..', '..') }) {
@@ -131,7 +143,8 @@ export async function startSourcingServer({ env = process.env, log = console.log
   const core = await buildCore({ env, dir, merchantId: merchantKey, store, safety, log, readers: services?.readers ?? null, procurement: proc.assistant });
   let backups = null;
   const creator = await buildCreator({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_CREATOR_MODULE=1
-  const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
+  const gbp = await buildGbp({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_GBP_DRAFTS_MODULE=1
+  const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
   const server = http.createServer(app.handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); });
   const addr = server.address();
