@@ -10,6 +10,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const hashToken = (token) => createHash('sha256').update(String(token), 'utf8').digest('hex');
 const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 export const MIN_PASSWORD = 12;
+export const RECOVERY_TTL_MINUTES = 60;
 const REFUSED = new Set(Object.keys(M.REFUSAL));
 
 export function createTeamService({ repo, auth = null, now = () => new Date(), origin = '', randomBytes = nodeRandomBytes, newId = randomUUID, ttlDays = M.INVITATION_TTL_DAYS } = {}) {
@@ -28,7 +29,7 @@ export function createTeamService({ repo, auth = null, now = () => new Date(), o
   function actionsFor(actorRole, actorId, m) {
     const st = statusOf(m); const self = m.user_id === actorId; const manages = (M.MANAGES[actorRole] ?? []).includes(m.role) && (actorRole === 'OWNER' || !self);
     const roles = manages && st !== 'REMOVED' ? (M.ASSIGNABLE[actorRole] ?? []).filter((r) => r !== m.role) : [];
-    return { changeRole: roles, suspend: manages && st === 'ACTIVE', reactivate: manages && st === 'SUSPENDED', remove: manages && st !== 'REMOVED' };
+    return { changeRole: roles, recover: manages && st === 'ACTIVE' && !self, suspend: manages && st === 'ACTIVE', reactivate: manages && st === 'SUSPENDED', remove: manages && st !== 'REMOVED' };
   }
   const memberView = (m, actorRole, actorId) => ({
     id: m.user_id, name: nameOf(m), email: m.email, role: m.role, roleLabel: M.roleLabel(m.role), status: statusOf(m), statusLabel: M.STATUS[statusOf(m)] ?? m.status, since: m.created_at ?? null, suspendedAt: m.suspended_at ?? null, removedAt: m.removed_at ?? null,
@@ -104,6 +105,29 @@ export function createTeamService({ repo, auth = null, now = () => new Date(), o
       refuse(await repo.inviteCancel({ merchantId: mid, actor, invitation: uuid(invitationId), now: at(), correlation: newId() }));
       const inv = (await repo.listInvitations(mid)).find((i) => i.id === invitationId.toLowerCase());
       return { invitation: invitationView(inv, at(), role) };
+    },
+
+    /** Account recovery without e-mail: a one-time link (60 min) for a member who lost the password. Shown once to the OWNER / ADMIN who issues it; the rules are the database's. */
+    async issueRecovery({ tenant, role, actor, userId }) {
+      const mid = merchantOf(tenant); needManager(role); const t = await target(mid, userId); const token = newToken();
+      refuse(await repo.recoveryIssue({ merchantId: mid, actor, target: t.user_id, tokenHash: hashToken(token), now: at(), expires: new Date(now().getTime() + RECOVERY_TTL_MINUTES * 60_000).toISOString(), correlation: newId() }));
+      return { member: { id: t.user_id, name: nameOf(t) }, link: linkFor(token).replace('/invitation/', '/recuperation/'), linkNote: `Ce lien ne sera plus affiché. Il est valable ${RECOVERY_TTL_MINUTES} minutes, une seule fois. Transmettez-le à la personne par un canal de confiance : quiconque l’ouvre peut choisir le mot de passe de ce compte. Un lien précédent est annulé.` };
+    },
+    async recoveryInfo(token) {
+      if (typeof token !== 'string' || !TOKEN_RE.test(token)) return { state: 'INVALID' };
+      const l = await repo.recoveryLookup(hashToken(token), at()); if (!l) return { state: 'INVALID' };
+      if (l.status !== 'PENDING') return { state: l.status };
+      return { state: 'PENDING', merchantName: l.merchant_name, expiresAt: l.expires_at, minPassword: MIN_PASSWORD };
+    },
+    /** Consumes the link (and closes every session of the account) FIRST, then sets the password: if the provider fails, nothing stays open and the issuer issues a new link. */
+    async applyRecovery({ token, password }) {
+      if (!auth?.setPassword) throw new TeamError('ACCEPT_UNAVAILABLE', 'La réinitialisation n’est pas disponible pour le moment.');
+      const info = await this.recoveryInfo(token); if (info.state !== 'PENDING') throw new TeamError(`RECOVERY_${info.state}`, 'Ce lien n’est plus utilisable.', { state: info.state });
+      if (typeof password !== 'string' || password.length < MIN_PASSWORD || password.length > 200) throw new TeamError('PASSWORD_INVALID', `Choisissez un mot de passe d’au moins ${MIN_PASSWORD} caractères.`);
+      const r = await repo.recoveryConsume({ tokenHash: hashToken(token), now: at(), correlation: newId() });
+      if (!r.ok) throw new TeamError(r.code, 'Ce lien n’est plus utilisable.', { state: r.code });
+      if (!(await auth.setPassword(r.user_id, password))) throw new TeamError('ACCOUNT_FAILED', 'Le mot de passe n’a pas pu être changé. Demandez un nouveau lien.');
+      return { ok: true, merchantName: info.merchantName, sessionsClosed: r.sessions_closed ?? 0 };
     },
 
     /** Who did what, when. Technical ids -> names, invitation ids -> addresses (managers only, this merchant only). No token, no link, no free-form detail. */

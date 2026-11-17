@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 
 const eq = (v) => `eq.${v}`;
 const MANAGED_BY_ADMIN = ['COLLABORATOR', 'VIEWER', 'ACCOUNTANT'];
-const HISTORY_TYPES = ['INVITATION_CREATED', 'INVITATION_RESENT', 'INVITATION_CANCELLED', 'INVITATION_ACCEPTED', 'INVITATION_DENIED', 'MEMBER_ADDED', 'MEMBER_ROLE_CHANGED', 'MEMBER_SUSPENDED', 'MEMBER_REACTIVATED', 'MEMBER_REMOVED', 'MEMBER_ACTION_DENIED', 'MEMBER_BOOTSTRAPPED'];
+const HISTORY_TYPES = ['RECOVERY_ISSUED', 'RECOVERY_USED', 'RECOVERY_DENIED', 'INVITATION_CREATED', 'INVITATION_RESENT', 'INVITATION_CANCELLED', 'INVITATION_ACCEPTED', 'INVITATION_DENIED', 'MEMBER_ADDED', 'MEMBER_ROLE_CHANGED', 'MEMBER_SUSPENDED', 'MEMBER_REACTIVATED', 'MEMBER_REMOVED', 'MEMBER_ACTION_DENIED', 'MEMBER_BOOTSTRAPPED'];
 const INVITE_ROLES = ['OWNER', 'ADMIN', 'VIEWER'];
 const MAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 const out = (r) => { if (!r || typeof r.ok !== 'boolean' || typeof r.code !== 'string') throw new Error('TEAM_STORE_UNEXPECTED'); return r; };
@@ -28,6 +28,9 @@ export function createSupabaseTeamRepository({ supabase, module = 'team' }) {
     inviteCancel: (a) => rpc('team_invitation_cancel', { p_merchant: a.merchantId, p_actor: a.actor, p_invitation: a.invitation, p_now: a.now, p_correlation: a.correlation }),
     async lookupInvitation(tokenHash, now) { const r = await supabase.rpc('team_invitation_lookup', { p_token_hash: tokenHash, p_now: now }); return r?.[0] ?? null; },
     async userByEmail(email) { const r = await supabase.rpc('team_user_by_email', { p_email: email }); return typeof r === 'string' ? r : (r?.[0] ?? null); },
+    recoveryIssue: (a) => rpc('recovery_issue', { p_merchant: a.merchantId, p_actor: a.actor, p_target: a.target, p_token_hash: a.tokenHash, p_now: a.now, p_expires: a.expires, p_correlation: a.correlation }),
+    async recoveryLookup(tokenHash, now) { const r = await supabase.rpc('recovery_lookup', { p_token_hash: tokenHash, p_now: now }); return r?.[0] ?? null; },
+    recoveryConsume: (a) => rpc('recovery_consume', { p_token_hash: a.tokenHash, p_now: a.now, p_correlation: a.correlation }),
     inviteAccept: (a) => rpc('team_invitation_accept', { p_token_hash: a.tokenHash, p_user: a.user, p_now: a.now, p_correlation: a.correlation }),
   });
 }
@@ -44,8 +47,9 @@ export function createMemoryTeamRepository({ merchants = {}, users = [], members
   const deny = (mid, actor, type, entity, code, extra, at) => { journal(mid, actor, type, 'DENIED', entity.id ? entity.type : null, entity.id ?? null, { ...extra, code }, at); return { ok: false, code }; };
   const sweep = (mid, at) => { for (const i of I) if (i.merchant_id === mid && i.status === 'PENDING' && new Date(i.expires_at) <= new Date(at)) i.status = 'EXPIRED'; };
   const hasMember = (mid, email) => M.some((m) => m.merchant_id === mid && !m.removed_at && U.get(m.user_id)?.email === email);
+  const R = []; const S = []; // recovery links, active sessions [{ user_id, revoked }]
   const api = {
-    _state: { members: M, invitations: I, events: E, users: U },
+    _state: { members: M, invitations: I, events: E, users: U, recovery: R, sessions: S },
     async merchantName(id) { return merchants[id] ?? null; },
     async listMembers(mid) { return M.filter((m) => m.merchant_id === mid).map((m) => ({ user_id: m.user_id, email: U.get(m.user_id)?.email ?? null, display_name: U.get(m.user_id)?.name ?? null, role: m.role, status: m.status, created_at: m.created_at, suspended_at: m.suspended_at, removed_at: m.removed_at })); },
     async listInvitations(mid) { return I.filter((i) => i.merchant_id === mid).sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).map((i) => ({ ...i })); },
@@ -104,6 +108,24 @@ export function createMemoryTeamRepository({ merchants = {}, users = [], members
       return { invitation_id: i.id, merchant_id: i.merchant_id, merchant_name: merchants[i.merchant_id] ?? null, email: i.email, role: i.role, status: i.status === 'PENDING' && new Date(i.expires_at) <= new Date(at) ? 'EXPIRED' : i.status, expires_at: i.expires_at, account_exists: [...U.values()].some((u) => u.email === i.email) };
     },
     async userByEmail(email) { return [...U.values()].find((u) => u.email === String(email).trim().toLowerCase())?.id ?? null; },
+    async recoveryIssue({ merchantId: mid, actor, target, tokenHash, now: at, expires }) {
+      await lock; if (!(mid in merchants)) return { ok: false, code: 'MERCHANT_UNKNOWN' };
+      const ar = actorRole(mid, actor); const t = mem(mid, target); let d = null; const ent = { type: 'user', id: target };
+      if (!ar) d = 'FORBIDDEN'; else if (actor === target) d = 'SELF_RECOVERY'; else if (!t) d = 'TARGET_NOT_MEMBER'; else if (t.removed_at || t.status !== 'ACTIVE') d = 'TARGET_NOT_ACTIVE'; else if (ar === 'ADMIN' && !MANAGED_BY_ADMIN.includes(t.role)) d = 'FORBIDDEN';
+      if (d) return deny(mid, actor, 'RECOVERY_DENIED', ent, d, {}, at);
+      for (const l of R) if (l.merchant_id === mid && l.user_id === target && l.status === 'PENDING') l.status = 'CANCELLED';
+      const id = randomUUID(); R.push({ id, merchant_id: mid, user_id: target, token_hash: tokenHash, status: 'PENDING', created_by: actor, created_at: at, expires_at: expires, used_at: null });
+      journal(mid, actor, 'RECOVERY_ISSUED', 'SUCCESS', 'recovery', id, { role: t.role }, at); return { ok: true, code: 'RECOVERY_ISSUED', link_id: id };
+    },
+    async recoveryLookup(tokenHash, at) { const l = R.find((x) => x.token_hash === tokenHash); if (!l) return null; return { link_id: l.id, merchant_name: merchants[l.merchant_id] ?? null, status: l.status === 'PENDING' && new Date(l.expires_at) <= new Date(at) ? 'EXPIRED' : l.status, expires_at: l.expires_at }; },
+    async recoveryConsume({ tokenHash, now: at }) {
+      await lock; const l = R.find((x) => x.token_hash === tokenHash); if (!l) return { ok: false, code: 'RECOVERY_INVALID' };
+      const m = mem(l.merchant_id, l.user_id); let d = null;
+      if (l.status !== 'PENDING') d = 'RECOVERY_' + l.status; else if (new Date(l.expires_at) <= new Date(at)) { l.status = 'EXPIRED'; d = 'RECOVERY_EXPIRED'; } else if (!m || m.status !== 'ACTIVE' || m.removed_at) d = 'TARGET_NOT_ACTIVE';
+      if (d) return deny(l.merchant_id, l.user_id, 'RECOVERY_DENIED', { type: 'recovery', id: l.id }, d, { action: 'USE' }, at);
+      l.status = 'USED'; l.used_at = at; let closed = 0; for (const x of S) if (x.user_id === l.user_id && !x.revoked) { x.revoked = true; closed += 1; }
+      journal(l.merchant_id, l.user_id, 'RECOVERY_USED', 'SUCCESS', 'recovery', l.id, { count: closed }, at); return { ok: true, code: 'RECOVERY_USED', user_id: l.user_id, sessions_closed: closed };
+    },
     async inviteAccept({ tokenHash, user, now: at }) {
       await lock; const inv = I.find((i) => i.token_hash === tokenHash); if (!inv) return { ok: false, code: 'INVITATION_INVALID' };
       const cur = mem(inv.merchant_id, user); let d = null;

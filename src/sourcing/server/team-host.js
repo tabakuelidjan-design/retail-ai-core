@@ -16,14 +16,14 @@ const GN = new URL('../../settings-general/ui/', import.meta.url);
 const CX = new URL('../../connections/ui/', import.meta.url);
 const DS = new URL('../../creative-autonomy/creator/ui/ds/', import.meta.url);
 const CSS = 'text/css; charset=utf-8'; const JS = 'text/javascript; charset=utf-8';
-const ASSETS = Object.freeze({ 'team.js': [UI, 'team.js', JS], 'team.css': [UI, 'team.css', CSS], 'invitation.js': [UI, 'invitation.js', JS], 'shell.js': [GN, 'shell.js', JS], 'connections.css': [CX, 'connections.css', CSS], 'nordla-ds.css': [DS, 'nordla-ds.css', CSS], 'nordla-tokens.css': [DS, 'nordla-tokens.css', CSS] });
+const ASSETS = Object.freeze({ 'team.js': [UI, 'team.js', JS], 'team.css': [UI, 'team.css', CSS], 'invitation.js': [UI, 'invitation.js', JS], 'recovery.js': [UI, 'recovery.js', JS], 'shell.js': [GN, 'shell.js', JS], 'connections.css': [CX, 'connections.css', CSS], 'nordla-ds.css': [DS, 'nordla-ds.css', CSS], 'nordla-tokens.css': [DS, 'nordla-tokens.css', CSS] });
 const HEADERS = { 'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'", 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY' };
 const send = (res, status, type, body, extra = {}) => { res.writeHead(status, { ...HEADERS, 'Content-Type': type, ...extra }); res.end(body); };
 const json = (res, status, body) => send(res, status, 'application/json; charset=utf-8', JSON.stringify(body), { 'Cache-Control': 'no-store' });
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const SLUGS = Object.freeze({ membres: 'members', invitations: 'invitations', roles: 'roles', historique: 'history' });
 const STATUS = Object.freeze({ FORBIDDEN_ROLE: 403, FORBIDDEN: 403, TENANT_REQUIRED: 403, NOT_FOUND: 404, ROLE_INVALID: 422, EMAIL_INVALID: 422, LAST_OWNER: 409, SELF_PROMOTION: 403, ALREADY_SUSPENDED: 409, ALREADY_ACTIVE: 409, ALREADY_REMOVED: 409, NO_CHANGE: 409, MEMBER_REMOVED: 409, ALREADY_MEMBER: 409, DUPLICATE_PENDING: 409, NOT_RESENDABLE: 409, NOT_CANCELLABLE: 409, TARGET_NOT_MEMBER: 404, MERCHANT_UNKNOWN: 404,
-  PASSWORD_INVALID: 422, CREDENTIALS_INVALID: 403, ACCOUNT_FAILED: 502, ACCEPT_UNAVAILABLE: 503, INVITATION_INVALID: 410, INVITATION_EXPIRED: 410, INVITATION_ACCEPTED: 410, INVITATION_CANCELLED: 410, INVITATION_PENDING: 410, EMAIL_MISMATCH: 403 });
+  PASSWORD_INVALID: 422, CREDENTIALS_INVALID: 403, ACCOUNT_FAILED: 502, ACCEPT_UNAVAILABLE: 503, INVITATION_INVALID: 410, INVITATION_EXPIRED: 410, INVITATION_ACCEPTED: 410, INVITATION_CANCELLED: 410, INVITATION_PENDING: 410, EMAIL_MISMATCH: 403, SELF_RECOVERY: 409, TARGET_NOT_ACTIVE: 409, RECOVERY_INVALID: 410, RECOVERY_EXPIRED: 410, RECOVERY_USED: 410, RECOVERY_CANCELLED: 410, RECOVERY_PENDING: 410 });
 const readJson = async (req) => { const chunks = []; let n = 0; for await (const c of req) { n += c.length; if (n > 20_000) throw Object.assign(new Error('too large'), { code: 'BODY_TOO_LARGE' }); chunks.push(c); } try { const v = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); if (v === null || typeof v !== 'object' || Array.isArray(v)) throw new Error('shape'); return v; } catch { throw Object.assign(new Error('invalid json'), { code: 'BODY_INVALID' }); } };
 
 /** Fixed-window limiter in memory (one server): `max` hits per `windowMs` per key. */
@@ -33,7 +33,7 @@ function limiter({ max, windowMs, now = () => Date.now() }) {
 }
 export async function teamPage(name) {
   const html = await readFile(new URL(name, UI), 'utf8');
-  return html.replace(/(href|src)="\/(nordla-ds\.css|nordla-tokens\.css|connections\.css|team\.css|shell\.js|team\.js|invitation\.js|nordla-icon\.js)"/g, '$1="/team-assets/$2"');
+  return html.replace(/(href|src)="\/(nordla-ds\.css|nordla-tokens\.css|connections\.css|team\.css|shell\.js|team\.js|invitation\.js|recovery\.js|nordla-icon\.js)"/g, '$1="/team-assets/$2"');
 }
 
 /** @param {{ gate: object, merchantId: string, service: object, origin?: string, shellOf?: Function, now?: () => number }} o */
@@ -51,7 +51,7 @@ export async function createTeamHost({ gate, merchantId, service, origin = '', s
       const p = url.pathname; const method = String(req.method ?? '').toUpperCase();
       try {
         // ---- public: the person who received the link
-        if (p === '/api/invitations/info' || p === '/api/invitations/accept') {
+        if (['/api/invitations/info', '/api/invitations/accept', '/api/recovery/info', '/api/recovery/apply'].includes(p)) {
           if (method !== 'POST') { json(res, 405, { error: { code: 'METHOD_NOT_ALLOWED' } }); return true; }
           if (origin && req.headers.origin !== origin) { json(res, 403, { error: { code: 'ORIGIN_REFUSED' } }); return true; }
           if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) { json(res, 415, { error: { code: 'JSON_REQUIRED' } }); return true; }
@@ -60,6 +60,8 @@ export async function createTeamHost({ gate, merchantId, service, origin = '', s
             const body = await readJson(req); const token = typeof body.token === 'string' ? body.token : '';
             if (!perToken(token.slice(0, 64))) { json(res, 429, { error: { code: 'RATE_LIMITED', message: 'Trop de tentatives. Réessayez dans quelques minutes.' } }); return true; }
             if (p === '/api/invitations/info') { json(res, 200, await service.inviteInfo(token)); return true; }
+            if (p === '/api/recovery/info') { json(res, 200, await service.recoveryInfo(token)); return true; }
+            if (p === '/api/recovery/apply') { json(res, 200, await service.applyRecovery({ token, password: body.password })); return true; }
             json(res, 200, await service.acceptInvite({ token, password: body.password, name: body.name })); return true;
           } catch (e) { if (answer(res, e)) return true; throw e; }
         }
@@ -76,11 +78,11 @@ export async function createTeamHost({ gate, merchantId, service, origin = '', s
             if (method === 'GET' && p === '/api/team/rights') { json(res, 200, service.rights()); return true; }
             const rr = /^\/api\/team\/rights\/([A-Z_]{4,20})$/.exec(p); if (rr && method === 'GET') { json(res, 200, service.rightsOfRole(rr[1])); return true; }
             if (method === 'GET' && p === '/api/team/members') { json(res, 200, await service.members({ ...base, q: url.searchParams.get('q') ?? '', roleFilter: url.searchParams.get('role') ?? '', status: url.searchParams.get('status') ?? '' })); return true; }
-            const mem = /^\/api\/team\/members\/([0-9a-f-]{36})(?:\/(role|suspend|reactivate|remove))?$/i.exec(p);
+            const mem = /^\/api\/team\/members\/([0-9a-f-]{36})(?:\/(role|suspend|reactivate|remove|recovery))?$/i.exec(p);
             if (mem && method === 'GET' && !mem[2]) { json(res, 200, await service.member({ ...base, userId: mem[1] })); return true; }
             if (mem && method === 'POST' && mem[2]) {
               if (mem[2] === 'role') { const body = await readJson(req); json(res, 200, await service.changeRole({ ...base, userId: mem[1], newRole: String(body.role ?? '') })); return true; }
-              await readJson(req).catch(() => ({})); json(res, 200, await service.setStatus({ ...base, userId: mem[1], action: mem[2].toUpperCase() })); return true;
+              await readJson(req).catch(() => ({})); if (mem[2] === 'recovery') { json(res, 200, await service.issueRecovery({ ...base, userId: mem[1] })); return true; } json(res, 200, await service.setStatus({ ...base, userId: mem[1], action: mem[2].toUpperCase() })); return true;
             }
             if (method === 'GET' && p === '/api/team/invitations') { json(res, 200, await service.invitations(base)); return true; }
             if (method === 'POST' && p === '/api/team/invitations') { const body = await readJson(req); json(res, 200, await service.invite({ ...base, email: String(body.email ?? ''), newRole: String(body.role ?? '') })); return true; }
@@ -93,6 +95,7 @@ export async function createTeamHost({ gate, merchantId, service, origin = '', s
         if (method !== 'GET' && method !== 'HEAD') return false;
         const page = /^\/settings\/team(?:\/([a-z-]+))?\/?$/.exec(p);
         if (page && (!page[1] || SLUGS[page[1]])) { send(res, 200, 'text/html; charset=utf-8', await teamPage('index.html')); return true; }
+        if (/^\/recuperation\/[A-Za-z0-9_-]{1,64}\/?$/.test(p)) { send(res, 200, 'text/html; charset=utf-8', await teamPage('recovery.html'), { 'Cache-Control': 'no-store' }); return true; }
         if (/^\/invitation\/[A-Za-z0-9_-]{1,64}\/?$/.test(p)) { send(res, 200, 'text/html; charset=utf-8', await teamPage('invitation.html'), { 'Cache-Control': 'no-store' }); return true; }
         if (p.startsWith('/nordla-assets/')) { const f = await readNordlaShared(p); if (!f) return false; send(res, 200, f.type, f.body); return true; }
         const m = /^\/team-assets\/([a-z0-9.-]+)$/.exec(p);

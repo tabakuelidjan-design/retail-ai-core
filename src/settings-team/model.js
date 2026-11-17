@@ -64,11 +64,13 @@ export const validEmail = (v) => { const e = normalizeEmail(v); return e.length 
 /** Event types of the access history (journal identity_events) and their French wording. */
 export const HISTORY_EVENTS = Object.freeze({
   INVITATION_CREATED: 'Invitation envoyée', INVITATION_RESENT: 'Invitation renvoyée', INVITATION_CANCELLED: 'Invitation annulée', INVITATION_ACCEPTED: 'Invitation acceptée', INVITATION_DENIED: 'Invitation refusée',
+  RECOVERY_ISSUED: 'Lien de réinitialisation créé', RECOVERY_USED: 'Mot de passe réinitialisé', RECOVERY_DENIED: 'Réinitialisation refusée',
   MEMBER_ADDED: 'Membre ajouté', MEMBER_ROLE_CHANGED: 'Rôle modifié', MEMBER_SUSPENDED: 'Accès suspendu', MEMBER_REACTIVATED: 'Accès réactivé', MEMBER_REMOVED: 'Accès retiré', MEMBER_ACTION_DENIED: 'Action refusée', MEMBER_BOOTSTRAPPED: 'Premier propriétaire créé',
 });
 export const REFUSAL = Object.freeze({
   FORBIDDEN: 'Votre rôle ne permet pas cette action.', FORBIDDEN_ROLE: 'Réservé au propriétaire et aux administrateurs.', LAST_OWNER: 'Impossible : c’est le dernier propriétaire actif. Nommez d’abord un autre propriétaire.', SELF_PROMOTION: 'Vous ne pouvez pas vous donner un rôle supérieur au vôtre.',
   TARGET_NOT_MEMBER: 'Cette personne n’est pas membre de ce commerce.', ALREADY_SUSPENDED: 'Cet accès est déjà suspendu.', ALREADY_ACTIVE: 'Cet accès est déjà actif.', ALREADY_REMOVED: 'L’accès de cette personne est déjà retiré.', NO_CHANGE: 'Ce membre a déjà ce rôle.',
   MEMBER_REMOVED: 'L’accès a été retiré : une nouvelle invitation est nécessaire.', ROLE_INVALID: 'Rôle inconnu.', EMAIL_INVALID: 'Adresse e-mail invalide.', ALREADY_MEMBER: 'Cette personne a déjà accès à ce commerce.', DUPLICATE_PENDING: 'Une invitation est déjà en attente pour cette adresse : renvoyez-la ou annulez-la.',
+  SELF_RECOVERY: 'Pour votre propre compte, utilisez Sécurité › Changer le mot de passe.', TARGET_NOT_ACTIVE: 'Le compte doit être actif : réactivez-le d’abord, ou invitez-le de nouveau si son accès a été retiré.',
   NOT_FOUND: 'Élément introuvable.', NOT_RESENDABLE: 'Cette invitation ne peut plus être renvoyée.', NOT_CANCELLABLE: 'Cette invitation ne peut plus être annulée.', MERCHANT_UNKNOWN: 'Commerce introuvable.',
 });

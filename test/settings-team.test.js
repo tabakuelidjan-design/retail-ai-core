@@ -28,7 +28,7 @@ const roster = () => [mm(A, 'own', 'OWNER'), mm(A, 'adm', 'ADMIN'), mm(A, 'adm2'
 let clock = new Date(T0);
 const world = (extra = {}) => {
   const repo = createMemoryTeamRepository({ merchants: { [A]: 'Boutique A', [B]: 'Boutique B' }, users, members: extra.members ?? roster(), now: () => clock });
-  let n = 0; const auth = { createUser: async ({ email, name }) => { const id = `d0000000-0000-4000-8000-${String(++n).padStart(12, '0')}`; repo._state.users.set(id, { id, email, name }); return { ok: true, userId: id }; }, verifyPassword: async (email, password) => { const u = [...repo._state.users.values()].find((x) => x.email === email); return u && password === 'correct-horse-battery' ? { ok: true, userId: u.id } : { ok: false }; } };
+  let n = 0; const auth = { setPassword: async (id, pw) => { world.lastPassword = [id, pw]; return !world.failSet; }, createUser: async ({ email, name }) => { const id = `d0000000-0000-4000-8000-${String(++n).padStart(12, '0')}`; repo._state.users.set(id, { id, email, name }); return { ok: true, userId: id }; }, verifyPassword: async (email, password) => { const u = [...repo._state.users.values()].find((x) => x.email === email); return u && password === 'correct-horse-battery' ? { ok: true, userId: u.id } : { ok: false }; } };
   const svc = createTeamService({ repo, auth, now: () => clock, origin: 'https://nordla.test' });
   return { repo, svc, st: repo._state, auth };
 };
@@ -305,4 +305,51 @@ test('TM-16 the Équipe et accès card does not lead to a 404 when the module is
   const mk = (disabledSections) => createConnectionsService({ registry: createRegistry(), disabledSections });
   const off = await mk(['team']).settings({ tenant: { merchantId: A }, role: 'OWNER' }); const c = off.cards.find((x) => x.id === 'team'); assert.deepEqual([c.available, c.href], [false, null]);
   const on = await mk([]).settings({ tenant: { merchantId: A }, role: 'OWNER' }); assert.deepEqual([on.cards.find((x) => x.id === 'team').available, on.cards.find((x) => x.id === 'team').href], [true, '/settings/team']);
+});
+
+// ------------------------------------------------------------------ Sécurité V2: account recovery without e-mail
+const recTok = (link) => link.split('/recuperation/')[1];
+test('TM-17 recovery: issuer rules (owner any non-self member, admin only read-only roles, never self/removed/suspended), one link per member, single use, 60 min, sessions closed, journal clean', async () => {
+  const { svc, st, repo } = world(); st.sessions.push({ user_id: U.view, revoked: false }, { user_id: U.view, revoked: false }, { user_id: U.own, revoked: false });
+  assert.equal(await code(svc.issueRecovery({ ...ctx(A, 'view', 'VIEWER'), userId: U.col })), 'FORBIDDEN_ROLE');
+  assert.equal(await code(svc.issueRecovery({ ...ctx(A, 'own', 'OWNER'), userId: U.own })), 'SELF_RECOVERY');
+  assert.equal(await code(svc.issueRecovery({ ...ctx(A, 'adm', 'ADMIN'), userId: U.own })), 'FORBIDDEN', 'an administrator cannot take over an owner');
+  assert.equal(await code(svc.issueRecovery({ ...ctx(A, 'adm', 'ADMIN'), userId: U.adm2 })), 'FORBIDDEN', 'nor another administrator');
+  assert.equal(await code(svc.issueRecovery({ ...ctx(B, 'ownB', 'OWNER'), userId: U.view })), 'NOT_FOUND', 'a member of another merchant is unknown here');
+  const m = (await svc.members(ctx(A, 'adm', 'ADMIN'))).members; assert.equal(m.find((x) => x.id === U.view).actions.recover, true); assert.equal(m.find((x) => x.id === U.own).actions.recover, false); assert.equal(m.find((x) => x.id === U.adm).actions.recover, false);
+  const one = await svc.issueRecovery({ ...ctx(A, 'adm', 'ADMIN'), userId: U.view }); assert.match(one.link, /^https:\/\/nordla\.test\/recuperation\/[A-Za-z0-9_-]{43}$/);
+  assert.ok(!JSON.stringify(st.recovery).includes(recTok(one.link)), 'only the hash is stored');
+  const two = await svc.issueRecovery({ ...ctx(A, 'own', 'OWNER'), userId: U.view }); assert.notEqual(recTok(one.link), recTok(two.link));
+  assert.equal((await svc.recoveryInfo(recTok(one.link))).state, 'CANCELLED', 'a new link cancels the previous one');
+  assert.equal(await code(svc.applyRecovery({ token: recTok(one.link), password: 'a-long-enough-password' })), 'RECOVERY_CANCELLED');
+  const info = await svc.recoveryInfo(recTok(two.link)); assert.deepEqual([info.state, info.merchantName], ['PENDING', 'Boutique A']); assert.ok(!JSON.stringify(info).includes('view@a.test'), 'no e-mail on the public page');
+  assert.equal(await code(svc.applyRecovery({ token: recTok(two.link), password: 'court' })), 'PASSWORD_INVALID');
+  const ok = await svc.applyRecovery({ token: recTok(two.link), password: 'a-long-enough-password' }); assert.equal(ok.sessionsClosed, 2);
+  assert.deepEqual(world.lastPassword, [U.view, 'a-long-enough-password']); assert.deepEqual(st.sessions.map((s) => s.revoked), [true, true, false], 'only that account\'s sessions are closed');
+  assert.equal(await code(svc.applyRecovery({ token: recTok(two.link), password: 'a-long-enough-password' })), 'RECOVERY_USED', 'single use');
+  const raw = JSON.stringify(st.events); assert.ok(!raw.includes(recTok(two.link)) && !raw.includes('view@a.test') && !raw.includes('/recuperation/'));
+  assert.ok(st.events.some((e) => e.event_type === 'RECOVERY_ISSUED') && st.events.some((e) => e.event_type === 'RECOVERY_USED'));
+  // expiry, suspended / removed targets, provider failure
+  const three = await svc.issueRecovery({ ...ctx(A, 'own', 'OWNER'), userId: U.col }); clock = new Date(clock.getTime() + 61 * 60_000);
+  assert.equal((await svc.recoveryInfo(recTok(three.link))).state, 'EXPIRED'); assert.equal(await code(svc.applyRecovery({ token: recTok(three.link), password: 'a-long-enough-password' })), 'RECOVERY_EXPIRED'); clock = new Date(T0);
+  await svc.setStatus({ ...ctx(A, 'own', 'OWNER'), userId: U.col, action: 'SUSPEND' }); assert.equal(await code(svc.issueRecovery({ ...ctx(A, 'own', 'OWNER'), userId: U.col })), 'TARGET_NOT_ACTIVE');
+  await svc.setStatus({ ...ctx(A, 'own', 'OWNER'), userId: U.multi, action: 'REMOVE' }); assert.equal(await code(svc.issueRecovery({ ...ctx(A, 'own', 'OWNER'), userId: U.multi })), 'TARGET_NOT_ACTIVE');
+  const four = await svc.issueRecovery({ ...ctx(A, 'own', 'OWNER'), userId: U.view }); world.failSet = true; assert.equal(await code(svc.applyRecovery({ token: recTok(four.link), password: 'a-long-enough-password' })), 'ACCOUNT_FAILED');
+  assert.equal((await svc.recoveryInfo(recTok(four.link))).state, 'USED', 'fail closed: the link is burnt, the issuer issues a new one'); world.failSet = false; void repo;
+});
+
+test('TM-18 HTTP recovery: issue (CSRF, rights), public page + apply (origin, rate limit, token only in a body), unusable afterwards', async () => {
+  const t = await bootTeam({ origin: 'http://allowed.test' }); const hdr = { origin: 'http://allowed.test' };
+  try {
+    assert.equal((await t.call(`/api/team/members/${U.view}/recovery`, { as: 'viewer', method: 'POST', body: {} })).status, 403);
+    assert.equal((await t.call(`/api/team/members/${U.view}/recovery`, { as: 'owner', method: 'POST', body: {}, csrf: 'bad' })).status, 403);
+    assert.equal((await t.call(`/api/team/members/${U.own}/recovery`, { as: 'owner', method: 'POST', body: {} })).json.error.code, 'SELF_RECOVERY');
+    const r = await t.call(`/api/team/members/${U.view}/recovery`, { as: 'owner', method: 'POST', body: {} }); assert.equal(r.status, 200); const token = recTok(r.json.link);
+    assert.match((await t.call(`/recuperation/${token}`)).text, /recovery\.js/); assert.equal((await t.call('/team-assets/recovery.js')).status, 200);
+    assert.equal((await t.call('/api/recovery/info', { method: 'POST', body: { token }, headers: { origin: 'http://evil.test' } })).status, 403);
+    assert.equal((await t.call('/api/recovery/info', { method: 'POST', body: { token }, headers: hdr })).json.state, 'PENDING');
+    assert.equal((await t.call('/api/recovery/apply', { method: 'POST', body: { token, password: 'a-long-enough-password' }, headers: hdr })).status, 200);
+    assert.equal((await t.call('/api/recovery/apply', { method: 'POST', body: { token, password: 'a-long-enough-password' }, headers: hdr })).status, 410);
+    assert.equal((await t.call('/api/recovery/info', { method: 'POST', body: { token: 'nope' }, headers: hdr })).json.state, 'INVALID');
+  } finally { t.close(); }
 });
