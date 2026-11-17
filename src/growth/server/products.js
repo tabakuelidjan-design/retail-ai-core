@@ -14,13 +14,14 @@ export const HISTORY_DAYS = 400; // same history depth as Finance's retail load:
 
 export function createProductPotentialSource({ supabase, merchantId, timeZone, config = mergeConfig(), now = () => new Date(), cacheMs = 5 * 60_000 }) {
   if (typeof merchantId !== 'string' || !merchantId) throw new TypeError('createProductPotentialSource: merchantId is required (server context)');
-  requireTimeZone(timeZone, 'createProductPotentialSource'); // the merchant's local zone, explicit (merchant_profile or MERCHANT_TIMEZONE): never an assumed UTC
+  if (typeof timeZone !== 'function') requireTimeZone(timeZone, 'createProductPotentialSource'); // a string, or a getter that follows Général (see liveTimeZone) // the merchant's local zone, explicit (merchant_profile or MERCHANT_TIMEZONE): never an assumed UTC
   let cached = null; let cachedAt = 0;
   return async function productPotential() {
     const t = now();
     if (cached && t.getTime() - cachedAt < cacheMs) return cached;
+    const tz = typeof timeZone === 'function' ? requireTimeZone(await timeZone(), 'createProductPotentialSource') : timeZone;
     const data = await loadDataset(supabase, merchantId, { since: new Date(t.getTime() - HISTORY_DAYS * DAY) });
-    const f = productPotentialFacts({ data, now: t, timeZone, config });
+    const f = productPotentialFacts({ data, now: t, timeZone: tz, config });
     const payload = { generatedAt: t.toISOString(), ...buildProductPotential(f.facts, { config, currency: f.currency, window: f.window, dataQuality: f.dataQuality }) };
     // Detail by variant (fiche produit): the same window, the net units and the sellable stock with its snapshot date. An optional extra: if it fails, the page is unchanged.
     try {
