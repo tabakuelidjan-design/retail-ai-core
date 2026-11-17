@@ -846,7 +846,7 @@ function opFollowUp(scope, snapshot, view = {}) {
       if (applied.post) appliedInfo.push(h('p', null, applied.post.declared === 'calendar' ? t('gr.pub.recorded', applied.post.id, applied.post.url ?? '', applied.date) : t('gr.social.postRecorded', applied.post.id, applied.post.url ?? '')));
       if (camp) appliedInfo.push(h('p', null, applied.recipients == null ? opFollowLabel('recipientsMissing') : opFollowLabel('recipientsRecorded', num(applied.recipients))));
       if (!appliedForPlan) appliedInfo.push(h('p', { class: 'gr-muted' }, opFollowLabel('appliedOlderPlan', opFollowDate(applied.planAt))));
-      if (appliedPlan) appliedInfo.push(h('p', null, opFollowLabel('afterApplied', appliedPlan.reviewDate)));
+      if (appliedPlan) appliedInfo.push(appliedPlan.reviewDate ? h('p', null, opFollowLabel('afterApplied', appliedPlan.reviewDate)) : h('p', { class: 'gr-muted' }, t('gr.review.none')));
     }
     const prereqBlock = prerequisites.length ? [heading('prereq.title'), ...prerequisites.map((c) => {
       const ok = events.length && opPrereqValid(events, c);
@@ -887,7 +887,7 @@ function opFollowUp(scope, snapshot, view = {}) {
         h('button', { type: 'button', class: 'gv-toggle', 'aria-expanded': String(bodyOpen), on: { click: () => { bodyOpen = !bodyOpen; render(read()); } } },
           h('span', { class: 'gv-chev', 'aria-hidden': 'true' }, '›'), rankChip, h('span', { class: 'ex-mover-name' }, evidence.title)),
         h('div', { class: 'ex-mover-sub gv-proofline' }, evidence.lineProof ?? evidence.summary ?? evidence.why,
-          view.reviewMode && plan ? h('span', { class: 'gv-due' }, ` · ${t('gr.review.due', plan.reviewDate)}`) : null,
+          view.reviewMode && plan ? h('span', { class: 'gv-due' }, ` · ${plan.reviewDate ? t('gr.review.due', plan.reviewDate) : t('gr.review.none')}`) : null,
           view.reviewMode && evidence.target ? opTargetLink({ target: evidence.target }) : null,
           stateText ? h('span', { class: 'gv-state gr-follow-state' }, stateText) : h('span', { class: 'gr-follow-state', hidden: '' }, opFollowLabel('state.ready')))),
       primary ? h('div', { class: 'gv-line-action' }, h('button', { type: 'button', class: 'gv-primary', 'aria-expanded': primary.expanded == null ? null : String(!!primary.expanded), on: { click: primary.run } }, primary.label)) : null);
@@ -954,7 +954,7 @@ function opDueReviews(scope) {
     let entry; try { entry = JSON.parse(growthStorage.getItem(key)); } catch { continue; }
     if (!entry || !entry.snapshot) continue;
     const st = opFollowState(entry.events ?? [], entry.snapshot.prerequisites ?? []);
-    if (!st.plan || !st.applied || st.applied.planAt !== st.plan.at || st.review || st.plan.reviewDate > today) continue; // not applied, applied an older plan version, already reviewed, or not yet due
+    if (!st.plan || !st.applied || st.applied.planAt !== st.plan.at || st.review || !st.plan.reviewDate || st.plan.reviewDate > today) continue; // not applied, applied an older plan version, already reviewed, without a review date, or not yet due
     out.push({ snapshot: entry.snapshot, due: st.plan.reviewDate });
   }
   return out.sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : a.snapshot.id < b.snapshot.id ? -1 : 1));

@@ -768,6 +768,7 @@ window.NORDLA_DICTS.nl = Object.assign(window.NORDLA_DICTS.nl || {}, {
   "gr.review.title": "Te evalueren ({0})",
   "gr.review.title.compare": "Waargenomen verandering",
   "gr.review.due": "Evaluatie gepland op {0}",
+  "gr.review.none": "Geen evaluatiedatum vastgelegd",
   "gr.review.line": "{0} ervoor · {1} erna · {2} netto-eenheden",
   "gr.review.windows": "Ervoor: {0} · Erna: {1} ({2} dagen elk, toepassingsdag uitgesloten).",
   "gr.review.scope": "Netto-eenheden van het toegepaste product of de toegepaste variant, alle kanalen: test- en geannuleerde bestellingen uitgesloten, bekende terugbetalingen afgetrokken. Een waargenomen verandering, zonder bewezen oorzaak.",

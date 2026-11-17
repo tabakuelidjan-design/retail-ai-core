@@ -768,6 +768,7 @@ window.NORDLA_DICTS.en = Object.assign(window.NORDLA_DICTS.en || {}, {
   "gr.review.title": "To review ({0})",
   "gr.review.title.compare": "Observed change",
   "gr.review.due": "Review planned for {0}",
+  "gr.review.none": "No review date set",
   "gr.review.line": "{0} before · {1} after · {2} net units",
   "gr.review.windows": "Before: {0} · After: {1} ({2} days each, application day excluded).",
   "gr.review.scope": "Net units of the product or variant applied, all channels: test and cancelled orders excluded, known refunds deducted. An observed change, with no proven cause.",

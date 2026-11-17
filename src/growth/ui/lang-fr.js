@@ -768,6 +768,7 @@ window.NORDLA_DICTS.fr = Object.assign(window.NORDLA_DICTS.fr || {}, {
   "gr.review.title": "À revoir ({0})",
   "gr.review.title.compare": "Évolution observée",
   "gr.review.due": "Revue prévue le {0}",
+  "gr.review.none": "Aucune date de revue fixée",
   "gr.review.line": "{0} avant · {1} après · {2} unités nettes",
   "gr.review.windows": "Avant : {0} · Après : {1} ({2} jours chacune, jour d’application exclu).",
   "gr.review.scope": "Unités nettes du produit ou de la variante appliqué, tous canaux : commandes test et annulées exclues, remboursements connus déduits. Évolution observée, sans lien de cause démontré.",
