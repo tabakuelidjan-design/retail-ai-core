@@ -79,3 +79,9 @@ test('BP-3 SIMULATED JOURNEY in the real Finance app: status, connect (KBC, busi
     const everything = JSON.stringify([conn.data, ok.data, st, list, treasury]); assert.ok(!everything.includes('sess-kbc-1') && !everything.includes('PRIVATE KEY'), 'no session id, token or key in any response');
   } finally { await app.close(); }
 });
+
+test('BP-4 the wiring edit left the rest of the Finance server arguments alive (a trailing // comment once swallowed retail, priceSource and salesConnector)', () => {
+  const src = readFileSync(new URL('../src/finance/server/index.js', import.meta.url), 'utf8');
+  const code = src.split('\n').map((l) => l.replace(/(^|\s)\/\/.*$/, '')).join('\n'); // comments removed: only live code is checked
+  for (const needle of ['bankAdapter: bankAdapterFromEnv(env', 'retail: rt.retail', 'priceSource: createShopifyPriceSource(rt.shopify)', 'salesConnector: rt.shopify', 'merchantId: rt.merchant.id']) assert.ok(code.includes(needle), needle);
+});

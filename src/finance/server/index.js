@@ -50,8 +50,9 @@ export async function startFinanceServer({ env = process.env, runtimeDeps = {}, 
   await mkdir('data/local/finance', { recursive: true });
   if (!existsSync(SETTINGS_PATH)) await saveSettings(await loadSettings());
   const app = createFinanceApp({
-    merchantId: rt.merchant.id, store: rt.store, token,
-    bankAdapter: bankAdapterFromEnv(env, { log }), // OFF unless FINANCE_BANK_PROVIDER=enable-banking AND its settings are complete; otherwise today's behaviour (no bank), never a failed start retail: rt.retail, priceSource: createShopifyPriceSource(rt.shopify), salesConnector: rt.shopify,
+    // Optional bank connection: OFF unless FINANCE_BANK_PROVIDER=enable-banking AND its settings are complete; otherwise today's behaviour (no bank), never a failed start.
+    bankAdapter: bankAdapterFromEnv(env, { log }),
+    merchantId: rt.merchant.id, store: rt.store, token, retail: rt.retail, priceSource: createShopifyPriceSource(rt.shopify), salesConnector: rt.shopify,
     // Shopify stock applier gated by the connector state: NOT_CONFIGURED / MISCONFIGURED / UNAVAILABLE block it explicitly.
     stockApplier: { ...createShopifyStockApplier(rt.shopify), state: () => rt.shopify.state({ verify: true }) },
     attachmentStore: createSupabaseAttachmentStore({ url: env.SUPABASE_URL, serviceKey: env.SUPABASE_SERVICE_ROLE_KEY }), retailConfig: rt.retailConfig, timeZone: rt.timeZone, retailHistory: async () => { let at = null; try { at = (await latestSyncStatus(rt.supabase, rt.merchant.id))?.lastSuccess?.finishedAt ?? null; } catch { at = null; } return mergeRetailHistory(await rt.retailHistory(), at); },
