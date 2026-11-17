@@ -116,6 +116,29 @@ export async function buildGeneral({ env, gate, hosted, log = console.log, supab
   } catch (e) { log(`General: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
 }
 
+/** Paramètres > Sécurité (staging module): built only when asked for AND hosted behind the Core identity. Reuses the identity layer (sessions, journal, Supabase Auth check). Any problem is logged and the server runs without it. */
+export async function buildSecurity({ env, gate, hosted, log = console.log, supabase: injected = null, shellOf = null, services = null }) {
+  if (String(env.NORDLA_SECURITY_MODULE ?? '') !== '1') return null;
+  if (!hosted || !gate) { log('Security: NOT built (needs the hosted Core identity)'); return null; }
+  try {
+    const { createSecurityHost } = await import('./security-host.js');
+    const { createSecurityService } = await import('../../settings-security/service.js');
+    const { createAdminAuth } = await import('../../settings-security/admin-auth.js');
+    const { createSessionStore } = await import('../../identity/sessions.js');
+    const { createEventLog } = await import('../../identity/events.js');
+    const { createGoTrueVerifier, loadGoTrueConfig } = await import('../../identity/gotrue.js');
+    const { loadIdentityConfig, loadRateLimitConfig } = await import('../../identity/config.js');
+    const cfg = (await import('../../supabase/client.js')).loadSupabaseConfigFromEnv(env);
+    const supabase = injected ?? (await import('../../supabase/client.js')).createSupabaseClient(cfg);
+    const sessionCfg = loadIdentityConfig(env); const rateCfg = loadRateLimitConfig(env);
+    let verifier = null; try { verifier = createGoTrueVerifier({ config: loadGoTrueConfig(env) }); } catch { verifier = null; }
+    const service = services?.security ?? createSecurityService({ supabase, adminAuth: createAdminAuth({ url: cfg.url, serviceRoleKey: cfg.serviceRoleKey }), verifier, events: createEventLog({ supabase }), sessions: createSessionStore({ supabase, config: sessionCfg }), rules: { ...sessionCfg, ...rateCfg }, idleMs: sessionCfg.idleMs });
+    const host = await createSecurityHost({ gate, merchantId: hosted.merchantId, service, shellOf });
+    log('Security: ON (Paramètres > Sécurité)');
+    return host;
+  } catch (e) { log(`Security: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
+}
+
 /** The video drafts (staging module, "Ajouter une vidéo"): built only when asked for AND hosted behind the Core identity. Any problem is logged and the server runs without it. */
 export async function buildVideos({ env, gate, hosted, log = console.log, contextOf = null }) {
   if (String(env.NORDLA_VIDEO_DRAFTS_MODULE ?? '') !== '1') return null;
@@ -216,10 +239,11 @@ export async function startSourcingServer({ env = process.env, log = console.log
   const creator = await buildCreator({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_CREATOR_MODULE=1
   const connections = await buildConnections({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_CONNECTIONS_MODULE=1
   const general = await buildGeneral({ env, gate, hosted, log, shellOf: connections?.settings ?? null, service: generalService }); // optional, isolated: null unless NORDLA_GENERAL_MODULE=1
+  const security = await buildSecurity({ env, gate, hosted, log, shellOf: connections?.settings ?? null, services }); // optional, isolated: null unless NORDLA_SECURITY_MODULE=1
   const marketingContext = generalService ? () => generalService.contextFor({ tenant: { merchantId: merchantKey }, module: 'marketing' }) : null;
   const videos = await buildVideos({ env, gate, hosted, log, contextOf: marketingContext }); // optional, isolated: null unless NORDLA_VIDEO_DRAFTS_MODULE=1
   const gbp = await buildGbp({ env, gate, hosted, log, contextOf: marketingContext }); // optional, isolated: null unless NORDLA_GBP_DRAFTS_MODULE=1
-  const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, videos, connections, general, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
+  const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, videos, connections, general, security, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
   const server = http.createServer(app.handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); });
   const addr = server.address();

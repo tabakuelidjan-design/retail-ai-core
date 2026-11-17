@@ -1,0 +1,15 @@
+/* Paramètres › Sécurité. Namespaced .sc-*; the shell, rows, buttons and .gn-* form pieces come from connections.css and general.css. */
+.sc-scope { display: inline-block; margin: 6px 0 0; font-size: .82rem; font-weight: 700; border-radius: 999px; padding: 3px 12px; background: var(--cx-blue-soft); color: var(--cx-navy); }
+.sc-scope[data-scope="TEAM"] { background: #fff6e5; color: #7a5200; }
+.sc-sessions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sc-session { background: #fff; border: 1px solid var(--cx-line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
+.sc-session[data-current="true"] { border: 2px solid var(--cx-blue); }
+.sc-session small { color: var(--cx-muted); }
+.sc-confirm { margin-top: 12px; }
+.sc-confirm p { margin: 6px 0; }
+.cx-list[hidden], .cx-detail[hidden] { display: none !important; }
+.cx-list a.cx-row, .cx-list a.cx-row:hover { text-decoration: none; color: inherit; }
+/* the detail column is narrow next to the list: label above value, always */
+#sc-detail .gn-field { grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 10px 0; }
+#sc-detail .gn-label { padding-top: 0; }
+#sc-detail .gn-head h2 { font-size: 1.4rem; }

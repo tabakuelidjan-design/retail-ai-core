@@ -17,7 +17,7 @@ import { loadIdentityConfig } from './config.js';
 export const TABLE = 'app_sessions';
 export const TOKEN_BYTES = 32;
 /** Why a revocation happened. Stored in app_sessions.revoked_reason. */
-export const REVOCATION_REASONS = Object.freeze(['LOGOUT', 'LOGOUT_ALL', 'REVOKED']);
+export const REVOCATION_REASONS = Object.freeze(['LOGOUT', 'LOGOUT_ALL', 'LOGOUT_OTHERS', 'REVOKED']);
 /** Why a token was refused by validate(). Internal: a client must always get the same answer whatever the reason. */
 export const REFUSAL_REASONS = Object.freeze(['MALFORMED', 'UNKNOWN', 'REVOKED', 'EXPIRED', 'IDLE_EXPIRED', 'WRONG_MERCHANT', 'WRONG_MODULE']);
 
