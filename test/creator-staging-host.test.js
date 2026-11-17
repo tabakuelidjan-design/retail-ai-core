@@ -115,7 +115,9 @@ test('CST-5 STORAGE: everything is under <volume>/creator/<merchant>/ ; a produc
   assert.equal((await hub.call('CREATIVE', 'anything_else', { run_id: 'cr-0123456789ab' })).ok, false);
   assert.equal((await hub.call('CREATIVE', 'produce_product_visual', { run_id: '../../evil', product_id: TEST_IMAGE.product_id })).code, 'RUN_ID_INVALID');
   assert.equal((await hub.call('CREATIVE', 'produce_product_visual', { run_id: 'cr-0123456789ab', product_id: 'gid://shopify/Product/1' })).code, 'UNKNOWN_PRODUCT', 'a real product has no archived run: nothing is invented');
-  const own = (await hub.call('CREATIVE', 'produce_product_visual', { run_id: 'cr-0123456789ab', product_id: TEST_IMAGE.product_id })).result.results[0].image;
+  const ownAnswer = (await hub.call('CREATIVE', 'produce_product_visual', { run_id: 'cr-0123456789ab', product_id: TEST_IMAGE.product_id })).result;
+  assert.match(ownAnswer.source_sha256, /^[0-9a-f]{64}$/, 'the screen prints the fingerprint: a null one crashed the result card on staging'); assert.equal(ownAnswer.reservation.status, 'NO_SPEND'); assert.ok(ownAnswer.media_id);
+  const own = ownAnswer.results[0].image;
   assert.ok(own.startsWith(join(dir, 'creator', M, 'images')));
   const read = w.readImageFor(M); assert.equal((await read(own)).subarray(0, 8).toString('hex'), PNG_MAGIC);
   mkdirSync(join(dir, 'creator', OTHER, 'images'), { recursive: true }); const foreign = join(dir, 'creator', OTHER, 'images', 'x.png'); writeFileSync(foreign, 'secret');

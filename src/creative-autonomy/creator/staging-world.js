@@ -11,6 +11,7 @@
 // Storage: everything lives under <dataDir>/creator/<merchant>/ on the server volume (never a Windows path, never another merchant's folder):
 //   history/<person>/<creation>.json  the creations of one person (written by app.js, read back at start)
 //   images/<creation>-<n>.png         the produced files; readImage refuses any path outside this merchant's images folder
+import { createHash } from 'node:crypto';
 import { copyFile, mkdir, readFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { MODULE } from '../../integration/index.js';
@@ -50,7 +51,8 @@ export function createStagingCreatorWorld({ dataDir, delayMs = 1500, replayDir =
           await mkdir(images, { recursive: true });
           const out = join(images, `${runId}-0.png`);
           await copyFile(urlOf('archived-result.png'), out);
-          return { ok: true, result: { status: 'COMPLETED', results: [{ image: out }], source_sha256: null, policy_version: 'staging-replay-v1', withheld: [], reservation: null } };
+          const sha256 = createHash('sha256').update(await readFile(out)).digest('hex'); // the fingerprint of the archived file itself (the screen prints it)
+          return { ok: true, result: { status: 'COMPLETED', results: [{ image: out }], media_id: 'archived-result', source_sha256: sha256, policy_version: 'staging-replay-v1', withheld: [], reservation: { status: 'NO_SPEND' } } };
         }
         if (input.product_id === TEST_NONE.product_id) {
           const archived = JSON.parse(await readFile(urlOf('cr-08a0933b0836.none.json'), 'utf8'));
