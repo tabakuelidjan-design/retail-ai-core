@@ -1,0 +1,30 @@
+/* Ajouter une vidéo: sober, readable, no framework. Every selector is namespaced .vid-* (nothing else on the server uses them). */
+.vid-wrap { max-width: 980px; margin: 0 auto; padding: 24px 16px 64px; font-family: var(--font-ui, 'Montserrat', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif); color: #0f2a52; overflow-wrap: anywhere; }
+.vid-wrap, .vid-card, .vid-grid > div { min-width: 0; }
+.vid-wrap h1 { font-size: 1.5rem; margin: 0 0 4px; }
+.vid-card h2 { font-size: 1.1rem; margin: 0 0 12px; }
+.vid-sub { color: #55606f; margin: 0 0 20px; font-size: .95rem; }
+.vid-banner { border: 1px solid #c9d3e2; background: #f3f6fb; border-radius: 10px; padding: 12px 14px; margin-bottom: 22px; font-size: .92rem; line-height: 1.45; }
+.vid-card { border: 1px solid #d9dee7; border-radius: 12px; padding: 18px; margin-bottom: 22px; background: #fff; }
+.vid-drop { display: block; border: 2px dashed #9fb0c9; border-radius: 10px; padding: 22px 16px; text-align: center; cursor: pointer; background: #fbf8f3; font-size: .95rem; line-height: 1.5; }
+.vid-drop.over { border-color: #0f2a52; background: #f3f6fb; }
+.vid-file { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+.vid-file:focus-visible + * , .vid-drop:focus-within { outline: 2px solid #0f2a52; outline-offset: 2px; }
+.vid-progress { width: 100%; margin-top: 10px; }
+.vid-head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.vid-title { flex: 1 1 240px; min-width: 0; font: inherit; font-size: 1.05rem; font-weight: 700; color: #0f2a52; border: 1px solid #d9dee7; border-radius: 8px; padding: 6px 10px; }
+.vid-state { font-size: .8rem; font-weight: 700; border-radius: 999px; padding: 3px 10px; border: 1px solid #c9d3e2; background: #f3f6fb; }
+.vid-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 18px; }
+@media (max-width: 720px) { .vid-grid { grid-template-columns: 1fr; } .vid-card { padding: 14px; } .vid-actions .vid-btn { flex: 1 1 100%; } }
+.vid-player { width: 100%; max-height: 520px; border-radius: 8px; background: #0f2a52; display: block; }
+.vid-cap { margin-bottom: 14px; }
+.vid-cap label { display: block; font-size: .9rem; }
+.vid-text { width: 100%; box-sizing: border-box; margin-top: 6px; font: inherit; font-size: .95rem; line-height: 1.5; color: #0f2a52; border: 1px solid #d9dee7; border-radius: 8px; padding: 10px; background: #fbf8f3; resize: vertical; }
+.vid-count, .vid-meta, .vid-note { font-size: .8rem; color: #55606f; margin: 4px 0 0; }
+.vid-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
+.vid-btn { max-width: 100%; box-sizing: border-box; white-space: normal; text-align: center; text-decoration: none; display: inline-block; border: 1px solid #0f2a52; background: #0f2a52; color: #fff; border-radius: 8px; padding: 8px 14px; font: inherit; font-size: .9rem; cursor: pointer; }
+.vid-btn.warn { background: #fff; color: #8a2d1f; border-color: #c0392b; }
+.vid-btn[disabled] { opacity: .5; cursor: not-allowed; }
+.vid-msg { font-size: .88rem; margin-top: 10px; min-height: 1.2em; }
+.vid-msg.err { color: #8a2d1f; }
+.vid-link { color: #0f2a52; }
