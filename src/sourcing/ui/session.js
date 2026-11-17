@@ -17,7 +17,7 @@ export async function detectAuth(S) {
   try {
     const r = await fetch('/api/auth/session', { credentials: 'same-origin', headers: { accept: 'application/json' } });
     const b = r.ok ? await r.json() : null;
-    if (b?.mode === 'session') { S.authMode = 'session'; S.token = b.authenticated ? 'session' : ''; S.role = b.role ?? null; ls.set('nordla.sourcing.authMode', 'session'); ls.set('nordla.sourcing.signedIn', !!b.authenticated); return S.authMode; }
+    if (b?.mode === 'session') { S.authMode = 'session'; S.recoveryOn = b.recovery === true; S.token = b.authenticated ? 'session' : ''; S.role = b.role ?? null; ls.set('nordla.sourcing.authMode', 'session'); ls.set('nordla.sourcing.signedIn', !!b.authenticated); return S.authMode; }
     if (b?.mode === 'token') { S.authMode = 'token'; ls.set('nordla.sourcing.authMode', 'token'); return S.authMode; }
   } catch { /* offline: keep what the phone knew */ }
   // no answer (offline, server down): what the phone knew last time. A phone that was signed in keeps working on its own cases; the server
@@ -32,7 +32,9 @@ export function loginScreen(S) {
   ${S.loginError ? `<p class="warn">${esc(S.loginError)}</p>` : ''}
   <label>Adresse e-mail<input id="login-email" type="email" autocomplete="username" inputmode="email"></label>
   <label>Mot de passe<input id="login-password" type="password" autocomplete="current-password"></label>
+  ${S.loginMfa ? '<label>Code de votre application d’authentification (ou code de récupération)<input id="login-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="20" autofocus></label>' : ''}
   <button class="btn" data-act="login-go" style="margin-top:10px" ${S.loginBusy ? 'disabled' : ''}>${S.loginBusy ? 'Connexion…' : 'Se connecter'}</button>
+  ${S.recoveryOn ? '<p class="small" style="margin:10px 0 0"><a href="/reset-password">Mot de passe oublié ?</a></p>' : ''}
   <button class="btn sec" data-act="gate-offline" style="margin-top:8px">Travailler sur ce téléphone seulement (hors ligne)</button></div>`;
 }
 
@@ -41,14 +43,14 @@ export function installSignIn({ S, after }) {
   if (typeof document === 'undefined') return;
   document.addEventListener('click', async (ev) => {
     if (!ev.target.closest?.('[data-act="login-go"]')) return;
-    const email = document.getElementById('login-email')?.value.trim() ?? ''; const password = document.getElementById('login-password')?.value ?? '';
+    const email = document.getElementById('login-email')?.value.trim() ?? ''; const password = document.getElementById('login-password')?.value ?? ''; const code = document.getElementById('login-code')?.value.trim() ?? '';
     if (!email || !password) { S.loginError = 'Indiquez votre adresse e-mail et votre mot de passe.'; return after(); }
     S.loginBusy = true; S.loginError = ''; after();
     try {
-      const r = await fetch('/api/auth/login', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password }) });
+      const r = await fetch('/api/auth/login', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password, ...(code ? { code } : {}) }) });
       const b = await r.json().catch(() => ({}));
-      if (r.ok && b.ok) { S.token = 'session'; S.authFailed = false; S.role = b.role ?? null; ls.set('nordla.sourcing.signedIn', true); }
-      else S.loginError = b.message ?? 'Connexion impossible.';
+      if (r.ok && b.ok) { S.token = 'session'; S.authFailed = false; S.loginMfa = false; S.role = b.role ?? null; ls.set('nordla.sourcing.signedIn', true); }
+      else { if (b.error === 'MFA_REQUIRED' || b.error === 'MFA_INVALID') S.loginMfa = true; S.loginError = b.message ?? 'Connexion impossible.'; }
     } catch { S.loginError = 'Le serveur ne répond pas. Vos dossiers restent utilisables sur ce téléphone.'; }
     S.loginBusy = false; after();
   });

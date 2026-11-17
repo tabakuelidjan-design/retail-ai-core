@@ -15,7 +15,7 @@
 const json = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers }); res.end(JSON.stringify(body)); };
 const SAFE = ['GET', 'HEAD'];
 
-export function createSessionGate({ identity, security }) {
+export function createSessionGate({ identity, security, features = {} }) {
   if (!identity || typeof identity.authenticateAndOpenSession !== 'function' || typeof identity.resolveAccessSession !== 'function') throw new TypeError('createSessionGate needs the identity service of this server (createIdentityService)');
   if (!security || typeof security.guardMutation !== 'function') throw new TypeError('createSessionGate needs the HTTP security of this server (createHttpSecurity)');
   if (identity.context?.module !== 'sourcing' || security.module !== 'sourcing') throw new TypeError('the identity and the HTTP security must both be built for the "sourcing" module');
@@ -29,13 +29,13 @@ export function createSessionGate({ identity, security }) {
       const g = security.guardRead(req); if (!g.ok) { json(res, g.response.status, g.response); return true; }
       const token = security.cookies.read(req.headers.cookie).session;
       const a = token ? await identity.resolveAccessSession(token) : null;
-      json(res, 200, a?.ok ? { mode: 'session', authenticated: true, role: a.role } : { mode: 'session', authenticated: false });
+      json(res, 200, a?.ok ? { mode: 'session', authenticated: true, role: a.role, ...(features.recovery ? { recovery: true } : {}) } : { mode: 'session', authenticated: false, ...(features.recovery ? { recovery: true } : {}) });
       return true;
     }
     if (pathname === '/api/auth/login') {
       const g = security.guardLogin(req); if (!g.ok) { json(res, g.response.status, g.response); return true; }
       let body; try { body = await security.readLoginBody(req); } catch (e) { const p = security.publicError(e, { requestId: g.ctx.requestId }); json(res, p.status, p); return true; }
-      const r = await security.normalizeLogin(() => identity.authenticateAndOpenSession({ email: body.email, password: body.password, ipAddress: g.ctx.clientIp }));
+      const r = await security.normalizeLogin(() => identity.authenticateAndOpenSession({ email: body.email, password: body.password, ...(body.code ? { code: body.code } : {}), ipAddress: g.ctx.clientIp }));
       if (!r || r.ok !== true) { const p = r ?? { error: 'UNAVAILABLE', status: 503 }; json(res, p.status ?? 401, { error: p.error, message: p.message }); return true; }
       json(res, 200, { ok: true, role: r.session?.role ?? null }, { 'set-cookie': cookiesFor(r.token) });
       return true;
@@ -63,5 +63,7 @@ export function createSessionGate({ identity, security }) {
     return { ok: true, access: g.access };
   }
 
-  return Object.freeze({ mode: 'session', handle, authorize });
+  /** Public (no session) POST routes of the same origin, e.g. password recovery: same Origin / Host checks as the login. */
+  const guardPublicPost = (req) => security.guardLogin(req);
+  return Object.freeze({ mode: 'session', handle, authorize, guardPublicPost, readBody: (req) => security.readJsonBody?.bind(null, req) });
 }

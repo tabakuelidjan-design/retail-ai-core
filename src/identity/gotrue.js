@@ -65,7 +65,7 @@ export function createGoTrueVerifier({ config, fetchImpl = globalThis.fetch, tim
    * Verifies an already normalised e-mail address and a password.
    * @returns {Promise<{ ok: true, userId: string, localLogout: 'DONE'|'FAILED' } | { ok: false, kind: 'INVALID' } | { ok: false, kind: 'UNAVAILABLE', reason: string }>}
    */
-  async function verifyPassword(email, password) {
+  async function verifyPassword(email, password, { code = null, recoveryCheck = null } = {}) {
     if (typeof email !== 'string' || email === '' || typeof password !== 'string' || password === '' || password.length > MAX_PASSWORD_LENGTH) {
       return { ok: false, kind: 'INVALID' };
     }
@@ -83,7 +83,30 @@ export function createGoTrueVerifier({ config, fetchImpl = globalThis.fetch, tim
     let refresh = typeof res.json?.refresh_token === 'string' ? res.json.refresh_token : null; // never used: dropped below
     const userId = typeof res.json?.user?.id === 'string' && UUID.test(res.json.user.id) ? res.json.user.id.toLowerCase() : null;
     const wellFormed = Boolean(access) && Boolean(refresh) && Boolean(userId);
+    // Second factor (Settings > Security V2): an account with a VERIFIED authenticator must finish the check before ANY Nordla session exists.
+    // The Supabase tokens stay in local variables; a recovery code (stored hashed by Nordla) replaces the authenticator code when it is lost.
+    let mfa = 'NONE';
+    const factors = Array.isArray(res.json?.user?.factors) ? res.json.user.factors : []; // GoTrue lists the account's factors in the user of the token response (absent = none)
     res = null;
+    const totp = (factors ?? []).filter((f) => f.factor_type === 'totp' && f.status === 'verified');
+    if (wellFormed && totp.length) {
+      const c = typeof code === 'string' ? code.trim() : '';
+      if (!c) mfa = 'REQUIRED';
+      else if (/^\d{6}$/.test(c)) {
+        mfa = 'INVALID';
+        try {
+          const ch = await timedFetch(fetchImpl, `${config.baseUrl}/auth/v1/factors/${totp[0].id}/challenge`, { method: 'POST', headers: { ...base, Authorization: `Bearer ${access}` }, body: '{}' }, timeoutMs);
+          if (ch.status === 200 && ch.json?.id) {
+            const ok = await timedFetch(fetchImpl, `${config.baseUrl}/auth/v1/factors/${totp[0].id}/verify`, { method: 'POST', headers: { ...base, Authorization: `Bearer ${access}` }, body: JSON.stringify({ challenge_id: ch.json.id, code: c }) }, timeoutMs);
+            if (ok.status === 200) { mfa = 'DONE'; if (typeof ok.json?.access_token === 'string') access = ok.json.access_token; }
+            else if (ok.status >= 500 || ok.status === 429) mfa = 'UNAVAILABLE';
+          } else if (ch.status >= 500 || ch.status === 429) mfa = 'UNAVAILABLE';
+        } catch { mfa = 'UNAVAILABLE'; }
+      } else {
+        mfa = 'INVALID';
+        if (typeof recoveryCheck === 'function') { try { if (await recoveryCheck(userId, c)) mfa = 'DONE_RECOVERY'; } catch { mfa = 'UNAVAILABLE'; } }
+      }
+    }
     let localLogout = 'FAILED';
     try {
       if (access) {
@@ -93,7 +116,10 @@ export function createGoTrueVerifier({ config, fetchImpl = globalThis.fetch, tim
       }
     } catch { localLogout = 'FAILED'; } finally { access = null; refresh = null; }
     if (!wellFormed) return { ok: false, kind: 'UNAVAILABLE', reason: 'INVALID_RESPONSE' };
-    return { ok: true, userId, localLogout };
+    if (mfa === 'REQUIRED') return { ok: false, kind: 'MFA_REQUIRED', userId };
+    if (mfa === 'INVALID') return { ok: false, kind: 'MFA_INVALID', userId };
+    if (mfa === 'UNAVAILABLE') return { ok: false, kind: 'UNAVAILABLE', reason: 'HTTP_5XX' };
+    return { ok: true, userId, localLogout, ...(mfa === 'DONE' ? { mfa: 'TOTP' } : mfa === 'DONE_RECOVERY' ? { mfa: 'RECOVERY_CODE' } : {}) };
   }
 
   return Object.freeze({ verifyPassword });

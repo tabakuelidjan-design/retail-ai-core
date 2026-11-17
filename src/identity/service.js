@@ -26,7 +26,7 @@ import { createAccessService } from './access.js';
 import { isModuleCode } from './modules.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const KEYS = Object.freeze(['merchantId', 'moduleCode', 'supabase', 'auth', 'sessions', 'rateLimits', 'rateLimitKey', 'fetchImpl', 'now', 'newId', 'randomBytes']);
+const KEYS = Object.freeze(['merchantId', 'moduleCode', 'supabase', 'auth', 'sessions', 'rateLimits', 'rateLimitKey', 'fetchImpl', 'now', 'newId', 'randomBytes', 'recoveryCheck']);
 
 export class IdentityServiceConfigError extends Error {
   constructor(field, message) { super(message); this.name = 'IdentityServiceConfigError'; this.code = 'IDENTITY_SERVICE_CONFIG_INVALID'; this.field = field; }
@@ -73,6 +73,7 @@ export function createIdentityService(config = {}) {
     events: createEventLog({ supabase, now, newId }),
     service: context,
     newId,
+    ...(typeof config.recoveryCheck === 'function' ? { recoveryCheck: config.recoveryCheck } : {}),
   });
   const access = createAccessService({ supabase, merchantId: context.merchantId, moduleCode: context.module, verifier, config: sessions, now, newId, randomBytes });
   return Object.freeze({ context, authenticateAndOpenSession: access.authenticateAndOpenSession, resolveAccessSession: access.resolveAccessSession, logoutSession: access.logoutSession });

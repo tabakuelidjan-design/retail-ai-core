@@ -33,6 +33,8 @@ export const ENTITLEMENTS = 'module_entitlements';
 
 /** The only answers a caller (later: the login route) can ever see. Frozen, compared as a whole by the tests. */
 export const PUBLIC_RESULTS = Object.freeze({
+  MFA_REQUIRED: Object.freeze({ ok: false, error: 'MFA_REQUIRED', status: 401, message: 'Saisissez le code de votre application d’authentification (ou un code de récupération).' }),
+  MFA_INVALID: Object.freeze({ ok: false, error: 'MFA_INVALID', status: 401, message: 'Code incorrect. Réessayez ou utilisez un code de récupération.' }),
   LOGIN_FAILED: Object.freeze({ ok: false, error: 'LOGIN_FAILED', status: 401, message: 'Impossible de vous connecter avec ces informations.' }),
   RATE_LIMITED: Object.freeze({ ok: false, error: 'RATE_LIMITED', status: 429, message: 'Trop de tentatives. Réessayez dans quelques minutes.' }),
   UNAVAILABLE: Object.freeze({ ok: false, error: 'UNAVAILABLE', status: 503, message: 'La connexion est momentanément indisponible. Réessayez plus tard.' }),
@@ -42,7 +44,7 @@ export const SESSION_REFUSED = Object.freeze({ ok: false, error: 'SESSION_INVALI
 export const SESSION_UNAVAILABLE = PUBLIC_RESULTS.UNAVAILABLE;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const LOGIN_KEYS = Object.freeze(['email', 'password', 'ipAddress']);
+const LOGIN_KEYS = Object.freeze(['email', 'password', 'ipAddress', 'code']);
 
 /**
  * @param {{
@@ -85,8 +87,8 @@ export function createAccessService({ supabase, merchantId, moduleCode, verifier
       if (!out || out.ok !== true || typeof out.session_id !== 'string') return { ok: false }; // precise code already journalled by the database
       return { ok: true, value: { sessionId: out.session_id, role: out.role } };
     };
-    const r = await verifier.verify({ email: input.email, password: input.password, ip: input.ipAddress, correlationId: newId() }, { authorize });
-    if (!r.ok) return r.error === 'RATE_LIMITED' ? PUBLIC_RESULTS.RATE_LIMITED : r.error === 'UNAVAILABLE' ? PUBLIC_RESULTS.UNAVAILABLE : PUBLIC_RESULTS.LOGIN_FAILED;
+    const r = await verifier.verify({ email: input.email, password: input.password, ip: input.ipAddress, correlationId: newId(), ...(typeof input.code === 'string' ? { code: input.code } : {}) }, { authorize });
+    if (!r.ok) return r.error === 'MFA_REQUIRED' ? PUBLIC_RESULTS.MFA_REQUIRED : r.error === 'MFA_INVALID' ? PUBLIC_RESULTS.MFA_INVALID : r.error === 'RATE_LIMITED' ? PUBLIC_RESULTS.RATE_LIMITED : r.error === 'UNAVAILABLE' ? PUBLIC_RESULTS.UNAVAILABLE : PUBLIC_RESULTS.LOGIN_FAILED;
     // 9. the token, once, for the server layer
     return Object.freeze({
       ok: true,

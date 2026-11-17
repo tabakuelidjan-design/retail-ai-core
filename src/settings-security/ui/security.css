@@ -13,3 +13,11 @@
 #sc-detail .gn-field { grid-template-columns: minmax(0, 1fr); gap: 4px; padding: 10px 0; }
 #sc-detail .gn-label { padding-top: 0; }
 #sc-detail .gn-head h2 { font-size: 1.4rem; }
+.sc-qr { display: block; margin: 8px 0; background: #fff; border: 1px solid var(--cx-line); border-radius: 8px; padding: 6px; max-width: 100%; height: auto; }
+.sc-secret { overflow-wrap: anywhere; font-family: ui-monospace, monospace; }
+.sc-codes { list-style: none; margin: 8px 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; font-family: ui-monospace, monospace; }
+.sc-codes li { background: #fff; border: 1px solid var(--cx-line); border-radius: 6px; padding: 6px 8px; text-align: center; }
+.sc-reset-box { max-width: 460px; margin: 0 auto; padding: 24px 16px; }
+.sc-reset-box .cx-brand { display: block; margin-bottom: 16px; }
+.sc-reset-field { grid-template-columns: minmax(0, 1fr) !important; gap: 4px !important; }
+.sc-reset-field .gn-label { padding-top: 0; }

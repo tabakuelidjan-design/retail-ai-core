@@ -20,7 +20,7 @@ import { randomUUID } from 'node:crypto';
 import { normalizeEmail } from './rate-limit.js';
 
 export const PUBLIC_ERRORS = Object.freeze(['INVALID_CREDENTIALS', 'RATE_LIMITED', 'UNAVAILABLE']);
-const ALLOWED_INPUT = new Set(['email', 'password', 'ip', 'correlationId']);
+const ALLOWED_INPUT = new Set(['email', 'password', 'ip', 'correlationId', 'code']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ref = (hmac) => hmac.slice(0, 16);
 
@@ -33,7 +33,7 @@ const ref = (hmac) => hmac.slice(0, 16);
  *   newId?: () => string,
  * }} deps
  */
-export function createIdentityVerifier({ gotrue, limiter, events, service, newId = randomUUID } = {}) {
+export function createIdentityVerifier({ gotrue, limiter, events, service, newId = randomUUID, recoveryCheck = null } = {}) {
   if (!gotrue || !limiter || !events || !service || !UUID.test(String(service.merchantId ?? '')) || typeof service.module !== 'string') {
     throw new TypeError('createIdentityVerifier needs gotrue, limiter, events and the service context { merchantId, module }');
   }
@@ -72,11 +72,11 @@ export function createIdentityVerifier({ gotrue, limiter, events, service, newId
     const settle = async (outcome) => { settled = true; return limiter.settle(reservation, outcome); };
     try {
       const normalized = normalizeEmail(email);
-      const result = normalized ? await gotrue.verifyPassword(normalized, typeof password === 'string' ? password : '') : { ok: false, kind: 'INVALID' };
+      const result = normalized ? await gotrue.verifyPassword(normalized, typeof password === 'string' ? password : '', { code: typeof input.code === 'string' ? input.code : null, recoveryCheck }) : { ok: false, kind: 'INVALID' };
 
       if (result.ok) {
         try {
-          await journal('AUTH_SUCCEEDED', 'SUCCESS', correlationId, { userId: result.userId, detail: { supabaseLocalLogout: result.localLogout } });
+          await journal('AUTH_SUCCEEDED', 'SUCCESS', correlationId, { userId: result.userId, detail: { supabaseLocalLogout: result.localLogout, ...(result.mfa ? { mfa: result.mfa } : {}) } });
         } catch { await quietly(settle('RELEASE')); return { ok: false, error: 'UNAVAILABLE' }; } // no unjournalled success
         let authz = { ok: true, value: undefined };
         if (authorize) { try { authz = await authorize(result.userId, correlationId); } catch { authz = { ok: false, unavailable: true }; } }
@@ -90,6 +90,16 @@ export function createIdentityVerifier({ gotrue, limiter, events, service, newId
         await quietly(settle('SUCCESS')); // releases the reservation and resets this address's failures (never the IP's)
         const identity = Object.freeze({ userId: result.userId });
         return authorize ? { ok: true, identity, authorization: authz.value } : { ok: true, identity };
+      }
+      if (result.kind === 'MFA_REQUIRED') { // the password was right: nothing is counted, the person is asked for the second factor (no session exists yet)
+        await quietly(settle('RELEASE'));
+        return { ok: false, error: 'MFA_REQUIRED' };
+      }
+      if (result.kind === 'MFA_INVALID') { // right password, wrong second factor: counts like a wrong password
+        let blockedNow = false;
+        try { blockedNow = (await settle('FAILURE')).blocked; } catch { /* still a refusal */ }
+        await quietly(journal('MFA_CHALLENGE_FAILED', 'FAILURE', correlationId, { userId: result.userId, detail: { ...refs, blockedNow } }));
+        return { ok: false, error: 'MFA_INVALID' };
       }
       if (result.kind === 'UNAVAILABLE') {
         await quietly(settle('RELEASE')); // not the person's fault: nothing is counted

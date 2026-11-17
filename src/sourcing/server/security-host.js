@@ -13,12 +13,12 @@ const GN = new URL('../../settings-general/ui/', import.meta.url);
 const CX = new URL('../../connections/ui/', import.meta.url);
 const DS = new URL('../../creative-autonomy/creator/ui/ds/', import.meta.url);
 const CSS = 'text/css; charset=utf-8'; const JS = 'text/javascript; charset=utf-8';
-const ASSETS = Object.freeze({ 'security.js': [UI, 'security.js', JS], 'security.css': [UI, 'security.css', CSS], 'shell.js': [GN, 'shell.js', JS], 'general.css': [GN, 'general.css', CSS], 'connections.css': [CX, 'connections.css', CSS], 'nordla-ds.css': [DS, 'nordla-ds.css', CSS], 'nordla-tokens.css': [DS, 'nordla-tokens.css', CSS] });
+const ASSETS = Object.freeze({ 'security.js': [UI, 'security.js', JS], 'security.css': [UI, 'security.css', CSS], 'reset.js': [UI, 'reset.js', JS], 'shell.js': [GN, 'shell.js', JS], 'general.css': [GN, 'general.css', CSS], 'connections.css': [CX, 'connections.css', CSS], 'nordla-ds.css': [DS, 'nordla-ds.css', CSS], 'nordla-tokens.css': [DS, 'nordla-tokens.css', CSS] });
 const HEADERS = { 'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'", 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY' };
 const send = (res, status, type, body, extra = {}) => { res.writeHead(status, { ...HEADERS, 'Content-Type': type, ...extra }); res.end(body); };
 const json = (res, status, body) => send(res, status, 'application/json; charset=utf-8', JSON.stringify(body), { 'Cache-Control': 'no-store' });
 export const SLUGS = Object.freeze({ connexion: 'sign_in', sessions: 'sessions', activite: 'activity', equipe: 'team' });
-const STATUS = Object.freeze({ FORBIDDEN_ROLE: 403, FEATURE_UNAVAILABLE: 409, VALIDATION: 422, BAD_CURRENT_PASSWORD: 403, RATE_LIMITED: 429, UNAVAILABLE: 503, PROVIDER_REFUSED: 422, CURRENT_SESSION_UNKNOWN: 409, SESSION_REQUIRED: 401 });
+const STATUS = Object.freeze({ LINK_INVALID: 410, MFA_REQUIRED: 422, MFA_INVALID: 403, FORBIDDEN_ROLE: 403, FEATURE_UNAVAILABLE: 409, VALIDATION: 422, BAD_CURRENT_PASSWORD: 403, RATE_LIMITED: 429, UNAVAILABLE: 503, PROVIDER_REFUSED: 422, CURRENT_SESSION_UNKNOWN: 409, SESSION_REQUIRED: 401 });
 const readJson = async (req) => { const chunks = []; let n = 0; for await (const c of req) { n += c.length; if (n > 20_000) throw Object.assign(new Error('too large'), { code: 'BODY_TOO_LARGE' }); chunks.push(c); } try { return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch { throw Object.assign(new Error('invalid json'), { code: 'BODY_INVALID' }); } };
 const cookieOf = (req, name) => { for (const part of String(req.headers.cookie ?? '').split(';')) { const i = part.indexOf('='); if (i > 0 && part.slice(0, i).trim() === name) return part.slice(i + 1).trim(); } return null; };
 
@@ -28,11 +28,26 @@ export async function securityPage() {
 }
 
 /** @param {{ gate: object, merchantId: string, service: object, sessionCookie?: string, shellOf?: Function }} o */
-export async function createSecurityHost({ gate, merchantId, service, sessionCookie = '__Host-nordla_sourcing_sid', shellOf = null }) {
+export async function createSecurityHost({ gate, merchantId, service, sessionCookie = '__Host-nordla_sourcing_sid', shellOf = null, features = {} }) {
+  const clientIpOf = (g) => String(g?.ctx?.clientIp ?? 'unknown');
   return Object.freeze({
     async handle(req, res, url) {
       const p = url.pathname;
       try {
+        // PUBLIC recovery routes (no session): only when the recovery feature is on, same-origin POST only, one fixed answer for the request.
+        if (features.recovery && (p === '/api/auth/forgot' || p === '/api/auth/reset')) {
+          const g = gate.guardPublicPost?.(req); if (!g || !g.ok) { json(res, g?.response?.status ?? 403, g?.response ?? { error: 'FORBIDDEN' }); return true; }
+          try {
+            const b = await readJson(req);
+            if (p === '/api/auth/forgot') { json(res, 200, await service.forgotPassword({ email: b.email, ip: clientIpOf(g) })); return true; }
+            json(res, 200, await service.resetPassword({ token: b.token, password: b.password, code: b.code })); return true;
+          } catch (e) {
+            if (e?.code === 'BODY_TOO_LARGE' || e?.code === 'BODY_INVALID') { json(res, e.code === 'BODY_TOO_LARGE' ? 413 : 400, { error: { code: e.code } }); return true; }
+            if (e instanceof SecurityError) { json(res, STATUS[e.code] ?? 400, { error: { code: e.code, message: e.message } }); return true; }
+            throw e;
+          }
+        }
+        if (features.recovery && req.method === 'GET' && /^\/reset-password\/?$/.test(p)) { send(res, 200, 'text/html; charset=utf-8', (await readFile(new URL('reset.html', UI), 'utf8')).replace(/(href|src)="\/(nordla-ds\.css|nordla-tokens\.css|connections\.css|general\.css|security\.css|reset\.js)"/g, '$1="/security-assets/$2"'), { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' }); return true; }
         if (p.startsWith('/api/security')) {
           const a = await gate.authorize(req);
           if (!a.ok) { json(res, a.status, a.body); return true; }
@@ -50,6 +65,10 @@ export async function createSecurityHost({ gate, merchantId, service, sessionCoo
             if (method === 'POST' && p === '/api/security/sessions/revoke-current') { json(res, 200, await service.revokeCurrent(me, token)); return true; }
             if (method === 'POST' && p === '/api/security/sessions/revoke-others') { json(res, 200, await service.revokeOthers(me, token)); return true; }
             if (method === 'POST' && p === '/api/security/password') { const b = await readJson(req); json(res, 200, await service.changePassword(me, token, { current: b.current, next: b.next })); return true; }
+            if (method === 'POST' && p === '/api/security/mfa/enroll') { const b = await readJson(req); json(res, 200, await service.mfaEnroll(me, { password: b.password })); return true; }
+            if (method === 'POST' && p === '/api/security/mfa/confirm') { const b = await readJson(req); json(res, 200, await service.mfaConfirm(me, token, { password: b.password, factorId: b.factorId, code: b.code })); return true; }
+            if (method === 'POST' && p === '/api/security/mfa/disable') { const b = await readJson(req); json(res, 200, await service.mfaDisable(me, token, { password: b.password, code: b.code })); return true; }
+            if (method === 'POST' && p === '/api/security/mfa/recovery-codes') { const b = await readJson(req); json(res, 200, await service.mfaRenewCodes(me, { password: b.password, code: b.code })); return true; }
             if (method === 'PUT' && p === '/api/security/team') { await readJson(req); service.saveTeamRules(me); json(res, 200, { ok: true }); return true; }
           } catch (e) {
             if (e?.code === 'BODY_TOO_LARGE' || e?.code === 'BODY_INVALID') { json(res, e.code === 'BODY_TOO_LARGE' ? 413 : 400, { error: { code: e.code } }); return true; }

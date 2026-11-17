@@ -10,7 +10,7 @@ import { HttpSecurityError } from './redact.js';
 export const LOGIN_BODY = Object.freeze({
   method: 'POST',
   maxBytes: 16 * 1024,
-  allowed: Object.freeze(['email', 'password']),
+  allowed: Object.freeze(['email', 'password', 'code']),
   required: Object.freeze(['email', 'password']),
 });
 /** Fields that must never come from a login request (the service's configuration and the session decide them). */
@@ -71,5 +71,6 @@ export async function readJsonBody(req, rule) {
 export async function readLoginBody(req, { maxBytes = LOGIN_BODY.maxBytes } = {}) {
   const body = await readJsonBody(req, { ...LOGIN_BODY, maxBytes, forbidden: FORBIDDEN_LOGIN_FIELDS });
   if (typeof body.email !== 'string' || typeof body.password !== 'string') fail('BAD_REQUEST', 'BODY_FIELD_TYPE');
-  return Object.freeze({ email: body.email, password: body.password });
+  if ('code' in body && typeof body.code !== 'string') fail('BAD_REQUEST', 'BODY_FIELD_TYPE');
+  return Object.freeze({ email: body.email, password: body.password, ...(typeof body.code === 'string' && body.code ? { code: body.code } : {}) });
 }

@@ -42,13 +42,57 @@
     });
     return h('form', { class: 'gn-form', novalidate: true, on: { submit: (e) => e.preventDefault() } }, h('p', { class: 'gn-help', text: `12 caractères au moins. Toutes vos autres sessions (tous modules et commerces) seront déconnectées ; celle-ci reste ouverte.` }), cur, h('div', { class: 'gn-mt' }), nxt, h('div', { class: 'gn-mt' }), btn, out);
   }
+  // second factor: enrol (password -> QR -> first code -> recovery codes shown once), renew codes, turn off. Each step asks the password again.
+  const passInput = (label) => h('input', { class: 'gn-input', type: 'password', autocomplete: 'current-password', 'aria-label': label, maxlength: 1024 });
+  const codeInput = (label) => h('input', { class: 'gn-input', type: 'text', inputmode: 'numeric', autocomplete: 'one-time-code', 'aria-label': label, maxlength: 20 });
+  function showCodes(box, codes, intro) {
+    box.replaceChildren(msg({ tone: 'ok', text: intro }), h('p', { class: 'gn-help', text: 'Conservez ces codes à part (gestionnaire de mots de passe ou papier). Chacun ne sert qu’une fois et ils ne seront plus affichés.' }),
+      h('ul', { class: 'sc-codes' }, codes.map((c) => h('li', { text: c }))), h('button', { class: 'cx-btn ghost', type: 'button', text: 'J’ai enregistré mes codes', on: { click: () => { flash = null; open('sign_in', true); } } }));
+  }
+  function mfaEnroll(box) {
+    const pw = passInput('Mot de passe actuel'); const out = h('div'); const go = h('button', { class: 'cx-btn', type: 'button', text: 'Continuer' });
+    go.addEventListener('click', async () => {
+      out.replaceChildren(); go.disabled = true; const r = await api('/api/security/mfa/enroll', { password: pw.value }); go.disabled = false; if (guard(r)) return;
+      if (!r.ok) { out.replaceChildren(msg({ tone: 'err', text: errText(r) })); return; }
+      const e = r.json; const code = codeInput('Code à 6 chiffres'); const out2 = h('div'); const ok = h('button', { class: 'cx-btn gn-btn-save', type: 'button', text: 'Activer la protection' });
+      ok.addEventListener('click', async () => {
+        out2.replaceChildren(); ok.disabled = true; const c = await api('/api/security/mfa/confirm', { password: pw.value, factorId: e.factorId, code: code.value.trim() }); ok.disabled = false; if (guard(c)) return;
+        if (!c.ok) { out2.replaceChildren(msg({ tone: 'err', text: errText(c) })); return; }
+        showCodes(box, c.json.recoveryCodes, `Double authentification activée. ${c.json.otherSessionsClosed} autre(s) session(s) déconnectée(s).`);
+      });
+      box.replaceChildren(h('p', { class: 'gn-help', text: '1. Scannez ce code avec votre application d’authentification (ou saisissez la clé). 2. Entrez le code à 6 chiffres qu’elle affiche.' }),
+        e.qr ? h('img', { class: 'sc-qr', src: e.qr, alt: 'Code QR à scanner avec l’application d’authentification', width: 180, height: 180 }) : null, h('p', { class: 'gn-help sc-secret', text: `Clé : ${e.secret}` }), code, h('div', { class: 'gn-mt' }), ok, out2);
+    });
+    box.replaceChildren(h('p', { class: 'gn-help', text: 'Pour commencer, confirmez votre mot de passe. Après l’activation, toutes vos autres sessions seront déconnectées.' }), pw, h('div', { class: 'gn-mt' }), go, out);
+  }
+  function mfaProof(box, { title, action, text, destructive }) {
+    const pw = passInput('Mot de passe actuel'); const code = codeInput('Code de l’application ou code de récupération'); const out = h('div'); const go = h('button', { class: destructive ? 'cx-btn ghost' : 'cx-btn', type: 'button', text });
+    go.addEventListener('click', async () => {
+      out.replaceChildren(); go.disabled = true; const r = await api(action, { password: pw.value, code: code.value.trim() }); go.disabled = false; if (guard(r)) return;
+      if (!r.ok) { out.replaceChildren(msg({ tone: 'err', text: errText(r) })); return; }
+      if (r.json.recoveryCodes) showCodes(box, r.json.recoveryCodes, 'Nouveaux codes de récupération : les anciens ne fonctionnent plus.'); else { flash = { tone: 'ok', text: 'Double authentification désactivée.' }; open('sign_in', true); }
+    });
+    box.replaceChildren(h('strong', { text: title }), h('p', { class: 'gn-help', text: 'Confirmez avec votre mot de passe et un code de votre application (ou un code de récupération).' }), pw, h('div', { class: 'gn-mt' }), code, h('div', { class: 'gn-mt' }), go, out);
+  }
+  function mfaRow(a) {
+    const m = a.mfa; const box = h('div');
+    if (m.state === 'ENABLED') {
+      box.append(state('Activée', 'ok'), h('p', { class: 'gn-help', text: `${m.label}.${m.recoveryCodesLeft != null ? ` Codes de récupération restants : ${m.recoveryCodesLeft}.` : ''}` }));
+      if (m.disable?.available) { const slot = h('div'); box.append(h('div', { class: 'gn-subbar' }, h('button', { class: 'cx-btn ghost', type: 'button', text: 'Renouveler les codes de récupération…', on: { click: () => mfaProof(slot, { title: 'Renouveler les codes de récupération', action: '/api/security/mfa/recovery-codes', text: 'Renouveler' }) } }), h('button', { class: 'cx-btn ghost', type: 'button', text: 'Désactiver…', on: { click: () => mfaProof(slot, { title: 'Désactiver la double authentification', action: '/api/security/mfa/disable', text: 'Désactiver', destructive: true }) } })), slot); }
+    } else {
+      box.append(state(m.enrollment.available ? 'Non activée' : 'Non demandée', 'todo'), h('p', { class: 'gn-help', text: `${m.label}.` }));
+      if (m.enrollment.available) { const slot = h('div'); box.append(h('button', { class: 'cx-btn', type: 'button', text: 'Activer la double authentification…', on: { click: () => mfaEnroll(slot) } }), slot); }
+      else box.append(unavailable('Activer la double authentification', m.enrollment.reason));
+    }
+    return row('Double authentification', box);
+  }
   function signIn(r) {
     const a = ov.account; const pw = h('div');
     pw.replaceChildren(a.password.available ? h('button', { class: 'cx-btn', type: 'button', text: 'Changer le mot de passe…', on: { click: () => pw.replaceChildren(passwordForm()) } }) : unavailable('Changer le mot de passe', a.password.reason));
     return [head(r, 'Comment votre compte se connecte à Nordla.'), h('hr', { class: 'gn-rule' }),
       row('Méthode de connexion', h('strong', { text: a.signInMethod.label }), a.email ? h('p', { class: 'gn-help', text: `Compte : ${a.email}` }) : null, a.lastSignInAt ? h('p', { class: 'gn-help', text: `Dernière connexion chez le fournisseur : ${fmt(a.lastSignInAt)}` }) : null),
-      row('Double authentification', state('Non demandée', 'todo'), h('p', { class: 'gn-help', text: `${a.mfa.label}.${a.mfa.enrolledFactors != null ? ` Facteurs enregistrés chez le fournisseur : ${a.mfa.enrolledFactors}.` : ''}` }), unavailable('Activer la double authentification', a.mfa.enrollment.reason)),
-      row('Mot de passe', pw), row('Récupérer mon compte', unavailable('Récupération par e-mail', a.recovery.reason)), row('Clés d’accès (passkeys)', unavailable('Clés d’accès', a.passkeys.reason))];
+      mfaRow(a),
+      row('Mot de passe', pw), row('Récupérer mon compte', a.recovery.available ? h('div', {}, state('Disponible', 'ok'), h('p', { class: 'gn-help', text: 'Depuis la page de connexion, « Mot de passe oublié ? » envoie un lien de réinitialisation à votre adresse e-mail. Le lien est valable peu de temps, ne sert qu’une fois et déconnecte toutes vos sessions.' }), h('a', { class: 'cx-link', href: '/reset-password', text: 'Ouvrir la page de réinitialisation' })) : unavailable('Récupération par e-mail', a.recovery.reason)), row('Clés d’accès (passkeys)', unavailable('Clés d’accès', a.passkeys.reason))];
   }
 
   // ---------------------------------------------------------------- rubric 2

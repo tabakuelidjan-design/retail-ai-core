@@ -20,7 +20,13 @@ export function createAdminAuth({ url, serviceRoleKey, fetchImpl = globalThis.fe
       const r = await call(`/admin/users/${id}`, { method: 'GET' });
       if (r.status === 404) return null;
       if (r.status !== 200 || !r.body?.id) throw new Error('auth provider unavailable');
-      return { id: r.body.id, email: r.body.email ?? null, identities: (r.body.identities ?? []).map((i) => ({ provider: i.provider })), factors: (r.body.factors ?? []).map((f) => ({ status: f.status })), last_sign_in_at: r.body.last_sign_in_at ?? null };
+      return { id: r.body.id, email: r.body.email ?? null, identities: (r.body.identities ?? []).map((i) => ({ provider: i.provider })), factors: (r.body.factors ?? []).map((f) => ({ id: f.id, status: f.status, factor_type: f.factor_type })), last_sign_in_at: r.body.last_sign_in_at ?? null };
+    },
+    /** Removes ONE factor of the account (admin: no second-factor proof is asked by the provider, the CALLER must have proven it). */
+    async deleteFactor(id, factorId) {
+      if (!UUID.test(id) || !UUID.test(String(factorId))) return false;
+      const r = await call(`/admin/users/${id}/factors/${factorId}`, { method: 'DELETE' });
+      return r.status === 200 || r.status === 204 || r.status === 404;
     },
     /** @returns {Promise<boolean>} true only when the provider accepted the new password */
     async setPassword(id, password) {

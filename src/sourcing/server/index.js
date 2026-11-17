@@ -41,9 +41,20 @@ async function ensureToken(env, dir) {
 
 /** The hosted sign-in: Core identity ('sourcing' module of THIS merchant) + Core HTTP security behind Railway. `services` lets a test inject both. */
 export function buildHostedGate(env, hosted, services = null) {
-  const identity = services?.identity ?? createIdentityService({ merchantId: hosted.merchantId, moduleCode: 'sourcing', supabase: createSupabaseClient(loadSupabaseConfigFromEnv(env)), ...loadIdentityServiceEnv(env) });
+  let identity = services?.identity;
+  if (!identity) {
+    const supabase = createSupabaseClient(loadSupabaseConfigFromEnv(env));
+    // A one-time recovery code replaces the authenticator code when the phone is lost (Security V2). Enforcement of the second factor itself is ALWAYS on: an account with a verified authenticator cannot open a session without it.
+    const recoveryCheck = async (userId, code) => {
+      const { createRecoveryCodes } = await import('../../settings-security/recovery-codes.js');
+      const ok = await createRecoveryCodes({ supabase }).consume(userId, code);
+      if (ok) { try { const { createEventLog } = await import('../../identity/events.js'); await createEventLog({ supabase }).record({ merchantId: hosted.merchantId, userId, module: 'sourcing', type: 'MFA_RECOVERY_CODE_USED', outcome: 'SUCCESS' }); } catch { /* the code is spent either way */ } }
+      return ok;
+    };
+    identity = createIdentityService({ merchantId: hosted.merchantId, moduleCode: 'sourcing', supabase, ...loadIdentityServiceEnv(env), recoveryCheck });
+  }
   const security = services?.security ?? createHttpSecurity({ environment: 'hosted', proxy: 'railway', allowedHosts: hosted.allowedHosts, allowedOrigins: [hosted.origin], moduleCode: 'sourcing', csrfKey: env.NORDLA_CSRF_KEY, rateLimitKey: env.NORDLA_IDENTITY_RATE_LIMIT_KEY });
-  return createSessionGate({ identity, security });
+  return createSessionGate({ identity, security, features: { recovery: String(env.NORDLA_SECURITY_MODULE ?? '') === '1' && String(env.NORDLA_RECOVERY_MODULE ?? '') === '1' } });
 }
 
 /** The Creator screen (staging module): built only when asked for AND hosted behind the Core identity. Any problem is logged and the server runs without it. */
@@ -133,8 +144,15 @@ export async function buildSecurity({ env, gate, hosted, log = console.log, supa
     const supabase = injected ?? (await import('../../supabase/client.js')).createSupabaseClient(cfg);
     const sessionCfg = loadIdentityConfig(env); const rateCfg = loadRateLimitConfig(env);
     let verifier = null; try { verifier = createGoTrueVerifier({ config: loadGoTrueConfig(env) }); } catch { verifier = null; }
-    const service = services?.security ?? createSecurityService({ supabase, adminAuth: createAdminAuth({ url: cfg.url, serviceRoleKey: cfg.serviceRoleKey }), verifier, events: createEventLog({ supabase }), sessions: createSessionStore({ supabase, config: sessionCfg }), rules: { ...sessionCfg, ...rateCfg }, idleMs: sessionCfg.idleMs });
-    const host = await createSecurityHost({ gate, merchantId: hosted.merchantId, service, shellOf });
+    const adminAuth = createAdminAuth({ url: cfg.url, serviceRoleKey: cfg.serviceRoleKey });
+    const authCfg = loadGoTrueConfig(env);
+    const { createMfaProvider } = await import('../../settings-security/mfa.js');
+    const { createRecoveryProvider } = await import('../../settings-security/recovery.js');
+    const { createRecoveryCodes } = await import('../../settings-security/recovery-codes.js');
+    const features = { mfa: String(env.NORDLA_MFA_MODULE ?? '') === '1', recovery: String(env.NORDLA_RECOVERY_MODULE ?? '') === '1' };
+    const service = services?.security ?? createSecurityService({ supabase, adminAuth, verifier, events: createEventLog({ supabase }), sessions: createSessionStore({ supabase, config: sessionCfg }), rules: { ...sessionCfg, ...rateCfg }, idleMs: sessionCfg.idleMs,
+      mfa: createMfaProvider({ config: authCfg, adminAuth }), recoveryCodes: createRecoveryCodes({ supabase }), recovery: createRecoveryProvider({ config: authCfg }), context: { merchantId: hosted.merchantId, module: 'sourcing' }, resetUrl: `${hosted.origin}/reset-password`, features });
+    const host = await createSecurityHost({ gate, merchantId: hosted.merchantId, service, shellOf, features: { recovery: String(env.NORDLA_RECOVERY_MODULE ?? '') === '1' } });
     log('Security: ON (Paramètres > Sécurité)');
     return host;
   } catch (e) { log(`Security: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
