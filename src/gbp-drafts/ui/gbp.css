@@ -27,3 +27,10 @@
 .gbp-msg.err { color: #8a2d1f; }
 .gbp-meta { font-size: .8rem; color: #55606f; margin-top: 8px; }
 .gbp-link { color: #0f2a52; }
+/* No horizontal overflow, even on a phone: every block can shrink, long words and links wrap, buttons wrap inside their card. */
+.gbp-wrap, .gbp-card, .gbp-grid > div { min-width: 0; }
+.gbp-wrap { overflow-wrap: anywhere; }
+.gbp-wrap img { max-width: 100%; }
+.gbp-btn { max-width: 100%; white-space: normal; text-align: center; box-sizing: border-box; text-decoration: none; display: inline-block; }
+.gbp-hold { border: 1px solid #c0392b; background: #fbf1ef; color: #8a2d1f; border-radius: 8px; padding: 10px 12px; font-size: .86rem; line-height: 1.45; margin: 8px 0; }
+@media (max-width: 720px) { .gbp-card { padding: 14px; } .gbp-actions .gbp-btn { flex: 1 1 100%; } }

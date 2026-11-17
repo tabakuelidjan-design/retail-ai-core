@@ -31,7 +31,7 @@
     const act = async (kind, body) => { msg.className = 'gbp-msg'; msg.textContent = '…'; const r = await api(`/api/gbp/drafts/${d.id}/${kind}`, body); if (r.ok) { data = r.json; render(); } else { msg.className = 'gbp-msg err'; msg.textContent = errText(r); } };
     const copy = h('button', { class: 'gbp-btn ghost', type: 'button', text: 'Copier le texte' }); copy.addEventListener('click', () => copyText(d.text, copy));
     const actions = [copy, h('a', { class: 'gbp-btn ghost', href: d.imageUrl, download: `${d.id}.jpg`, text: 'Télécharger l’image' })];
-    if (d.state === 'REVIEW') actions.push(h('button', { class: 'gbp-btn', type: 'button', text: 'Approuver cette version', on: { click: () => act('approve', { expected_version: d.version }) } }));
+    if (d.state === 'REVIEW' && !d.hold) actions.push(h('button', { class: 'gbp-btn', type: 'button', text: 'Approuver cette version', on: { click: () => act('approve', { expected_version: d.version }) } }));
     if (d.state === 'APPROVED') {
       actions.push(h('button', { class: 'gbp-btn', type: 'button', text: 'J’ai publié sur ma fiche', on: { click: () => { const url = window.prompt('Lien de la publication Google (facultatif, https://…) :', ''); if (url === null) return; act('published', url.trim() ? { url: url.trim() } : {}); } } }));
       actions.push(h('button', { class: 'gbp-btn warn', type: 'button', text: 'Retirer l’approbation', on: { click: () => act('revoke', {}) } }));
@@ -42,7 +42,7 @@
       h('div', { class: 'gbp-head' }, h('h2', { text: `${d.id} · ${d.title}` }), h('span', { class: 'gbp-state', 'data-state': d.state, text: d.stateLabel })),
       h('div', { class: 'gbp-grid' },
         h('div', {}, h('img', { class: 'gbp-img', src: d.imageUrl, alt: `Image de ${d.id}` }), h('p', { class: 'gbp-note', text: d.imageNote })),
-        h('div', {}, h('p', { class: 'gbp-text', text: d.text }), h('p', { class: 'gbp-cta' }, h('strong', { text: `Bouton : ${d.cta.label}. ` }), d.cta.note), h('ul', { class: 'gbp-checks' }, d.checks.map((c) => h('li', { text: c }))))),
+        h('div', {}, h('p', { class: 'gbp-text', text: d.text }), h('p', { class: 'gbp-cta' }, h('strong', { text: `Bouton : ${d.cta.label}. ` }), d.cta.note, d.cta.link ? h('span', {}, ' ', h('a', { class: 'gbp-link', href: d.cta.link.url, target: '_blank', rel: 'noopener noreferrer', title: d.cta.link.url, text: d.cta.link.label })) : null), d.hold ? h('p', { class: 'gbp-hold', role: 'note', text: `En attente : ${d.hold}` }) : null, h('ul', { class: 'gbp-checks' }, d.checks.map((c) => h('li', { text: c }))))),
       h('div', { class: 'gbp-actions' }, actions), msg,
       d.approvedAt ? h('p', { class: 'gbp-meta', text: `Approuvé le ${when(d.approvedAt)}.` }) : null,
       d.publishedAt ? h('p', { class: 'gbp-meta' }, `Publié (attesté par vous) le ${when(d.publishedAt)}.`, d.publishedUrl ? h('span', {}, ' ', h('a', { class: 'gbp-link', href: d.publishedUrl, target: '_blank', rel: 'noopener noreferrer', text: 'Voir la publication' })) : null) : null);
