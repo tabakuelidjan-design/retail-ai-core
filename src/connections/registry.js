@@ -50,7 +50,7 @@ export const PROVIDERS = Object.freeze([
     description: 'Boutique reliée à Nordla par la synchronisation existante (catalogue et commandes). Rien n’est modifié depuis cette page.',
   }),
   defineProvider({
-    id: 'instagram', label: 'Instagram', category: 'reseaux', status: 'AVAILABLE', dataLabel: 'Profil, publications et statistiques', source: 'oauth', providerKey: 'instagram', access: 'READ_ONLY', capabilities: ['profile_read', 'media_read', 'insights_read'],
+    id: 'instagram', label: 'Instagram', category: 'reseaux', status: 'AVAILABLE', canRead: true, dataLabel: 'Profil, publications et statistiques', source: 'oauth', providerKey: 'instagram', access: 'READ_ONLY', capabilities: ['profile_read', 'media_read', 'insights_read'],
     description: 'Compte professionnel Instagram de la boutique, en lecture seule : profil, publications et statistiques. Nordla ne publie rien.', appName: 'Meta',
   }),
   defineProvider({

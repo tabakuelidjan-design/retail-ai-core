@@ -80,7 +80,10 @@ export async function buildConnections({ env, gate, hosted, log = console.log, s
       merchantLabel: async (merchantId) => { const rows = await supabase.select('merchants', { id: `eq.${merchantId}`, select: 'name', limit: '1' }); return rows?.[0]?.name ?? null; },
       environmentLabel: /^staging$/i.test(String(env.RAILWAY_ENVIRONMENT_NAME ?? env.NORDLA_ENV_LABEL ?? '').trim()) ? 'Staging' : (String(env.NORDLA_ENV_LABEL ?? '').trim() || null),
     });
-    const host = await createConnectionsHost({ gate, merchantId: hosted.merchantId, runtime, service, registry });
+    const { createInstagramReaderFor } = await import('../../provider-connections/instagram-reader.js');
+    const { createInstagramReadService } = await import('../../connections/instagram-read.js');
+    const reads = createInstagramReadService({ connectorRepository: runtime.connectorRepository, readerFor: ({ merchantId, connectorId, grantedScopes }) => createInstagramReaderFor({ tokenManager: runtime.tokenManager, merchantId, connectorId, graphVersion: runtime.appConfigFor('instagram').graphVersion, grantedScopes, fetchImpl }) });
+    const host = await createConnectionsHost({ gate, merchantId: hosted.merchantId, runtime, service, registry, reads });
     log('Connections: ON (read-only; Instagram and TikTok ask read scopes only)');
     return host;
   } catch (e) { log(`Connections: NOT built (${e?.code ?? e?.message ?? e})`); return null; }

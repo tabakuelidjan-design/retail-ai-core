@@ -5,6 +5,7 @@
 //   - Several connections of the same provider coexist (two Shopify shops, several bank accounts, two Instagram accounts); none is ever picked implicitly.
 //   - Reading is for any session of the merchant; connecting, verifying, reconnecting, disconnecting are OWNER / ADMIN only (decided here AND by the host).
 import { findSecretLeaks } from '../provider-connections/validation.js';
+import { sanitizeSnapshot } from './instagram-read.js';
 import { ACCESS_FR, CAPABILITY, SETTINGS_SECTIONS, STATUS_FR } from './registry.js';
 
 export const WRITER_ROLES = new Set(['OWNER', 'ADMIN']);
@@ -27,13 +28,13 @@ const accountOf = (c) => c.external_display_name || c.external_id || 'Compte san
 export function createConnectionsService({
   registry, center = null, connectorRepository = null, merchantLabel = async () => null, environmentLabel = null, moduleLinks = {}, appConfigPresent = () => false, appEnvNames = {}, redirectUriOf = () => null, shopifySync = async () => null, bankCatalog = [], bankProvider = null, now = () => new Date(),
 }) {
-  const actionsFor = (role, state) => {
+  const actionsFor = (role, state, canRead = false) => {
     if (!WRITER_ROLES.has(role)) return [];
     if (state === 'NOT_CONFIGURED') return ['reconnect'];
-    return ['verify', 'reconnect', 'disconnect'];
+    return [...(canRead && (state === 'VERIFIED' || state === 'CONNECTED') ? ['read'] : []), 'verify', 'reconnect', 'disconnect'];
   };
 
-  async function oauthConnections(provider, all, role) {
+  async function oauthConnections(provider, all, role, cfg = new Map()) {
     return all.filter((c) => c.provider === provider.providerKey).map((c) => {
       const readiness = c.live_readiness?.level ?? 'NOT_CONFIGURED';
       const key = c.connection_state === 'REAUTH_REQUIRED' ? 'REAUTH_REQUIRED' : c.connection_state === 'NOT_CONFIGURED' ? 'NOT_CONFIGURED' : c.connection_state === 'MISCONFIGURED' ? 'MISCONFIGURED' : c.connection_state === 'UNAVAILABLE' ? 'UNAVAILABLE'
@@ -44,7 +45,8 @@ export function createConnectionsService({
         state: key, stateLabel: STATE_FR[key], tone: TONE[key], verifiedAt: c.last_verified_at ?? null,
         scopes, readOnly: scopes.length > 0 && !scopes.some((s) => PUBLISH_SCOPE.test(s)),
         needs: [...(c.review_signals ?? [])].filter((s) => ['REAUTH_REQUIRED', 'NO_CREDENTIAL', 'SCOPES_MISSING'].includes(s)),
-        actions: actionsFor(role, key),
+        actions: actionsFor(role, key, Boolean(provider.canRead)),
+        ...(provider.canRead ? { canRead: true, lastRead: sanitizeSnapshot(cfg.get(c.connector_id)?.last_read), lastReadData: sanitizeSnapshot(cfg.get(c.connector_id)?.last_read_ok), lastReadOkAt: typeof cfg.get(c.connector_id)?.last_read_ok_at === 'string' ? cfg.get(c.connector_id).last_read_ok_at : null } : {}),
       };
     });
   }
@@ -91,11 +93,12 @@ export function createConnectionsService({
     async overview({ tenant, role }) {
       const merchantId = tenant.merchantId; const merchantName = await merchantLabel(merchantId).catch(() => null);
       const all = center ? await center.listConnections({ tenant }) : [];
+      const cfg = new Map(connectorRepository ? (await connectorRepository.listForMerchant(merchantId)).map((r) => [r.id, r.config ?? {}]) : []);
       const out = [];
       for (const cat of registry.categories()) {
         const providers = [];
         for (const p of cat.providers) {
-          const connections = p.source === 'oauth' && p.status === 'AVAILABLE' ? await oauthConnections(p, all, role) : p.source === 'shopify' ? await shopifyConnections(merchantId) : [];
+          const connections = p.source === 'oauth' && p.status === 'AVAILABLE' ? await oauthConnections(p, all, role, cfg) : p.source === 'shopify' ? await shopifyConnections(merchantId) : [];
           const setup = setupOf(p, role, { merchant: merchantName, connections });
           providers.push({
             id: p.id, label: p.label, category: p.category, source: p.source, dataLabel: p.dataLabel ?? null, status: p.status, statusLabel: STATUS_FR[p.status], description: p.description, access: p.access, accessLabel: ACCESS_FR[p.access],

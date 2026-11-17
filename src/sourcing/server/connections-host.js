@@ -26,6 +26,8 @@ const STATUS_OF = Object.freeze({
   [PC_ERROR.APP_MISCONFIGURED]: 409, [PC_ERROR.SESSION_NOT_FOUND]: 404, [PC_ERROR.SESSION_STATE_CONFLICT]: 409, [PC_ERROR.TARGET_REQUIRED]: 400, [PC_ERROR.TARGET_NOT_FOUND]: 404, [PC_ERROR.TARGET_INELIGIBLE]: 422,
   [PC_ERROR.CONNECTOR_NOT_FOUND]: 404, [PC_ERROR.PROVIDER_UNSUPPORTED]: 400, [PC_ERROR.REAUTH_REQUIRED]: 409, [PC_ERROR.VAULT_UNAVAILABLE]: 503, [PC_ERROR.OAUTH]: 502,
 });
+// Reading Instagram: what a whole-read failure looks like to the page (the failed attempt is already recorded).
+const READ_ERRORS = Object.freeze({ TOKEN_REJECTED: [409, 'REAUTH_REQUIRED'], RATE_LIMITED: [429, 'RATE_LIMITED'], SOURCE_UNREACHABLE: [502, 'SOURCE_UNREACHABLE'], NOT_CONNECTED: [409, 'NOT_CONNECTED'] });
 function problem(error) {
   const code = error?.code ?? 'UNKNOWN';
   const status = STATUS_OF[code]; if (!status) return null;
@@ -43,7 +45,7 @@ export async function connectionsPage() {
 }
 
 /** @param {{ gate: object, merchantId: string, runtime: object, service: object, registry: object }} o runtime = createProviderConnectionsRuntime(...) (real, or the test fakes) */
-export async function createConnectionsHost({ gate, merchantId, runtime, service, registry }) {
+export async function createConnectionsHost({ gate, merchantId, runtime, service, registry, reads = null }) {
   const center = runtime.connectionCenter; const tenantOf = () => ({ merchantId, source: 'session' });
   const providerFor = (key) => { const p = registry.byProviderKey(key); return p && p.source === 'oauth' && p.status === 'AVAILABLE' ? p : null; };
   const overview = (role) => service.overview({ tenant: tenantOf(), role });
@@ -90,9 +92,10 @@ export async function createConnectionsHost({ gate, merchantId, runtime, service
                 const bound = await center.selectTarget({ tenant: tenantOf(), sessionRef: body.session_ref, externalId: body.external_id, actorRef });
                 json(res, 200, { state: bound.verification?.state ?? null, ...(await overview(access.role)) }); return true;
               }
-              const one = /^\/api\/connections\/([0-9a-f-]{36})\/(verify|reconnect|disconnect)$/i.exec(p);
+              const one = /^\/api\/connections\/([0-9a-f-]{36})\/(verify|reconnect|disconnect|read)$/i.exec(p);
               if (one) {
                 const [, connectorId, action] = one;
+                if (action === 'read') { if (!reads) { json(res, 404, { error: { code: 'NOT_FOUND' } }); return true; } const snapshot = await reads.read({ tenant: tenantOf(), connectorId }); json(res, 200, { read: snapshot, ...(await overview(access.role)) }); return true; }
                 if (action === 'verify') { await center.verify({ tenant: tenantOf(), connectorId }); json(res, 200, await overview(access.role)); return true; }
                 if (action === 'disconnect') { await center.disconnect({ tenant: tenantOf(), connectorId }); json(res, 200, await overview(access.role)); return true; }
                 const started = await center.reconnect({ tenant: tenantOf(), connectorId, actorRef });
@@ -101,6 +104,7 @@ export async function createConnectionsHost({ gate, merchantId, runtime, service
             }
           } catch (e) {
             if (e?.code === 'BODY_TOO_LARGE' || e?.code === 'BODY_INVALID') { json(res, e.code === 'BODY_TOO_LARGE' ? 413 : 400, { error: { code: e.code } }); return true; }
+            const known = READ_ERRORS[e?.code]; if (known) { json(res, known[0], { error: { code: known[1] } }); return true; }
             const pr = problem(e); if (pr) { json(res, pr.status, pr.body); return true; } throw e;
           }
           json(res, 404, { error: { code: 'NOT_FOUND' } }); return true;

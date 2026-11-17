@@ -123,3 +123,23 @@ html, body { background: var(--cx-bg); }
 .cx-copy-out { display: block; margin-top: 6px; font-size: .84rem; color: #1d5a2c; }
 .cx-code { display: block; padding: 8px 10px; background: #f3f5f9; border: 1px solid var(--cx-line); border-radius: 6px; font-size: .8rem; user-select: all; word-break: break-all; }
 @media (max-width: 899px) { .cx-copy-row .cx-btn { width: 100%; } }
+.cx-read { margin-top: 12px; padding: 12px 14px; border: 1px solid var(--cx-line); border-radius: 10px; background: #fbfcfe; }
+.cx-read-title { font-size: 1rem; margin: 10px 0 6px; }
+.cx-read-title:first-child { margin-top: 0; }
+.cx-readdate[data-state="ok"] { color: #1d5a2c; font-weight: 600; }
+.cx-readdate[data-state="none"] { color: #6b4a10; }
+.cx-read-dl { display: grid; grid-template-columns: minmax(110px, 160px) minmax(0, 1fr); margin: 6px 0; border: 1px solid var(--cx-line); border-radius: 8px; overflow: hidden; background: #fff; }
+.cx-read-dl dt, .cx-read-dl dd { margin: 0; padding: 8px 10px; border-top: 1px solid var(--cx-line); font-size: .9rem; }
+.cx-read-dl dt { font-weight: 700; background: #f3f5f9; }
+.cx-read-dl dt:first-of-type, .cx-read-dl dt:first-of-type + dd { border-top: 0; }
+.cx-fig-table { width: 100%; border-collapse: collapse; margin: 6px 0; background: #fff; border: 1px solid var(--cx-line); border-radius: 8px; }
+.cx-fig-table th, .cx-fig-table td { text-align: left; padding: 8px 10px; border-top: 1px solid var(--cx-line); font-size: .9rem; vertical-align: top; }
+.cx-fig-table tr:first-child th, .cx-fig-table tr:first-child td { border-top: 0; }
+.cx-fig-table th { width: 42%; font-weight: 700; background: #f3f5f9; }
+.cx-fig-note { color: var(--cx-muted); font-size: .8rem; }
+.cx-fig[data-state="ZERO"] strong { color: var(--cx-navy); }
+.cx-fig[data-state="UNAVAILABLE"] strong { color: var(--cx-muted); font-style: italic; }
+.cx-fig[data-state="PERMISSION_MISSING"] strong { color: #8a2d1f; }
+.cx-perm { border: 1px solid #c0392b; background: #fbf1ef; color: #8a2d1f; border-radius: 8px; padding: 9px 11px; font-size: .88rem; margin: 6px 0; }
+@media (max-width: 899px) { .cx-read-dl { grid-template-columns: minmax(0, 1fr); } .cx-read-dl dt { border-top: 1px solid var(--cx-line); } .cx-read-dl dt:first-of-type { border-top: 0; } .cx-read-dl dd { border-top: 0; } .cx-fig-table th { width: 38%; } }
+.cx-fig-table th { overflow-wrap: normal; word-break: normal; min-width: 9.5em; }

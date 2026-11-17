@@ -26,6 +26,7 @@
     TENANT_MISMATCH: 'Cette connexion appartient à une autre boutique.', PC_TARGET_INELIGIBLE: 'Ce compte ne peut pas être utilisé : un compte professionnel est nécessaire.', PC_TARGET_NOT_FOUND: 'Ce compte ne fait pas partie de ceux que vous avez autorisés.',
     PC_SESSION_NOT_FOUND: 'Cette autorisation est introuvable ou expirée : recommencez la connexion.', PC_SESSION_STATE_CONFLICT: 'Cette autorisation a déjà été utilisée : recommencez la connexion.', PC_VAULT_UNAVAILABLE: 'Le coffre des jetons est indisponible : rien n’a été enregistré.',
     USER_DENIED: 'Vous avez refusé l’accès : rien n’a été connecté.', INVALID_STATE: 'La réponse du fournisseur ne correspond à aucune demande en cours : recommencez.', SESSION_EXPIRED: 'La demande a expiré : recommencez.', CODE_EXCHANGE_FAILED: 'Le fournisseur a refusé l’autorisation : recommencez.',
+    REAUTH_REQUIRED: 'Instagram a refusé l’accès : reconnectez le compte.', RATE_LIMITED: 'Instagram a demandé de ralentir : réessayez plus tard.', SOURCE_UNREACHABLE: 'Instagram est injoignable pour le moment : réessayez plus tard.', NOT_CONNECTED: 'Ce compte n’est pas connecté.',
     SCOPE_MISSING: 'Une permission de lecture n’a pas été accordée : recommencez et acceptez-les toutes.', PROVIDER_UNAVAILABLE: 'Le fournisseur ne répond pas pour le moment : réessayez plus tard.', PROVIDER_UNSUPPORTED: 'Ce fournisseur n’est pas encore connectable.', CALLBACK_FAILED: 'La connexion n’a pas abouti : recommencez.',
   };
   const errText = (r) => ERR[r.json?.error?.code ?? r.json?.oauth] ?? `Action refusée (${r.status}).`;
@@ -70,7 +71,7 @@
     if (action === 'reconnect') return startOAuth(`/api/connections/${connectionId}/reconnect`, {});
     if (action === 'disconnect' && !window.confirm('Déconnecter ce compte ? Les jetons enregistrés seront détruits ; rien ne change chez le fournisseur.')) return;
     const r = await api(`/api/connections/${connectionId}/${action}`, {});
-    if (r.ok) { data = r.json; setFlash('ok', action === 'verify' ? 'État revérifié auprès du fournisseur.' : 'Compte déconnecté.'); } else setFlash('err', errText(r));
+    if (r.ok) { data = r.json; setFlash('ok', action === 'verify' ? 'État revérifié auprès du fournisseur.' : action === 'read' ? (r.json.read?.outcome === 'OK' ? 'Lecture réussie : voir « Données lues ».' : 'Lecture terminée avec des réserves : voir « Données lues ».') : 'Compte déconnecté.'); } else { if (action === 'read') { const f = await api('/api/connections'); if (f.ok) data = f.json; } setFlash('err', errText(r)); }
   }
   async function choose(target) {
     const r = await api('/api/connections/select', { session_ref: pick.ref, external_id: target.externalId });
@@ -95,8 +96,47 @@
         s.facts && s.facts.length ? h('ul', { class: 'cx-facts' }, s.facts.map((f) => h('li', { text: f }))) : null,
         s.copy ? copyBlock(s.copy) : null)))) : null;
   }
+  // ---- "Données lues": what Nordla REALLY read from the connected account, and when. Four states for every figure, never a bare number:
+  //   a measured value, a measured ZERO, UNAVAILABLE (the provider did not return it), PERMISSION_MISSING (the permission is named).
+  const nf = new Intl.NumberFormat('fr-BE');
+  const UNAVAILABLE_WHY = { METRIC_NOT_SUPPORTED: 'Instagram ne fournit pas cette statistique pour cette publication.', NOT_RETURNED: 'Instagram ne l’a pas communiquée.', SOURCE_ERROR: 'Instagram a répondu par une erreur pour cette statistique.' };
+  const PROBLEM_TEXT = { TOKEN_REJECTED: 'Instagram a refusé l’accès : reconnectez le compte.', RATE_LIMITED: 'Instagram a demandé de ralentir : réessayez plus tard.', SOURCE_UNREACHABLE: 'Instagram était injoignable.', READ_FAILED: 'La lecture a échoué.', PC_REAUTH_REQUIRED: 'Le compte doit être reconnecté.' };
+  function figureCell(f) {
+    if (!f) return h('span', { class: 'cx-fig', 'data-state': 'UNAVAILABLE', text: 'Indisponible' });
+    if (f.state === 'VALUE') return h('span', { class: 'cx-fig', 'data-state': 'VALUE', text: nf.format(f.value) });
+    if (f.state === 'ZERO') return h('span', { class: 'cx-fig', 'data-state': 'ZERO' }, h('strong', { text: '0' }), h('span', { class: 'cx-fig-note', text: ' mesuré : zéro' }));
+    if (f.state === 'PERMISSION_MISSING') return h('span', { class: 'cx-fig', 'data-state': 'PERMISSION_MISSING' }, h('strong', { text: 'Permission manquante' }), h('span', { class: 'cx-fig-note', text: ` : ${f.permission ?? 'permission de lecture'}` }));
+    return h('span', { class: 'cx-fig', 'data-state': 'UNAVAILABLE' }, h('strong', { text: 'Indisponible' }), h('span', { class: 'cx-fig-note', text: ` ${UNAVAILABLE_WHY[f.reason] ?? ''}` }));
+  }
+  function missingNote(permission) { return h('p', { class: 'cx-perm', role: 'note' }, h('strong', { text: `Permission manquante : ${permission}. ` }), 'Reconnectez le compte et acceptez toutes les permissions de lecture demandées.'); }
+  function readPanel(c) {
+    const attempt = c.lastRead; const lr = attempt && attempt.profile ? attempt : c.lastReadData; // the latest attempt that answered, else the last data really read
+    const out = [h('h4', { class: 'cx-read-title', text: 'Données lues' })];
+    out.push(h('p', { class: 'cx-meta cx-readdate', 'data-state': c.lastReadOkAt ? 'ok' : 'none', text: c.lastReadOkAt ? `Dernière lecture réussie : ${when(c.lastReadOkAt)}.` : 'Aucune lecture réussie pour l’instant : Nordla n’a encore lu aucune donnée de ce compte.' }));
+    if (attempt && attempt.at && attempt.at !== c.lastReadOkAt) out.push(h('p', { class: 'cx-meta warn', text: `Dernière tentative : ${when(attempt.at)} — ${attempt.outcome === 'FAILED' ? (PROBLEM_TEXT[attempt.problem] ?? 'la lecture a échoué.') : attempt.outcome === 'PARTIAL' ? 'lecture partielle (voir ci-dessous).' : 'lecture incomplète.'}` }));
+    if (attempt && !attempt.profile && lr) out.push(h('p', { class: 'cx-meta', text: 'Les données ci-dessous datent de la dernière lecture réussie.' }));
+    if (!lr || !lr.profile) { out.push(h('p', { class: 'cx-meta', text: 'Cliquez sur « Lire maintenant » pour lire le profil et la dernière publication (lecture seule).' })); return h('div', { class: 'cx-read' }, out); }
+    const p = lr.profile;
+    if (p.state === 'PERMISSION_MISSING') out.push(missingNote(p.permission ?? 'instagram_business_basic'));
+    else if (p.state !== 'OK' || !p.data) out.push(h('p', { class: 'cx-perm', text: 'Le profil n’a pas pu être lu.' }));
+    else out.push(h('dl', { class: 'cx-read-dl' }, h('dt', { text: 'Nom' }), h('dd', { text: p.data.name ?? '—' }), h('dt', { text: 'Compte' }), h('dd', { text: p.data.username ? `@${p.data.username}${p.data.accountType ? ` · ${p.data.accountType}` : ''}` : '—' }),
+      h('dt', { text: 'Abonnés' }), h('dd', {}, figureCell(p.data.followers)), h('dt', { text: 'Abonnements' }), h('dd', {}, figureCell(p.data.follows)), h('dt', { text: 'Publications' }), h('dd', {}, figureCell(p.data.mediaCount))));
+    const pub = lr.publication;
+    out.push(h('h4', { class: 'cx-read-title', text: 'Publication récente' }));
+    if (pub.state === 'PERMISSION_MISSING') out.push(missingNote(pub.permission ?? 'instagram_business_basic'));
+    else if (pub.state === 'NONE') out.push(h('p', { class: 'cx-meta', text: 'Ce compte n’a aucune publication à lire.' }));
+    else if (pub.state !== 'OK' || !pub.item) out.push(h('p', { class: 'cx-perm', text: 'La dernière publication n’a pas pu être lue.' }));
+    else {
+      const it = pub.item;
+      out.push(h('p', { class: 'cx-meta', text: `${it.type ?? 'Publication'} du ${it.postedAt ? when(it.postedAt) : 'date inconnue'}${it.caption ? ` — « ${it.caption} »` : ''}` }));
+      if (it.permalink) out.push(h('p', { class: 'cx-meta' }, h('a', { class: 'cx-link', href: it.permalink, target: '_blank', rel: 'noopener noreferrer', text: 'Voir la publication sur Instagram' })));
+      out.push(h('table', { class: 'cx-fig-table' }, h('tbody', {}, it.stats.map((s) => h('tr', {}, h('th', { scope: 'row', text: s.label }), h('td', {}, figureCell(s)))))));
+      const missing = it.stats.find((s) => s.state === 'PERMISSION_MISSING'); if (missing) out.push(missingNote(missing.permission ?? 'instagram_business_manage_insights'));
+    }
+    return h('div', { class: 'cx-read' }, out);
+  }
   function connRow(c) {
-    const labels = { verify: 'Revérifier', reconnect: 'Reconnecter', disconnect: 'Déconnecter' };
+    const labels = { read: 'Lire maintenant', verify: 'Revérifier', reconnect: 'Reconnecter', disconnect: 'Déconnecter' };
     return h('div', { class: 'cx-conn' },
       h('div', { class: 'cx-conn-head' }, h('strong', { text: c.account }), h('span', { class: 'cx-state', 'data-tone': c.tone, text: c.stateLabel })),
       c.accountType ? h('p', { class: 'cx-meta', text: `Type de compte : ${c.accountType}` }) : null,
@@ -104,7 +144,8 @@
       c.verifiedAt ? h('p', { class: 'cx-meta', text: `Dernière vérification : ${when(c.verifiedAt)}` }) : null,
       c.scopes.length ? h('p', { class: 'cx-meta', text: c.readOnly ? 'Permissions : lecture seule.' : 'Permissions : attention, ce compte a une permission d’écriture.' }) : null,
       c.needs.includes('REAUTH_REQUIRED') ? h('p', { class: 'cx-meta warn', text: 'Le fournisseur demande de nouveau votre accord.' }) : null,
-      c.actions.length ? h('div', { class: 'cx-actions' }, c.actions.map((a) => h('button', { class: `cx-btn ${a === 'disconnect' ? 'warn' : 'ghost'}`, type: 'button', text: labels[a], on: { click: () => runAction(c.id, a) } }))) : null);
+      c.canRead ? readPanel(c) : null,
+      c.actions.length ? h('div', { class: 'cx-actions' }, c.actions.map((a) => h('button', { class: `cx-btn ${a === 'disconnect' ? 'warn' : a === 'read' ? '' : 'ghost'}`, type: 'button', text: labels[a], on: { click: () => runAction(c.id, a) } }))) : null);
   }
   function picker(p) {
     if (!pick || pick.provider !== p.id.replace('google_business_profile', 'google_business_profile')) return null;

@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { CATEGORY, PROVIDERS, createRegistry, defineProvider } from '../src/connections/registry.js';
 import { createConnectionsService } from '../src/connections/service.js';
+import { createInstagramReadService } from '../src/connections/instagram-read.js';
+import { createInstagramReaderFor } from '../src/provider-connections/instagram-reader.js';
 import { createConnectionsHost } from '../src/sourcing/server/connections-host.js';
 import { buildConnections } from '../src/sourcing/server/index.js';
 import { createSessionGate } from '../src/sourcing/server/session-gate.js';
@@ -35,7 +37,7 @@ const READ_PERMS = 'instagram_business_basic,instagram_business_manage_insights'
 const ENV_READ = { ...ENV, NORDLA_PROVIDER_SCOPE_MODE: 'read' };
 const NO_APP = Object.fromEntries(Object.entries(ENV).filter(([k]) => !k.startsWith('INSTAGRAM_')));
 
-async function boot({ env = ENV_READ, routes = igRoutes({ permissions: READ_PERMS }), extra = [], shop = true } = {}) {
+async function boot({ env = ENV_READ, routes = igRoutes({ permissions: READ_PERMS }), extra = [], shop = true, graph = null } = {}) {
   const ctx = makeRuntime({ routes, env });
   if (shop) await ctx.rt.connectorRepository.link({ merchantId: M1, kind: 'shopify', externalId: 'gid://shopify/Shop/STAGING-1', status: 'CONFIGURED', config: {} });
   const registry = createRegistry({ extra });
@@ -44,7 +46,8 @@ async function boot({ env = ENV_READ, routes = igRoutes({ permissions: READ_PERM
     redirectUriOf: (k) => { try { return ctx.rt.appConfigFor(k).redirectUri; } catch { return `https://sourcing-staging-staging.up.railway.app/api/connections/${k}/callback`; } },
     merchantLabel: async () => 'HABB (test staging)', environmentLabel: 'Staging', shopifySync: async () => ({ status: 'completed', startedAt: '2026-11-17T08:00:00Z', finishedAt: '2026-11-17T08:01:00Z' }), bankCatalog: BELGIAN_BANKS, bankProvider: { id: 'enable-banking', label: 'Enable Banking' },
   });
-  const host = await createConnectionsHost({ gate: gateOver(SESSIONS), merchantId: M1, runtime: ctx.rt, service, registry });
+  const reads = createInstagramReadService({ connectorRepository: ctx.rt.connectorRepository, readerFor: ({ merchantId, connectorId, grantedScopes }) => createInstagramReaderFor({ tokenManager: ctx.rt.tokenManager, merchantId, connectorId, graphVersion: 'v25.0', grantedScopes, fetchImpl: graph?.fetchImpl ?? (async () => { throw new Error('no network in this test'); }) }) });
+  const host = await createConnectionsHost({ gate: gateOver(SESSIONS), merchantId: M1, runtime: ctx.rt, service, registry, reads });
   const s = http.createServer(async (req, res) => { const u = new URL(req.url, 'http://x'); if (!(await host.handle(req, res, u))) { res.writeHead(404); res.end('{"error":"NOT_FOUND"}'); } });
   await new Promise((r) => s.listen(0, '127.0.0.1', r)); const base = `http://127.0.0.1:${s.address().port}`;
   const seen = [];
@@ -103,7 +106,7 @@ test('CX-3 Instagram READ-ONLY journey with simulated answers: connect -> consen
     const done = await t.req('/api/connections/select', { token: 'tok-owner', body: { session_ref: ref, external_id: IG_ACCOUNT } }); assert.equal(done.status, 200); assert.equal(done.json.state, 'CONFIGURED');
     const ig = find(done.json, 'instagram'); assert.equal(ig.connections.length, 1); const c = ig.connections[0];
     assert.deepEqual([c.account, c.accountId, c.state, c.stateLabel, c.readOnly], ['habb.be', IG_ACCOUNT, 'VERIFIED', 'Connecté, vérifié', true]); assert.deepEqual(c.scopes, ['instagram_business_basic', 'instagram_business_manage_insights']); assert.ok(c.verifiedAt);
-    assert.deepEqual(c.actions, ['verify', 'reconnect', 'disconnect']);
+    assert.deepEqual(c.actions, ['read', 'verify', 'reconnect', 'disconnect']);
     const again = await t.req('/api/connections/select', { token: 'tok-owner', body: { session_ref: ref, external_id: IG_ACCOUNT } }); assert.equal(again.status, 409, 'the session is finished');
     const re = await t.req(`/api/connections/${c.id}/verify`, { token: 'tok-owner', body: {} }); assert.equal(re.status, 200); assert.equal(find(re.json, 'instagram').connections[0].state, 'VERIFIED');
     const text = t.seen.join('\n'); for (const s of allSecrets()) assert.ok(!text.includes(s), 'no secret value reaches the browser'); assert.doesNotMatch(text, /access_token|client_secret|refresh_token|SIM-CODE-1/);
@@ -172,5 +175,55 @@ test('CX-7 the Settings home: six sections, the real availability of each, the C
     assert.ok(!conn.providers.some((p) => /stripe|google analytics/i.test(p.label)), 'the catalogue providers, not the mock-up ones');
     assert.deepEqual(s.nav.map((n) => n.label), ['Accueil', 'Sourcing', 'Achats', 'Finance', 'Analyses', 'Growth', 'Marketing', 'Paramètres']); assert.equal(s.nav.find((n) => n.id === 'settings').href, '/settings'); assert.deepEqual([s.merchant.name, s.environment], ['HABB (test staging)', 'Staging']);
     const noShop = await boot({ shop: false }); try { const c2 = (await noShop.req('/api/settings', { token: 'tok-owner' })).json.cards.find((c) => c.id === 'connections'); assert.equal(c2.providers.find((p) => p.id === 'shopify').statusLabel, 'Non reliée', 'no shop linked to this merchant: said plainly'); } finally { await noShop.close(); }
+  } finally { await t.close(); }
+});
+
+// ------------------------------------------------------------------ the Instagram READ through the host (simulated Graph answers)
+const gerrBody = (code, message = 'x') => ({ error: { message, type: 'OAuthException', code } });
+const insBody = (obj) => ({ data: Object.entries(obj).map(([name, value]) => ({ name, period: 'lifetime', values: [{ value }] })) });
+function graphDouble(state) {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    const u = new URL(url); const path = u.pathname; const q = Object.fromEntries(u.searchParams); calls.push({ method: init.method, path });
+    const send = (status, body) => ({ ok: status < 300, status, json: async () => body });
+    if (state.mode === 'rejected') return send(400, gerrBody(190, 'Invalid OAuth access token'));
+    if (path === '/v25.0/me') return send(200, { user_id: IG_ACCOUNT, username: 'habb.be', name: 'HABB', account_type: 'Business', followers_count: 128, follows_count: 40, media_count: 53 });
+    if (path === '/v25.0/me/media') return send(200, { data: [{ id: 'M2', media_type: 'REELS', timestamp: '2026-11-10T09:00:00+0000', permalink: 'https://www.instagram.com/p/NEW/', caption: 'Coque personnalisée à Namur', like_count: 12, comments_count: 0 }] });
+    return send(200, insBody({ reach: 340, views: 0, likes: 12, comments: 0, shares: 2 })); // `saved` is not returned
+  };
+  return { fetchImpl, calls };
+}
+async function connectInstagram(t) {
+  const state = new URL((await t.req('/api/connections/connect', { token: 'tok-owner', body: { provider: 'instagram' } })).json.authorizationUrl).searchParams.get('state');
+  const ref = new URL((await t.req(`/api/connections/instagram/callback?code=SIM&state=${encodeURIComponent(state)}`, { token: 'tok-owner' })).location, 'http://x').searchParams.get('connect');
+  const done = await t.req('/api/connections/select', { token: 'tok-owner', body: { session_ref: ref, external_id: IG_ACCOUNT } }); assert.equal(done.status, 200);
+  return find(done.json, 'instagram').connections[0];
+}
+const statOf = (snap, name) => snap.publication.item.stats.find((s) => s.name === name);
+
+test('CX-8 Instagram READ: profile + latest publication from simulated answers; zero vs unavailable vs missing permission are distinct; the date of the last SUCCESSFUL read is kept; a failure never erases it; no secret leaves', async () => {
+  const state = { mode: 'ok' }; const graph = graphDouble(state);
+  const t = await boot({ graph });
+  try {
+    const c0 = await connectInstagram(t); assert.equal(c0.canRead, true); assert.deepEqual([c0.lastRead, c0.lastReadOkAt], [null, null], 'nothing read yet: said so'); assert.ok(c0.actions.includes('read'));
+    assert.equal((await t.req(`/api/connections/${c0.id}/read`, { token: 'tok-viewer', body: {} })).json.error.code, 'FORBIDDEN_ROLE'); assert.equal((await t.req(`/api/connections/${c0.id}/read`, { token: 'tok-other', body: {} })).json.error.code, 'TENANT_MISMATCH');
+    assert.equal(graph.calls.length, 0, 'nothing is read before the owner asks');
+    const ok = await t.req(`/api/connections/${c0.id}/read`, { token: 'tok-owner', body: {} }); assert.equal(ok.status, 200); const snap = ok.json.read; assert.equal(snap.outcome, 'OK');
+    assert.deepEqual([snap.profile.data.name, snap.profile.data.username, snap.profile.data.followers.value], ['HABB', 'habb.be', 128]);
+    assert.deepEqual([statOf(snap, 'reach').state, statOf(snap, 'reach').value], ['VALUE', 340]); assert.deepEqual([statOf(snap, 'views').state, statOf(snap, 'views').value], ['ZERO', 0]); assert.deepEqual([statOf(snap, 'saved').state, statOf(snap, 'saved').value], ['UNAVAILABLE', null]);
+    assert.ok(graph.calls.every((c) => c.method === 'GET'), 'only reads');
+    const seen = find((await t.req('/api/connections', { token: 'tok-viewer' })).json, 'instagram').connections[0]; // a viewer SEES what was read
+    assert.equal(seen.lastReadOkAt, snap.at); assert.equal(seen.lastRead.outcome, 'OK'); assert.equal(seen.lastRead.profile.data.name, 'HABB'); assert.deepEqual(seen.actions, [], 'but cannot trigger a read');
+    // the token is refused: explicit error, the failed attempt is recorded, the last SUCCESSFUL read date is untouched
+    state.mode = 'rejected'; const bad = await t.req(`/api/connections/${c0.id}/read`, { token: 'tok-owner', body: {} }); assert.equal(bad.status, 409); assert.equal(bad.json.error.code, 'REAUTH_REQUIRED');
+    const after = find((await t.req('/api/connections', { token: 'tok-owner' })).json, 'instagram').connections[0]; assert.equal(after.lastReadOkAt, snap.at, 'a failure never erases the last successful read'); assert.deepEqual([after.lastRead.outcome, after.lastRead.problem, after.lastRead.profile], ['FAILED', 'TOKEN_REJECTED', null]); assert.equal(after.lastReadData.profile.data.name, 'HABB', 'the data last really read stays visible after a failure'); assert.equal(after.lastReadData.at, snap.at);
+    // the connection carries only the basic permission: the insights are reported as a MISSING PERMISSION, by name
+    state.mode = 'ok'; const stored = (await t.ctx.rt.connectorRepository.listForMerchant(M1)).find((c) => c.id === c0.id);
+    await t.ctx.rt.connectorRepository.update({ merchantId: M1, connectorId: c0.id, status: 'CONFIGURED', config: { ...stored.config, granted_scopes: ['instagram_business_basic'] } });
+    const calls = graph.calls.length; const part = await t.req(`/api/connections/${c0.id}/read`, { token: 'tok-owner', body: {} }); assert.equal(part.status, 200); assert.equal(part.json.read.outcome, 'PARTIAL');
+    for (const s of part.json.read.publication.item.stats) assert.deepEqual([s.state, s.permission, s.value], ['PERMISSION_MISSING', 'instagram_business_manage_insights', null]);
+    assert.equal(part.json.read.profile.state, 'OK'); assert.ok(!graph.calls.slice(calls).some((c) => c.path.includes('insights')), 'no insight is requested without the permission');
+    const text = t.seen.join('\n'); for (const s of allSecrets()) assert.ok(!text.includes(s), 'no secret value reaches the browser'); assert.doesNotMatch(text, /access_token|client_secret|refresh_token|Bearer /);
+    assert.equal((await t.req(`/api/connections/${c0.id}/read`, { token: 'tok-owner', body: {}, csrf: false })).status, 403, 'a read needs the CSRF pair too');
   } finally { await t.close(); }
 });
