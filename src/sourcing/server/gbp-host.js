@@ -34,7 +34,7 @@ export async function createGbpHost({ gate, merchantId, dataDir, draftsDir = DRA
     return {
       network: content.network, listing: content.listing,
       publish: { available: false, reason: 'GOOGLE_API_ACCESS_NOT_GRANTED', case: GOOGLE_CASE, message: `Nordla ne peut pas publier sur Google tant que Google n'a pas accordé l'accès à l'API (dossier ${GOOGLE_CASE}). Copiez le texte, enregistrez l'image, publiez dans votre fiche, puis cliquez « J'ai publié ».` },
-      drafts: content.drafts.map((d) => { const s = stateOf(events, d); return { id: d.id, title: d.title, kind: d.kind, text: d.text, cta: d.cta, imageUrl: `/api/gbp/drafts/${d.id}/image?v=${d.imageSha.slice(0, 12)}`, imageNote: d.image_note, checks: d.checks, version: d.version, state: s.state, stateLabel: STATE_FR[s.state], approvedAt: s.approvedAt ?? null, approvedBy: s.approvedBy ?? null, publishedAt: s.publishedAt ?? null, publishedUrl: s.publishedUrl ?? null }; }),
+      drafts: content.drafts.map((d) => { const s = stateOf(events, d); return { id: d.id, title: d.title, kind: d.kind, text: d.text, cta: d.cta, imageUrl: `/api/gbp/drafts/${d.id}/image?v=${d.imageSha.slice(0, 12)}`, imageNote: d.image_note, hold: d.hold ?? null, checks: d.checks, version: d.version, state: s.state, stateLabel: STATE_FR[s.state], approvedAt: s.approvedAt ?? null, approvedBy: s.approvedBy ?? null, publishedAt: s.publishedAt ?? null, publishedUrl: s.publishedUrl ?? null }; }),
     };
   };
   return Object.freeze({
@@ -55,6 +55,7 @@ export async function createGbpHost({ gate, merchantId, dataDir, draftsDir = DRA
             let body; try { body = await readBody(req); } catch (e) { json(res, e.code === 'BODY_TOO_LARGE' ? 413 : 400, { error: { code: e.code ?? 'BODY_INVALID' } }); return true; }
             const events = await store.list(); const cur = stateOf(events, d); const kind = act[2];
             if (kind === 'approve') {
+              if (d.hold) { json(res, 409, { error: { code: 'ON_HOLD' }, reason: d.hold }); return true; } // a draft with an open condition (e.g. a real photo to provide) cannot be approved
               if (body.expected_version !== d.version) { json(res, 409, { error: { code: 'VERSION_CHANGED' }, current: d.version }); return true; } // the screen the owner read is not the current version
               if (cur.state !== STATE.REVIEW) { json(res, 409, { error: { code: 'ALREADY_APPROVED' } }); return true; }
               await store.append({ type: 'approve', draft: d.id, version: d.version, by: access.userId, role: access.role, at: now().toISOString() });

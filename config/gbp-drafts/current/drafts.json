@@ -8,7 +8,7 @@
       "title": "Verre trempé à 15 €, pose incluse",
       "kind": "Actualité",
       "text": "Verre trempé à 15 €, pose incluse chez HABB à Namur. Appelez-nous avec le modèle de votre téléphone pour vérifier la disponibilité.\n\nHABB · Rue de Bruxelles 18, Namur\nDu lundi au samedi, de 10 h à 18 h.",
-      "cta": { "label": "Appeler", "note": "Bouton « Appeler » de la publication (le texte demande d'appeler). Si Google ne le propose pas : « En savoir plus » vers https://habb.be/pages/contact" },
+      "cta": { "label": "Appeler", "note": "Bouton « Appeler » de la publication (le texte demande d'appeler). Si Google ne le propose pas, utilisez « En savoir plus » avec ce lien :", "link": { "label": "Page Contact HABB", "url": "https://habb.be/pages/contact" } },
       "image": "GBP-POST-11-verre-trempe-1200x900.jpg",
       "image_note": "Version adaptée de l'affiche UNIPROVE (droits confirmés par le propriétaire) : ligne « rayures » corrigée, visuel du fournisseur inchangé, 1 200 × 900 px. Une photo réelle prise en boutique reste préférable.",
       "checks": ["Prix 15 € pose incluse : confirmé par le propriétaire (aucun produit correspondant dans Shopify)", "Adresse et horaires : confirmés", "Aucune promesse de modèle : la disponibilité se vérifie par téléphone"]
@@ -18,7 +18,8 @@
       "title": "Coques personnalisées à l'atelier",
       "kind": "Actualité",
       "text": "Une photo que vous aimez, sur une coque imprimée dans notre atelier à Namur. On cadre l’image avec vous, puis on imprime sur place.\n\nCoque et personnalisation à 25 €. Comptez environ 5 minutes si la coque pour votre modèle est en stock.\n\nHABB · Rue de Bruxelles 18, Namur\nDu lundi au samedi, de 10 h à 18 h.",
-      "cta": { "label": "En savoir plus", "note": "Lien : https://habb.be/pages/personnaliser?utm_source=google&utm_medium=organic&utm_campaign=gbp_coques_atelier" },
+      "cta": { "label": "En savoir plus", "note": "Lien du bouton :", "link": { "label": "Page Personnaliser (suivi Google inclus)", "url": "https://habb.be/pages/personnaliser?utm_source=google&utm_medium=organic&utm_campaign=gbp_coques_atelier" } },
+      "hold": "Vraie photo de la réalisation à fournir avant publication : l'image actuelle est un rendu de présentation. Remplacez-la, puis relisez et approuvez la nouvelle version.",
       "image": "GBP-POST-12-coque-1200x900.jpg",
       "image_note": "Rendu HABB existant (coque avec une photo de chien), recadré sans génération : rendu de présentation, pas une réalisation client. Une vraie photo de coque terminée est préférable.",
       "checks": ["Prix 25 € : vérifié dans Shopify (coques actives à 25,00 €)", "Délai : environ 5 minutes, sous condition de stock (confirmé le 2026-09-04)", "Adresse et horaires : confirmés"]

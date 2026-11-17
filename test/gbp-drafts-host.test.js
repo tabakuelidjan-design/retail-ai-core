@@ -64,6 +64,9 @@ test('GD-2 the two drafts carry the owner\'s exact texts, their image (a real JP
     assert.equal(v.publish.available, false); assert.equal(v.publish.case, '8-1074000042712'); assert.match(v.publish.message, /8-1074000042712/);
     for (const d of v.drafts) { const img = await s.req(d.imageUrl.split('?')[0], { token: 'tok-viewer' }); assert.equal(img.status, 200); assert.equal(img.type, 'image/jpeg'); assert.equal(img.buf.subarray(0, 2).toString('hex'), 'ffd8'); assert.ok(img.buf.length > 50_000); }
     assert.equal((await s.req('/api/gbp/drafts/GBP-POST-99/image', { token: 'tok-viewer' })).status, 404);
+    assert.equal(v.drafts[0].cta.link.label, 'Page Contact HABB'); assert.equal(v.drafts[0].cta.link.url, 'https://habb.be/pages/contact'); assert.equal(v.drafts[0].hold, null);
+    assert.match(v.drafts[1].cta.link.url, /^https:\/\/habb\.be\/pages\/personnaliser\?utm_source=google/); assert.ok(v.drafts[1].cta.link.label.length < 50, 'a short label, the full address stays behind the link'); assert.match(v.drafts[1].hold, /vraie photo/i);
+    const held = await s.req('/api/gbp/drafts/GBP-POST-12/approve', { token: 'tok-owner', body: { expected_version: v.drafts[1].version } }); assert.equal(held.status, 409); assert.equal(held.json.error.code, 'ON_HOLD', 'a draft waiting for a real photo cannot be approved');
   } finally { await s.close(); }
 });
 

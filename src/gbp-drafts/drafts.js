@@ -1,6 +1,6 @@
 // Google Business Profile post drafts, their approval and their (manual) publication record. PURE data + a small append-only store: nothing here talks to Google.
 //
-// A draft's VERSION is the sha-256 of its text, its call to action and its image bytes. An approval is bound to ONE version: any change to the text, the button or the image
+// A draft's VERSION is the sha-256 of its text, its call-to-action button and link, and its image bytes. An approval is bound to ONE version: any change to the text, the button or the image
 // gives another version, and the approval no longer applies (it must be given again). The state of a draft is derived from its events, never stored.
 //   À examiner   no approval for the current version
 //   Approuvé     the owner approved THIS version
@@ -21,7 +21,8 @@ export async function loadDrafts({ dir }) {
   const out = [];
   for (const d of cfg.drafts) {
     const imageBytes = await readFile(join(root, d.image));
-    out.push({ ...d, imageSha: sha(imageBytes), imageBytes, version: sha(JSON.stringify({ text: d.text, cta: d.cta?.label ?? null, image: sha(imageBytes) })) });
+    const url = d.cta?.link?.url ?? null; if (url !== null && !/^https:\/\/\S+$/.test(url)) throw new Error(`draft ${d.id}: the call-to-action link must be https`); // the link is part of what the owner approves
+    out.push({ ...d, imageSha: sha(imageBytes), imageBytes, version: sha(JSON.stringify({ text: d.text, cta: d.cta?.label ?? null, link: url, image: sha(imageBytes) })) });
   }
   return { network: cfg.network, listing: cfg.listing, source: cfg.source, drafts: out };
 }
