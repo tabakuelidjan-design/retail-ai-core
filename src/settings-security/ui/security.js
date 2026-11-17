@@ -31,16 +31,17 @@
 
   // ---------------------------------------------------------------- rubric 1
   function passwordForm() {
+    const needCode = ov.account.mfa?.state === 'ENABLED'; const mcode = h('input', { class: 'gn-input', type: 'text', inputmode: 'numeric', autocomplete: 'one-time-code', 'aria-label': 'Code de l’application ou code de récupération', maxlength: 20 });
     const cur = h('input', { class: 'gn-input', type: 'password', autocomplete: 'current-password', 'aria-label': 'Mot de passe actuel', maxlength: 1024 });
     const nxt = h('input', { class: 'gn-input', type: 'password', autocomplete: 'new-password', 'aria-label': 'Nouveau mot de passe', maxlength: 200 });
     const out = h('div'); const btn = h('button', { class: 'cx-btn gn-btn-save', type: 'button', text: 'Changer le mot de passe' });
     btn.addEventListener('click', async () => {
       out.replaceChildren(); btn.disabled = true; btn.textContent = 'Changement…';
-      const r = await api('/api/security/password', { current: cur.value, next: nxt.value });
+      const r = await api('/api/security/password', { current: cur.value, next: nxt.value, ...(mcode.value.trim() ? { code: mcode.value.trim() } : {}) });
       btn.disabled = false; btn.textContent = 'Changer le mot de passe'; if (guard(r)) return;
       if (r.ok) { cur.value = ''; nxt.value = ''; out.replaceChildren(msg({ tone: 'ok', text: `Mot de passe changé. ${r.json.otherSessionsClosed} autre(s) session(s) déconnectée(s).` })); } else out.replaceChildren(msg({ tone: 'err', text: errText(r) }));
     });
-    return h('form', { class: 'gn-form', novalidate: true, on: { submit: (e) => e.preventDefault() } }, h('p', { class: 'gn-help', text: `12 caractères au moins. Toutes vos autres sessions (tous modules et commerces) seront déconnectées ; celle-ci reste ouverte.` }), cur, h('div', { class: 'gn-mt' }), nxt, h('div', { class: 'gn-mt' }), btn, out);
+    return h('form', { class: 'gn-form', novalidate: true, on: { submit: (e) => e.preventDefault() } }, h('p', { class: 'gn-help', text: `12 caractères au moins. Toutes vos autres sessions (tous modules et commerces) seront déconnectées ; celle-ci reste ouverte.` }), cur, h('div', { class: 'gn-mt' }), nxt, needCode ? h('div', {}, h('div', { class: 'gn-mt' }), mcode, h('p', { class: 'gn-help', text: 'Code de votre application d’authentification (ou code de récupération).' })) : null, h('div', { class: 'gn-mt' }), btn, out);
   }
   // second factor: enrol (password -> QR -> first code -> recovery codes shown once), renew codes, turn off. Each step asks the password again.
   const passInput = (label) => h('input', { class: 'gn-input', type: 'password', autocomplete: 'current-password', 'aria-label': label, maxlength: 1024 });

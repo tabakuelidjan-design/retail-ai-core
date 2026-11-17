@@ -109,7 +109,7 @@ export function createSecurityService({ supabase, adminAuth = null, verifier = n
       note: 'Connexions, déconnexions et changements de mot de passe de votre compte dans ce commerce. Les invitations, suspensions et changements de rôle sont dans Équipe et accès → Historique des accès.' };
   }
 
-  async function changePassword(me, token, { current, next } = {}) {
+  async function changePassword(me, token, { current, next, code } = {}) {
     need(me);
     if (!adminAuth || !verifier) throw new SecurityError('FEATURE_UNAVAILABLE', 'Le changement de mot de passe est indisponible.');
     if (typeof current !== 'string' || typeof next !== 'string' || !current || next.length < MIN_PASSWORD || next.length > 200) throw new SecurityError('VALIDATION', `Le nouveau mot de passe doit faire au moins ${MIN_PASSWORD} caractères.`);
@@ -119,8 +119,9 @@ export function createSecurityService({ supabase, adminAuth = null, verifier = n
     if (!cur) throw new SecurityError('CURRENT_SESSION_UNKNOWN', 'La session actuelle est introuvable : rien n’a été changé.');
     let user; try { user = await adminAuth.getUser(me.userId); } catch { throw new SecurityError('UNAVAILABLE', 'Le service d’authentification ne répond pas : rien n’a été changé.'); }
     if (!user?.email) throw new SecurityError('FEATURE_UNAVAILABLE', 'Le compte n’utilise pas un mot de passe Nordla.');
-    const v = await verifier.verifyPassword(String(user.email).toLowerCase(), current);
+    const v = await verifier.verifyPassword(String(user.email).toLowerCase(), current, { code: typeof code === 'string' ? code : null, recoveryCheck: recoveryCodes ? (u, c) => recoveryCodes.consume(u, c) : null });
     if (!v.ok) {
+      if (v.kind === 'MFA_REQUIRED') throw new SecurityError('MFA_REQUIRED', 'Saisissez aussi un code de votre application d’authentification (ou un code de récupération).');
       if (v.kind === 'UNAVAILABLE') throw new SecurityError('UNAVAILABLE', 'Le service d’authentification ne répond pas : rien n’a été changé.');
       failed(me.userId); await journal(me, 'PASSWORD_CHANGE_FAILED', 'DENIED', { code: 'BAD_CURRENT' });
       throw new SecurityError('BAD_CURRENT_PASSWORD', 'Le mot de passe actuel est incorrect.');

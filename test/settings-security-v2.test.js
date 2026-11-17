@@ -202,3 +202,17 @@ test('V2-8 the reset page and its script are served; the token never reaches a l
     assert.equal((await call('/security-assets/reset.js')).status, 200);
   } finally { close(); }
 });
+
+test('V2-9 an account with a second factor must also give a code to change its password (found on the real staging run); without it nothing changes', async () => {
+  const { call, open, auth, close } = await boot();
+  try {
+    const id = auth.addUser('a@example.test', PW); const a = await open(id); const other = await open(id);
+    const e = (await call('/api/security/mfa/enroll', { as: a, method: 'POST', body: { password: PW } })).json;
+    const list = (await call('/api/security/mfa/confirm', { as: a, method: 'POST', body: { password: PW, factorId: e.factorId, code: totp(e.secret) } })).json.recoveryCodes;
+    const b = await open(id);
+    const none = await call('/api/security/password', { as: a, method: 'POST', body: { current: PW, next: NEW } }); assert.equal(none.status, 422); assert.equal(none.json.error.code, 'MFA_REQUIRED'); assert.equal(auth.users.get(id).password, PW);
+    assert.equal((await call('/api/security/password', { as: a, method: 'POST', body: { current: PW, next: NEW, code: '000000' } })).status, 403); assert.equal(auth.users.get(id).password, PW);
+    const ok = await call('/api/security/password', { as: a, method: 'POST', body: { current: PW, next: NEW, code: list[0] } }); assert.equal(ok.status, 200); assert.equal(auth.users.get(id).password, NEW);
+    assert.equal((await call('/api/security', { as: a })).status, 200); assert.equal((await call('/api/security', { as: b })).status, 401); assert.ok(other);
+  } finally { close(); }
+});

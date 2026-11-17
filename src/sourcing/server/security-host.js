@@ -64,7 +64,7 @@ export async function createSecurityHost({ gate, merchantId, service, sessionCoo
             if (method === 'GET' && p === '/api/security/team') { json(res, 200, service.teamRules(me)); return true; }
             if (method === 'POST' && p === '/api/security/sessions/revoke-current') { json(res, 200, await service.revokeCurrent(me, token)); return true; }
             if (method === 'POST' && p === '/api/security/sessions/revoke-others') { json(res, 200, await service.revokeOthers(me, token)); return true; }
-            if (method === 'POST' && p === '/api/security/password') { const b = await readJson(req); json(res, 200, await service.changePassword(me, token, { current: b.current, next: b.next })); return true; }
+            if (method === 'POST' && p === '/api/security/password') { const b = await readJson(req); json(res, 200, await service.changePassword(me, token, { current: b.current, next: b.next, code: b.code })); return true; }
             if (method === 'POST' && p === '/api/security/mfa/enroll') { const b = await readJson(req); json(res, 200, await service.mfaEnroll(me, { password: b.password })); return true; }
             if (method === 'POST' && p === '/api/security/mfa/confirm') { const b = await readJson(req); json(res, 200, await service.mfaConfirm(me, token, { password: b.password, factorId: b.factorId, code: b.code })); return true; }
             if (method === 'POST' && p === '/api/security/mfa/disable') { const b = await readJson(req); json(res, 200, await service.mfaDisable(me, token, { password: b.password, code: b.code })); return true; }
