@@ -90,7 +90,18 @@ export async function buildConnections({ env, gate, hosted, log = console.log, s
 }
 
 /** Paramètres > Général (staging module): built only when asked for AND hosted behind the Core identity. Any problem is logged and the server runs without it. */
-export async function buildGeneral({ env, gate, hosted, log = console.log, supabase: injected = null, shellOf = null }) {
+/** The common Général service, built once and shared by every module that READS it. Null when the module is off or cannot be built (the modules then simply do not show Général data). */
+export async function buildGeneralService({ env, log = console.log, supabase: injected = null }) {
+  if (String(env.NORDLA_GENERAL_MODULE ?? '') !== '1') return null;
+  try {
+    const { createGeneralService } = await import('../../settings-general/service.js');
+    const { createSupabaseGeneralRepository } = await import('../../settings-general/repository.js');
+    const supabase = injected ?? (await import('../../supabase/client.js')).createSupabaseClient((await import('../../supabase/client.js')).loadSupabaseConfigFromEnv(env));
+    return createGeneralService({ repo: createSupabaseGeneralRepository({ supabase }) });
+  } catch (e) { log(`General service: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
+}
+
+export async function buildGeneral({ env, gate, hosted, log = console.log, supabase: injected = null, shellOf = null, service: shared = null }) {
   if (String(env.NORDLA_GENERAL_MODULE ?? '') !== '1') return null;
   if (!hosted || !gate) { log('General: NOT built (needs the hosted Core identity)'); return null; }
   try {
@@ -98,7 +109,7 @@ export async function buildGeneral({ env, gate, hosted, log = console.log, supab
     const { createGeneralService } = await import('../../settings-general/service.js');
     const { createSupabaseGeneralRepository } = await import('../../settings-general/repository.js');
     const supabase = injected ?? (await import('../../supabase/client.js')).createSupabaseClient((await import('../../supabase/client.js')).loadSupabaseConfigFromEnv(env));
-    const service = createGeneralService({ repo: createSupabaseGeneralRepository({ supabase }) });
+    const service = shared ?? createGeneralService({ repo: createSupabaseGeneralRepository({ supabase }) });
     const host = await createGeneralHost({ gate, merchantId: hosted.merchantId, service, shellOf });
     log('General: ON (Paramètres > Général)');
     return host;
@@ -106,24 +117,24 @@ export async function buildGeneral({ env, gate, hosted, log = console.log, supab
 }
 
 /** The video drafts (staging module, "Ajouter une vidéo"): built only when asked for AND hosted behind the Core identity. Any problem is logged and the server runs without it. */
-export async function buildVideos({ env, gate, hosted, log = console.log }) {
+export async function buildVideos({ env, gate, hosted, log = console.log, contextOf = null }) {
   if (String(env.NORDLA_VIDEO_DRAFTS_MODULE ?? '') !== '1') return null;
   if (!hosted || !gate) { log('Video drafts: NOT built (needs the hosted Core identity)'); return null; }
   try {
     const { createVideoHost } = await import('./video-host.js');
-    const host = await createVideoHost({ gate, merchantId: hosted.merchantId, dataDir: hosted.dataDir });
+    const host = await createVideoHost({ gate, merchantId: hosted.merchantId, dataDir: hosted.dataDir, contextOf });
     log('Video drafts: ON (an MP4 and two captions kept as drafts, nothing is published, no social account is connected)');
     return host;
   } catch (e) { log(`Video drafts: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
 }
 
 /** The Google Business post drafts (staging module): built only when asked for AND hosted behind the Core identity. Any problem is logged and the server runs without it. */
-export async function buildGbp({ env, gate, hosted, log = console.log }) {
+export async function buildGbp({ env, gate, hosted, log = console.log, contextOf = null }) {
   if (String(env.NORDLA_GBP_DRAFTS_MODULE ?? '') !== '1') return null;
   if (!hosted || !gate) { log('GBP drafts: NOT built (needs the hosted Core identity)'); return null; }
   try {
     const { createGbpHost } = await import('./gbp-host.js');
-    const host = await createGbpHost({ gate, merchantId: hosted.merchantId, dataDir: hosted.dataDir });
+    const host = await createGbpHost({ gate, merchantId: hosted.merchantId, dataDir: hosted.dataDir, contextOf });
     log('GBP drafts: ON (review and approval only, nothing is published by Nordla)');
     return host;
   } catch (e) { log(`GBP drafts: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
@@ -131,7 +142,7 @@ export async function buildGbp({ env, gate, hosted, log = console.log }) {
 
 /** Nordla Core on this server: the merchant's core-decision.json + the decision journal in the data directory. Any problem (no config,
  *  a journal that does not verify) disables the Core with its reason and leaves China Sourcing working; the journal is never touched. */
-export async function buildCore({ env, dir, merchantId, store, safety, log = () => {}, readers: injected = null, procurement = null, root = join(HERE, '..', '..', '..') }) {
+export async function buildCore({ env, dir, merchantId, store, safety, log = () => {}, readers: injected = null, procurement = null, merchantIdentity = null, root = join(HERE, '..', '..', '..') }) {
   const { config, error } = await loadCoreConfig(env, root);
   if (!config) return { core: createCoreHttp({ runtime: null, configError: `CORE_NOT_CONFIGURED: ${error}`, store }), status: `Nordla Core OFF (${error})` };
   // the journal's guarantees need a volume on Railway (durability) and one service (one writer): refuse to record decisions where they would be lost
@@ -149,7 +160,7 @@ export async function buildCore({ env, dir, merchantId, store, safety, log = () 
   let creation = null; // local visual (owner's photo + headline), only when the merchant's typography is configured; no provider, no network
   try { const { createCreationService, loadCreationConfig } = await import('../../core-pilot/creation.js'); const cfg = await loadCreationConfig(env, root); if (cfg) creation = createCreationService({ merchantId, config: cfg, branding, dir: join(dir, 'core', 'creations') }); } catch (e) { log(`Création (local visual): NOT connected (${e.message}).`); }
   const financeSso = buildFinanceSso(env, merchantId);
-  return { core: createCoreHttp({ runtime, store, externals, ...readers, branding, campaigns, creation, financeSso, env }), status: `Nordla Core ON for merchant ${merchantId} (owner rules: ${config.ownerRules.length || 'none configured'}); Finance ${readers.finance ? 'read-only' : 'not connected'}; Analytics ${readers.analytics ? 'read-only' : 'not connected'}` };
+  return { core: createCoreHttp({ runtime, store, externals, ...readers, branding, campaigns, creation, financeSso, merchantIdentity, env }), status: `Nordla Core ON for merchant ${merchantId} (owner rules: ${config.ownerRules.length || 'none configured'}); Finance ${readers.finance ? 'read-only' : 'not connected'}; Analytics ${readers.analytics ? 'read-only' : 'not connected'}` };
 }
 
 /** Read-only Finance and Analytics for the Core, on the SAME Supabase project and merchant as the sign-in (hosted mode only). Finance needs
@@ -199,13 +210,15 @@ export async function startSourcingServer({ env = process.env, log = console.log
   const merchantKey = hosted ? hosted.merchantId : merchantProfile?.merchantId ?? 'local';
   const financeHandoff = await buildFinanceHandoff({ env, merchantId: merchantKey, log }); // Stock/Achats -> Finance inbox (hosted + Supabase + MERCHANT_TIMEZONE), else null
   const proc = await buildHostedProcurement({ dir, merchantId: merchantKey, env, log, financeHandoff }); // Stock / Achats on the same sign-in and volume; if it cannot open, Nordla runs without it
-  const core = await buildCore({ env, dir, merchantId: merchantKey, store, safety, log, readers: services?.readers ?? null, procurement: proc.assistant });
+  const generalService = hosted ? await buildGeneralService({ env, log }) : null; // the common Général service (null unless NORDLA_GENERAL_MODULE=1): modules READ it, none rewrites it
+  const core = await buildCore({ env, dir, merchantId: merchantKey, store, safety, log, readers: services?.readers ?? null, procurement: proc.assistant, merchantIdentity: generalService ? async () => ({ name: (await generalService.contextFor({ tenant: { merchantId: merchantKey }, module: 'core' })).profile.name }) : null });
   let backups = null;
   const creator = await buildCreator({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_CREATOR_MODULE=1
   const connections = await buildConnections({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_CONNECTIONS_MODULE=1
-  const general = await buildGeneral({ env, gate, hosted, log, shellOf: connections?.settings ?? null }); // optional, isolated: null unless NORDLA_GENERAL_MODULE=1
-  const videos = await buildVideos({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_VIDEO_DRAFTS_MODULE=1
-  const gbp = await buildGbp({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_GBP_DRAFTS_MODULE=1
+  const general = await buildGeneral({ env, gate, hosted, log, shellOf: connections?.settings ?? null, service: generalService }); // optional, isolated: null unless NORDLA_GENERAL_MODULE=1
+  const marketingContext = generalService ? () => generalService.contextFor({ tenant: { merchantId: merchantKey }, module: 'marketing' }) : null;
+  const videos = await buildVideos({ env, gate, hosted, log, contextOf: marketingContext }); // optional, isolated: null unless NORDLA_VIDEO_DRAFTS_MODULE=1
+  const gbp = await buildGbp({ env, gate, hosted, log, contextOf: marketingContext }); // optional, isolated: null unless NORDLA_GBP_DRAFTS_MODULE=1
   const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, videos, connections, general, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
   const server = http.createServer(app.handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); });

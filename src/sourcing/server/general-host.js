@@ -20,7 +20,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const SLUGS = new Set(Object.values(SECTION_META).map((m) => m.slug));
 const SECTION_OF = Object.fromEntries(Object.entries(SECTION_META).map(([id, m]) => [m.slug, id]));
 const readJson = async (req) => { const chunks = []; let n = 0; for await (const c of req) { n += c.length; if (n > 200_000) throw Object.assign(new Error('too large'), { code: 'BODY_TOO_LARGE' }); chunks.push(c); } try { return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch { throw Object.assign(new Error('invalid json'), { code: 'BODY_INVALID' }); } };
-const STATUS = Object.freeze({ MODULE_UNKNOWN: 404,FORBIDDEN_ROLE: 403, VALIDATION: 422, CONFLICT: 409, NOT_FOUND: 404, SECTION_UNKNOWN: 404, PRIMARY_REQUIRED: 409, ARCHIVED: 409, TENANT_REQUIRED: 403 });
+const STATUS = Object.freeze({ MODULE_UNKNOWN: 404, LOCATION_UNKNOWN: 422, LOCATION_ALREADY_LINKED: 409, FORBIDDEN_ROLE: 403, VALIDATION: 422, CONFLICT: 409, NOT_FOUND: 404, SECTION_UNKNOWN: 404, PRIMARY_REQUIRED: 409, ARCHIVED: 409, TENANT_REQUIRED: 403 });
 
 /** The option lists the forms need, so the page never carries a business list of its own. */
 export const OPTIONS = Object.freeze({
@@ -52,6 +52,9 @@ export async function createGeneralHost({ gate, merchantId, service, shellOf = n
               json(res, 200, { ...(await service.overview({ tenant, role })), shell, options: OPTIONS }); return true;
             }
             if (method === 'GET' && p === '/api/general/context') { json(res, 200, await service.contextFor({ tenant, module: url.searchParams.get('module') ?? '' })); return true; } // what a module may read (allowlisted fields)
+            if (method === 'GET' && p === '/api/general/supplier-locations') { json(res, 200, await service.supplierLocations({ tenant, role })); return true; }
+            const lk = /^\/api\/general\/establishments\/([0-9a-f-]{36})\/links$/i.exec(p);
+            if (lk && method === 'POST') { const body = await readJson(req); const prov = String(body.provider ?? ''); const ext = String(body.external_id ?? ''); if (!UUID.test(lk[1]) || !/^[a-z_]{2,40}$/.test(prov) || !ext || ext.length > 200) { json(res, 400, { error: { code: 'INVALID_REQUEST' } }); return true; } json(res, 200, await service.linkSupplierLocation({ tenant, role, actor, establishmentId: lk[1], provider: prov, externalId: ext, unlink: body.action === 'unlink' })); return true; }
             const rs = /^\/api\/general\/(profile|activity|establishments|selling_modes|regional|legal|objectives)$/.exec(p);
             if (rs && method === 'GET') { json(res, 200, await service.read({ tenant, role, section: rs[1] })); return true; }
             if (rs && (method === 'POST' || method === 'PUT') && rs[1] !== 'establishments') {

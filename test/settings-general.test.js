@@ -119,3 +119,34 @@ test('SG-10 objectives: one priority (Autre needs its label), valid date, up to 
   assert.equal(await code(svc.contextFor({ tenant: ta, module: 'inconnu' })), 'MODULE_UNKNOWN');
   assert.equal((await svc.overview({ tenant: ta, role: 'OWNER' })).sections.find((s) => s.id === 'objectives').filled, true);
 });
+
+test('SG-11 supplier links: only a location Nordla really holds can be tied, one place per location, editing the place keeps the links, nothing is invented', async () => {
+  const { svc, repo } = mk();
+  const place = (over = {}) => ({ name: 'Boutique', functions: [{ value: 'shop' }], address: { street: 'Rue 1', postal_code: '5000', city: 'Namur', country: 'BE' }, visibility: 'public', hours: {}, ...over });
+  const p1 = await svc.saveEstablishment({ tenant: ta, role: 'OWNER', actor: 'u', establishment: place() }); const p2 = await svc.saveEstablishment({ tenant: ta, role: 'OWNER', actor: 'u', establishment: place({ name: 'Dépôt', visibility: 'internal' }) });
+  assert.deepEqual((await svc.supplierLocations({ tenant: ta, role: 'OWNER' })).locations, [], 'no supplier connected: nothing to tie');
+  assert.equal(await code(svc.linkSupplierLocation({ tenant: ta, role: 'OWNER', actor: 'u', establishmentId: p1.id, provider: 'shopify', externalId: 'gid://x/Location/1' })), 'LOCATION_UNKNOWN');
+  repo.seedLocations(A, [{ name: 'Namur', type: 'shop', source_system: 'shopify', source_id: 'gid://x/Location/1' }, { name: 'Dépôt', type: 'warehouse', source_system: 'shopify', source_id: 'gid://x/Location/2' }]);
+  const ok = await svc.linkSupplierLocation({ tenant: ta, role: 'OWNER', actor: 'u', establishmentId: p1.id, provider: 'shopify', externalId: 'gid://x/Location/1' });
+  assert.deepEqual(ok.data.establishments.find((e) => e.id === p1.id).links, [{ provider: 'shopify', external_id: 'gid://x/Location/1' }]);
+  assert.equal(await code(svc.linkSupplierLocation({ tenant: ta, role: 'OWNER', actor: 'u', establishmentId: p2.id, provider: 'shopify', externalId: 'gid://x/Location/1' })), 'LOCATION_ALREADY_LINKED');
+  assert.equal(await code(svc.linkSupplierLocation({ tenant: ta, role: 'VIEWER', actor: 'u', establishmentId: p1.id, provider: 'shopify', externalId: 'gid://x/Location/2' })), 'FORBIDDEN_ROLE');
+  await svc.saveEstablishment({ tenant: ta, role: 'OWNER', actor: 'u', establishment: { ...place({ name: 'Boutique renommée' }), id: p1.id } });
+  const after = (await svc.read({ tenant: ta, role: 'OWNER', section: 'establishments' })).data.establishments.find((e) => e.id === p1.id); assert.equal(after.name, 'Boutique renommée'); assert.equal(after.links.length, 1, 'editing the place keeps its supplier link');
+  const list = await svc.supplierLocations({ tenant: ta, role: 'OWNER' }); assert.deepEqual(list.locations.map((l) => l.establishmentId), [p1.id, null]);
+  assert.equal((await svc.supplierLocations({ tenant: tb, role: 'OWNER' })).locations.length, 0, 'merchant B holds no location of A');
+  const un = await svc.linkSupplierLocation({ tenant: ta, role: 'OWNER', actor: 'u', establishmentId: p1.id, provider: 'shopify', externalId: 'gid://x/Location/1', unlink: true }); assert.deepEqual(un.data.establishments.find((e) => e.id === p1.id).links, []);
+  assert.equal((await svc.supplierLocations({ tenant: ta, role: 'OWNER' })).locations[0].establishmentId, null);
+});
+
+test('SG-12 module places: marketing/creative get only public places that agreed to share contact details; stock/sourcing get every active place without street or contact; the priority carries its label', async () => {
+  const { svc } = mk();
+  const base = { functions: [{ value: 'shop' }], address: { street: 'Rue Secrète 9', postal_code: '5000', city: 'Namur', country: 'BE' }, phone: '+3281000000', hours: {} };
+  await svc.saveEstablishment({ tenant: ta, role: 'OWNER', actor: 'u', establishment: { ...base, name: 'Public partagé', visibility: 'public', publish_contact: true } });
+  await svc.saveEstablishment({ tenant: ta, role: 'OWNER', actor: 'u', establishment: { ...base, name: 'Public discret', visibility: 'public', publish_contact: false } });
+  await svc.saveEstablishment({ tenant: ta, role: 'OWNER', actor: 'u', establishment: { ...base, name: 'Interne', visibility: 'internal' } });
+  await svc.save({ tenant: ta, role: 'OWNER', actor: 'u', section: 'objectives', data: { priority: { value: 'sales' }, featured_offers: [{ label: 'Coques' }] } });
+  const mkt = await svc.contextFor({ tenant: ta, module: 'marketing' }); assert.deepEqual(mkt.places.map((p) => p.name), ['Public partagé']); assert.equal(mkt.places[0].phone, '+3281000000'); assert.equal(mkt.objectives.priority.label, 'Développer les ventes');
+  const stock = await svc.contextFor({ tenant: ta, module: 'stock' }); assert.equal(stock.places.length, 3); assert.ok(stock.places.every((p) => !('phone' in p) && !('address' in p)), 'no street, no contact for stock');
+  const cr = await svc.contextFor({ tenant: ta, module: 'creative' }); assert.deepEqual(cr.places.map((p) => p.name), ['Public partagé']); assert.ok(!('legal' in cr));
+});

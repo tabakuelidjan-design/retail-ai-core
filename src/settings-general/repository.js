@@ -33,6 +33,8 @@ export function createSupabaseGeneralRepository({ supabase, now = () => new Date
       const r = await supabase.update('merchant_profile', { merchant_id: eq(merchantId), updated_at: eq(expectedToken) }, { timezone: value.timezone, currency: value.currency });
       return r?.length ? { ok: true, version: r[0].updated_at } : { ok: false, conflict: true };
     },
+    /** The locations the supplier systems gave Nordla for this merchant (table `locations`): read only here, written by the sync. */
+    async supplierLocations(merchantId) { return (await supabase.select('locations', { merchant_id: eq(merchantId), select: 'name,type,source_system,source_id', order: 'name.asc' })) ?? []; },
     async listEstablishments(merchantId) { return supabase.select('merchant_establishments', { merchant_id: eq(merchantId), select: 'id,data,is_primary,archived_at,version,updated_at', order: 'created_at.asc' }); },
     async createEstablishment(merchantId, data, { primary, actor }) {
       try { const r = await supabase.insert('merchant_establishments', [{ id: randomUUID(), merchant_id: merchantId, data, is_primary: primary, updated_by: actor }]); return { ok: true, row: r[0] }; }
@@ -47,7 +49,7 @@ export function createSupabaseGeneralRepository({ supabase, now = () => new Date
 
 /** Same interface, in memory. Used by the tests and by a local preview. */
 export function createMemoryGeneralRepository({ merchants = {}, now = () => new Date() } = {}) {
-  const m = new Map(Object.entries(merchants).map(([id, name]) => [id, { name }])); const sections = new Map(); const regionals = new Map(); const places = new Map();
+  const m = new Map(Object.entries(merchants).map(([id, name]) => [id, { name }])); const sections = new Map(); const regionals = new Map(); const places = new Map(); const locs = new Map();
   let tick = 0;
   const key = (a, b) => `${a}|${b}`;
   const clone = (x) => (x == null ? x : structuredClone(x));
@@ -67,6 +69,8 @@ export function createMemoryGeneralRepository({ merchants = {}, now = () => new 
       const cur = regionals.get(id); if ((cur?.updated_at ?? '') !== (expected ?? '')) return { ok: false, conflict: true };
       const row = { ...(cur ?? { country: null }), ...value, updated_at: `t${++tick}` }; regionals.set(id, row); return { ok: true, version: row.updated_at };
     },
+    seedLocations(id, rows) { locs.set(id, clone(rows)); },
+    async supplierLocations(id) { return clone(locs.get(id) ?? []); },
     async listEstablishments(id) { return clone([...places.values()].filter((p) => p.merchant_id === id)); },
     async createEstablishment(id, data, { primary, actor }) {
       if (primary && [...places.values()].some((p) => p.merchant_id === id && p.is_primary && !p.archived_at)) return { ok: false, conflict: true };

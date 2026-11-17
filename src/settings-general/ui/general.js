@@ -157,6 +157,21 @@
       if (f.editable) box.append(h('button', { class: 'gn-add', type: 'button', text: '+ Ajouter une date', on: { click: () => { (f.draft.exceptions ??= []).push({ date: '', closed: true, slots: [], reason: '' }); f.touch(); draw(); } } })); if (!list.length && !f.editable) box.append(h('span', { class: 'gn-help', text: 'Aucun horaire exceptionnel' })); };
     draw(); return box;
   }
+  // supplier locations: tie a location Nordla received from a connected supplier to THIS place (by its stable Nordla id). Nothing is invented: only locations that exist are offered.
+  function supplierBlock(p, canWrite) {
+    const box = h('div', { class: 'gn-field-block', 'data-supplier-links': '' }); const SUP = { shopify: 'Shopify', google_business_profile: 'Google Business Profile' };
+    const draw = async () => {
+      const r = await api('/api/general/supplier-locations'); box.replaceChildren(h('h3', { text: 'Lieux du fournisseur' }));
+      if (!r.ok) { box.append(h('p', { class: 'gn-help', text: 'Les lieux du fournisseur sont indisponibles pour le moment.' })); return; }
+      const mine = r.json.locations.filter((l) => l.establishmentId === p.id); const free = r.json.locations.filter((l) => !l.establishmentId);
+      if (!r.json.locations.length) { box.append(h('p', { class: 'gn-note', text: 'Aucun lieu fournisseur n’est connu de Nordla : le fournisseur n’est pas connecté (voir Connexions). L’association réelle reste à vérifier.' }), h('a', { class: 'cx-link', href: '/settings/connections', text: 'Ouvrir Connexions' })); return; }
+      const act = async (l, action) => { const x = await api('/api/general/establishments/' + p.id + '/links', { provider: l.provider, external_id: l.externalId, action }); if (!x.ok) { flash = { tone: 'err', text: ERRORS[x.json?.error?.code] ?? x.json?.error?.message ?? 'Action refusée.' }; } else flash = { tone: 'ok', text: action === 'unlink' ? 'Association retirée.' : 'Lieu associé.' }; await openSection('establishments', true); };
+      for (const l of mine) box.append(h('div', { class: 'gn-slot' }, h('span', { text: (SUP[l.provider] ?? l.provider) + ' : ' + (l.name || l.externalId) }), canWrite ? h('button', { class: 'cx-btn ghost', type: 'button', text: 'Retirer', on: { click: () => act(l, 'unlink') } }) : null));
+      if (canWrite && free.length) { const sel = h('select', { class: 'gn-select gn-add-select', 'aria-label': 'Lieu du fournisseur à associer' }, h('option', { value: '', text: '+ Associer un lieu du fournisseur' }), free.map((l, i) => h('option', { value: String(i), text: (SUP[l.provider] ?? l.provider) + ' : ' + (l.name || l.externalId) }))); sel.addEventListener('change', () => { if (sel.value !== '') act(free[Number(sel.value)], 'link'); }); box.append(sel); }
+      if (!mine.length && !free.length) box.append(h('p', { class: 'gn-help', text: 'Tous les lieux connus sont déjà associés.' }));
+    };
+    draw(); return box;
+  }
   function placeForm(p, canWrite, isNew) {
     const f = makeForm({ section: 'establishments', read: { data: placeData(p ?? {}), version: p?.version ?? null, canWrite: canWrite && !p?.archived }, build: null, submit: null });
     f.build = (ff) => h('form', { class: 'gn-form', novalidate: true, on: { submit: (e) => e.preventDefault() }, 'data-place': p?.id ?? 'new' }, head(isNew ? 'Nouvel établissement' : (p.name || 'Établissement'), p?.archived ? 'Archivé : restaurez-le pour le modifier.' : (p?.isPrimary ? 'Établissement principal' : null)), h('hr', { class: 'gn-rule' }),
@@ -165,6 +180,7 @@
       field(ff, 'phone', 'Téléphone', input(ff, 'phone', { type: 'tel', maxlength: 30, inputmode: 'tel' }), { optional: true }), field(ff, 'email', 'E-mail', input(ff, 'email', { type: 'email', maxlength: 254 }), { optional: true }),
       field(ff, 'visibility', 'Visibilité', select(ff, 'visibility', { public: 'Lieu accueillant le public', internal: 'Lieu interne' }, { empty: null, onchange: () => { if (ff.draft.visibility !== 'public') ff.draft.publish_contact = false; ff.rebuild(); } })),
       ff.draft.visibility === 'public' ? field(ff, 'publish_contact', 'Brouillons', h('label', { class: 'gn-check' }, h('input', { type: 'checkbox', checked: !!ff.draft.publish_contact, disabled: !ff.editable, on: { change: (e) => { ff.draft.publish_contact = e.target.checked; ff.touch(); } } }), h('span', { text: 'Reprendre l’adresse et les coordonnées dans les brouillons publics' }))) : h('p', { class: 'gn-note', text: 'Un lieu interne ne fournit pas son adresse aux brouillons publics.' }),
+      !isNew && !p?.archived ? supplierBlock(p, canWrite) : null,
       h('h3', { text: 'Horaires réguliers' }), hoursEditor(ff), h('h3', { text: 'Horaires exceptionnels' }), h('p', { class: 'gn-help', text: 'Ils priment sur les horaires réguliers pour la date concernée.' }), exceptionsEditor(ff),
       bar(ff, !isNew && canWrite ? [p.archived ? h('button', { class: 'cx-btn ghost', type: 'button', text: 'Restaurer', on: { click: () => placeAction(p.id, 'restore') } }) : [!p.isPrimary ? h('button', { class: 'cx-btn ghost', type: 'button', text: 'Définir comme principal', on: { click: () => placeAction(p.id, 'primary') } }) : null, h('button', { class: 'cx-btn ghost', type: 'button', text: 'Archiver', on: { click: () => { if (window.confirm('Archiver ce lieu ? Les références des ventes et stocks passés sont conservées.')) placeAction(p.id, 'archive'); } } })]] : []));
     f.submit = async (ff) => { const r = await api('/api/general/establishments', { establishment: { ...ff.draft, ...(p?.id ? { id: p.id } : {}) }, expectedVersion: ff.version }); if (!r.ok) return r; const saved = r.json.data.establishments.find((x) => x.id === r.json.id); placeSel = r.json.id; return { ...r, json: { data: placeData(saved), version: saved.version } }; };

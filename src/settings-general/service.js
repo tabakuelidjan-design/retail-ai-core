@@ -12,7 +12,11 @@ const MODULE_FIELDS = Object.freeze({
   core: { profile: ['name'] }, marketing: { profile: ['name', 'website', 'email', 'phone', 'description'], objectives: ['priority', 'expected_result', 'deadline', 'featured_offers', 'constraints'] },
   growth: { activity: ['main', 'channels', 'clientele'], objectives: ['priority', 'expected_result', 'deadline', 'constraints'] }, stock: { selling_modes: ['modes'], objectives: ['constraints'] },
   analytics: { regional: ['currency', 'timezone'], activity: ['channels'] },
+  creative: { profile: ['name', 'website', 'description'], activity: ['main', 'complementary'], objectives: ['priority', 'expected_result', 'featured_offers', 'constraints'] },
+  sourcing: { activity: ['main', 'complementary'], selling_modes: ['modes'], objectives: ['constraints'] },
 });
+// modules that also receive places: 'public' = only the places open to the public that agreed to share their contact details; 'all' = every active place (internal ones included, never given to a public draft)
+const MODULE_PLACES = Object.freeze({ marketing: 'public', creative: 'public', stock: 'all', sourcing: 'all' });
 export const SECTION_META = Object.freeze({
   profile: { label: 'Profil du commerce', slug: 'profil' }, activity: { label: 'Activité et canaux de vente', slug: 'activite' }, establishments: { label: 'Établissements et horaires', slug: 'etablissements' },
   selling_modes: { label: 'Mode de vente et de production', slug: 'modes-de-vente' }, regional: { label: 'Devise et fuseau horaire', slug: 'devise-fuseau' }, legal: { label: 'Informations légales et facturation', slug: 'legal' }, objectives: { label: 'Objectifs et priorités', slug: 'objectifs' },
@@ -85,6 +89,12 @@ export function createGeneralService({ repo, catalogueFamilies = async () => [],
       const id = merchantOf(tenant); const wants = MODULE_FIELDS[module]; if (!wants) throw new GeneralError('MODULE_UNKNOWN', 'Module inconnu.');
       const out = { module, merchantId: id };
       for (const [section, keys] of Object.entries(wants)) { const r = await READERS[section](id); out[section] = Object.fromEntries(keys.map((k) => [k, r.data[k] ?? null])); }
+      if (out.objectives?.priority) out.objectives = { ...out.objectives, priority: { ...out.objectives.priority, label: out.objectives.priority.label ?? M.PRIORITIES[out.objectives.priority.value] ?? null } };
+      const mode = MODULE_PLACES[module];
+      if (mode) {
+        const rows = (await repo.listEstablishments(id)).filter((r) => !r.archived_at);
+        out.places = rows.filter((r) => mode === 'all' || (r.data.visibility === 'public' && r.data.publish_contact === true)).map((r) => ({ id: r.id, primary: !!r.is_primary, name: r.data.name ?? null, functions: r.data.functions ?? [], visibility: r.data.visibility ?? 'internal', ...(mode === 'public' ? { address: r.data.address ?? null, phone: r.data.phone ?? null, email: r.data.email ?? null, hours: r.data.hours ?? null } : { city: r.data.address?.city ?? null, country: r.data.address?.country ?? null }) }));
+      }
       return out;
     },
     /** Saves ONE section. `expectedVersion` is the version the form was loaded with (null while the section never existed). */
@@ -120,7 +130,7 @@ export function createGeneralService({ repo, catalogueFamilies = async () => [],
       }
       const cur = rows.find((r) => r.id === establishment.id); if (!cur) throw new GeneralError('NOT_FOUND', 'Établissement inconnu.');
       if (cur.archived_at) throw new GeneralError('ARCHIVED', 'Un établissement archivé ne se modifie pas : restaurez-le d’abord.');
-      const upd = await repo.updateEstablishment(id, cur.id, { data: checked.value }, expectedVersion ?? cur.version, actor);
+      const upd = await repo.updateEstablishment(id, cur.id, { data: { ...checked.value, ...(cur.data.links?.length ? { links: cur.data.links } : {}) } }, expectedVersion ?? cur.version, actor); // the supplier links are not edited here: they are kept
       if (!upd.ok) throw new GeneralError('CONFLICT', 'Cet établissement a été modifié entre-temps ; rien n’a été remplacé.', { current: await readEstablishments(id) });
       return { ok: true, ...(await readEstablishments(id)), id: cur.id };
     },
@@ -131,6 +141,27 @@ export function createGeneralService({ repo, catalogueFamilies = async () => [],
       if (!restore && cur.is_primary && rows.some((r) => r.id !== cur.id && !r.archived_at)) throw new GeneralError('PRIMARY_REQUIRED', 'Désignez d’abord un autre établissement principal.');
       if (restore && !cur.archived_at) return { ok: true, ...(await readEstablishments(id)) };
       const upd = await repo.updateEstablishment(id, cur.id, { archived_at: restore ? null : isoDate(now()), ...(restore ? { is_primary: false } : { is_primary: false }) }, cur.version, actor);
+      if (!upd.ok) throw new GeneralError('CONFLICT', 'Cet établissement a été modifié entre-temps.');
+      return { ok: true, ...(await readEstablishments(id)) };
+    },
+    /** The supplier locations Nordla knows (from the sync) and which establishment each one is tied to. None = the supplier is not connected / has given nothing yet: the real association stays to be verified. */
+    async supplierLocations({ tenant, role }) {
+      const id = merchantOf(tenant); const [locs, rows] = await Promise.all([repo.supplierLocations(id), repo.listEstablishments(id)]);
+      const tied = new Map(); for (const r of rows.filter((x) => !x.archived_at)) for (const l of r.data.links ?? []) tied.set(`${l.provider}|${l.external_id}`, r.id);
+      return { canWrite: canWrite(role), locations: locs.map((l) => ({ provider: l.source_system, externalId: l.source_id, name: l.name, type: l.type, establishmentId: tied.get(`${l.source_system}|${l.source_id}`) ?? null })) };
+    },
+    /** Ties ONE supplier location (that really exists in Nordla's own copy) to ONE establishment, by the stable Nordla id of the place. Never invents a supplier id. */
+    async linkSupplierLocation({ tenant, role, actor, establishmentId, provider, externalId, unlink = false }) {
+      const id = merchantOf(tenant); needWrite(role);
+      const rows = await repo.listEstablishments(id); const cur = rows.find((r) => r.id === establishmentId && !r.archived_at); if (!cur) throw new GeneralError('NOT_FOUND', 'Établissement inconnu ou archivé.');
+      const links = [...(cur.data.links ?? [])]; const same = (l) => l.provider === provider && l.external_id === externalId;
+      if (unlink) { if (!links.some(same)) return { ok: true, ...(await readEstablishments(id)) }; links.splice(links.findIndex(same), 1); }
+      else {
+        const known = (await repo.supplierLocations(id)).find((l) => l.source_system === provider && l.source_id === externalId); if (!known) throw new GeneralError('LOCATION_UNKNOWN', 'Ce lieu du fournisseur n’est pas connu de Nordla : connectez le fournisseur d’abord.');
+        if (rows.some((r) => r.id !== cur.id && !r.archived_at && (r.data.links ?? []).some(same))) throw new GeneralError('LOCATION_ALREADY_LINKED', 'Ce lieu est déjà associé à un autre établissement.');
+        if (!links.some(same)) links.push({ provider, external_id: externalId });
+      }
+      const upd = await repo.updateEstablishment(id, cur.id, { data: { ...cur.data, links } }, cur.version, actor);
       if (!upd.ok) throw new GeneralError('CONFLICT', 'Cet établissement a été modifié entre-temps.');
       return { ok: true, ...(await readEstablishments(id)) };
     },
