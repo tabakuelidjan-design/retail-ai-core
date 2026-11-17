@@ -277,3 +277,32 @@ test('TM-14 the model refuses nothing silently: refusal messages exist for every
   for (const c of ['LAST_OWNER', 'FORBIDDEN', 'SELF_PROMOTION', 'ALREADY_MEMBER', 'DUPLICATE_PENDING', 'MEMBER_REMOVED', 'NOT_RESENDABLE', 'NOT_CANCELLABLE', 'TARGET_NOT_MEMBER']) assert.ok(M.REFUSAL[c], c);
   assert.ok(new TeamError('X', 'm') instanceof Error);
 });
+
+// ------------------------------------------------------------------ China Sourcing: roles enforced server-side (not only hidden)
+test('TM-15 China Sourcing: a read-only member reads but every change is refused by the SERVER (API included); OWNER/ADMIN still save; the grid says so', async () => {
+  const { mkdtemp, rm } = await import('node:fs/promises'); const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const { createSourcingApp, SOURCING_WRITERS } = await import('../src/sourcing/server/app.js'); const { createFileStore } = await import('../src/sourcing/store/file-store.js'); const { newCase } = await import('../src/sourcing/core/case.js');
+  const dir = await mkdtemp(join(tmpdir(), 'tm15-')); const w = bootHost(); const store = createFileStore(dir);
+  const app = createSourcingApp({ token: 'x'.repeat(32), gate: w.gate, store, uiDir: dir, coreDir: dir, allowedHosts: null });
+  const s = await serve([{ handle: async (req, res) => { await app.handler(req, res); return true; } }]);
+  try {
+    assert.deepEqual([...SOURCING_WRITERS].sort(), ['ADMIN', 'COLLABORATOR', 'OWNER']); assert.equal(M.MODULE_RIGHTS.find((m) => m.id === 'sourcing').levels.VIEWER, 'view', 'the grid now states the enforced rule');
+    const c = newCase({ id: 'case-1', name: 'gourde', now: new Date('2026-11-18T08:00:00Z') });
+    assert.equal((await s.call('/api/cases/case-1', { as: 'owner', method: 'PUT', body: c })).status, 200, 'owner saves');
+    assert.equal((await s.call('/api/cases/case-1', { as: 'admin', method: 'PUT', body: c })).status === 403, false, 'admin is not refused by the role gate');
+    assert.equal((await s.call('/api/cases', { as: 'viewer' })).status, 200, 'viewer lists'); assert.equal((await s.call('/api/cases/case-1', { as: 'viewer' })).status, 200, 'viewer reads');
+    const put = await s.call('/api/cases/case-1', { as: 'viewer', method: 'PUT', body: { ...c, name: 'piraté' } }); assert.equal(put.status, 403); assert.equal(put.json.error, 'FORBIDDEN_ROLE');
+    assert.equal((await s.call('/api/cases/case-1', { as: 'viewer', method: 'DELETE', body: {} })).status, 403);
+    assert.equal((await s.call('/api/field/workspace', { as: 'viewer', method: 'PUT', body: { x: 1 } })).status, 403);
+    assert.equal((await s.call('/api/documents/extract', { as: 'viewer', method: 'POST', body: {} })).status, 403);
+    assert.equal((await s.call('/api/core/ask', { as: 'viewer', method: 'POST', body: {} })).status === 403, false, 'asking Nordla is a read');
+    assert.ok(!(await s.call('/api/cases/case-1', { as: 'viewer' })).text.includes('piraté'), 'nothing was changed');
+  } finally { s.close(); await rm(dir, { recursive: true, force: true }); }
+});
+
+test('TM-16 the Équipe et accès card does not lead to a 404 when the module is off', async () => {
+  const { createConnectionsService } = await import('../src/connections/service.js'); const { createRegistry } = await import('../src/connections/registry.js');
+  const mk = (disabledSections) => createConnectionsService({ registry: createRegistry(), disabledSections });
+  const off = await mk(['team']).settings({ tenant: { merchantId: A }, role: 'OWNER' }); const c = off.cards.find((x) => x.id === 'team'); assert.deepEqual([c.available, c.href], [false, null]);
+  const on = await mk([]).settings({ tenant: { merchantId: A }, role: 'OWNER' }); assert.deepEqual([on.cards.find((x) => x.id === 'team').available, on.cards.find((x) => x.id === 'team').href], [true, '/settings/team']);
+});
