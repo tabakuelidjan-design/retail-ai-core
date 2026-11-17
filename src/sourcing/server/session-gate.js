@@ -14,8 +14,9 @@
 
 const json = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers }); res.end(JSON.stringify(body)); };
 const SAFE = ['GET', 'HEAD'];
+const MFA_EXEMPT = /^\/api\/(security|auth)(\/|$)/; // enrolling the second factor and signing in stay reachable
 
-export function createSessionGate({ identity, security, features = {} }) {
+export function createSessionGate({ identity, security, features = {}, mfaRule = null }) {
   if (!identity || typeof identity.authenticateAndOpenSession !== 'function' || typeof identity.resolveAccessSession !== 'function') throw new TypeError('createSessionGate needs the identity service of this server (createIdentityService)');
   if (!security || typeof security.guardMutation !== 'function') throw new TypeError('createSessionGate needs the HTTP security of this server (createHttpSecurity)');
   if (identity.context?.module !== 'sourcing' || security.module !== 'sourcing') throw new TypeError('the identity and the HTTP security must both be built for the "sourcing" module');
@@ -51,6 +52,13 @@ export function createSessionGate({ identity, security, features = {} }) {
 
   /** Every other /api route: a valid session; for a change also the same-origin and CSRF checks. */
   async function authorize(req) {
+    const r = await authorizeBase(req);
+    if (r.ok && mfaRule && !String(req.url ?? '').split('?')[0].match(MFA_EXEMPT) && await mfaRule.blocked(r.access)) {
+      return { ok: false, status: 403, body: { error: { code: 'MFA_REQUIRED_FOR_ROLE', message: 'Votre rôle exige la double authentification. Activez-la dans Paramètres › Sécurité pour retrouver l’accès.' } } };
+    }
+    return r;
+  }
+  async function authorizeBase(req) {
     const method = String(req.method ?? '').toUpperCase();
     if (SAFE.includes(method)) {
       const g = security.guardRead(req); if (!g.ok) return refusal(g);
@@ -65,5 +73,5 @@ export function createSessionGate({ identity, security, features = {} }) {
 
   /** Public (no session) POST routes of the same origin, e.g. password recovery: same Origin / Host checks as the login. */
   const guardPublicPost = (req) => security.guardLogin(req);
-  return Object.freeze({ mode: 'session', handle, authorize, guardPublicPost, readBody: (req) => security.readJsonBody?.bind(null, req) });
+  return Object.freeze({ mode: 'session', handle, authorize, guardPublicPost, mfaRule, readBody: (req) => security.readJsonBody?.bind(null, req) });
 }

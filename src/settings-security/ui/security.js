@@ -93,7 +93,7 @@
     return [head(r, 'Comment votre compte se connecte à Nordla.'), h('hr', { class: 'gn-rule' }),
       row('Méthode de connexion', h('strong', { text: a.signInMethod.label }), a.email ? h('p', { class: 'gn-help', text: `Compte : ${a.email}` }) : null, a.lastSignInAt ? h('p', { class: 'gn-help', text: `Dernière connexion chez le fournisseur : ${fmt(a.lastSignInAt)}` }) : null),
       mfaRow(a),
-      row('Mot de passe', pw), row('Récupérer mon compte', a.recovery.available ? h('div', {}, state('Disponible', 'ok'), h('p', { class: 'gn-help', text: 'Depuis la page de connexion, « Mot de passe oublié ? » envoie un lien de réinitialisation à votre adresse e-mail. Le lien est valable peu de temps, ne sert qu’une fois et déconnecte toutes vos sessions.' }), h('a', { class: 'cx-link', href: '/reset-password', text: 'Ouvrir la page de réinitialisation' })) : unavailable('Récupération par e-mail', a.recovery.reason)), row('Clés d’accès (passkeys)', unavailable('Clés d’accès', a.passkeys.reason))];
+      row('Mot de passe', pw), row('Récupérer mon compte', h('div', {}, a.recovery.available ? h('div', {}, h('strong', { text: 'Vous avez perdu votre mot de passe et vous recevez vos e-mails' }), h('p', { class: 'gn-help', text: 'Depuis la page de connexion, « Mot de passe oublié ? » envoie un lien de réinitialisation à votre adresse e-mail. Le lien ne sert qu’une fois, expire rapidement et déconnecte toutes vos sessions. Si la double authentification est activée, le code reste demandé.' }), h('a', { class: 'cx-link', href: '/reset-password', text: 'Ouvrir la page de réinitialisation' })) : unavailable('Mot de passe oublié (par e-mail)', a.recovery.reason), h('div', { class: 'gn-mt' }, h('strong', { text: 'Vous n’avez pas accès à vos e-mails, ou vous aidez un collègue' }), h('p', { class: 'gn-help', text: 'Un propriétaire ou un administrateur crée un lien de réinitialisation depuis Paramètres › Équipe et accès › Membres (« Créer un lien de réinitialisation ») et le transmet à la personne. Valable 60 minutes, une seule fois, il ferme aussi toutes les sessions ; la double authentification reste demandée à la connexion. Un administrateur ne peut le faire que pour un rôle Lecture seule.' }), h('a', { class: 'cx-link', href: '/settings/team/membres', text: 'Ouvrir Équipe et accès' })))), row('Clés d’accès (passkeys)', unavailable('Clés d’accès', a.passkeys.reason))];
   }
 
   // ---------------------------------------------------------------- rubric 2
@@ -123,13 +123,28 @@
   }
 
   // ---------------------------------------------------------------- rubric 4
+  function mfaRuleRow(t) {
+    const m = t.requireMfa; const label = 'Exiger la double authentification pour les rôles sensibles';
+    if (!m.available) return row(label, unavailable('Exiger la double authentification', m.reason));
+    const out = h('div', { class: 'gn-slot' });
+    const missing = m.nonCompliant;
+    const btn = h('button', { class: 'cx-btn' + (m.enabled ? ' ghost' : ''), type: 'button', disabled: !m.editable, text: m.enabled ? 'Désactiver l’exigence' : 'Exiger la double authentification', on: { click: async () => {
+      const ask = m.enabled ? 'Désactiver l’exigence de double authentification pour les propriétaires et administrateurs ?' : 'Exiger la double authentification des propriétaires et administrateurs ? Ceux qui ne l’ont pas activée n’accèderont plus qu’à Paramètres › Sécurité tant qu’ils ne l’auront pas fait.' + (missing && missing.length ? ` Concernés aujourd’hui : ${missing.map((x) => x.label).join(', ')}.` : '');
+      if (!window.confirm(ask)) return; btn.disabled = true;
+      const res = await api('/api/security/team', { requireMfa: !m.enabled }); if (guard(res)) return;
+      if (!res.ok) { btn.disabled = !m.editable; out.replaceChildren(h('p', { class: 'gn-error', role: 'alert', text: res.json?.error?.message ?? 'Action impossible.' })); return; }
+      open('team'); } } });
+    return row(label, h('div', {}, state(m.enabled ? 'Exigée' : 'Non exigée', m.enabled ? 'ok' : 'todo'), h('p', { class: 'gn-help', text: m.note }),
+      missing && missing.length ? h('p', { class: 'gn-help', text: `Sans second facteur aujourd’hui : ${missing.map((x) => `${x.label} (${x.role === 'OWNER' ? 'propriétaire' : 'administrateur'})`).join(', ')}.` }) : (missing ? h('p', { class: 'gn-help', text: 'Tous les propriétaires et administrateurs ont un second facteur.' }) : null),
+      m.editable ? btn : h('p', { class: 'gn-help', text: m.reason }), out));
+  }
   async function team(r) {
     const res = await api('/api/security/team'); if (guard(res)) return null;
     const t = res.json;
     return [head(r, 'Les règles de connexion réellement appliquées à ce commerce.'), h('hr', { class: 'gn-rule' }),
       h('p', { class: 'gn-note', text: t.canManage ? 'Votre rôle peut gérer ces règles, mais aucune n’est encore modifiable depuis cette page.' : 'Lecture seule : la gestion de ces règles est réservée au propriétaire et aux administrateurs.' }),
       ...t.applied.map((a) => row(a.label, h('strong', { text: a.value }), ' ', state('Appliquée', 'ok'), a.note ? h('p', { class: 'gn-help', text: a.note }) : null)),
-      row('Exiger la double authentification pour les rôles sensibles', unavailable('Exiger la double authentification', t.requireMfa.reason)),
+      mfaRuleRow(t),
       row('Délai d’inactivité par rôle', unavailable('Délai par rôle', 'Prévu pour une étape suivante. Le délai est aujourd’hui le même pour tous.'))];
   }
 

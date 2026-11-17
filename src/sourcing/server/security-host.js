@@ -57,11 +57,11 @@ export async function createSecurityHost({ gate, merchantId, service, sessionCoo
           try {
             if (method === 'GET' && p === '/api/security') {
               let shell = null; if (shellOf) { try { const s = await shellOf({ tenant: { merchantId, source: 'session' }, role: me.role }); shell = { nav: s.nav, merchant: s.merchant, environment: s.environment }; } catch { shell = null; } }
-              json(res, 200, { role: me.role, shell, account: await service.account(me), team: service.teamRules(me) }); return true;
+              json(res, 200, { role: me.role, shell, account: await service.account(me), team: await service.teamRules(me) }); return true;
             }
             if (method === 'GET' && p === '/api/security/sessions') { json(res, 200, await service.listSessions(me, token)); return true; }
             if (method === 'GET' && p === '/api/security/activity') { json(res, 200, await service.activity(me)); return true; }
-            if (method === 'GET' && p === '/api/security/team') { json(res, 200, service.teamRules(me)); return true; }
+            if (method === 'GET' && p === '/api/security/team') { json(res, 200, await service.teamRules(me)); return true; }
             if (method === 'POST' && p === '/api/security/sessions/revoke-current') { json(res, 200, await service.revokeCurrent(me, token)); return true; }
             if (method === 'POST' && p === '/api/security/sessions/revoke-others') { json(res, 200, await service.revokeOthers(me, token)); return true; }
             if (method === 'POST' && p === '/api/security/password') { const b = await readJson(req); json(res, 200, await service.changePassword(me, token, { current: b.current, next: b.next, code: b.code })); return true; }
@@ -69,7 +69,7 @@ export async function createSecurityHost({ gate, merchantId, service, sessionCoo
             if (method === 'POST' && p === '/api/security/mfa/confirm') { const b = await readJson(req); json(res, 200, await service.mfaConfirm(me, token, { password: b.password, factorId: b.factorId, code: b.code })); return true; }
             if (method === 'POST' && p === '/api/security/mfa/disable') { const b = await readJson(req); json(res, 200, await service.mfaDisable(me, token, { password: b.password, code: b.code })); return true; }
             if (method === 'POST' && p === '/api/security/mfa/recovery-codes') { const b = await readJson(req); json(res, 200, await service.mfaRenewCodes(me, { password: b.password, code: b.code })); return true; }
-            if (method === 'PUT' && p === '/api/security/team') { await readJson(req); service.saveTeamRules(me); json(res, 200, { ok: true }); return true; }
+            if ((method === 'PUT' || method === 'POST') && p === '/api/security/team') { const b = await readJson(req); json(res, 200, await service.saveTeamRules(me, { requireMfa: b.requireMfa })); return true; }
           } catch (e) {
             if (e?.code === 'BODY_TOO_LARGE' || e?.code === 'BODY_INVALID') { json(res, e.code === 'BODY_TOO_LARGE' ? 413 : 400, { error: { code: e.code } }); return true; }
             if (e instanceof SecurityError) { json(res, STATUS[e.code] ?? 400, { error: { code: e.code, message: e.message } }); return true; }

@@ -19,13 +19,13 @@ export const ACTIVITY_LABELS = Object.freeze({
 const DETAIL_KEYS = ['scope', 'count', 'code']; // the only detail fields ever returned
 
 const NO_MFA_REASON = 'La connexion Nordla ne demande pas encore de second facteur : un facteur enregistré chez le fournisseur ne protégerait pas la connexion. L’inscription reste désactivée tant que ce contrôle n’existe pas.';
-const NO_RECOVERY_REASON = 'Nordla n’a pas encore de page de réinitialisation : le fournisseur enverrait un lien qui n’ouvre aucun écran Nordla. En cas de perte du mot de passe, contactez le propriétaire du compte Nordla.';
+const NO_RECOVERY_REASON = 'La réinitialisation par e-mail n’est pas activée sur ce serveur. Un propriétaire ou un administrateur peut créer un lien de réinitialisation depuis Paramètres › Équipe et accès › Membres.';
 
 /**
  * @param {{ supabase, adminAuth: { getUser(id): Promise<object|null>, setPassword(id, pw): Promise<boolean> }|null, verifier: { verifyPassword(email, pw): Promise<object> }|null,
  *   events: { record: Function }, sessions: { logoutCurrent: Function }, rules: object, now?: () => Date, idleMs?: number }} deps
  */
-export function createSecurityService({ supabase, adminAuth = null, verifier = null, events, sessions, rules, now = () => new Date(), idleMs = 7_200_000, mfa = null, recoveryCodes = null, recovery = null, context = null, resetUrl = null, features = {} }) {
+export function createSecurityService({ supabase, adminAuth = null, verifier = null, events, sessions, rules, now = () => new Date(), idleMs = 7_200_000, mfa = null, recoveryCodes = null, recovery = null, context = null, resetUrl = null, features = {}, mfaRule = null }) {
   const failures = new Map(); // password-change attempts per person: 5 failures / 15 min
   const recent = (u) => (failures.get(u) ?? []).filter((t) => now().getTime() - t < 900_000);
   const blocked = (u) => recent(u).length >= 5;
@@ -129,7 +129,7 @@ export function createSecurityService({ supabase, adminAuth = null, verifier = n
     if (v.userId !== me.userId) throw new SecurityError('FEATURE_UNAVAILABLE', 'Compte incohérent.');
     let ok = false; try { ok = await adminAuth.setPassword(me.userId, next); } catch { ok = false; }
     if (!ok) { await journal(me, 'PASSWORD_CHANGE_FAILED', 'FAILURE', { code: 'PROVIDER_REFUSED' }); throw new SecurityError('PROVIDER_REFUSED', 'Le fournisseur a refusé ce mot de passe (trop faible ou déjà utilisé). Rien n’a été changé.'); }
-    failures.delete(me.userId);
+    failures.delete(me.userId); mfaRule?.forget(context?.merchantId, me.userId);
     const closed = await revokeAllExcept(me, cur); // a changed password closes every other session of the person
     await journal(me, 'PASSWORD_CHANGED', 'SUCCESS', { scope: 'others', count: closed }, { type: 'session', id: cur });
     return { changed: true, otherSessionsClosed: closed };
@@ -155,7 +155,7 @@ export function createSecurityService({ supabase, adminAuth = null, verifier = n
     const { email } = await emailOf(me);
     const r = await mfa.confirm(email, String(password ?? ''), factorId, code);
     if (!r.ok) { if (r.kind === 'INVALID') failed(me.userId); providerFail(r); }
-    failures.delete(me.userId);
+    failures.delete(me.userId); mfaRule?.forget(context?.merchantId, me.userId);
     const codes = await recoveryCodes.renew(me.userId);
     const closed = await revokeAllExcept(me, cur); // sessions opened before the protection existed are closed
     await journal(me, 'MFA_ENABLED', 'SUCCESS', { scope: 'others', count: closed }, { type: 'session', id: cur });
@@ -178,7 +178,7 @@ export function createSecurityService({ supabase, adminAuth = null, verifier = n
     const cur = await currentSessionId(me, token); if (!cur) throw new SecurityError('CURRENT_SESSION_UNKNOWN', 'La session actuelle est introuvable : rien n’a été changé.');
     const { user } = await proof(me, { password, code });
     for (const f of user.factors ?? []) { let ok = false; try { ok = await adminAuth.deleteFactor(me.userId, f.id); } catch { ok = false; } if (!ok) throw new SecurityError('PROVIDER_REFUSED', 'Le fournisseur n’a pas pu retirer le facteur : rien n’est confirmé.'); }
-    await recoveryCodes.clear(me.userId); failures.delete(me.userId);
+    await recoveryCodes.clear(me.userId); failures.delete(me.userId); mfaRule?.forget(context?.merchantId, me.userId);
     const closed = await revokeAllExcept(me, cur);
     await journal(me, 'MFA_DISABLED', 'SUCCESS', { scope: 'others', count: closed }, { type: 'session', id: cur });
     return { disabled: true, otherSessionsClosed: closed };
@@ -229,8 +229,11 @@ export function createSecurityService({ supabase, adminAuth = null, verifier = n
     return { reset: true, sessionsClosed: n };
   }
 
-  function teamRules(me) {
+  async function teamRules(me) {
     need(me);
+    const ruleReady = Boolean(features.mfa && mfaRule && context?.merchantId);
+    let enabled = false; let missing = null;
+    if (ruleReady) { try { enabled = await mfaRule.enabled(context.merchantId); } catch { enabled = false; } if (MANAGER_ROLES.includes(me.role)) missing = await mfaRule.noncompliant(context.merchantId); }
     return { scope: 'TEAM', canManage: MANAGER_ROLES.includes(me.role),
       applied: [
         { id: 'session_lifetime', label: 'Durée maximale d’une session', value: `${rules.absoluteHours} h`, editable: false },
@@ -239,12 +242,20 @@ export function createSecurityService({ supabase, adminAuth = null, verifier = n
         { id: 'membership', label: 'Appartenance vérifiée à chaque requête', value: 'Active', editable: false, note: 'Un membre suspendu perd l’accès immédiatement.' },
         { id: 'csrf', label: 'Protection contre les requêtes forgées et cookies sécurisés', value: 'Active', editable: false },
       ],
-      requireMfa: { available: false, enabled: false, reason: 'Non applicable côté serveur : la connexion Nordla n’a pas d’étape de second facteur, aucun membre ne peut s’inscrire et la récupération du compte propriétaire n’est pas définie.' } };
+      requireMfa: ruleReady
+        ? { available: true, enabled, editable: me.role === 'OWNER', reason: me.role === 'OWNER' ? null : 'Seul un propriétaire peut modifier cette règle.', label: 'Exiger la double authentification des Propriétaires et Administrateurs',
+            note: 'Appliquée côté serveur à chaque requête : une session déjà ouverte, une promotion en administrateur ou un facteur retiré prennent effet aussitôt. Un propriétaire ou administrateur sans second facteur n’accède plus qu’à Paramètres › Sécurité pour l’activer.',
+            nonCompliant: missing }
+        : { available: false, enabled: false, reason: 'La double authentification n’est pas activée sur ce serveur : la règle ne peut pas être appliquée.' } };
   }
-  function saveTeamRules(me) {
+  async function saveTeamRules(me, { requireMfa } = {}) {
     need(me);
     if (!MANAGER_ROLES.includes(me.role)) throw new SecurityError('FORBIDDEN_ROLE', 'Votre rôle ne permet pas de modifier les règles de l’équipe.');
-    throw new SecurityError('FEATURE_UNAVAILABLE', 'Aucune règle de l’équipe n’est encore modifiable.');
+    if (!(features.mfa && mfaRule && context?.merchantId)) throw new SecurityError('FEATURE_UNAVAILABLE', 'La double authentification n’est pas activée sur ce serveur.');
+    if (typeof requireMfa !== 'boolean') throw new SecurityError('VALIDATION', 'Valeur inconnue.');
+    const r = await mfaRule.set({ merchantId: context.merchantId, actor: me.userId, enabled: requireMfa });
+    if (!r?.ok) throw new SecurityError(r?.code === 'ACTOR_NO_MFA' ? 'VALIDATION' : 'FORBIDDEN_ROLE', r?.code === 'ACTOR_NO_MFA' ? 'Activez d’abord votre propre double authentification : sinon vous seriez bloqué.' : 'Seul un propriétaire peut modifier cette règle.');
+    return { ok: true, enabled: r.enabled };
   }
 
   return Object.freeze({ account, listSessions, revokeCurrent, revokeOthers, activity, changePassword, teamRules, saveTeamRules, mfaEnroll, mfaConfirm, mfaDisable, mfaRenewCodes, forgotPassword, resetPassword });

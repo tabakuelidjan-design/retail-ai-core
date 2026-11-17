@@ -30,6 +30,8 @@
         h('main', { class: 'cx-page' }, content)));
   }
   const signIn = () => app.replaceChildren(h('div', { class: 'cx-wrap' }, h('h1', { text: 'Paramètres' }), h('p', { class: 'cx-sub', text: 'Connectez-vous avec votre compte Nordla.' }), h('a', { class: 'cx-btn', href: '/', text: 'Ouvrir Nordla' })));
-  const guard = (r) => (r.status === 401 || (r.status === 403 && r.json?.error?.code !== 'FORBIDDEN_ROLE') ? (signIn(), true) : false);
+  // MFA_REQUIRED_FOR_ROLE: the team requires a second factor for this role; the person is signed in, so say so and lead to Sécurité (the only page still open)
+  const mfaNeeded = () => app.replaceChildren(h('div', { class: 'cx-wrap' }, h('h1', { text: 'Double authentification requise' }), h('p', { class: 'cx-sub', text: 'Votre rôle exige la double authentification. Activez-la pour retrouver l’accès à cette page.' }), h('a', { class: 'cx-btn', href: '/settings/security', text: 'Ouvrir Paramètres › Sécurité' })));
+  const guard = (r) => (r.json?.error?.code === 'MFA_REQUIRED_FOR_ROLE' ? (mfaNeeded(), true) : r.status === 401 || (r.status === 403 && r.json?.error?.code !== 'FORBIDDEN_ROLE') ? (signIn(), true) : false);
   window.NordlaShell = { h, ico, api, csrf, shell, signIn, guard, app };
 })();

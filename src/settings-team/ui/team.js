@@ -80,7 +80,7 @@
       h('div', { class: 'tm-tags' }, chip(m.roleLabel, 'role'), chip(m.statusLabel, STATUS_TONE[m.status] ?? 'todo')),
       h('p', { class: 'tm-help', text: `Membre depuis le ${when(m.since)}.${m.removedAt ? ` Accès retiré le ${when(m.removedAt)}.` : m.suspendedAt ? ` Suspendu le ${when(m.suspendedAt)}.` : ''}` }),
       h('h3', { text: 'Droits effectifs' }), rightsList(d.rights), h('p', { class: 'tm-note', text: d.establishments.note }),
-      buttons.length ? [h('h3', { text: 'Actions' }), h('div', { class: 'tm-actions' }, buttons), note] : h('p', { class: 'tm-note', text: m.status === 'REMOVED' ? 'L’accès est retiré : une nouvelle invitation est nécessaire pour revenir.' : 'Votre rôle ne permet pas de modifier ce membre.' }));
+      buttons.length ? [h('h3', { text: 'Actions' }), a.recover ? h('p', { class: 'tm-help', text: '« Créer un lien de réinitialisation » s’adresse à une personne qui ne peut pas utiliser « Mot de passe oublié ? » (pas d’accès à ses e-mails) : vous lui transmettez le lien vous-même. Si elle a activé la double authentification, le code reste demandé à sa connexion.' }) : null, h('div', { class: 'tm-actions' }, buttons), note] : h('p', { class: 'tm-note', text: m.status === 'REMOVED' ? 'L’accès est retiré : une nouvelle invitation est nécessaire pour revenir.' : 'Votre rôle ne permet pas de modifier ce membre.' }));
     flash = null; return out;
   }
 
