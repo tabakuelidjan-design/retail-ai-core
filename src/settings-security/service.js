@@ -200,9 +200,9 @@ export function createSecurityService({ supabase, adminAuth = null, verifier = n
     recoveryReady();
     const e = String(email ?? '').trim().toLowerCase();
     if (e.length > 254 || !/^[^\s@]{1,64}@[^\s@]{1,255}$/.test(e)) return { ok: true }; // same answer: nothing tells whether it was valid
-    if (!within(mail, e, 3) || !within(mailIp, String(ip ?? 'unknown'), 20)) return { ok: true }; // limited: silently, same answer
-    await recovery.request(e, resetUrl);
-    await recoveryJournal('PASSWORD_RESET_REQUESTED', 'SUCCESS');
+    if (!within(mail, e, 3) || !within(mailIp, String(ip ?? 'unknown'), 20)) { await recoveryJournal('PASSWORD_RESET_REQUESTED', 'DENIED', null, { code: 'LOCAL_THROTTLED' }); return { ok: true }; } // limited: same answer, but the journal says no mail was even attempted
+    const r = await recovery.request(e, resetUrl); // the answer stays the same for the person; the journal tells the truth about the provider
+    await recoveryJournal('PASSWORD_RESET_REQUESTED', r?.sent ? 'SUCCESS' : 'FAILURE', null, { code: r?.outcome ?? 'UNKNOWN', status: r?.status ?? null, ms: r?.ms ?? null });
     return { ok: true };
   }
   async function resetPassword({ token, password, code } = {}) {

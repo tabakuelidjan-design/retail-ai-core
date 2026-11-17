@@ -28,7 +28,7 @@ const B32SECRET = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
 
 // ---- fake Supabase Auth
 function fakeAuth() {
-  const users = new Map(); const tokens = new Map(); const links = new Map(); const sent = []; let n = 1;
+  const users = new Map(); const tokens = new Map(); const links = new Map(); const sent = []; let n = 1; const quota = { max: Infinity, smtpDown: false };
   const addUser = (email, password) => { const id = randomUUID(); users.set(id, { id, email, password, factors: [], last_sign_in_at: null }); return id; };
   const userJson = (u) => ({ id: u.id, email: u.email, factors: u.factors.map((f) => ({ id: f.id, factor_type: 'totp', status: f.status })), identities: [{ provider: 'email' }], last_sign_in_at: u.last_sign_in_at });
   const issueLink = (id) => { const tok = `recovery-token-${n++}-${'x'.repeat(30)}`; links.set(tok, { userId: id, used: false, expired: false }); return tok; };
@@ -38,7 +38,7 @@ function fakeAuth() {
     const bearer = String(init.headers?.Authorization ?? '').replace(/^Bearer /, ''); const sess = tokens.get(bearer); const service = bearer.startsWith('service-');
     if (path === '/token' && u.searchParams.get('grant_type') === 'password') { const x = [...users.values()].find((q) => q.email === body.email && q.password === body.password); if (!x) return resp(400, {}); const t = `at-${n++}`; tokens.set(t, { userId: x.id, aal: 'aal1' }); x.last_sign_in_at = '2026-11-18T10:00:00Z'; return resp(200, { access_token: t, refresh_token: `rt-${t}`, user: userJson(x) }); }
     if (path === '/logout') { if (sess) { if (u.searchParams.get('scope') === 'global') for (const [k, v] of tokens) if (v.userId === sess.userId) tokens.delete(k); tokens.delete(bearer); } return resp(204, null); }
-    if (path === '/recover' && m === 'POST') { const x = [...users.values()].find((q) => q.email === body.email); sent.push({ email: body.email, redirect: u.searchParams.get('redirect_to'), known: Boolean(x) }); if (x) { const tok = issueLink(x.id); sent.at(-1).token = tok; } return resp(200, {}); }
+    if (path === '/recover' && m === 'POST') { if (quota.smtpDown) return resp(500, { error_code: 'unexpected_failure', msg: 'Error sending recovery email' }); if (sent.filter((q) => q.known).length >= quota.max) return resp(429, { error_code: 'over_email_send_rate_limit' }); const x = [...users.values()].find((q) => q.email === body.email); sent.push({ email: body.email, redirect: u.searchParams.get('redirect_to'), known: Boolean(x) }); if (x) { const tok = issueLink(x.id); sent.at(-1).token = tok; } return resp(200, {}); }
     if (path === '/user' && m === 'GET') { if (!sess) return resp(401, {}); const link = links.get(bearer); if (link && (link.used || link.expired)) return resp(401, {}); return resp(200, userJson(users.get(sess.userId))); }
     let f = /^\/factors$/.exec(path);
     if (f && m === 'POST') { if (!sess) return resp(401, {}); const x = users.get(sess.userId); const fac = { id: randomUUID(), status: 'unverified', secret: B32SECRET.slice(0, 16 + (n++ % 8)) }; x.factors.push(fac); return resp(200, { id: fac.id, totp: { secret: fac.secret, uri: `otpauth://totp/Nordla:${x.email}?secret=${fac.secret}`, qr_code: 'data:image/svg+xml;utf-8,<svg/>' } }); }
@@ -51,7 +51,7 @@ function fakeAuth() {
   // a click on the e-mail link: the provider validates the one-time link and hands a recovery session to the page
   const clickLink = (tok) => { const l = links.get(tok); if (!l || l.used || l.expired) return null; l.used = false; tokens.set(tok, { userId: l.userId, aal: 'aal1' }); return tok; };
   const consumeLink = (tok) => { const l = links.get(tok); if (l) l.used = true; };
-  return { users, tokens, links, sent, addUser, fetchImpl, clickLink, consumeLink };
+  return { users, tokens, links, sent, quota, addUser, fetchImpl, clickLink, consumeLink };
 }
 
 function fakeDb() {
@@ -214,5 +214,22 @@ test('V2-9 an account with a second factor must also give a code to change its p
     assert.equal((await call('/api/security/password', { as: a, method: 'POST', body: { current: PW, next: NEW, code: '000000' } })).status, 403); assert.equal(auth.users.get(id).password, PW);
     const ok = await call('/api/security/password', { as: a, method: 'POST', body: { current: PW, next: NEW, code: list[0] } }); assert.equal(ok.status, 200); assert.equal(auth.users.get(id).password, NEW);
     assert.equal((await call('/api/security', { as: a })).status, 200); assert.equal((await call('/api/security', { as: b })).status, 401); assert.ok(other);
+  } finally { close(); }
+});
+
+test('V2-10 the neutral public answer never changes, while the internal journal tells ACCEPTED / QUOTA_EXCEEDED / SMTP_ERROR / LOCAL_THROTTLED apart (no e-mail address, no token in it)', async () => {
+  const { call, auth, db, close } = await boot();
+  try {
+    auth.addUser('a@example.test', PW); auth.quota.max = 1;
+    const first = await call('/api/auth/forgot', { method: 'POST', body: { email: 'a@example.test' } });
+    const quota = await call('/api/auth/forgot', { method: 'POST', body: { email: 'a@example.test' } });
+    auth.quota.max = Infinity; auth.quota.smtpDown = true; const smtp = await call('/api/auth/forgot', { method: 'POST', body: { email: 'a@example.test' } });
+    for (let i = 0; i < 5; i++) await call('/api/auth/forgot', { method: 'POST', body: { email: 'a@example.test' } }); // the 4th+ of the same address is throttled locally
+    assert.ok([first, quota, smtp].every((r) => r.status === 200 && JSON.stringify(r.json) === '{"ok":true}'), 'same answer every time');
+    const ev = db.t.identity_events.filter((x) => x.event_type === 'PASSWORD_RESET_REQUESTED');
+    assert.deepEqual(ev.slice(0, 3).map((x) => [x.outcome, x.detail.code]), [['SUCCESS', 'ACCEPTED'], ['FAILURE', 'QUOTA_EXCEEDED'], ['FAILURE', 'SMTP_ERROR']]);
+    assert.ok(ev.some((x) => x.outcome === 'DENIED' && x.detail.code === 'LOCAL_THROTTLED'));
+    assert.ok(ev.slice(0, 3).every((x) => Number.isInteger(x.detail.ms)), 'duration of the provider call recorded');
+    assert.ok(!JSON.stringify(db.t.identity_events).includes('example.test'));
   } finally { close(); }
 });

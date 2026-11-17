@@ -14,12 +14,26 @@ export function createRecoveryProvider({ config, fetchImpl = globalThis.fetch })
     try { const r = await fetchImpl(`${config.baseUrl}/auth/v1${path}`, { ...init, signal: c.signal, redirect: 'error' }); let json = null; try { json = await r.json(); } catch { json = null; } return { status: r.status, json }; } finally { clearTimeout(t); }
   };
   return Object.freeze({
-    /** @returns {Promise<{ sent: boolean, limited?: boolean }>} the caller never tells the person which */
+    /**
+     * What the provider answered, for the INTERNAL journal only (the person always gets the same neutral answer):
+     *   ACCEPTED         200: handed to the mail system (this is NOT proof of delivery in the inbox)
+     *   QUOTA_EXCEEDED   429 over_email_send_rate_limit: the project's e-mail quota is used up
+     *   RATE_LIMITED     any other 429 (request frequency)
+     *   SMTP_ERROR       5xx: the provider could not hand the mail to the SMTP service (bad credentials, sender not verified, outage)
+     *   REFUSED          other 4xx (e.g. the redirect address is not allowed)
+     *   UNREACHABLE      timeout or network failure towards the auth provider
+     * @returns {Promise<{ outcome: string, status: number|null, ms: number, sent: boolean, limited: boolean }>}
+     */
     async request(email, redirectTo) {
+      const t0 = Date.now();
+      const out = (outcome, status) => ({ outcome, status, ms: Date.now() - t0, sent: outcome === 'ACCEPTED', limited: outcome === 'QUOTA_EXCEEDED' || outcome === 'RATE_LIMITED' });
       try {
         const r = await call(`/recover?redirect_to=${encodeURIComponent(redirectTo)}`, { method: 'POST', headers: base, body: JSON.stringify({ email }) });
-        return { sent: r.status === 200, limited: r.status === 429 };
-      } catch { return { sent: false }; }
+        if (r.status === 200) return out('ACCEPTED', 200);
+        if (r.status === 429) return out(r.json?.error_code === 'over_email_send_rate_limit' ? 'QUOTA_EXCEEDED' : 'RATE_LIMITED', 429);
+        if (r.status >= 500) return out('SMTP_ERROR', r.status);
+        return out('REFUSED', r.status);
+      } catch { return out('UNREACHABLE', null); }
     },
     async userOf(token) {
       if (typeof token !== 'string' || token.length < 20 || token.length > 4096 || /\s/.test(token)) return null;
