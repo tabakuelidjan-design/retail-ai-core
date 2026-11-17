@@ -58,6 +58,18 @@ export async function buildCreator({ env, gate, hosted, log = console.log }) {
   } catch (e) { log(`Creator: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
 }
 
+/** The video drafts (staging module, "Ajouter une vidéo"): built only when asked for AND hosted behind the Core identity. Any problem is logged and the server runs without it. */
+export async function buildVideos({ env, gate, hosted, log = console.log }) {
+  if (String(env.NORDLA_VIDEO_DRAFTS_MODULE ?? '') !== '1') return null;
+  if (!hosted || !gate) { log('Video drafts: NOT built (needs the hosted Core identity)'); return null; }
+  try {
+    const { createVideoHost } = await import('./video-host.js');
+    const host = await createVideoHost({ gate, merchantId: hosted.merchantId, dataDir: hosted.dataDir });
+    log('Video drafts: ON (an MP4 and two captions kept as drafts, nothing is published, no social account is connected)');
+    return host;
+  } catch (e) { log(`Video drafts: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
+}
+
 /** The Google Business post drafts (staging module): built only when asked for AND hosted behind the Core identity. Any problem is logged and the server runs without it. */
 export async function buildGbp({ env, gate, hosted, log = console.log }) {
   if (String(env.NORDLA_GBP_DRAFTS_MODULE ?? '') !== '1') return null;
@@ -143,8 +155,9 @@ export async function startSourcingServer({ env = process.env, log = console.log
   const core = await buildCore({ env, dir, merchantId: merchantKey, store, safety, log, readers: services?.readers ?? null, procurement: proc.assistant });
   let backups = null;
   const creator = await buildCreator({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_CREATOR_MODULE=1
+  const videos = await buildVideos({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_VIDEO_DRAFTS_MODULE=1
   const gbp = await buildGbp({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_GBP_DRAFTS_MODULE=1
-  const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
+  const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, videos, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
   const server = http.createServer(app.handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); });
   const addr = server.address();
