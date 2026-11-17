@@ -55,6 +55,16 @@ export function createCorePanel({ S, api, refresh }) {
   }
 
   /** The menu section. `active` = the open case (or null). */
+  // Stock / Achats / Sourcing: the commerce context from Général (read only): activity, places, selling modes. Quantities, delays and prices always come from the business data.
+  const MODE = { stock: 'vente sur stock', personalised: 'personnalisation à la demande', made_to_order: 'fabrication à la commande', preorder: 'précommande', service: 'prestation de services' };
+  const merchantContext = (c) => {
+    if (!c) return '';
+    const bits = [];
+    if (c.activity) bits.push(`Activité : ${esc(c.activity.label ?? c.activity.value)}`);
+    if (c.sellingModes?.length) bits.push(`Modes de vente : ${c.sellingModes.map((m) => esc(m.label ?? MODE[m.value] ?? m.value)).join(', ')}`);
+    if (c.places?.length) bits.push(`Lieux : ${c.places.map((p) => esc([p.name, p.city].filter(Boolean).join(' · '))).join(' ; ')}`);
+    return bits.length ? `<p class="small muted" data-core-context>${bits.join(' — ')}. Contexte uniquement : les quantités et délais viennent des données métier.</p>` : '';
+  };
   function section(active) {
     const head = '<h2>Nordla Core</h2>';
     if (!S.online || !S.token) return `${head}<p class="small muted">Nordla Core et Parle à Nordla demandent le serveur${S.online ? ' (connectez-vous)' : ' : hors ligne maintenant'}. Rien n’est perdu : vos dossiers restent sur ce téléphone.</p>${askUi.history(S.online)}`;
@@ -66,7 +76,7 @@ export function createCorePanel({ S, api, refresh }) {
       : list === undefined ? `<button class="btn sec" data-act="core-load" data-case="${esc(active.id)}">Voir les décisions de ce dossier</button>`
         : `${list.length ? decisionCard(list[0]) : '<p class="small muted">Pas encore analysé par Nordla Core.</p>'}<button class="btn" data-act="core-analyse" data-case="${esc(active.id)}" ${st.busy ? 'disabled' : ''}>Analyser l’achat de ce dossier (version serveur)</button>`;
     const askBlock = askUi.render(active, st.busy, st.error);
-    return `${head}${err}${st.status.merchant?.name ? `<p class="small muted" data-core-merchant>Commerce : ${esc(st.status.merchant.name)}</p>` : ""}<p class="small muted">Décisions en attente : ${esc(st.status.awaiting_human ?? 0)} — en suivi : ${esc(st.status.in_follow_up ?? 0)}. Règles du propriétaire : ${st.status.owner_rules === 'CONFIGURED' ? 'configurées' : 'aucune configurée'}.</p>${caseBlock}${askBlock}`;
+    return `${head}${err}${st.status.merchant?.name ? `<p class="small muted" data-core-merchant>Commerce : ${esc(st.status.merchant.name)}</p>` : ""}${merchantContext(st.status.merchant?.context)}<p class="small muted">Décisions en attente : ${esc(st.status.awaiting_human ?? 0)} — en suivi : ${esc(st.status.in_follow_up ?? 0)}. Règles du propriétaire : ${st.status.owner_rules === 'CONFIGURED' ? 'configurées' : 'aucune configurée'}.</p>${caseBlock}${askBlock}`;
   }
   return { section, load };
 }

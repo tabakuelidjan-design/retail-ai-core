@@ -103,7 +103,9 @@ test('SG-9 the name written here is the name every module already reads (merchan
   await svc.save({ tenant: ta, role: 'OWNER', actor: 'u', section: 'profile', data: { name: 'Nouveau nom' } });
   assert.equal(await repo.merchantName(A), 'Nouveau nom'); assert.equal(await repo.merchantName(B), 'Atelier B');
   const { consumers } = await svc.overview({ tenant: ta, role: 'OWNER' });
-  assert.deepEqual(consumers.filter((c) => c.state === 'READS').map((c) => c.module), ['Core', 'Analyses et Growth']); assert.ok(consumers.filter((c) => c.state === 'TO_CONNECT').length >= 3);
+  const by = (st) => consumers.filter((c) => c.state === st).map((c) => c.module);
+  assert.deepEqual(by('VERIFIED'), ['Core']); assert.deepEqual(by('API_VERIFIED'), ['Marketing (brouillons Google et vidéo)']); assert.deepEqual(by('WAITING_SUPPLIER'), ['Connexions']);
+  assert.ok(!consumers.some((c) => c.state === 'READS'), 'no claim without a proof level'); assert.ok(consumers.filter((c) => c.state === 'AWAITS_SESSION').length >= 2 && consumers.filter((c) => c.state === 'TO_CONNECT').length >= 3);
 });
 
 test('SG-10 objectives: one priority (Autre needs its label), valid date, up to 10 distinct offers, budget needs its period; modules read only their allowlisted fields', async () => {
@@ -149,4 +151,18 @@ test('SG-12 module places: marketing/creative get only public places that agreed
   const mkt = await svc.contextFor({ tenant: ta, module: 'marketing' }); assert.deepEqual(mkt.places.map((p) => p.name), ['Public partagé']); assert.equal(mkt.places[0].phone, '+3281000000'); assert.equal(mkt.objectives.priority.label, 'Développer les ventes');
   const stock = await svc.contextFor({ tenant: ta, module: 'stock' }); assert.equal(stock.places.length, 3); assert.ok(stock.places.every((p) => !('phone' in p) && !('address' in p)), 'no street, no contact for stock');
   const cr = await svc.contextFor({ tenant: ta, module: 'creative' }); assert.deepEqual(cr.places.map((p) => p.name), ['Public partagé']); assert.ok(!('legal' in cr));
+});
+
+test('SG-13 legal check: read only comparison with Finance seller profile; absent table / no profile / differences are reported, nothing is written, a viewer cannot read it', async () => {
+  const { svc, repo } = mk();
+  await svc.save({ tenant: ta, role: 'OWNER', actor: 'u', section: 'legal', data: { legal_name: 'Alpha SRL', country: 'BE', enterprise_number: '0403170701', vat_status: 'registered', vat_number: 'BE0403170701' } });
+  let c = await svc.legalCheck({ tenant: ta, role: 'OWNER' }); assert.deepEqual([c.finance, c.readyForNewDocuments, c.differences.length], ['TABLE_ABSENT', true, 0]); assert.match(c.note, /Aucune bascule/);
+  repo.seedSellerProfile(A, { none: true }); c = await svc.legalCheck({ tenant: ta, role: 'OWNER' }); assert.equal(c.finance, 'NO_PROFILE');
+  repo.seedSellerProfile(A, { version: 3, profile: { legalName: 'ALPHA srl', country: 'BE', enterpriseNumber: '0403 170 701', vatNumber: 'BE0403170701' } });
+  c = await svc.legalCheck({ tenant: ta, role: 'OWNER' }); assert.deepEqual([c.finance, c.financeVersion, c.differences], ['PRESENT', 3, []], 'same facts in another format: no difference');
+  repo.seedSellerProfile(A, { version: 4, profile: { legalName: 'Beta SA', country: 'BE', enterpriseNumber: '0403170701', vatNumber: 'BE0999999999' } });
+  c = await svc.legalCheck({ tenant: ta, role: 'OWNER' }); assert.deepEqual(c.differences.map((d) => d.field).sort(), ['legalName', 'vatNumber']); assert.match(c.note, /rien n’est remplacé/);
+  assert.equal((await svc.read({ tenant: ta, role: 'OWNER', section: 'legal' })).data.legal_name, 'Alpha SRL', 'Général is untouched by the check');
+  assert.equal(await code(svc.legalCheck({ tenant: ta, role: 'VIEWER' })), 'FORBIDDEN_ROLE');
+  const empty = await svc.legalCheck({ tenant: tb, role: 'OWNER' }); assert.deepEqual([empty.readyForNewDocuments, empty.missing.includes('legal_name')], [false, true]);
 });

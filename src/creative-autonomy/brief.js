@@ -1,6 +1,7 @@
 // THE AUTONOMOUS BRIEF. The owner gives four things: a Shopify product, a commercial objective, the tenant's brand (its creative profile) and a format. Nordla builds the
 // Creative Brain's brief from them WITHOUT a human writing any copy, concept or position: only VERIFIED facts become claims (price and stock come from
 // the Shopify snapshot, a personalisation promise only from the product's own type/tags/description), everything else is left to the Brain or marked UNKNOWN.
+import { commerceContextForBrief } from './commerce-context.js';
 import { createHash } from 'node:crypto';
 import { brandBriefFacts, commercialBrief } from './brand-guard.js';
 import { resolveBrandProfile } from './brand-profile.js';
@@ -52,7 +53,7 @@ export function verifiedFacts({ product, variantTitle = null, readAt }) {
  * The Brain brief. owner input: { product (Shopify snapshot), variantTitle?, objective, audience?, occasion?, brand, format (key of FORMATS), photo: { bytes, media_type, width_px, height_px, origin, rights_class }, merchant }
  * Returns { brief, facts }.
  */
-export function buildAutonomousBrief({ product, variantTitle = null, readAt, objective, audience = null, occasion = null, scenePermissions = [], brand, format, photo, merchant = null, route = null }) {
+export function buildAutonomousBrief({ product, variantTitle = null, readAt, objective, audience = null, occasion = null, scenePermissions = [], brand, format, photo, merchant = null, route = null, commerceContext = null }) {
   const profile = resolveBrandProfile(brand);
   merchant = merchant ?? profile.merchant_display; // the ACTIVE tenant's name, never another merchant's
   if (!FORMATS[format]) throw new Error(`unknown format ${format}`);
@@ -66,6 +67,7 @@ export function buildAutonomousBrief({ product, variantTitle = null, readAt, obj
       product: `${describe}. ${facts.description}`,
       ...(merchant ? { merchant } : {}),
       objective,
+      ...(commerceContextForBrief(commerceContext) ? { commerce_context: commerceContextForBrief(commerceContext) } : {}), // context from Général (priority, offers, public contact...): the objective above stays first
       ...(audience ? { audience } : {}),
       ...(occasion ? { occasion } : {}),
       ...(scenePermissions.length ? { scene_permissions: scenePermissions } : {}), // what THIS campaign allows beyond the default scene rules (scene-permissions.js)

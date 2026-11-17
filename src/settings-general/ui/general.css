@@ -66,3 +66,6 @@
 .gn-auto { width: auto; }
 .cx-list[hidden], .cx-detail[hidden], .gn-error[hidden], .gn-form [hidden] { display: none !important; }
 .cx-list a.cx-row, .cx-list a.cx-row:hover { text-decoration: none; color: inherit; }
+
+.gn-group { margin: 12px 0 6px; }
+.gn-state[data-tone="wait"] { background: #fff6e5; color: #7a5200; border: 1px solid #f1d9a2; }

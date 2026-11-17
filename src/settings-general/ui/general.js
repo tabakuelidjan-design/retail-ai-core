@@ -80,6 +80,14 @@
   }
 
   // ------------------------------------------------------------------ the six forms
+  // read-only comparison with Finance's seller profile: differences are shown, never applied
+  function legalCheck() {
+    const box = h('div', { class: 'gn-note', 'data-legal-check': '' }, 'Contrôle avec Finance…');
+    api('/api/general/legal-check').then((r) => { if (!r.ok) { box.textContent = 'Le contrôle avec Finance est indisponible pour le moment.'; return; } const c = r.json;
+      box.replaceChildren(h('strong', { text: 'Contrôle avec Finance : ' }), c.note, c.readyForNewDocuments ? ' Les faits légaux nécessaires aux nouveaux documents sont complets.' : ` À compléter pour les nouveaux documents : ${c.missing.join(', ')}.`,
+        c.differences.length ? h('ul', {}, c.differences.map((d) => h('li', { text: `${d.field} : Général « ${d.general ?? '—'} » · Finance « ${d.finance ?? '—'} »` }))) : null); });
+    return box;
+  }
   // featured offers: a short list of free labels (the catalogue is not required)
   function offersEditor(f) {
     const box = h('div'); const draw = () => { const list = f.draft.featured_offers ?? (f.draft.featured_offers = []); box.replaceChildren();
@@ -127,7 +135,7 @@
           return w; })(), { optional: true })); drawDyn();
       return h('form', { class: 'gn-form', novalidate: true, on: { submit: (e) => e.preventDefault() } }, head('Informations légales et facturation', 'Finance lit ces informations pour les futurs documents ; les factures déjà émises gardent leur identité.'), h('hr', { class: 'gn-rule' }),
         field(f, 'legal_name', 'Raison sociale', input(f, 'legal_name', { maxlength: 120 }), { optional: true }), field(f, 'country', 'Pays d’immatriculation', select(f, 'country', opts.countries, { onchange: () => { f.draft.legal_form = null; f.touch(); drawDyn(); } }), { optional: true }), dyn,
-        field(f, 'email', 'E-mail de facturation', input(f, 'email', { type: 'email', maxlength: 254 }), { optional: true, help: 'Distinct de l’e-mail public.' }), bar(f)); },
+        field(f, 'email', 'E-mail de facturation', input(f, 'email', { type: 'email', maxlength: 254 }), { optional: true, help: 'Distinct de l’e-mail public.' }), legalCheck(), bar(f)); },
   };
 
   // ------------------------------------------------------------------ establishments (list + one editor)
@@ -195,7 +203,9 @@
   const stateOf = (s) => (s.locked ? ['Réservé', 'lock'] : s.filled ? ['Renseigné', 'ok'] : ['À renseigner', 'todo']);
   function renderList() {
     listBox.replaceChildren(...ov.sections.map((s) => { const [t, tone] = stateOf(s); return h('a', { class: 'cx-row', href: `/settings/general/${SLUG[s.id]}`, 'aria-current': current === s.id ? 'true' : null, on: { click: (e) => { e.preventDefault(); go(s.id); } } }, icon(ICON[s.id]), h('span', { class: 'cx-row-name', text: s.label }), h('span', { class: 'gn-state', 'data-tone': tone, text: t })); }));
-    side.replaceChildren(h('div', { class: 'gn-consumers' }, h('h3', { text: 'Qui lit Général' }), h('ul', {}, ov.consumers.map((c) => h('li', {}, h('span', { class: 'gn-state', 'data-tone': c.state === 'READS' ? 'ok' : 'todo', text: c.state === 'READS' ? 'Lit déjà' : 'À raccorder' }), h('strong', { text: `${c.module} : ` }), c.note)))));
+    const GROUPS = [['Lit déjà', ['VERIFIED', 'API_VERIFIED'], 'ok'], ['En attente d’un lieu fournisseur réel', ['WAITING_SUPPLIER'], 'wait'], ['Branché, contrôle restant', ['WIRED'], 'wait'], ['Attend une session pour être vérifié', ['AWAITS_SESSION'], 'wait'], ['À raccorder', ['TO_CONNECT'], 'todo']];
+    const LEVEL = { VERIFIED: 'vérifié', API_VERIFIED: 'vérifié sur l’API, contrôle visuel restant' };
+    side.replaceChildren(h('div', { class: 'gn-consumers' }, h('h3', { text: 'Qui lit Général' }), GROUPS.map(([title, states, tone]) => { const rows = ov.consumers.filter((c) => states.includes(c.state)); return rows.length ? h('div', {}, h('p', { class: 'gn-group' }, h('span', { class: 'gn-state', 'data-tone': tone, text: title })), h('ul', {}, rows.map((c) => h('li', {}, h('strong', { text: c.module + ' : ' }), c.note, LEVEL[c.state] ? ' (' + LEVEL[c.state] + ')' : '')))) : null; })));
   }
   const msgNode = (m, f) => h('div', { class: `gn-msg ${m.tone}`, role: m.tone === 'err' ? 'alert' : 'status' }, m.text, m.reload && f ? h('button', { class: 'cx-btn ghost', type: 'button', text: 'Recharger les valeurs enregistrées', on: { click: () => { openSection(f.section, true); } } }) : null);
   async function refreshOverview() { const r = await api('/api/general'); if (r.ok) { ov = r.json; } }

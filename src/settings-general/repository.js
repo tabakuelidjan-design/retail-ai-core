@@ -35,6 +35,11 @@ export function createSupabaseGeneralRepository({ supabase, now = () => new Date
     },
     /** The locations the supplier systems gave Nordla for this merchant (table `locations`): read only here, written by the sync. */
     async supplierLocations(merchantId) { return (await supabase.select('locations', { merchant_id: eq(merchantId), select: 'name,type,source_system,source_id', order: 'name.asc' })) ?? []; },
+    /** Finance's append-only seller profile (latest version), READ ONLY. A deployment without that table reads as ABSENT (never an error). */
+    async latestSellerProfile(merchantId) {
+      try { const r = await supabase.select('fin_seller_profile_versions', { merchant_id: eq(merchantId), select: 'version,profile,effective_from', order: 'version.desc', limit: '1' }); return r?.[0] ? { version: r[0].version, profile: r[0].profile, effectiveFrom: r[0].effective_from } : { none: true }; }
+      catch (e) { if (/fin_seller_profile_versions|42P01|PGRST205|schema cache|does not exist/.test(String(e?.message ?? e))) return { absent: true }; throw e; }
+    },
     async listEstablishments(merchantId) { return supabase.select('merchant_establishments', { merchant_id: eq(merchantId), select: 'id,data,is_primary,archived_at,version,updated_at', order: 'created_at.asc' }); },
     async createEstablishment(merchantId, data, { primary, actor }) {
       try { const r = await supabase.insert('merchant_establishments', [{ id: randomUUID(), merchant_id: merchantId, data, is_primary: primary, updated_by: actor }]); return { ok: true, row: r[0] }; }
@@ -49,7 +54,7 @@ export function createSupabaseGeneralRepository({ supabase, now = () => new Date
 
 /** Same interface, in memory. Used by the tests and by a local preview. */
 export function createMemoryGeneralRepository({ merchants = {}, now = () => new Date() } = {}) {
-  const m = new Map(Object.entries(merchants).map(([id, name]) => [id, { name }])); const sections = new Map(); const regionals = new Map(); const places = new Map(); const locs = new Map();
+  const m = new Map(Object.entries(merchants).map(([id, name]) => [id, { name }])); const sections = new Map(); const regionals = new Map(); const places = new Map(); const locs = new Map(); const sellers = new Map();
   let tick = 0;
   const key = (a, b) => `${a}|${b}`;
   const clone = (x) => (x == null ? x : structuredClone(x));
@@ -71,6 +76,8 @@ export function createMemoryGeneralRepository({ merchants = {}, now = () => new 
     },
     seedLocations(id, rows) { locs.set(id, clone(rows)); },
     async supplierLocations(id) { return clone(locs.get(id) ?? []); },
+    seedSellerProfile(id, v) { sellers.set(id, v); },
+    async latestSellerProfile(id) { return clone(sellers.get(id) ?? { absent: true }); },
     async listEstablishments(id) { return clone([...places.values()].filter((p) => p.merchant_id === id)); },
     async createEstablishment(id, data, { primary, actor }) {
       if (primary && [...places.values()].some((p) => p.merchant_id === id && p.is_primary && !p.archived_at)) return { ok: false, conflict: true };

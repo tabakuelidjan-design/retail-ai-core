@@ -52,6 +52,7 @@ export async function createGeneralHost({ gate, merchantId, service, shellOf = n
               json(res, 200, { ...(await service.overview({ tenant, role })), shell, options: OPTIONS }); return true;
             }
             if (method === 'GET' && p === '/api/general/context') { json(res, 200, await service.contextFor({ tenant, module: url.searchParams.get('module') ?? '' })); return true; } // what a module may read (allowlisted fields)
+            if (method === 'GET' && p === '/api/general/legal-check') { json(res, 200, await service.legalCheck({ tenant, role })); return true; } // read only: Général vs Finance's seller profile
             if (method === 'GET' && p === '/api/general/supplier-locations') { json(res, 200, await service.supplierLocations({ tenant, role })); return true; }
             const lk = /^\/api\/general\/establishments\/([0-9a-f-]{36})\/links$/i.exec(p);
             if (lk && method === 'POST') { const body = await readJson(req); const prov = String(body.provider ?? ''); const ext = String(body.external_id ?? ''); if (!UUID.test(lk[1]) || !/^[a-z_]{2,40}$/.test(prov) || !ext || ext.length > 200) { json(res, 400, { error: { code: 'INVALID_REQUEST' } }); return true; } json(res, 200, await service.linkSupplierLocation({ tenant, role, actor, establishmentId: lk[1], provider: prov, externalId: ext, unlink: body.action === 'unlink' })); return true; }

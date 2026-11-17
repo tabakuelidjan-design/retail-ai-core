@@ -22,15 +22,18 @@ export const SECTION_META = Object.freeze({
   selling_modes: { label: 'Mode de vente et de production', slug: 'modes-de-vente' }, regional: { label: 'Devise et fuseau horaire', slug: 'devise-fuseau' }, legal: { label: 'Informations légales et facturation', slug: 'legal' }, objectives: { label: 'Objectifs et priorités', slug: 'objectifs' },
 });
 // What reads Général today and what is still to be connected: shown as such in the page (never a promise).
+// Proof levels, from the strongest: VERIFIED = checked in the module's real path; API_VERIFIED = checked on the API, the visual check is left; WAITING_SUPPLIER = built, a real supplier location is needed;
+// WIRED = built and deployed, not yet checked in its path; AWAITS_SESSION = built, only a session of that module can prove it; TO_CONNECT = not built yet. A module is "Lit déjà" only when VERIFIED or API_VERIFIED.
 export const CONSUMERS = Object.freeze([
-  { module: 'Core', reads: ['Nom commercial'], state: 'READS', note: 'Lit déjà le nom du commerce (merchants.name).' },
-  { module: 'Analyses et Growth', reads: ['Fuseau horaire', 'Devise'], state: 'READS', note: 'Lisent déjà le fuseau et la devise (merchant_profile), sans changement de code.' },
-  { module: 'Marketing et Création', reads: ['Priorité du moment', 'Offres à mettre en avant', 'Contraintes'], state: 'TO_CONNECT', note: 'À raccorder : les briefs gardent leur propre objectif ; ils ne lisent pas encore « Objectifs et priorités ».' },
-  { module: 'Growth', reads: ['Priorité du moment', 'Échéance', 'Budget'], state: 'TO_CONNECT', note: 'À raccorder : Growth ne lit pas encore les objectifs (lecture prête via le service commun).' },
-  { module: 'Marketing', reads: ['Nom', 'Site', 'Coordonnées publiques', 'Horaires'], state: 'TO_CONNECT', note: 'À raccorder : les brouillons ne lisent pas encore Général.' },
-  { module: 'Finance', reads: ['Identité légale', 'Adresse de facturation'], state: 'TO_CONNECT', note: 'À raccorder : Finance garde son profil vendeur versionné ; un écart éventuel sera remonté, jamais écrasé.' },
-  { module: 'Stock et Sourcing', reads: ['Mode de vente'], state: 'TO_CONNECT', note: 'À raccorder (contexte uniquement : aucun stock ni délai n’en est déduit).' },
-  { module: 'Connexions', reads: ['Établissements'], state: 'TO_CONNECT', note: 'À raccorder : association des lieux du fournisseur à l’identifiant Nordla du lieu.' },
+  { module: 'Core', reads: ['Nom du commerce'], state: 'VERIFIED', note: 'Le statut de Core affiche le nom lu dans Général (vérifié sur le staging avec un nom de test, restauré).' },
+  { module: 'Marketing (brouillons Google et vidéo)', reads: ['Nom', 'Site', 'Priorité', 'Offres', 'Contraintes', 'Coordonnées publiques'], state: 'API_VERIFIED', note: 'Vérifié via l’API avec des valeurs de test ; le contrôle visuel de la carte reste à faire. L’objectif d’un brief reste prioritaire.' },
+  { module: 'Connexions', reads: ['Établissements'], state: 'WAITING_SUPPLIER', note: 'Association lieu fournisseur ↔ établissement construite ; aucun lieu fournisseur réel n’existe pour HABB : l’association réelle reste à vérifier.' },
+  { module: 'Stock, Achats et Sourcing', reads: ['Activité', 'Modes de vente', 'Lieux'], state: 'WIRED', note: 'Affiché comme contexte dans le panneau Core ; à vérifier. Les quantités et délais viennent des données métier.' },
+  { module: 'Growth', reads: ['Fuseau horaire'], state: 'AWAITS_SESSION', note: 'Le fuseau est suivi sans redémarrage (tests) ; à prouver dans une session Growth. Les objectifs ne sont pas encore lus.' },
+  { module: 'Analyses', reads: ['Devise', 'Fuseau horaire'], state: 'AWAITS_SESSION', note: 'Lit déjà merchant_profile dans son code ; à prouver avec un accès Analyses.' },
+  { module: 'Growth (objectifs)', reads: ['Priorité', 'Offres', 'Contraintes'], state: 'TO_CONNECT', note: 'À raccorder : les recommandations ne tiennent pas encore compte des objectifs.' },
+  { module: 'Finance', reads: ['Identité légale', 'Adresse de facturation'], state: 'TO_CONNECT', note: 'Un contrôle d’écart en lecture seule existe (rubrique légale). Finance ne lit pas encore Général pour ses documents ; le profil vendeur versionné n’existe pas sur ce staging.' },
+  { module: 'Création', reads: ['Priorité', 'Offres', 'Lieux publics'], state: 'TO_CONNECT', note: 'Le constructeur de briefs sait recevoir ce contexte (non activé) ; rien n’est branché : Création reste en pause.' },
 ]);
 
 const isoDate = (d) => d.toISOString();
@@ -90,6 +93,10 @@ export function createGeneralService({ repo, catalogueFamilies = async () => [],
       const out = { module, merchantId: id };
       for (const [section, keys] of Object.entries(wants)) { const r = await READERS[section](id); out[section] = Object.fromEntries(keys.map((k) => [k, r.data[k] ?? null])); }
       if (out.objectives?.priority) out.objectives = { ...out.objectives, priority: { ...out.objectives.priority, label: out.objectives.priority.label ?? M.PRIORITIES[out.objectives.priority.value] ?? null } };
+      const lab = (list, map) => list.map((x) => ({ ...x, label: x.label ?? map[x.value] ?? x.value }));
+      if (out.activity?.main) out.activity = { ...out.activity, main: { ...out.activity.main, label: out.activity.main.label ?? M.MAIN_ACTIVITIES[out.activity.main.value] ?? null } };
+      if (out.activity?.complementary) out.activity = { ...out.activity, complementary: lab(out.activity.complementary, M.SIDE_ACTIVITIES) };
+      if (out.selling_modes?.modes) out.selling_modes = { ...out.selling_modes, modes: lab(out.selling_modes.modes, M.SELLING_MODES) };
       const mode = MODULE_PLACES[module];
       if (mode) {
         const rows = (await repo.listEstablishments(id)).filter((r) => !r.archived_at);
@@ -164,6 +171,24 @@ export function createGeneralService({ repo, catalogueFamilies = async () => [],
       const upd = await repo.updateEstablishment(id, cur.id, { data: { ...cur.data, links } }, cur.version, actor);
       if (!upd.ok) throw new GeneralError('CONFLICT', 'Cet établissement a été modifié entre-temps.');
       return { ok: true, ...(await readEstablishments(id)) };
+    },
+    /**
+     * Compares the legal identity written in Général with Finance's versioned seller profile. READ ONLY: nothing is written to Finance, no issued document is touched.
+     * Differences are REPORTED so that nobody is switched over silently. `readyForNewDocuments` = the legal facts Finance needs are complete in Général.
+     */
+    async legalCheck({ tenant, role }) {
+      const id = merchantOf(tenant); needLegalRead(role);
+      const g = (await READERS.legal(id)).data; const fin = await repo.latestSellerProfile(id);
+      const mine = { legalName: g.legal_name ?? null, country: g.country ?? null, enterpriseNumber: g.enterprise_number ?? null, vatNumber: g.vat_status === 'registered' ? (g.vat_number ?? null) : null };
+      const missing = [['legal_name', mine.legalName], ['country', mine.country], ['enterprise_number', mine.enterpriseNumber]].filter(([, v]) => !v).map(([k]) => k); if (g.vat_status === 'unknown') missing.push('vat_status');
+      const out = { general: mine, readyForNewDocuments: missing.length === 0, missing, finance: fin.absent ? 'TABLE_ABSENT' : fin.none ? 'NO_PROFILE' : 'PRESENT', differences: [] };
+      if (fin.profile) {
+        const p = fin.profile; const norm = (v) => (v == null || v === '' ? null : String(v).replace(/[\s.]/g, '').toUpperCase());
+        const pairs = [['legalName', mine.legalName, p.legalName ?? p.name ?? null], ['country', mine.country, p.country ?? null], ['enterpriseNumber', mine.enterpriseNumber, p.enterpriseNumber ?? null], ['vatNumber', mine.vatNumber, p.vatNumber ?? null]];
+        out.financeVersion = fin.version; out.differences = pairs.filter(([k, a, b]) => (a != null || b != null) && (k === 'legalName' ? String(a ?? '').trim().toLowerCase() !== String(b ?? '').trim().toLowerCase() : norm(a) !== norm(b))).map(([field, general, finance]) => ({ field, general, finance }));
+      }
+      out.note = out.finance === 'TABLE_ABSENT' ? 'Finance n’a pas de profil vendeur versionné sur ce serveur : rien à comparer. Aucune bascule.' : out.finance === 'NO_PROFILE' ? 'Finance n’a encore aucun profil vendeur : Général pourra servir à le préparer, sur validation.' : out.differences.length ? 'Des écarts existent : rien n’est remplacé. Les documents déjà émis gardent leur identité figée.' : 'Général et le profil vendeur de Finance concordent.';
+      return out;
     },
     async makePrimary({ tenant, role, actor, establishmentId }) {
       const id = merchantOf(tenant); needWrite(role); const rows = await repo.listEstablishments(id); const cur = rows.find((r) => r.id === establishmentId);
