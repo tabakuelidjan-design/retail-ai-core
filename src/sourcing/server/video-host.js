@@ -24,7 +24,7 @@ export async function videosPage() {
 }
 
 /** @param {{ gate: object, merchantId: string, dataDir: string, now?: () => Date }} o */
-export async function createVideoHost({ gate, merchantId, dataDir, now = () => new Date() }) {
+export async function createVideoHost({ gate, merchantId, dataDir, now = () => new Date(), contextOf = null }) {
   const store = createVideoStore({ dataDir, merchantId, now });
   const list = async () => ({ limits: { videoMaxBytes: LIMITS.VIDEO_MAX_BYTES, captionMax: LIMITS.CAPTION_MAX }, networks: NETWORKS, notice: 'Brouillons : aucune vidéo n’est publiée et aucun compte TikTok ou Instagram n’est connecté. Vous publiez vous-même depuis l’application.', videos: (await store.list()).map(view) });
   return Object.freeze({
@@ -36,6 +36,7 @@ export async function createVideoHost({ gate, merchantId, dataDir, now = () => n
           const access = a.access; if (access.merchantId !== merchantId) { json(res, 403, { error: { code: 'TENANT_MISMATCH' } }); return true; }
           const method = String(req.method ?? '').toUpperCase(); const writer = VIDEO_WRITERS.has(access.role);
           try {
+            if (method === 'GET' && p === '/api/videos/context') { json(res, 200, { context: (await contextOf?.().catch(() => null)) ?? null }); return true; } // what Général gives the new drafts (read only); null when Général is off
             if (method === 'GET' && p === '/api/videos') { json(res, 200, await list()); return true; }
             const m = /^\/api\/videos\/(VID-[0-9a-f]{8})(\/file|\/remove)?$/.exec(p);
             if (method === 'GET' && m?.[2] === '/file') { // playback, with Range so the player can seek

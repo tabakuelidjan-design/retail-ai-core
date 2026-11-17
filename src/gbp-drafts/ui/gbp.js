@@ -15,11 +15,24 @@
   const errText = (r) => ERR[r.json?.error?.code ?? r.json?.error] ?? `Action refusée (${r.status}).`;
   let data = null;
 
+  // "Contexte du commerce": what Général gives (read only). An explicit objective in a brief always wins over it.
+  const contextCard = (c) => {
+    if (!c) return null;
+    const rows = []; const add = (k, v) => { if (v) rows.push(h('li', {}, h('strong', { text: `${k} : ` }), v)); };
+    add('Commerce', [c.profile?.name, c.profile?.website].filter(Boolean).join(' · '));
+    const o = c.objectives ?? {}; add('Priorité du moment', o.priority ? `${o.priority.label ?? o.priority.value}${o.priority.note ? ` — ${o.priority.note}` : ''}` : null);
+    add('Résultat attendu', o.expected_result); add('Échéance', o.deadline);
+    add('Offres à mettre en avant', (o.featured_offers ?? []).map((x) => x.label).join(', '));
+    const k = o.constraints ?? {}; add('Contraintes', [k.budget?.amount != null ? `budget ${k.budget.amount}${k.budget.period ? ` (${k.budget.period})` : ''}` : null, k.time?.note && `temps : ${k.time.note}`, k.stock?.note && `stock : ${k.stock.note}`, k.production?.note && `production : ${k.production.note}`].filter(Boolean).join(' ; '));
+    const places = (c.places ?? []).map((p) => [p.name, [p.address?.street, p.address?.postal_code, p.address?.city].filter(Boolean).join(' '), p.phone, p.email].filter(Boolean).join(', '));
+    add('Coordonnées publiques', places.length ? places.join(' / ') : 'aucune à reprendre (à renseigner dans Général)');
+    return h('div', { class: 'ctx-card', 'data-general-context': '' }, h('strong', { text: 'Contexte du commerce (Général)' }), h('ul', {}, rows), h('p', { class: 'ctx-note' }, 'L’objectif explicite d’un brief reste prioritaire. ', h('a', { href: '/settings/general', text: 'Modifier dans Général' })));
+  };
   async function load() {
     const r = await api('/api/gbp/drafts');
     if (r.status === 401 || r.status === 403 && r.json?.error?.code !== 'FORBIDDEN_ROLE') return signIn();
     if (!r.ok) return app.replaceChildren(h('div', { class: 'gbp-wrap' }, h('h1', { text: 'Publications Google' }), h('p', { class: 'gbp-msg err', text: 'Cette page est indisponible pour le moment.' })));
-    data = r.json; render();
+    data = r.json; try { data.context = (await api('/api/gbp/context')).json?.context ?? null; } catch { data.context = null; } render();
   }
   function signIn() {
     app.replaceChildren(h('div', { class: 'gbp-wrap' }, h('h1', { text: 'Publications Google' }), h('p', { class: 'gbp-sub', text: 'Connectez-vous avec votre compte Nordla pour voir et approuver les brouillons.' }), h('a', { class: 'gbp-btn', href: '/', text: 'Ouvrir Nordla' })));
@@ -50,7 +63,7 @@
   function render() {
     app.replaceChildren(h('div', { class: 'gbp-wrap' },
       h('h1', { text: 'Publications Google Business' }), h('p', { class: 'gbp-sub', text: `${data.network} · ${data.listing}` }),
-      h('div', { class: 'gbp-banner' }, h('strong', { text: 'Rien n’est publié par Nordla. ' }), data.publish.message),
+      h('div', { class: 'gbp-banner' }, h('strong', { text: 'Rien n’est publié par Nordla. ' }), data.publish.message), contextCard(data.context),
       data.drafts.map(card), h('p', { class: 'gbp-note' }, h('a', { class: 'gbp-link', href: '/', text: '← Retour à Nordla' }))));
   }
   load();

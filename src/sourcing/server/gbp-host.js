@@ -26,7 +26,7 @@ export async function gbpPage() {
 }
 
 /** @param {{ gate: object, merchantId: string, dataDir: string, draftsDir?: URL, now?: () => Date }} o */
-export async function createGbpHost({ gate, merchantId, dataDir, draftsDir = DRAFTS_DIR, now = () => new Date() }) {
+export async function createGbpHost({ gate, merchantId, dataDir, draftsDir = DRAFTS_DIR, now = () => new Date(), contextOf = null }) {
   const content = await loadDrafts({ dir: draftsDir }); // fails at build time (the module is then not built), never per request
   const store = createDraftStore({ dataDir, merchantId });
   const view = async () => {
@@ -45,6 +45,7 @@ export async function createGbpHost({ gate, merchantId, dataDir, draftsDir = DRA
           const a = await gate.authorize(req); if (!a.ok) { json(res, a.status, a.body); return true; }
           const access = a.access; if (access.merchantId !== merchantId) { json(res, 403, { error: { code: 'TENANT_MISMATCH' } }); return true; }
           const method = String(req.method ?? '').toUpperCase();
+          if (method === 'GET' && p === '/api/gbp/context') { json(res, 200, { context: (await contextOf?.().catch(() => null)) ?? null }); return true; } // what Général gives the drafts (read only, allowlisted); null when Général is off
           if (method === 'GET' && p === '/api/gbp/drafts') { json(res, 200, await view()); return true; }
           const img = /^\/api\/gbp\/drafts\/(GBP-POST-\d{1,3})\/image$/.exec(p);
           if (method === 'GET' && img) { const d = content.drafts.find((x) => x.id === img[1]); if (!d) { json(res, 404, { error: { code: 'NOT_FOUND' } }); return true; } send(res, 200, 'image/jpeg', d.imageBytes, { 'Cache-Control': 'private, max-age=3600' }); return true; }

@@ -28,3 +28,7 @@
 .vid-msg { font-size: .88rem; margin-top: 10px; min-height: 1.2em; }
 .vid-msg.err { color: #8a2d1f; }
 .vid-link { color: #0f2a52; }
+
+.ctx-card { background: #eef3fb; border: 1px solid #c9d3e2; border-radius: 10px; padding: 12px 14px; margin: 12px 0; font-size: .92rem; overflow-wrap: anywhere; }
+.ctx-card ul { margin: 8px 0 0; padding-left: 18px; }
+.ctx-note { margin: 8px 0 0; color: #55606f; font-size: .85rem; }
