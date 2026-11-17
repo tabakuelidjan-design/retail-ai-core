@@ -16,14 +16,17 @@ import { createSign, randomUUID } from 'node:crypto';
 import { FinanceError } from './document.js';
 import { READ_ONLY_SCOPES, assertReadOnlyAdapter } from './bank.js';
 import { toCents } from './money.js';
+import { aspspOf, belgianBank } from './bank-catalog-be.js';
 
 const BASE = 'https://api.enablebanking.com';
 const MAX_PAGES = 20;
 const b64u = (b) => Buffer.from(b).toString('base64url');
 const OGM = /\+\+\+(\d{3})\/(\d{4})\/(\d{5})\+\+\+|\b(\d{12})\b/; // Belgian structured communication (OGM/VCS) when the remittance carries one
 
-/** @param {{ applicationId?: string, privateKeyPem?: string, aspsp?: {name: string, country: string}, psuType?: 'personal'|'business', consentDays?: number, baseUrl?: string, fetchImpl?: Function, now?: () => Date }} o */
-export function createEnableBankingAdapter({ applicationId = null, privateKeyPem = null, aspsp = null, psuType = 'business', consentDays = 90, baseUrl = BASE, fetchImpl = globalThis.fetch, now = () => new Date() } = {}) {
+/** @param {{ applicationId?: string, privateKeyPem?: string, bankKey?: string, aspsp?: {name: string, country: string}, psuType?: 'personal'|'business', consentDays?: number, baseUrl?: string, fetchImpl?: Function, now?: () => Date }} o */
+export function createEnableBankingAdapter({ applicationId = null, privateKeyPem = null, bankKey = null, aspsp: aspspGiven = null, psuType = 'business', consentDays = 90, baseUrl = BASE, fetchImpl = globalThis.fetch, now = () => new Date() } = {}) {
+  if (bankKey != null && !belgianBank(bankKey)) throw new FinanceError('BANK_UNKNOWN', String(bankKey)); // a bank outside the catalogue is refused, never guessed
+  const aspsp = aspspGiven ?? (bankKey ? aspspOf(bankKey) : null); // explicit ASPSP (e.g. read from the provider's list) wins over the catalogue default
   const configured = Boolean(applicationId && privateKeyPem && aspsp?.name && aspsp?.country);
   const calls = { auth: 0, sessions: 0, balances: 0, transactions: 0, revoked: 0 };
 

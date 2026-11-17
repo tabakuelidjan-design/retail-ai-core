@@ -94,3 +94,22 @@ test('EB-4 through the REAL Finance app (doubles at the bank): connect, consent,
     assert.ok(!everything.includes('sess-1') && !everything.includes('PRIVATE KEY'), 'no session id, token or key in any response');
   } finally { await app.close(); }
 });
+
+test('EB-5 Belgian catalogue: the 8 requested banks (KBC, CBC, Belfius, BNP Paribas Fortis, AXA, Argenta, ING, Beobank) resolve; AXA is Crelan; an unknown bank or one the provider does not list is refused, never guessed', async () => {
+  const { BELGIAN_BANKS, belgianBank, aspspOf, matchAspsp } = await import('../src/finance/bank-catalog-be.js');
+  for (const k of ['kbc', 'cbc', 'belfius', 'bnp-paribas-fortis', 'axa', 'argenta', 'ing', 'beobank']) { assert.ok(belgianBank(k), k); assert.equal(aspspOf(k).country, 'BE'); }
+  assert.equal(belgianBank('axa').aliasOf, 'crelan'); assert.deepEqual(aspspOf('axa'), { name: 'Crelan', country: 'BE' }); assert.ok(BELGIAN_BANKS.every((b) => b.names.length && b.notes.length));
+  assert.equal(belgianBank('nope'), null); assert.equal(aspspOf('nope'), null);
+  // matching against the provider's own list: "Belfius" vs "Belfius Bank" is settled by the list, case/accents/spaces ignored
+  assert.deepEqual(matchAspsp([{ name: 'Belfius Bank', country: 'BE' }, { name: 'KBC', country: 'BE' }], 'belfius'), { name: 'Belfius Bank', country: 'BE' });
+  assert.deepEqual(matchAspsp([{ name: ' kbc ', country: 'BE' }], 'kbc'), { name: ' kbc ', country: 'BE' });
+  assert.equal(matchAspsp([{ name: 'Belfius', country: 'NL' }], 'belfius'), null, 'another country is not a match');
+  assert.equal(matchAspsp([{ name: 'KBC', country: 'BE' }], 'beobank'), null, 'a bank the provider does not list is refused');
+  assert.equal(matchAspsp(null, 'kbc'), null);
+  // the adapter takes the bank key: KBC is the pilot bank
+  const b = bank(); const a = createEnableBankingAdapter({ applicationId: 'app-123', privateKeyPem: PEM, bankKey: 'kbc', fetchImpl: b.fetchImpl, now: NOW });
+  assert.equal(a.configured, true); await a.beginConsent({ redirectUri: 'https://finance.example.test/' }); assert.deepEqual(b.seen[0].body.aspsp, { name: 'KBC', country: 'BE' });
+  assert.throws(() => createEnableBankingAdapter({ applicationId: 'a', privateKeyPem: PEM, bankKey: 'unknown-bank' }), /BANK_UNKNOWN/);
+  const exp = createEnableBankingAdapter({ applicationId: 'a', privateKeyPem: PEM, bankKey: 'belfius', aspsp: { name: 'Belfius Bank', country: 'BE' }, fetchImpl: b.fetchImpl, now: NOW });
+  await exp.beginConsent({ redirectUri: 'https://finance.example.test/' }); assert.equal(b.seen.at(-1).body.aspsp.name, 'Belfius Bank', 'the name read from the provider list wins over the catalogue default');
+});

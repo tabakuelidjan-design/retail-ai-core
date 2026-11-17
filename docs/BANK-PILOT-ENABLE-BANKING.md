@@ -11,8 +11,25 @@ Document seul (aucun code, aucune inscription, aucun abonnement, aucun consentem
   - Limites utiles : KBC et Crelan ne supportent pas les cartes de crédit ; l'historique complet n'est garanti que dans les **90 jours** suivant un nouveau consentement (par défaut `/transactions` renvoie 90 jours si `dateFrom` est absent ; la page ne cite cette règle que pour Wise) ; la durée maximale du consentement n'est pas indiquée sur cette page.
 - **Coûts** : la page tarifs `enablebanking.com/pricing` n'existe pas (404). Les sources disent seulement que la production complète est facturée au volume (par compte bancaire connecté et par mois, et par paiement initié) **par contrat** : **aucun tarif chiffré n'est publié, aucun coût n'est confirmé.**
 
+## Banques belges prises en charge (catalogue `src/finance/bank-catalog-be.js`, mis à jour le 2026-11-17)
+**Banque du pilote : KBC** (indiquée par le propriétaire ; l'adaptateur la prend par défaut avec `bankKey: 'kbc'`). Banques demandées, toutes listées par Enable Banking pour la Belgique ([page Belgique](https://enablebanking.com/open-banking-apis/belgium), [spécificités](https://enablebanking.com/docs/markets/be/)) :
+
+| Banque | Clé | Remarque (source officielle) |
+|---|---|---|
+| KBC | `kbc` | choix privé / professionnel sur la page web ; cartes de crédit non prises en charge |
+| CBC | `cbc` | idem KBC |
+| (KBC Brussels) | `kbc-brussels` | idem KBC |
+| Belfius | `belfius` | app Belfius Mobile, sinon itsme ou lecteur de carte ; nom exact « Belfius » ou « Belfius Bank » selon la page |
+| BNP Paribas Fortis | `bnp-paribas-fortis` | itsme ou lecteur de carte |
+| ING | `ing` | app ING, sinon itsme, lecteur, QR, Isabel |
+| Argenta | `argenta` | app Argenta, sinon Digipass ou itsme |
+| Beobank | `beobank` | listée par Enable Banking ; aucune particularité décrite |
+| AXA | `axa` | **AXA Bank Belgium est devenue Crelan** : Enable Banking la liste sous « Crelan (AXA Bank) » ; connexion via Crelan ; cartes de crédit non prises en charge |
+
+Le nom exact attendu par l'API (par exemple « Belfius » ou « Belfius Bank ») sera comparé à la liste propre d'Enable Banking au premier appel réel (`matchAspsp`) : si la banque n'y figure pas, la connexion est refusée, jamais devinée.
+
 ## Ce qui est inconnu (à fournir par vous)
-- **Le nom de la banque de HABB** (non identifiable depuis le dépôt) → détermine l'app/itsme à prévoir et la compatibilité (la banque de HABB est-elle parmi les 6 principales ?).
+- ~~Le nom de la banque de HABB~~ : **KBC** (reçu). Reste à savoir si les comptes sont professionnels (le client choisira « professionnel » sur la page KBC) et s'il y a une carte de crédit (non lisible chez KBC).
 - Comptes à lier (professionnels ? carte de crédit exclue pour KBC/Crelan).
 - Votre accord pour créer l'application chez Enable Banking (inscription = création de compte/identité : **non faite**).
 
