@@ -79,11 +79,21 @@
   const setFlash = (tone, text) => { flash = { tone, text }; renderConnections(); };
   const go = (id) => { selected = id; history.replaceState(null, '', id ? `#/${id}` : location.pathname); renderConnections(); window.scrollTo(0, 0); };
 
+  // The return address is never printed inline (it overflows a phone): it sits behind a button; if the clipboard is refused, it is shown selectable instead.
+  function copyBlock(c) {
+    const out = h('span', { class: 'cx-copy-out', 'aria-live': 'polite' });
+    const btn = h('button', { class: 'cx-btn ghost cx-copy', type: 'button', text: c.label, on: { click: async () => {
+      try { await navigator.clipboard.writeText(c.value); out.textContent = 'Adresse copiée.'; btn.textContent = 'Adresse copiée'; setTimeout(() => { btn.textContent = c.label; }, 2500); }
+      catch { out.textContent = ''; out.append(h('code', { class: 'cx-code', text: c.value })); }
+    } } });
+    return h('div', { class: 'cx-copy-row' }, c.what ? h('p', { class: 'cx-step-detail', text: c.what }) : null, btn, out);
+  }
   function stepList(steps) {
     return steps.length ? h('ol', { class: 'cx-steps' }, steps.map((s, i) => h('li', { class: s.state },
       h('span', { class: 'cx-num', text: s.state === 'done' ? '✓' : String(i + 1), 'aria-hidden': 'true' }),
       h('div', {}, h('strong', { text: s.title }), s.owner ? h('span', { class: 'cx-who', text: { owner: 'Vous', provider: 'Fournisseur', nordla: 'Nordla' }[s.owner] ?? '' }) : null, s.detail ? h('p', { class: 'cx-step-detail', text: s.detail }) : null,
-        s.facts && s.facts.length ? h('ul', { class: 'cx-facts' }, s.facts.map((f) => h('li', { text: f }))) : null)))) : null;
+        s.facts && s.facts.length ? h('ul', { class: 'cx-facts' }, s.facts.map((f) => h('li', { text: f }))) : null,
+        s.copy ? copyBlock(s.copy) : null)))) : null;
   }
   function connRow(c) {
     const labels = { verify: 'Revérifier', reconnect: 'Reconnecter', disconnect: 'Déconnecter' };

@@ -118,3 +118,8 @@ html, body { background: var(--cx-bg); }
   .cx-actions .cx-btn { flex: 1 1 100%; }
 }
 @media (min-width: 900px) and (max-width: 1199px) { .cx-set-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.cx-copy-row { margin-top: 8px; }
+.cx-copy-row .cx-btn { padding: 8px 14px; font-size: .88rem; }
+.cx-copy-out { display: block; margin-top: 6px; font-size: .84rem; color: #1d5a2c; }
+.cx-code { display: block; padding: 8px 10px; background: #f3f5f9; border: 1px solid var(--cx-line); border-radius: 6px; font-size: .8rem; user-select: all; word-break: break-all; }
+@media (max-width: 899px) { .cx-copy-row .cx-btn { width: 100%; } }

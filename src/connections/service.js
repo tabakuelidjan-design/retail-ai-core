@@ -75,9 +75,9 @@ export function createConnectionsService({
       const connected = (ctx.connections ?? []).some((c) => c.state !== 'NOT_CONFIGURED'); const verified = (ctx.connections ?? []).some((c) => c.state === 'VERIFIED');
       const flags = [ready, connected, verified]; const firstOpen = flags.findIndex((f) => !f);
       const steps = [
-        { title: `Configuration ${app}`, detail: `Configurer l’application dans ${app} (développeurs).`, owner: 'owner', facts: ready ? [] : [`Adresse de retour à déclarer : ${redirectUriOf(p.providerKey) ?? '(adresse du service)'}`, `Variables à poser sur le service Nordla : ${names.join(', ')}${p.providerKey === 'instagram' ? ', INSTAGRAM_GRAPH_API_VERSION' : ''}`, `Ajouter le compte de la boutique comme testeur de l’application ${app}.`] },
-        { title: 'Autorisation du compte', detail: `Autoriser l’accès à votre compte ${p.label}${who}.`, owner: 'owner', facts: [] },
-        { title: 'Vérification', detail: 'Nordla vérifie le compte (professionnel) et les permissions de lecture.', owner: 'nordla', facts: [] },
+        { title: `Configuration ${app}`, detail: `Configurer l’application dans ${app} (développeurs).`, owner: 'owner', copy: redirectUriOf(p.providerKey) ? { label: 'Copier l’adresse de retour', value: redirectUriOf(p.providerKey), what: 'Adresse de retour à déclarer dans l’application (URI de redirection OAuth valides).' } : null, facts: ready ? [] : [`Variables à poser sur le service Nordla : ${names.join(', ')}${p.providerKey === 'instagram' ? ', INSTAGRAM_GRAPH_API_VERSION' : ''}`, `Ajouter le compte de la boutique comme testeur de l’application ${app}.`] },
+        { title: 'Autorisation du compte', detail: `Autoriser l’accès à votre compte ${p.label}${who}.`, owner: 'owner', facts: [], copy: null },
+        { title: 'Vérification', detail: 'Nordla vérifie le compte (professionnel) et les permissions de lecture.', owner: 'nordla', facts: [], copy: null },
       ].map((st, i) => ({ ...st, state: flags[i] ? 'done' : (i === firstOpen ? 'current' : 'todo') }));
       return ready
         ? { state: 'READY', label: 'Prêt à connecter', detail: null, steps, canConnect: WRITER_ROLES.has(role) }
