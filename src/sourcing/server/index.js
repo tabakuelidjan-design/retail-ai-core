@@ -156,7 +156,7 @@ export async function buildTeam({ env, gate, hosted, log = console.log, supabase
     const gotrue = loadGoTrueConfig(env);
     const admin = createAuthAdmin({ baseUrl: gotrue.baseUrl, serviceKey: String(env.SUPABASE_SERVICE_ROLE_KEY ?? ''), fetchImpl });
     const verifier = createGoTrueVerifier({ config: gotrue, fetchImpl });
-    const service = createTeamService({ repo: createSupabaseTeamRepository({ supabase }), auth: { createUser: admin.createUser, verifyPassword: verifier.verifyPassword }, origin: hosted.origin });
+    const service = createTeamService({ repo: createSupabaseTeamRepository({ supabase }), auth: { createUser: admin.createUser, setPassword: admin.setPassword, verifyPassword: verifier.verifyPassword }, origin: hosted.origin });
     const host = await createTeamHost({ gate, merchantId: hosted.merchantId, service, origin: hosted.origin, shellOf });
     log('Team: ON (Paramètres > Équipe et accès; invitations by one-time link, no e-mail sending)');
     return host;
