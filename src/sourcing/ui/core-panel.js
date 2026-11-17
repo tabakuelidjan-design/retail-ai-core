@@ -66,7 +66,7 @@ export function createCorePanel({ S, api, refresh }) {
       : list === undefined ? `<button class="btn sec" data-act="core-load" data-case="${esc(active.id)}">Voir les décisions de ce dossier</button>`
         : `${list.length ? decisionCard(list[0]) : '<p class="small muted">Pas encore analysé par Nordla Core.</p>'}<button class="btn" data-act="core-analyse" data-case="${esc(active.id)}" ${st.busy ? 'disabled' : ''}>Analyser l’achat de ce dossier (version serveur)</button>`;
     const askBlock = askUi.render(active, st.busy, st.error);
-    return `${head}${err}<p class="small muted">Décisions en attente : ${esc(st.status.awaiting_human ?? 0)} — en suivi : ${esc(st.status.in_follow_up ?? 0)}. Règles du propriétaire : ${st.status.owner_rules === 'CONFIGURED' ? 'configurées' : 'aucune configurée'}.</p>${caseBlock}${askBlock}`;
+    return `${head}${err}${st.status.merchant?.name ? `<p class="small muted" data-core-merchant>Commerce : ${esc(st.status.merchant.name)}</p>` : ""}<p class="small muted">Décisions en attente : ${esc(st.status.awaiting_human ?? 0)} — en suivi : ${esc(st.status.in_follow_up ?? 0)}. Règles du propriétaire : ${st.status.owner_rules === 'CONFIGURED' ? 'configurées' : 'aucune configurée'}.</p>${caseBlock}${askBlock}`;
   }
   return { section, load };
 }
