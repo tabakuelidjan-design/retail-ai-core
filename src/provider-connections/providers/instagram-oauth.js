@@ -18,9 +18,12 @@ import { deepFreeze, seal } from '../validation.js';
 import { OAuthFailure, bundleFromResponse, oauthRequest, parseScopes } from './common.js';
 
 export const INSTAGRAM_MINIMUM_SCOPES = Object.freeze(['instagram_business_basic', 'instagram_business_content_publish']);
+// READ-ONLY set (owner request 2026-11-17): profile and media (basic) + insights. Nothing here can publish. Meta's documentation pairs these two for insights with Instagram Login
+// (developers.facebook.com/documentation/instagram-platform/insights, checked 2026-11-17). Opt-in: the default stays the publishing set above.
+export const INSTAGRAM_READ_SCOPES = Object.freeze(['instagram_business_basic', 'instagram_business_manage_insights']);
 const PROFESSIONAL = ['Business', 'Media_Creator'];
 
-export function createInstagramOAuth({ http, timeoutMs, now = Date.now } = {}) {
+export function createInstagramOAuth({ http, timeoutMs, now = Date.now, scopes = INSTAGRAM_MINIMUM_SCOPES } = {}) {
   const call = (request) => oauthRequest(http, request, { timeoutMs, now, classify: (r) => (r.status === 400 || r.status === 401 ? { code: OAUTH_ERROR.CODE_EXCHANGE_FAILED, reauth: r.status === 401, safeCode: r.body?.error_type ?? r.body?.error?.code ?? r.status } : {}) });
   const versionOf = (appConfig) => {
     if (!appConfig.graphVersion || !/^v\d+\.\d+$/.test(appConfig.graphVersion)) throw new OAuthFailure({ code: OAUTH_ERROR.APP_MISCONFIGURED, safeCode: 'GRAPH_VERSION' });
@@ -35,7 +38,7 @@ export function createInstagramOAuth({ http, timeoutMs, now = Date.now } = {}) {
   const candidateOf = (account, tokens) => {
     const reasons = [];
     if (!PROFESSIONAL.includes(account.accountType)) reasons.push('ACCOUNT_NOT_PROFESSIONAL'); // a consumer account can never publish through the API
-    for (const scope of INSTAGRAM_MINIMUM_SCOPES) if (!tokens.scopes.includes(scope)) reasons.push('SCOPE_MISSING');
+    for (const scope of scopes) if (!tokens.scopes.includes(scope)) reasons.push('SCOPE_MISSING');
     return deepFreeze({
       provider: PROVIDER.INSTAGRAM, external_id: account.id, display_name: account.username, account_type: account.accountType, location_name: null,
       granted_scopes: [...tokens.scopes], eligibility: { eligible: reasons.length === 0, reasons: [...new Set(reasons)].sort() }, review_signals: [],
@@ -46,7 +49,7 @@ export function createInstagramOAuth({ http, timeoutMs, now = Date.now } = {}) {
   return {
     provider: PROVIDER.INSTAGRAM,
     descriptor: deepFreeze({
-      minimum_scopes: INSTAGRAM_MINIMUM_SCOPES, uses_pkce: false, revocable_remotely: false,
+      minimum_scopes: scopes, uses_pkce: false, revocable_remotely: false,
       verified_against: [
         'https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/business-login',
         'https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/get-started',
@@ -59,7 +62,7 @@ export function createInstagramOAuth({ http, timeoutMs, now = Date.now } = {}) {
       url.searchParams.set('client_id', appConfig.clientId);
       url.searchParams.set('redirect_uri', redirectUri);
       url.searchParams.set('response_type', 'code');
-      url.searchParams.set('scope', INSTAGRAM_MINIMUM_SCOPES.join(','));
+      url.searchParams.set('scope', scopes.join(','));
       url.searchParams.set('state', state);
       return url.toString();
     },

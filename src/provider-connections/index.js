@@ -24,6 +24,6 @@ export { createOAuthHttp } from './oauth-http.js';
 export { createProviderConnectionsRuntime } from './runtime.js';
 export { runCli, createCallbackServer } from './cli.js';
 export { loadProviderAppConfig, OAuthFailure } from './providers/common.js';
-export { createInstagramOAuth, INSTAGRAM_MINIMUM_SCOPES } from './providers/instagram-oauth.js';
-export { createTikTokOAuth, TIKTOK_MINIMUM_SCOPES } from './providers/tiktok-oauth.js';
+export { createInstagramOAuth, INSTAGRAM_MINIMUM_SCOPES, INSTAGRAM_READ_SCOPES } from './providers/instagram-oauth.js';
+export { createTikTokOAuth, TIKTOK_MINIMUM_SCOPES, TIKTOK_READ_SCOPES } from './providers/tiktok-oauth.js';
 export { createGoogleBusinessOAuth, googleLocationBinding, GOOGLE_MINIMUM_SCOPES } from './providers/google-business-oauth.js';
