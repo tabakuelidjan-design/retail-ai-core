@@ -18,7 +18,7 @@ const send = (res, status, type, body, extra = {}) => { res.writeHead(status, { 
 const json = (res, status, body) => send(res, status, 'application/json; charset=utf-8', JSON.stringify(body), { 'Cache-Control': 'no-store' });
 const redirect = (res, to) => { res.writeHead(303, { ...HEADERS, Location: to, 'Cache-Control': 'no-store' }); res.end(); };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const PAGE = '/settings/connections';
+const PAGE = '/settings/connections'; const HOME = '/settings';
 const readJson = async (req) => { const chunks = []; let n = 0; for await (const c of req) { n += c.length; if (n > 10_000) throw Object.assign(new Error('too large'), { code: 'BODY_TOO_LARGE' }); chunks.push(c); } try { return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch { throw Object.assign(new Error('bad json'), { code: 'BODY_INVALID' }); } };
 
 // Provisioning error -> HTTP. Only a code (and a few non-secret hints) is ever returned, never a provider body.
@@ -51,13 +51,14 @@ export async function createConnectionsHost({ gate, merchantId, runtime, service
     async handle(req, res, url) {
       const p = url.pathname;
       try {
-        if (p.startsWith('/api/connections')) {
+        if (p.startsWith('/api/connections') || p === '/api/settings') {
           const a = await gate.authorize(req);
           const cb = /^\/api\/connections\/([a-z_]{2,40})\/callback$/.exec(p);
           if (!a.ok) { if (cb) { redirect(res, `${PAGE}?connect_error=SESSION_INVALID`); return true; } json(res, a.status, a.body); return true; }
           const access = a.access; if (access.merchantId !== merchantId) { if (cb) { redirect(res, `${PAGE}?connect_error=TENANT_MISMATCH`); return true; } json(res, 403, { error: { code: 'TENANT_MISMATCH' } }); return true; }
           const method = String(req.method ?? '').toUpperCase(); const writer = WRITER_ROLES.has(access.role); const actorRef = access.userId;
           if (method === 'GET' && p === '/api/connections') { json(res, 200, await overview(access.role)); return true; }
+          if (method === 'GET' && p === '/api/settings') { json(res, 200, await service.settings({ tenant: tenantOf(), role: access.role })); return true; }
           // The provider sends the browser back here after the consent: GET, with the Nordla session cookie. Nothing from the query is echoed back.
           if (method === 'GET' && cb) {
             const provider = providerFor(cb[1]); if (!provider) { redirect(res, `${PAGE}?connect_error=PROVIDER_UNSUPPORTED`); return true; }
@@ -105,7 +106,7 @@ export async function createConnectionsHost({ gate, merchantId, runtime, service
           json(res, 404, { error: { code: 'NOT_FOUND' } }); return true;
         }
         if (req.method !== 'GET' && req.method !== 'HEAD') return false;
-        if (p === PAGE || p === `${PAGE}/`) { send(res, 200, 'text/html; charset=utf-8', await connectionsPage()); return true; }
+        if (p === PAGE || p === `${PAGE}/` || p === HOME || p === `${HOME}/`) { send(res, 200, 'text/html; charset=utf-8', await connectionsPage()); return true; }
         const m = /^\/connections-assets\/([a-z0-9.-]+)$/.exec(p);
         if (m) {
           if (m[1] === 'nordla-icon.js') { const f = await readNordlaShared('/nordla-icon.js'); if (!f) { send(res, 404, 'application/json', '{"error":"NOT_FOUND"}'); return true; } send(res, 200, f.type, f.body); return true; }

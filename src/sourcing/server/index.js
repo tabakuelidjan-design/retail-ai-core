@@ -77,6 +77,8 @@ export async function buildConnections({ env, gate, hosted, log = console.log, s
       redirectUriOf: (key) => { try { return runtime.appConfigFor(key).redirectUri; } catch { return origin ? `${origin}/api/connections/${key}/callback` : null; } },
       shopifySync: async (merchantId) => { const rows = await supabase.select('sync_runs', { merchant_id: `eq.${merchantId}`, order: 'started_at.desc', limit: '1' }); const r = rows?.[0]; return r ? { status: r.status, startedAt: r.started_at, finishedAt: r.finished_at } : null; },
       bankCatalog: BELGIAN_BANKS, bankProvider: { id: 'enable-banking', label: 'Enable Banking' },
+      merchantLabel: async (merchantId) => { const rows = await supabase.select('merchants', { id: `eq.${merchantId}`, select: 'name', limit: '1' }); return rows?.[0]?.name ?? null; },
+      environmentLabel: /^staging$/i.test(String(env.RAILWAY_ENVIRONMENT_NAME ?? env.NORDLA_ENV_LABEL ?? '').trim()) ? 'Staging' : (String(env.NORDLA_ENV_LABEL ?? '').trim() || null),
     });
     const host = await createConnectionsHost({ gate, merchantId: hosted.merchantId, runtime, service, registry });
     log('Connections: ON (read-only; Instagram and TikTok ask read scopes only)');

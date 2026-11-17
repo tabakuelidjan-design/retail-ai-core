@@ -42,7 +42,7 @@ async function boot({ env = ENV_READ, routes = igRoutes({ permissions: READ_PERM
   const service = createConnectionsService({
     registry, center: ctx.rt.connectionCenter, connectorRepository: ctx.rt.connectorRepository, appConfigPresent: ctx.rt.appConfigPresent, appEnvNames: APP_ENV,
     redirectUriOf: (k) => { try { return ctx.rt.appConfigFor(k).redirectUri; } catch { return `https://sourcing-staging-staging.up.railway.app/api/connections/${k}/callback`; } },
-    shopifySync: async () => ({ status: 'completed', startedAt: '2026-11-17T08:00:00Z', finishedAt: '2026-11-17T08:01:00Z' }), bankCatalog: BELGIAN_BANKS, bankProvider: { id: 'enable-banking', label: 'Enable Banking' },
+    merchantLabel: async () => 'HABB (test staging)', environmentLabel: 'Staging', shopifySync: async () => ({ status: 'completed', startedAt: '2026-11-17T08:00:00Z', finishedAt: '2026-11-17T08:01:00Z' }), bankCatalog: BELGIAN_BANKS, bankProvider: { id: 'enable-banking', label: 'Enable Banking' },
   });
   const host = await createConnectionsHost({ gate: gateOver(SESSIONS), merchantId: M1, runtime: ctx.rt, service, registry });
   const s = http.createServer(async (req, res) => { const u = new URL(req.url, 'http://x'); if (!(await host.handle(req, res, u))) { res.writeHead(404); res.end('{"error":"NOT_FOUND"}'); } });
@@ -76,7 +76,9 @@ test('CX-2 the page shows the real state: Shopify linked + last sync, Instagram 
     const ov = (await t.req('/api/connections', { token: 'tok-owner' })).json; assert.equal(ov.canManage, true);
     const shop = find(ov, 'shopify'); assert.equal(shop.connections.length, 1); assert.equal(shop.connections[0].stateLabel, 'Boutique liée'); assert.equal(shop.connections[0].sync.label, 'Dernière synchronisation réussie'); assert.deepEqual(shop.connections[0].actions, []);
     const ig = find(ov, 'instagram'); assert.equal(ig.setup.state, 'APP_MISSING'); assert.equal(ig.setup.label, 'Application Meta à configurer'); assert.equal(ig.setup.canConnect, false); assert.equal(ig.accessLabel, 'Lecture seule');
-    assert.match(ig.setup.steps.map((s) => s.label).join(' | '), /https:\/\/sourcing-staging-staging\.up\.railway\.app\/api\/connections\/instagram\/callback/); assert.match(ig.setup.steps.map((s) => s.label).join(' '), /INSTAGRAM_CLIENT_ID, INSTAGRAM_CLIENT_SECRET, INSTAGRAM_REDIRECT_URI/);
+    assert.deepEqual(ig.setup.steps.map((x) => [x.title, x.state]), [['Configuration Meta', 'current'], ['Autorisation du compte', 'todo'], ['Vérification', 'todo']]); assert.match(ig.setup.steps[1].detail, /Instagram HABB \(test staging\)/);
+    const facts = ig.setup.steps[0].facts.join(' | '); assert.match(facts, /https:\/\/sourcing-staging-staging\.up\.railway\.app\/api\/connections\/instagram\/callback/); assert.match(facts, /INSTAGRAM_CLIENT_ID, INSTAGRAM_CLIENT_SECRET, INSTAGRAM_REDIRECT_URI/); assert.equal(ig.dataLabel, 'Profil, publications et statistiques');
+    assert.equal(find(ov, 'tiktok').statusLabel, 'Prévu', 'TikTok stays Prévu until its journey is validated'); assert.equal(find(ov, 'tiktok').setup.canConnect, false);
     const g = find(ov, 'google_business_profile'); assert.equal(g.setup.state, 'WAITING'); assert.match(g.setup.detail, /8-1074000042712/); assert.equal(g.connections.length, 0); assert.equal(g.setup.canConnect, false);
     const b = find(ov, 'bank'); assert.equal(b.setup.state, 'WAITING'); assert.equal(b.setup.steps.length, 3); assert.equal(b.bank.banks.length, BELGIAN_BANKS.length); assert.ok(b.bank.banks.some((x) => x.key === 'kbc') && b.bank.pilot === 'kbc'); assert.equal(b.bank.provider.label, 'Enable Banking');
     for (const id of ['odoo', 'woocommerce', 'prestashop']) assert.equal(find(ov, id).statusLabel, 'Prévu');
@@ -155,4 +157,20 @@ test('CX-6 ISOLATION: without NORDLA_CONNECTIONS_MODULE=1 nothing is built; with
   } finally { await new Promise((r) => s.close(r)); }
   const { readFileSync } = await import('node:fs');
   for (const f of ['../src/connections/registry.js', '../src/connections/service.js', '../src/sourcing/server/connections-host.js', '../src/connections/ui/connections.js']) { const src = readFileSync(new URL(f, import.meta.url), 'utf8'); assert.doesNotMatch(src, /graph\.instagram\.com|api\.instagram\.com|open\.tiktokapis|googleapis\.com|content_publish|media_publish/i, `${f} talks to no provider and publishes nothing`); }
+});
+
+test('CX-7 the Settings home: six sections, the real availability of each, the Connections card highlighted with the catalogue states, the Nordla menu, readable by any role, the page served at /settings', async () => {
+  const t = await boot({ env: { ...NO_APP, NORDLA_PROVIDER_SCOPE_MODE: 'read' } });
+  try {
+    const page = await t.req('/settings'); assert.equal(page.status, 200); assert.match(page.text, /connections-assets\/connections\.js/); assert.equal((await t.req('/settings/')).status, 200); assert.equal((await t.req('/api/settings')).status, 401);
+    const s = (await t.req('/api/settings', { token: 'tok-viewer' })).json;
+    assert.deepEqual(s.cards.map((c) => c.id), ['general', 'team', 'connections', 'notifications', 'preferences', 'security']); assert.deepEqual(s.cards.map((c) => c.label), ['Général', 'Équipe et accès', 'Connexions', 'Notifications', 'Préférences', 'Sécurité']);
+    assert.deepEqual(s.cards.filter((c) => c.available).map((c) => c.id), ['connections'], 'only Connexions has a screen'); const conn = s.cards.find((c) => c.id === 'connections'); assert.equal(conn.href, '/settings/connections');
+    for (const c of s.cards.filter((x) => x.id !== 'connections')) { assert.deepEqual([c.available, c.href, c.availabilityLabel], [false, null, 'Prévu']); assert.ok(c.note, 'what already works, or that nothing does'); }
+    assert.match(s.cards.find((c) => c.id === 'team').note, /rôles/); assert.deepEqual(conn.providers.map((p) => p.id), ['shopify', 'instagram', 'tiktok', 'google_business_profile', 'bank', 'odoo', 'woocommerce', 'prestashop']);
+    const st = Object.fromEntries(conn.providers.map((p) => [p.id, p.statusLabel])); assert.deepEqual([st.shopify, st.instagram, st.tiktok, st.google_business_profile, st.bank, st.odoo], ['Connecté', 'Application Meta à configurer', 'Prévu', 'En attente', 'En attente', 'Prévu']);
+    assert.ok(!conn.providers.some((p) => /stripe|google analytics/i.test(p.label)), 'the catalogue providers, not the mock-up ones');
+    assert.deepEqual(s.nav.map((n) => n.label), ['Accueil', 'Sourcing', 'Achats', 'Finance', 'Analyses', 'Growth', 'Marketing', 'Paramètres']); assert.equal(s.nav.find((n) => n.id === 'settings').href, '/settings'); assert.deepEqual([s.merchant.name, s.environment], ['HABB (test staging)', 'Staging']);
+    const noShop = await boot({ shop: false }); try { const c2 = (await noShop.req('/api/settings', { token: 'tok-owner' })).json.cards.find((c) => c.id === 'connections'); assert.equal(c2.providers.find((p) => p.id === 'shopify').statusLabel, 'Non reliée', 'no shop linked to this merchant: said plainly'); } finally { await noShop.close(); }
+  } finally { await t.close(); }
 });

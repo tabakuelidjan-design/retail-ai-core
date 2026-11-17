@@ -1,10 +1,20 @@
-// Paramètres -> Connexions. Everything comes from GET /api/connections (the registry + the real state): the page never names a provider. All text is inserted with textContent.
+// Paramètres (hub) and Paramètres › Connexions (list + detail), one script, two routes. Everything comes from GET /api/settings and GET /api/connections (the registry + the real state):
+// the page never names a provider. All text from the server is inserted with textContent.
 (() => {
   'use strict';
   const CSRF_COOKIES = ['__Host-nordla_sourcing_csrf'];
   const csrf = () => { for (const part of String(document.cookie).split(';')) { const i = part.indexOf('='); if (i > 0 && CSRF_COOKIES.includes(part.slice(0, i).trim())) return part.slice(i + 1).trim(); } return ''; };
   const app = document.getElementById('app');
-  const h = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs || {})) { if (v == null || v === false) continue; if (k === 'on') for (const [ev, fn] of Object.entries(v)) e.addEventListener(ev, fn); else if (k === 'text') e.textContent = v; else e.setAttribute(k, v === true ? '' : String(v)); } for (const k of kids.flat()) if (k != null) e.append(k.nodeType ? k : document.createTextNode(String(k))); return e; };
+  const h = (tag, attrs, ...kids) => { const e = document.createElement(tag); for (const [k, v] of Object.entries(attrs || {})) { if (v == null || v === false) continue; if (k === 'on') for (const [ev, fn] of Object.entries(v)) e.addEventListener(ev, fn); else if (k === 'text') e.textContent = v; else e.setAttribute(k, v === true ? '' : String(v)); } for (const k of kids.flat(Infinity)) if (k != null) e.append(k.nodeType ? k : document.createTextNode(String(k))); return e; };
+  const svg = (d) => { const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('class', 'cx-ico'); s.setAttribute('aria-hidden', 'true'); for (const p of d) { const e = document.createElementNS('http://www.w3.org/2000/svg', 'path'); e.setAttribute('d', p); s.append(e); } return s; };
+  const ICONS = {
+    home: ['M3 11l9-8 9 8', 'M5 10v10h14V10'], sourcing: ['M11 4a7 7 0 100 14 7 7 0 000-14z', 'M21 21l-5-5'], procurement: ['M3 4h2l2 11h11l2-8H7', 'M9 20h.01', 'M17 20h.01'], finance: ['M4 7c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3z', 'M4 7v5c0 1.7 3.6 3 8 3s8-1.3 8-3V7', 'M4 12v5c0 1.7 3.6 3 8 3s8-1.3 8-3v-5'],
+    analytics: ['M5 20V12', 'M12 20V5', 'M19 20v-9'], growth: ['M3 17l6-6 4 4 8-8', 'M15 7h6v6'], marketing: ['M4 10v4l12 5V5L4 10z', 'M7 14l1 5h3l-1-4'], settings: ['M12 9a3 3 0 100 6 3 3 0 000-6z', 'M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.5-2.3 1a7 7 0 00-2-1.2L14 3h-4l-.6 2.6a7 7 0 00-2 1.2l-2.3-1-2 3.5 2 1.5A7 7 0 005 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.5 2.3-1a7 7 0 002 1.2L10 21h4l.6-2.6a7 7 0 002-1.2l2.3 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z'],
+    gear: ['M12 9a3 3 0 100 6 3 3 0 000-6z', 'M19 12a7 7 0 00-.1-1.2l2-1.5-2-3.5-2.3 1a7 7 0 00-2-1.2L14 3h-4l-.6 2.6a7 7 0 00-2 1.2l-2.3-1-2 3.5 2 1.5A7 7 0 005 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.5 2.3-1a7 7 0 002 1.2L10 21h4l.6-2.6a7 7 0 002-1.2l2.3 1 2-3.5-2-1.5c.1-.4.1-.8.1-1.2z'],
+    users: ['M9 11a4 4 0 100-8 4 4 0 000 8z', 'M2 21v-1a6 6 0 0112 0v1', 'M16 4a4 4 0 010 7', 'M18 14a6 6 0 013 5v2'], plug: ['M9 2v6', 'M15 2v6', 'M6 8h12v4a6 6 0 01-12 0V8z', 'M12 18v4'],
+    bell: ['M6 9a6 6 0 0112 0c0 6 2 7 2 8H4c0-1 2-2 2-8z', 'M10 21h4'], sliders: ['M4 6h10', 'M18 6h2', 'M4 12h4', 'M12 12h8', 'M4 18h12', 'M20 18h0', 'M14 4v4', 'M8 10v4', 'M16 16v4'], shield: ['M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z'], chevron: ['M9 6l6 6-6 6'], back: ['M15 6l-6 6 6 6'], menu: ['M4 7h16', 'M4 12h16', 'M4 17h16'],
+  };
+  const ico = (name) => svg(ICONS[name] ?? ICONS.gear);
   const api = async (path, body) => {
     const r = await fetch(path, { method: body ? 'POST' : 'GET', credentials: 'same-origin', headers: { accept: 'application/json', ...(body ? { 'content-type': 'application/json', 'x-nordla-csrf': csrf() } : {}) }, body: body ? JSON.stringify(body) : undefined });
     let j = null; try { j = await r.json(); } catch { /* none */ }
@@ -19,21 +29,41 @@
     SCOPE_MISSING: 'Une permission de lecture n’a pas été accordée : recommencez et acceptez-les toutes.', PROVIDER_UNAVAILABLE: 'Le fournisseur ne répond pas pour le moment : réessayez plus tard.', PROVIDER_UNSUPPORTED: 'Ce fournisseur n’est pas encore connectable.', CALLBACK_FAILED: 'La connexion n’a pas abouti : recommencez.',
   };
   const errText = (r) => ERR[r.json?.error?.code ?? r.json?.oauth] ?? `Action refusée (${r.status}).`;
-  let data = null; let flash = null; let pick = null;
 
-  async function load() {
-    const r = await api('/api/connections');
-    if (r.status === 401 || (r.status === 403 && r.json?.error?.code !== 'FORBIDDEN_ROLE')) return signIn();
-    if (!r.ok) return app.replaceChildren(h('div', { class: 'cx-wrap' }, h('h1', { text: 'Connexions' }), h('p', { class: 'cx-msg err', text: 'Cette page est indisponible pour le moment.' })));
-    data = r.json;
-    const q = new URLSearchParams(location.search); const ref = q.get('connect'); const err = q.get('connect_error');
-    if (err) flash = { tone: 'err', text: ERR[err] ?? 'La connexion n’a pas abouti.' };
-    if (ref && data.canManage) { const t = await api(`/api/connections/targets?session=${encodeURIComponent(ref)}`); if (t.ok) pick = { ref, provider: q.get('provider'), targets: t.json.targets }; else flash = { tone: 'err', text: errText(t) }; }
-    if (ref || err) history.replaceState(null, '', '/settings/connections');
-    render();
+  // ------------------------------------------------------------------ shell: the Nordla menu (left) + the page
+  const INITIALS = { shopify: 'S', instagram: 'Ig', tiktok: 'Tk', google_business_profile: 'G', bank: 'B', odoo: 'odoo', woocommerce: 'Woo', prestashop: 'Ps' };
+  function shell(settings, current, content) {
+    const nav = h('nav', { class: 'cx-nav', id: 'cx-nav', 'aria-label': 'Menu Nordla' }, settings.nav.map((n) => h('a', { class: 'cx-nav-item', href: n.href, 'aria-current': n.id === 'settings' ? 'page' : null, title: n.id === 'settings' || n.href === '/' ? null : 'Ouvre l’accueil Nordla : chaque module y est listé avec son état réel.' }, ico(n.id), h('span', { text: n.label }))));
+    const toggle = h('button', { class: 'cx-menu', type: 'button', 'aria-controls': 'cx-nav', 'aria-expanded': 'false', 'aria-label': 'Ouvrir le menu Nordla', on: { click: (e) => { const open = nav.classList.toggle('open'); e.currentTarget.setAttribute('aria-expanded', String(open)); } } }, ico('menu'));
+    return h('div', { class: 'cx-shell' },
+      h('aside', { class: 'cx-side' }, h('div', { class: 'cx-brandrow' }, h('a', { class: 'cx-brand', href: '/', text: 'Nordla AI' }), toggle), nav),
+      h('div', { class: 'cx-main' },
+        h('header', { class: 'cx-top' }, h('span', { class: 'cx-shop', text: settings.merchant?.name ?? 'Boutique' }), settings.environment ? h('span', { class: 'cx-env', text: settings.environment }) : null),
+        h('main', { class: 'cx-page' }, content)));
   }
-  function signIn() { app.replaceChildren(h('div', { class: 'cx-wrap' }, h('h1', { text: 'Connexions' }), h('p', { class: 'cx-sub', text: 'Connectez-vous avec votre compte Nordla.' }), h('a', { class: 'cx-btn', href: '/', text: 'Ouvrir Nordla' }))); }
-  const setFlash = (tone, text) => { flash = { tone, text }; render(); };
+  const signIn = () => app.replaceChildren(h('div', { class: 'cx-wrap' }, h('h1', { text: 'Paramètres' }), h('p', { class: 'cx-sub', text: 'Connectez-vous avec votre compte Nordla.' }), h('a', { class: 'cx-btn', href: '/', text: 'Ouvrir Nordla' })));
+  const guard = (r) => (r.status === 401 || (r.status === 403 && r.json?.error?.code !== 'FORBIDDEN_ROLE') ? (signIn(), true) : false);
+
+  // ------------------------------------------------------------------ Paramètres (hub)
+  async function hub() {
+    const r = await api('/api/settings'); if (guard(r)) return;
+    if (!r.ok) return app.replaceChildren(h('div', { class: 'cx-wrap' }, h('h1', { text: 'Paramètres' }), h('p', { class: 'cx-msg err', text: 'Cette page est indisponible pour le moment.' })));
+    const s = r.json;
+    const card = (c) => {
+      const body = [h('div', { class: 'cx-card-head' }, h('span', { class: 'cx-card-ico' }, ico(c.icon)), h('h2', { text: c.label }), c.available ? h('span', { class: 'cx-chev' }, ico('chevron')) : h('span', { class: 'cx-avail', 'data-available': 'false', text: c.availabilityLabel })),
+        h('p', { class: 'cx-card-desc', text: c.description }),
+        c.available && c.providers ? h('ul', { class: 'cx-prov' }, c.providers.map((p) => h('li', { 'data-tone': p.status === 'PLANNED' ? 'planned' : p.statusLabel === 'Connecté' ? 'ok' : 'todo' }, h('span', { class: 'cx-badge', text: INITIALS[p.id] ?? p.label.slice(0, 2) }), h('span', { class: 'cx-prov-text' }, h('span', { class: 'cx-prov-name', text: p.label }), h('span', { class: 'cx-prov-state', text: p.statusLabel }))))) : null,
+        !c.available && c.note ? h('p', { class: 'cx-card-note', text: c.note }) : null];
+      return c.available ? h('a', { class: 'cx-set-card highlight', href: c.href, 'data-section': c.id }, body) : h('div', { class: 'cx-set-card', 'data-section': c.id, 'aria-disabled': 'true' }, body);
+    };
+    app.replaceChildren(shell(s, 'settings', [h('h1', { text: 'Paramètres' }), h('p', { class: 'cx-sub', text: 'Aperçu général.' }), h('div', { class: 'cx-set-grid' }, s.cards.map(card))]));
+  }
+
+  // ------------------------------------------------------------------ Paramètres › Connexions (list + detail)
+  let data = null; let settings = null; let flash = null; let pick = null; let selected = null;
+  const wide = () => window.matchMedia('(min-width: 900px)').matches;
+  const listState = (p) => (p.connections.some((c) => c.state === 'VERIFIED' || c.state === 'LINKED') ? ['Connecté', 'ok'] : p.status === 'PLANNED' ? ['Prévu', 'planned'] : p.status === 'WAITING' ? ['En attente', 'wait'] : p.source === 'shopify' ? ['Non reliée', 'todo'] : p.setup.state === 'APP_MISSING' ? ['À configurer', 'todo'] : p.connections.length ? [p.connections[0].stateLabel, 'wait'] : ['Prêt', 'wait']);
+  const providers = () => data.categories.flatMap((c) => c.providers);
 
   async function startOAuth(path, body) { const r = await api(path, body); if (r.ok && r.json.authorizationUrl) { location.assign(r.json.authorizationUrl); return; } setFlash('err', errText(r)); }
   async function runAction(connectionId, action) {
@@ -46,12 +76,16 @@
     const r = await api('/api/connections/select', { session_ref: pick.ref, external_id: target.externalId });
     if (r.ok) { data = r.json; pick = null; setFlash('ok', r.json.state === 'CONFIGURED' ? `Compte ${target.displayName ?? target.externalId} connecté et vérifié (lecture seule).` : 'Compte lié ; la vérification n’est pas concluante : voir l’état ci-dessous.'); } else setFlash('err', errText(r));
   }
+  const setFlash = (tone, text) => { flash = { tone, text }; renderConnections(); };
+  const go = (id) => { selected = id; history.replaceState(null, '', id ? `#/${id}` : location.pathname); renderConnections(); window.scrollTo(0, 0); };
 
-  const chips = (items, cls) => h('ul', { class: 'cx-chips' }, items.map((c) => h('li', { class: cls, text: c.label ?? c })));
-  const steps = (list) => list.length ? h('ol', { class: 'cx-steps' }, list.map((s) => h('li', { class: s.done ? 'done' : '' }, h('span', { class: 'cx-who', text: { owner: 'Vous', provider: 'Fournisseur', nordla: 'Nordla' }[s.owner] ?? '' }), ` ${s.label}`))) : null;
-
-  function connection(c, provider) {
-    const btn = (action, label, cls = 'ghost') => h('button', { class: `cx-btn ${cls}`, type: 'button', text: label, on: { click: () => runAction(c.id, action) } });
+  function stepList(steps) {
+    return steps.length ? h('ol', { class: 'cx-steps' }, steps.map((s, i) => h('li', { class: s.state },
+      h('span', { class: 'cx-num', text: s.state === 'done' ? '✓' : String(i + 1), 'aria-hidden': 'true' }),
+      h('div', {}, h('strong', { text: s.title }), s.owner ? h('span', { class: 'cx-who', text: { owner: 'Vous', provider: 'Fournisseur', nordla: 'Nordla' }[s.owner] ?? '' }) : null, s.detail ? h('p', { class: 'cx-step-detail', text: s.detail }) : null,
+        s.facts && s.facts.length ? h('ul', { class: 'cx-facts' }, s.facts.map((f) => h('li', { text: f }))) : null)))) : null;
+  }
+  function connRow(c) {
     const labels = { verify: 'Revérifier', reconnect: 'Reconnecter', disconnect: 'Déconnecter' };
     return h('div', { class: 'cx-conn' },
       h('div', { class: 'cx-conn-head' }, h('strong', { text: c.account }), h('span', { class: 'cx-state', 'data-tone': c.tone, text: c.stateLabel })),
@@ -60,43 +94,63 @@
       c.verifiedAt ? h('p', { class: 'cx-meta', text: `Dernière vérification : ${when(c.verifiedAt)}` }) : null,
       c.scopes.length ? h('p', { class: 'cx-meta', text: c.readOnly ? 'Permissions : lecture seule.' : 'Permissions : attention, ce compte a une permission d’écriture.' }) : null,
       c.needs.includes('REAUTH_REQUIRED') ? h('p', { class: 'cx-meta warn', text: 'Le fournisseur demande de nouveau votre accord.' }) : null,
-      c.actions.length ? h('div', { class: 'cx-actions' }, c.actions.map((a) => btn(a, labels[a], a === 'disconnect' ? 'warn' : 'ghost'))) : null);
+      c.actions.length ? h('div', { class: 'cx-actions' }, c.actions.map((a) => h('button', { class: `cx-btn ${a === 'disconnect' ? 'warn' : 'ghost'}`, type: 'button', text: labels[a], on: { click: () => runAction(c.id, a) } }))) : null);
   }
-
-  function providerCard(p) {
-    const msg = h('p', { class: 'cx-msg', 'aria-live': 'polite' });
-    const actions = [];
-    if (p.setup.canConnect && p.status === 'AVAILABLE' && p.setup.state === 'READY') actions.push(h('button', { class: 'cx-btn', type: 'button', text: p.connections.length ? `Ajouter un autre compte ${p.label}` : `Connecter ${p.label} (lecture seule)`, on: { click: () => startOAuth('/api/connections/connect', { provider: p.id }) } }));
-    if (p.setup.state === 'APP_MISSING') actions.push(h('button', { class: 'cx-btn', type: 'button', disabled: true, text: `Connecter ${p.label}` }));
-    return h('section', { class: 'cx-card', 'data-provider': p.id, 'data-status': p.status },
-      h('div', { class: 'cx-head' }, h('h3', { text: p.label }), h('span', { class: 'cx-status', 'data-status': p.status, text: p.status === 'AVAILABLE' && p.setup.state === 'APP_MISSING' ? p.setup.label : p.statusLabel })),
-      h('p', { class: 'cx-desc', text: p.description }),
-      h('p', { class: 'cx-meta', text: `${p.accessLabel}${p.multiAccount ? ' · plusieurs comptes possibles' : ''}${p.multiCapability && p.category === 'commerce_gestion' ? ' · une seule connexion, plusieurs capacités' : ''}` }),
-      chips(p.capabilities, 'cap'),
-      p.connections.length ? h('div', { class: 'cx-conns' }, p.connections.map((c) => connection(c, p))) : (p.status === 'AVAILABLE' && p.setup.state !== 'APP_MISSING' ? h('p', { class: 'cx-meta', text: p.source === 'shopify' ? 'Aucune boutique liée.' : 'Aucun compte connecté.' }) : null),
-      p.setup.state === 'APP_MISSING' || p.setup.state === 'WAITING' ? h('div', { class: 'cx-todo' }, h('p', { class: 'cx-todo-title', text: p.setup.state === 'WAITING' ? 'Ce qu’il reste à faire' : p.setup.label }), p.setup.detail ? h('p', { class: 'cx-meta', text: p.setup.detail }) : null, steps(p.setup.steps)) : null,
-      p.bank ? h('details', { class: 'cx-banks' }, h('summary', { text: `Banques belges proposées par ${p.bank.provider ? p.bank.provider.label : 'le fournisseur prévu'} (${p.bank.banks.length}) — à confirmer à la première lecture réelle` }), h('ul', {}, p.bank.banks.map((b) => h('li', {}, h('strong', { text: b.label }), b.key === p.bank.pilot ? ' · banque du pilote' : '', b.aliasOf ? ' · même banque que Crelan' : '')))) : null,
-      actions.length ? h('div', { class: 'cx-actions' }, actions) : null, msg);
-  }
-
-  function picker() {
-    if (!pick) return null;
-    return h('section', { class: 'cx-card cx-pick' }, h('h3', { text: 'Choisissez le compte à connecter' }),
-      h('p', { class: 'cx-desc', text: 'Nordla ne choisit jamais un compte à votre place. Seul un compte professionnel peut être relié.' }),
+  function picker(p) {
+    if (!pick || pick.provider !== p.id.replace('google_business_profile', 'google_business_profile')) return null;
+    return h('div', { class: 'cx-pick' }, h('h3', { text: 'Choisissez le compte à connecter' }), h('p', { class: 'cx-meta', text: 'Nordla ne choisit jamais un compte à votre place. Seul un compte professionnel peut être relié.' }),
       pick.targets.length ? pick.targets.map((t) => h('div', { class: 'cx-conn' }, h('strong', { text: t.displayName ?? t.externalId }), h('span', { class: 'cx-meta', text: ` ${t.accountType ?? ''}${t.locationName ? ` · ${t.locationName}` : ''}` }),
-        t.eligible ? h('button', { class: 'cx-btn', type: 'button', text: 'Relier ce compte', on: { click: () => choose(t) } }) : h('span', { class: 'cx-meta warn', text: ' Non éligible : compte professionnel requis.' })))
-        : h('p', { class: 'cx-meta', text: 'Aucun compte autorisé n’a été trouvé.' }),
-      h('button', { class: 'cx-btn ghost', type: 'button', text: 'Annuler', on: { click: () => { pick = null; render(); } } }));
+        t.eligible ? h('div', { class: 'cx-actions' }, h('button', { class: 'cx-btn', type: 'button', text: 'Relier ce compte', on: { click: () => choose(t) } })) : h('p', { class: 'cx-meta warn', text: 'Non éligible : compte professionnel requis.' }))) : h('p', { class: 'cx-meta', text: 'Aucun compte autorisé n’a été trouvé.' }),
+      h('button', { class: 'cx-btn ghost', type: 'button', text: 'Annuler', on: { click: () => { pick = null; renderConnections(); } } }));
   }
-
-  function render() {
-    app.replaceChildren(h('div', { class: 'cx-wrap' },
-      h('p', { class: 'cx-crumb' }, h('a', { class: 'cx-link', href: '/', text: 'Nordla' }), ' › Paramètres › ', h('strong', { text: 'Connexions' })),
-      h('h1', { text: 'Connexions' }), h('p', { class: 'cx-sub', text: 'Les comptes et services reliés à votre boutique, avec leur état réel.' }),
+  function detail(p) {
+    const [stateLabel, tone] = listState(p);
+    const connectLabel = p.connections.length ? `Ajouter un autre compte ${p.label}` : 'Connecter';
+    const canClick = p.status === 'AVAILABLE' && p.setup.canConnect && p.setup.state === 'READY';
+    const showConnect = p.status === 'AVAILABLE' && p.source === 'oauth';
+    return h('section', { class: 'cx-detail', 'data-provider': p.id },
+      !wide() ? h('button', { class: 'cx-back', type: 'button', on: { click: () => go(null) } }, ico('back'), 'Retour') : null,
+      h('div', { class: 'cx-dhead' }, h('span', { class: 'cx-badge big', text: INITIALS[p.id] ?? p.label.slice(0, 2) }), h('div', {}, h('h2', { text: p.label }), data.merchant?.name ? h('p', { class: 'cx-dsub', text: p.source === 'oauth' || p.source === 'bank' || p.source === 'shopify' ? data.merchant.name : '' }) : null)),
+      h('p', { class: 'cx-desc', text: p.description }),
+      h('dl', { class: 'cx-facts-table' },
+        h('dt', { text: 'Statut' }), h('dd', {}, h('span', { class: 'cx-pill', 'data-tone': tone, text: p.setup.state === 'APP_MISSING' ? p.setup.label : stateLabel })),
+        h('dt', { text: 'Accès prévu' }), h('dd', { text: p.status === 'PLANNED' ? '—' : p.accessLabel === 'Aucun accès pour l’instant' ? 'Lecture seule (prévu)' : p.accessLabel }),
+        h('dt', { text: 'Données accessibles' }), h('dd', { text: p.dataLabel ?? '—' }),
+        h('dt', { text: 'Capacités' }), h('dd', { text: p.capabilities.map((c) => c.label).join(', ') + (p.multiCapability && p.category === 'commerce_gestion' ? ' — une seule connexion, plusieurs capacités' : '') })),
+      p.status === 'WAITING' && p.setup.detail ? h('p', { class: 'cx-hold', text: p.setup.detail }) : null,
+      p.setup.steps.length ? [h('h3', { text: 'Étapes' }), stepList(p.setup.steps)] : null,
+      p.connections.length ? [h('h3', { text: p.connections.length > 1 ? 'Comptes connectés' : 'Compte connecté' }), p.connections.map(connRow)] : (p.status === 'AVAILABLE' && p.setup.state !== 'APP_MISSING' ? h('p', { class: 'cx-meta', text: p.source === 'shopify' ? 'Aucune boutique de Shopify n’est reliée à ce marchand dans Nordla.' : 'Aucun compte connecté.' }) : null),
+      picker(p),
+      p.bank ? h('details', { class: 'cx-banks' }, h('summary', { text: `Banques belges proposées par ${p.bank.provider ? p.bank.provider.label : 'le fournisseur prévu'} (${p.bank.banks.length}) — à confirmer à la première lecture réelle` }), h('ul', {}, p.bank.banks.map((b) => h('li', {}, h('strong', { text: b.label }), b.key === p.bank.pilot ? ' · banque du pilote' : '', b.aliasOf ? ' · même banque que Crelan' : '')))) : null,
+      showConnect ? h('div', { class: 'cx-actions' }, h('button', { class: 'cx-btn', type: 'button', disabled: !canClick, text: connectLabel, on: { click: () => startOAuth('/api/connections/connect', { provider: p.id }) } }),
+        !canClick ? h('span', { class: 'cx-meta', text: p.setup.state === 'APP_MISSING' ? 'Disponible dès que l’application est configurée.' : !data.canManage ? 'Réservé au propriétaire ou à un administrateur.' : '' }) : null) : null);
+  }
+  function renderConnections() {
+    const list = providers();
+    if (wide() && !selected) selected = (list.find((p) => p.id === 'instagram') ?? list[0]).id;
+    const cur = list.find((p) => p.id === selected) ?? null;
+    const left = h('div', { class: 'cx-list', role: 'list' }, data.categories.map((c) => [h('p', { class: 'cx-cat-label', text: c.label }), c.providers.map((p) => { const [t, tone] = listState(p); return h('button', { class: 'cx-row', type: 'button', role: 'listitem', 'aria-current': p.id === selected ? 'true' : null, 'data-provider': p.id, on: { click: () => go(p.id) } }, h('span', { class: 'cx-badge', text: INITIALS[p.id] ?? p.label.slice(0, 2) }), h('span', { class: 'cx-row-name', text: p.label }), h('span', { class: 'cx-pill sm', 'data-tone': tone, text: t }), h('span', { class: 'cx-chev' }, ico('chevron'))); })]));
+    const showDetail = cur && (wide() || selected);
+    const content = [h('p', { class: 'cx-crumb' }, h('a', { class: 'cx-link', href: '/settings', text: 'Paramètres' }), ' › ', h('strong', { text: 'Connexions' })), h('h1', { text: 'Connexions' }),
       h('div', { class: 'cx-banner' }, h('strong', { text: 'Lecture seule. ' }), 'Nordla ne publie, ne modifie et ne paie rien depuis ces connexions. ', data.canManage ? '' : 'Votre rôle permet de consulter, pas de modifier.'),
       flash ? h('p', { class: `cx-flash ${flash.tone}`, role: 'status', text: flash.text }) : null,
-      picker(),
-      data.categories.map((c) => h('section', { class: 'cx-cat', 'data-category': c.id }, h('h2', { text: c.label }), h('div', { class: 'cx-list' }, c.providers.map(providerCard))))));
+      h('div', { class: `cx-split ${!wide() && showDetail ? 'show-detail' : 'show-list'}` }, !wide() && showDetail ? null : left, showDetail ? detail(cur) : null)];
+    app.replaceChildren(shell(settings, 'settings', content));
   }
-  load();
+  async function connections() {
+    const [a, b] = await Promise.all([api('/api/connections'), api('/api/settings')]);
+    if (guard(a)) return;
+    if (!a.ok || !b.ok) return app.replaceChildren(h('div', { class: 'cx-wrap' }, h('h1', { text: 'Connexions' }), h('p', { class: 'cx-msg err', text: 'Cette page est indisponible pour le moment.' })));
+    data = a.json; settings = b.json;
+    const q = new URLSearchParams(location.search); const ref = q.get('connect'); const err = q.get('connect_error'); const provider = q.get('provider');
+    if (err) flash = { tone: 'err', text: ERR[err] ?? 'La connexion n’a pas abouti.' };
+    if (ref && data.canManage) { const t = await api(`/api/connections/targets?session=${encodeURIComponent(ref)}`); if (t.ok) { pick = { ref, provider, targets: t.json.targets }; selected = provider; } else flash = { tone: 'err', text: errText(t) }; }
+    const hash = location.hash.replace(/^#\//, ''); if (!selected && providers().some((p) => p.id === hash)) selected = hash;
+    if (ref || err) history.replaceState(null, '', selected ? `${location.pathname}#/${selected}` : location.pathname);
+    renderConnections();
+    window.matchMedia('(min-width: 900px)').addEventListener('change', () => { if (data) renderConnections(); });
+  }
+
+  const path = location.pathname.replace(/\/$/, '');
+  if (path === '/settings/connections') connections(); else { document.title = 'Nordla AI · Paramètres'; hub(); }
 })();
