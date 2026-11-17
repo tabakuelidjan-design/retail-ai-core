@@ -10,8 +10,8 @@ import { createOAuthSessionRepository } from './oauth-session.js';
 import { createProviderProvisioningService } from './provisioning-service.js';
 import { createProviderTokenManager } from './token-manager.js';
 import { createGoogleBusinessOAuth } from './providers/google-business-oauth.js';
-import { createInstagramOAuth } from './providers/instagram-oauth.js';
-import { createTikTokOAuth } from './providers/tiktok-oauth.js';
+import { createInstagramOAuth, INSTAGRAM_READ_SCOPES } from './providers/instagram-oauth.js';
+import { createTikTokOAuth, TIKTOK_READ_SCOPES } from './providers/tiktok-oauth.js';
 import { loadProviderAppConfig } from './providers/common.js';
 import { PROVIDER } from './constants.js';
 
@@ -23,9 +23,11 @@ export function createProviderConnectionsRuntime({
   supabase, fetch: fetchFn, http = fetchFn ? createOAuthHttp({ fetch: fetchFn }) : undefined, env = process.env, clock = Date.now, rng, logger = () => {}, timeoutMs,
   credentialStore = createVaultCredentialStore({ supabase }), sessionSecrets = createVaultSessionSecretStore({ supabase, clock }), returnToAllowlist,
 }) {
+  // NORDLA_PROVIDER_SCOPE_MODE=read asks Instagram and TikTok for READ-ONLY scopes (profile, media, insights, statistics). Unset = unchanged (the publishing scopes).
+  const readOnly = String(env.NORDLA_PROVIDER_SCOPE_MODE ?? '').trim().toLowerCase() === 'read';
   const oauthAdapters = {
-    [PROVIDER.INSTAGRAM]: createInstagramOAuth({ http, timeoutMs, now: clock }),
-    [PROVIDER.TIKTOK]: createTikTokOAuth({ http, timeoutMs, now: clock }),
+    [PROVIDER.INSTAGRAM]: createInstagramOAuth({ http, timeoutMs, now: clock, ...(readOnly ? { scopes: INSTAGRAM_READ_SCOPES } : {}) }),
+    [PROVIDER.TIKTOK]: createTikTokOAuth({ http, timeoutMs, now: clock, ...(readOnly ? { scopes: TIKTOK_READ_SCOPES } : {}) }),
     [PROVIDER.GOOGLE_BUSINESS_PROFILE]: createGoogleBusinessOAuth({ http, timeoutMs, now: clock }),
   };
   const appConfigFor = (provider) => loadProviderAppConfig(provider, env);

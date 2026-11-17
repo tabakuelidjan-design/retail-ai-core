@@ -20,8 +20,13 @@ import {
 } from './common.js';
 
 export const TIKTOK_MINIMUM_SCOPES = Object.freeze(['video.publish']);
+// READ-ONLY set (owner request 2026-11-17), from the official Scopes Reference (developers.tiktok.com/doc/tiktok-api-scopes, checked 2026-11-17):
+//   user.info.basic  open_id, display name, avatar     user.info.stats  follower_count, following_count, likes_count, video_count     video.list  the user's PUBLIC videos with
+//   view_count, like_count, comment_count, share_count (Video object). Nothing here can post. Opt-in: the default stays the publishing scope above.
+export const TIKTOK_READ_SCOPES = Object.freeze(['user.info.basic', 'user.info.stats', 'video.list']);
 
-export function createTikTokOAuth({ http, timeoutMs, now = Date.now } = {}) {
+export function createTikTokOAuth({ http, timeoutMs, now = Date.now, scopes = TIKTOK_MINIMUM_SCOPES } = {}) {
+  const readOnly = !scopes.includes('video.publish'); // a read-only grant has no access to the posting API: the account is identified through User Info instead
   const classify = (r) => {
     const code = r.body?.error;
     if (code === 'invalid_client' || code === 'unauthorized_client') return { code: OAUTH_ERROR.APP_MISCONFIGURED, safeCode: code };
@@ -40,15 +45,19 @@ export function createTikTokOAuth({ http, timeoutMs, now = Date.now } = {}) {
   });
 
   async function creator(tokens) {
+    if (readOnly) {
+      const res = await call({ method: 'GET', url: 'https://open.tiktokapis.com/v2/user/info/', query: { fields: 'open_id,display_name' }, headers: bearerOf(tokens) });
+      return { creator_nickname: res.body?.data?.user?.display_name ?? null };
+    }
     const res = await call({ method: 'POST', url: 'https://open.tiktokapis.com/v2/post/publish/creator_info/query/', headers: bearerOf(tokens), body: {} });
     return res.body?.data ?? {};
   }
   const candidateOf = (tokens, info, appConfig) => {
-    const reasons = TIKTOK_MINIMUM_SCOPES.filter((s) => !tokens.scopes.includes(s)).map(() => 'SCOPE_MISSING');
+    const reasons = scopes.filter((s) => !tokens.scopes.includes(s)).map(() => 'SCOPE_MISSING');
     return deepFreeze({
       provider: PROVIDER.TIKTOK, external_id: String(tokens.external_user_id ?? ''), display_name: info.creator_nickname ?? null, account_type: 'TIKTOK_CREATOR', location_name: null,
       granted_scopes: [...tokens.scopes], eligibility: { eligible: reasons.length === 0 && Boolean(tokens.external_user_id), reasons },
-      review_signals: appConfig?.clientAudited ? [] : ['TIKTOK_UNAUDITED_PRIVATE_ONLY'], // an unaudited client can only post privately
+      review_signals: readOnly || appConfig?.clientAudited ? [] : ['TIKTOK_UNAUDITED_PRIVATE_ONLY'], // an unaudited client can only post privately
       safe_metadata: { privacy_level_options: [...(info.privacy_level_options ?? [])] },
     });
   };
@@ -56,7 +65,7 @@ export function createTikTokOAuth({ http, timeoutMs, now = Date.now } = {}) {
   return {
     provider: PROVIDER.TIKTOK,
     descriptor: deepFreeze({
-      minimum_scopes: TIKTOK_MINIMUM_SCOPES, uses_pkce: false, revocable_remotely: true,
+      minimum_scopes: scopes, uses_pkce: false, revocable_remotely: true,
       verified_against: [
         'https://developers.tiktok.com/doc/login-kit-web', 'https://developers.tiktok.com/doc/oauth-user-access-token-management',
         'https://developers.tiktok.com/doc/content-posting-api-reference-query-creator-info',
@@ -70,7 +79,7 @@ export function createTikTokOAuth({ http, timeoutMs, now = Date.now } = {}) {
       if (target.protocol !== 'https:' || target.search || target.hash || redirectUri.length >= 512) throw new OAuthFailure({ code: OAUTH_ERROR.APP_MISCONFIGURED, safeCode: 'REDIRECT_URI_RULES' });
       const url = new URL('https://www.tiktok.com/v2/auth/authorize/');
       url.searchParams.set('client_key', appConfig.clientId);
-      url.searchParams.set('scope', TIKTOK_MINIMUM_SCOPES.join(','));
+      url.searchParams.set('scope', scopes.join(','));
       url.searchParams.set('response_type', 'code');
       url.searchParams.set('redirect_uri', redirectUri);
       url.searchParams.set('state', state);
