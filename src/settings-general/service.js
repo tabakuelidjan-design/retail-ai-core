@@ -10,7 +10,7 @@ export class GeneralError extends Error { constructor(code, message, extra = {})
 // Fields each module may read from Général (the legal rubric is read by Finance only, through its own future link).
 const MODULE_FIELDS = Object.freeze({
   core: { profile: ['name'] }, marketing: { profile: ['name', 'website', 'email', 'phone', 'description'], objectives: ['priority', 'expected_result', 'deadline', 'featured_offers', 'constraints'] },
-  growth: { activity: ['main', 'channels', 'clientele'], objectives: ['priority', 'expected_result', 'deadline', 'constraints'] }, stock: { selling_modes: ['modes'], objectives: ['constraints'] },
+  growth: { activity: ['main', 'channels', 'clientele'], objectives: ['priority', 'expected_result', 'deadline', 'featured_offers', 'constraints'] }, stock: { selling_modes: ['modes'], objectives: ['constraints'] },
   analytics: { regional: ['currency', 'timezone'], activity: ['channels'] },
   creative: { profile: ['name', 'website', 'description'], activity: ['main', 'complementary'], objectives: ['priority', 'expected_result', 'featured_offers', 'constraints'] },
   sourcing: { activity: ['main', 'complementary'], selling_modes: ['modes'], objectives: ['constraints'] },
