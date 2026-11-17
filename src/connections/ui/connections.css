@@ -1,0 +1,44 @@
+/* Paramètres › Connexions: sober, readable, no framework. Every selector is namespaced .cx-* (nothing else on the server uses them). */
+.cx-wrap { max-width: 1040px; margin: 0 auto; padding: 24px 16px 64px; font-family: var(--font-ui, 'Montserrat', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif); color: #0f2a52; overflow-wrap: anywhere; }
+.cx-wrap, .cx-card, .cx-conn { min-width: 0; }
+.cx-wrap h1 { font-size: 1.5rem; margin: 0 0 4px; }
+.cx-cat h2 { font-size: 1.05rem; margin: 28px 0 10px; letter-spacing: .02em; }
+.cx-crumb, .cx-sub, .cx-meta, .cx-desc { color: #55606f; font-size: .88rem; line-height: 1.45; margin: 4px 0; }
+.cx-sub { margin: 0 0 18px; font-size: .95rem; }
+.cx-meta.warn, .cx-meta .warn { color: #8a2d1f; }
+.cx-banner { border: 1px solid #c9d3e2; background: #f3f6fb; border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; font-size: .92rem; line-height: 1.45; }
+.cx-flash { border-radius: 8px; padding: 10px 12px; font-size: .9rem; margin: 0 0 16px; border: 1px solid #a9cdb0; background: #e8f3ea; color: #1d5a2c; }
+.cx-flash.err { border-color: #c0392b; background: #fbf1ef; color: #8a2d1f; }
+.cx-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); gap: 16px; }
+.cx-card { border: 1px solid #d9dee7; border-radius: 12px; padding: 16px; background: #fff; }
+.cx-card[data-status="PLANNED"] { background: #fbf8f3; border-style: dashed; }
+.cx-head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; justify-content: space-between; margin-bottom: 6px; }
+.cx-head h3 { font-size: 1.05rem; margin: 0; }
+.cx-status, .cx-state { font-size: .78rem; font-weight: 700; border-radius: 999px; padding: 3px 10px; border: 1px solid #c9d3e2; background: #f3f6fb; white-space: normal; }
+.cx-status[data-status="AVAILABLE"] { background: #e6eefb; border-color: #a9bde0; color: #183247; }
+.cx-status[data-status="WAITING"] { background: #fbf4e6; border-color: #e0cfa0; color: #6b4a10; }
+.cx-state[data-tone="ok"] { background: #e8f3ea; border-color: #a9cdb0; color: #1d5a2c; }
+.cx-state[data-tone="warn"] { background: #fbf4e6; border-color: #e0cfa0; color: #6b4a10; }
+.cx-state[data-tone="bad"] { background: #fbf1ef; border-color: #c0392b; color: #8a2d1f; }
+.cx-chips { list-style: none; display: flex; flex-wrap: wrap; gap: 6px; padding: 0; margin: 8px 0; }
+.cx-chips li { font-size: .76rem; border: 1px solid #d9dee7; border-radius: 6px; padding: 2px 8px; background: #fbf8f3; }
+.cx-conns { margin-top: 10px; }
+.cx-conn { border-top: 1px solid #e3e7ee; padding: 10px 0 2px; }
+.cx-conn-head { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: space-between; }
+.cx-todo { margin-top: 10px; border: 1px solid #e0cfa0; background: #fffaf0; border-radius: 8px; padding: 10px 12px; }
+.cx-todo-title { font-weight: 700; font-size: .9rem; margin: 0 0 4px; }
+.cx-steps { margin: 6px 0 0; padding-left: 20px; font-size: .86rem; line-height: 1.45; }
+.cx-steps li.done { text-decoration: line-through; color: #55606f; }
+.cx-who { font-size: .72rem; font-weight: 700; border: 1px solid #c9d3e2; border-radius: 4px; padding: 0 5px; margin-right: 2px; background: #fff; }
+.cx-banks { margin-top: 10px; font-size: .86rem; }
+.cx-banks ul { columns: 2; margin: 8px 0 0; padding-left: 18px; }
+@media (max-width: 560px) { .cx-banks ul { columns: 1; } .cx-card { padding: 14px; } .cx-actions .cx-btn { flex: 1 1 100%; } }
+.cx-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+.cx-btn { max-width: 100%; box-sizing: border-box; white-space: normal; text-align: center; text-decoration: none; display: inline-block; border: 1px solid #0f2a52; background: #0f2a52; color: #fff; border-radius: 8px; padding: 8px 14px; font: inherit; font-size: .88rem; cursor: pointer; }
+.cx-btn.ghost { background: #fff; color: #0f2a52; }
+.cx-btn.warn { background: #fff; color: #8a2d1f; border-color: #c0392b; }
+.cx-btn[disabled] { opacity: .5; cursor: not-allowed; }
+.cx-pick { margin-bottom: 20px; border-color: #0f2a52; }
+.cx-msg { font-size: .88rem; min-height: 1.2em; margin: 6px 0 0; }
+.cx-msg.err { color: #8a2d1f; }
+.cx-link { color: #0f2a52; }
