@@ -85,8 +85,24 @@ export async function buildConnections({ env, gate, hosted, log = console.log, s
     const reads = createInstagramReadService({ connectorRepository: runtime.connectorRepository, readerFor: ({ merchantId, connectorId, grantedScopes }) => createInstagramReaderFor({ tokenManager: runtime.tokenManager, merchantId, connectorId, graphVersion: runtime.appConfigFor('instagram').graphVersion, grantedScopes, fetchImpl }) });
     const host = await createConnectionsHost({ gate, merchantId: hosted.merchantId, runtime, service, registry, reads });
     log('Connections: ON (read-only; Instagram and TikTok ask read scopes only)');
-    return host;
+    return Object.freeze({ ...host, settings: ({ tenant, role }) => service.settings({ tenant, role }) }); // the same menu, merchant name and environment are reused by Paramètres > Général
   } catch (e) { log(`Connections: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
+}
+
+/** Paramètres > Général (staging module): built only when asked for AND hosted behind the Core identity. Any problem is logged and the server runs without it. */
+export async function buildGeneral({ env, gate, hosted, log = console.log, supabase: injected = null, shellOf = null }) {
+  if (String(env.NORDLA_GENERAL_MODULE ?? '') !== '1') return null;
+  if (!hosted || !gate) { log('General: NOT built (needs the hosted Core identity)'); return null; }
+  try {
+    const { createGeneralHost } = await import('./general-host.js');
+    const { createGeneralService } = await import('../../settings-general/service.js');
+    const { createSupabaseGeneralRepository } = await import('../../settings-general/repository.js');
+    const supabase = injected ?? (await import('../../supabase/client.js')).createSupabaseClient((await import('../../supabase/client.js')).loadSupabaseConfigFromEnv(env));
+    const service = createGeneralService({ repo: createSupabaseGeneralRepository({ supabase }) });
+    const host = await createGeneralHost({ gate, merchantId: hosted.merchantId, service, shellOf });
+    log('General: ON (Paramètres > Général)');
+    return host;
+  } catch (e) { log(`General: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
 }
 
 /** The video drafts (staging module, "Ajouter une vidéo"): built only when asked for AND hosted behind the Core identity. Any problem is logged and the server runs without it. */
@@ -187,9 +203,10 @@ export async function startSourcingServer({ env = process.env, log = console.log
   let backups = null;
   const creator = await buildCreator({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_CREATOR_MODULE=1
   const connections = await buildConnections({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_CONNECTIONS_MODULE=1
+  const general = await buildGeneral({ env, gate, hosted, log, shellOf: connections?.settings ?? null }); // optional, isolated: null unless NORDLA_GENERAL_MODULE=1
   const videos = await buildVideos({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_VIDEO_DRAFTS_MODULE=1
   const gbp = await buildGbp({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_GBP_DRAFTS_MODULE=1
-  const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, videos, connections, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
+  const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, videos, connections, general, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
   const server = http.createServer(app.handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); });
   const addr = server.address();
