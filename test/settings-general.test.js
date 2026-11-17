@@ -104,7 +104,7 @@ test('SG-9 the name written here is the name every module already reads (merchan
   assert.equal(await repo.merchantName(A), 'Nouveau nom'); assert.equal(await repo.merchantName(B), 'Atelier B');
   const { consumers } = await svc.overview({ tenant: ta, role: 'OWNER' });
   const by = (st) => consumers.filter((c) => c.state === st).map((c) => c.module);
-  assert.deepEqual(by('VERIFIED'), ['Core']); assert.deepEqual(by('API_VERIFIED'), ['Marketing (brouillons Google et vidéo)']); assert.deepEqual(by('WAITING_SUPPLIER'), ['Connexions']);
+  assert.deepEqual(by('VERIFIED'), ['Core', 'Marketing (brouillons Google et vidéo)']); assert.deepEqual(by('API_VERIFIED'), ['Stock, Achats et Sourcing']); assert.deepEqual(by('WAITING_SUPPLIER'), ['Connexions']);
   assert.ok(!consumers.some((c) => c.state === 'READS'), 'no claim without a proof level'); assert.ok(consumers.filter((c) => c.state === 'AWAITS_SESSION').length >= 2 && consumers.filter((c) => c.state === 'TO_CONNECT').length >= 3);
 });
 
