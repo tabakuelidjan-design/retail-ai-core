@@ -52,7 +52,7 @@ export function createEnableBankingAdapter({ applicationId = null, privateKeyPem
   const parse = (token) => { try { const t = JSON.parse(token); if (t?.sid && Array.isArray(t.accounts)) return t; } catch { /* below */ } throw new FinanceError('BANK_CONSENT_REJECTED'); };
 
   const adapter = {
-    name: 'enable-banking', label: 'Enable Banking (lecture seule)', configured, scopes: [...READ_ONLY_SCOPES], calls,
+    name: 'enable-banking', label: `Enable Banking${bankKey && belgianBank(bankKey) ? ` – ${belgianBank(bankKey).label}` : ''} (lecture seule)`, configured, scopes: [...READ_ONLY_SCOPES], calls,
 
     async beginConsent({ redirectUri }) {
       need(); calls.auth += 1;
