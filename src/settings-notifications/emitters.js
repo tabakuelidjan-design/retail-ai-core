@@ -13,7 +13,7 @@ const labelOf = (p) => PROVIDER_LABEL[String(p ?? '').toLowerCase()] ?? String(p
 export function createConnectionReauthEmitter({ service, merchantId, listConnections, log = () => {} }) {
   let running = null;
   async function sweep() {
-    const items = await listConnections({ tenant: { merchantId, source: 'notifications' } });
+    const items = await listConnections({ tenant: { merchantId, source: 'env' } });
     const total = { seen: 0, created: 0, duplicate: 0, skipped: 0 };
     for (const c of items) {
       if (c.connection_state !== 'REAUTH_REQUIRED' || !c.connector_id) continue;

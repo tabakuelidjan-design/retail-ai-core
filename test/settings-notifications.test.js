@@ -73,7 +73,8 @@ test('NT-4 inbox: open leads to the registry page and marks as read; another mem
 test('NT-5 emitter: reads only connections in REAUTH_REQUIRED, same expired credential twice = one alert, failures never throw', async () => {
   const repo = createMemoryNotificationsRepository({ members: members() }); const svc = createNotificationsService({ repo });
   let items = [{ connector_id: 'conn-1', provider: 'instagram', connection_state: 'REAUTH_REQUIRED', grant: { rotation_version: 1 } }, { connector_id: 'conn-2', provider: 'tiktok', connection_state: 'VERIFIED', grant: { rotation_version: 1 } }];
-  const logs = []; const em = createConnectionReauthEmitter({ service: svc, merchantId: M1, listConnections: async () => items, log: (m) => logs.push(m) });
+  const logs = []; const strict = async ({ tenant }) => { assert.ok(['session', 'env'].includes(tenant.source) && tenant.merchantId === M1, 'the connection centre only accepts the canonical tenant shapes'); return items; };
+  const em = createConnectionReauthEmitter({ service: svc, merchantId: M1, listConnections: strict, log: (m) => logs.push(m) });
   const a = await em.run(); assert.equal(a.seen, 1); assert.equal(a.created, 3); // owner, viewer, admin (all roles may view Connexions)
   const b = await em.run(); assert.equal(b.created, 0); assert.equal(repo._rows.length, 3);
   const bad = createConnectionReauthEmitter({ service: svc, merchantId: M1, listConnections: async () => { throw new Error('down'); }, log: (m) => logs.push(m) });
