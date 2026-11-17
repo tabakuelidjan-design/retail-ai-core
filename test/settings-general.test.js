@@ -104,12 +104,13 @@ test('SG-9 the name written here is the name every module already reads (merchan
   assert.equal(await repo.merchantName(A), 'Nouveau nom'); assert.equal(await repo.merchantName(B), 'Atelier B');
   const { consumers } = await svc.overview({ tenant: ta, role: 'OWNER' });
   const by = (st) => consumers.filter((c) => c.state === st).map((c) => c.module); const proof = (p) => consumers.filter((c) => c.proof === p).map((c) => c.module);
-  assert.deepEqual(by('VERIFIED'), ['Core', 'Marketing (brouillons Google et vidéo)']); assert.deepEqual(by('API_VERIFIED'), ['Stock, Achats et Sourcing', 'Growth (offres prioritaires)']); assert.deepEqual(by('WAITING_SUPPLIER'), ['Connexions']);
+  assert.deepEqual(by('VERIFIED'), ['Core', 'Marketing (brouillons Google et vidéo)', 'Growth (fuseau)', 'Growth (offres prioritaires)']); assert.deepEqual(by('API_VERIFIED'), ['Stock, Achats et Sourcing']); assert.deepEqual(by('WAITING_SUPPLIER'), ['Connexions']);
   assert.ok(!consumers.some((c) => c.state === 'READS'), 'no claim without a proof level'); assert.ok(consumers.every((c) => ['SESSION', 'TESTS', 'NONE'].includes(c.proof)), 'every usage says how it is proven');
-  assert.deepEqual(proof('SESSION'), ['Core', 'Marketing (brouillons Google et vidéo)', 'Stock, Achats et Sourcing', 'Growth (offres prioritaires)'], 'only what was checked in a real session');
+  assert.deepEqual(proof('SESSION'), ['Core', 'Marketing (brouillons Google et vidéo)', 'Stock, Achats et Sourcing', 'Growth (fuseau)', 'Growth (offres prioritaires)'], 'only what was checked in a real session');
   assert.ok(!consumers.filter((c) => ['VERIFIED', 'API_VERIFIED'].includes(c.state)).some((c) => c.proof !== 'SESSION'), '"Lit déjà" always means a real session');
   const infl = consumers.find((c) => c.module === 'Growth (influence sur les recommandations)'); assert.deepEqual([infl.state, infl.proof], ['TO_CONNECT', 'NONE'], 'objectives and constraints do not influence the recommendations yet');
-  assert.match(consumers.find((c) => c.module === 'Growth (offres prioritaires)').note, /n’est prouvé que par des tests/, 'the matching of a product is still only covered by tests');
+  assert.match(consumers.find((c) => c.module === 'Growth (offres prioritaires)').note, /badge/, 'the featured offer is seen on the screen of the test instance');
+  assert.match(consumers.find((c) => c.module === 'Growth (fuseau)').note, /Revue, Corrections, Site, Revue du site, Publicités/, 'the sources that still keep the start-time zone are named');
 });
 
 test('SG-10 objectives: one priority (Autre needs its label), valid date, up to 10 distinct offers, budget needs its period; modules read only their allowlisted fields', async () => {
