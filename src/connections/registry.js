@@ -95,7 +95,7 @@ export const PROVIDERS = Object.freeze([
 // Settings home: the six sections of the grid. `status` is the REAL availability: a section with no screen is PLANNED and says what already works, it is never shown as usable.
 export const SETTINGS_SECTIONS = Object.freeze([
   Object.freeze({ id: 'general', label: 'Général', icon: 'gear', description: 'Profil du commerce, activité, établissements, devise, fuseau horaire et informations légales.', status: 'AVAILABLE', href: '/settings/general' }),
-  Object.freeze({ id: 'team', label: 'Équipe et accès', icon: 'users', description: 'Gérer les membres, rôles et permissions.', status: 'PLANNED', note: 'Les rôles (propriétaire, administrateur, lecture) s’appliquent déjà ; leur gestion n’a pas encore d’écran.' }),
+  Object.freeze({ id: 'team', label: 'Équipe et accès', icon: 'users', description: 'Membres, invitations, rôles et permissions, historique des accès.', status: 'AVAILABLE', href: '/settings/team' }),
   Object.freeze({ id: 'connections', label: 'Connexions', icon: 'plug', description: 'Connecter vos outils (boutique, réseaux sociaux, banque, gestion).', status: 'AVAILABLE', href: '/settings/connections' }),
   Object.freeze({ id: 'notifications', label: 'Notifications', icon: 'bell', description: 'Choisir ce que vous recevez et par quel canal (e-mail, application).', status: 'PLANNED', note: 'Pas encore disponible.' }),
   Object.freeze({ id: 'preferences', label: 'Préférences', icon: 'sliders', description: 'Paramètres d’achats, de stocks, de pricing et d’affichage.', status: 'PLANNED', note: 'Pas encore disponible.' }),

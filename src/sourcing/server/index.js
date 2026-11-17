@@ -139,6 +139,29 @@ export async function buildSecurity({ env, gate, hosted, log = console.log, supa
   } catch (e) { log(`Security: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
 }
 
+/** Paramètres > Équipe et accès (staging module): built only when asked for AND hosted behind the Core identity. Any problem is logged and the server runs without it. */
+export async function buildTeam({ env, gate, hosted, log = console.log, supabase: injected = null, shellOf = null, fetchImpl = globalThis.fetch }) {
+  if (String(env.NORDLA_TEAM_MODULE ?? '') !== '1') return null;
+  if (!hosted || !gate) { log('Team: NOT built (needs the hosted Core identity)'); return null; }
+  try {
+    const { createTeamHost } = await import('./team-host.js');
+    const { createTeamService } = await import('../../settings-team/service.js');
+    const { createSupabaseTeamRepository } = await import('../../settings-team/repository.js');
+    const { createAuthAdmin } = await import('../../settings-team/auth-admin.js');
+    const { createGoTrueVerifier, loadGoTrueConfig } = await import('../../identity/gotrue.js');
+    const client = await import('../../supabase/client.js');
+    const cfg = client.loadSupabaseConfigFromEnv(env);
+    const supabase = injected ?? client.createSupabaseClient(cfg);
+    const gotrue = loadGoTrueConfig(env);
+    const admin = createAuthAdmin({ baseUrl: gotrue.baseUrl, serviceKey: String(env.SUPABASE_SERVICE_ROLE_KEY ?? ''), fetchImpl });
+    const verifier = createGoTrueVerifier({ config: gotrue, fetchImpl });
+    const service = createTeamService({ repo: createSupabaseTeamRepository({ supabase }), auth: { createUser: admin.createUser, verifyPassword: verifier.verifyPassword }, origin: hosted.origin });
+    const host = await createTeamHost({ gate, merchantId: hosted.merchantId, service, origin: hosted.origin, shellOf });
+    log('Team: ON (Paramètres > Équipe et accès; invitations by one-time link, no e-mail sending)');
+    return host;
+  } catch (e) { log(`Team: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
+}
+
 /** The video drafts (staging module, "Ajouter une vidéo"): built only when asked for AND hosted behind the Core identity. Any problem is logged and the server runs without it. */
 export async function buildVideos({ env, gate, hosted, log = console.log, contextOf = null }) {
   if (String(env.NORDLA_VIDEO_DRAFTS_MODULE ?? '') !== '1') return null;
@@ -239,11 +262,12 @@ export async function startSourcingServer({ env = process.env, log = console.log
   const creator = await buildCreator({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_CREATOR_MODULE=1
   const connections = await buildConnections({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_CONNECTIONS_MODULE=1
   const general = await buildGeneral({ env, gate, hosted, log, shellOf: connections?.settings ?? null, service: generalService }); // optional, isolated: null unless NORDLA_GENERAL_MODULE=1
+  const team = await buildTeam({ env, gate, hosted, log, shellOf: connections?.settings ?? null }); // optional, isolated: null unless NORDLA_TEAM_MODULE=1
   const security = await buildSecurity({ env, gate, hosted, log, shellOf: connections?.settings ?? null, services }); // optional, isolated: null unless NORDLA_SECURITY_MODULE=1
   const marketingContext = generalService ? () => generalService.contextFor({ tenant: { merchantId: merchantKey }, module: 'marketing' }) : null;
   const videos = await buildVideos({ env, gate, hosted, log, contextOf: marketingContext }); // optional, isolated: null unless NORDLA_VIDEO_DRAFTS_MODULE=1
   const gbp = await buildGbp({ env, gate, hosted, log, contextOf: marketingContext }); // optional, isolated: null unless NORDLA_GBP_DRAFTS_MODULE=1
-  const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, videos, connections, general, security, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
+  const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, videos, connections, general, security, team, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
   const server = http.createServer(app.handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); });
   const addr = server.address();
