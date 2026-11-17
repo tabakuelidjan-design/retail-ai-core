@@ -1,7 +1,7 @@
 // Stock / Achats V1 screens: suppliers and offers, stock adjustments, transfers, inventories (counts), the queue of filed stock changes, the history of an item.
 // Plain DOM, no innerHTML with data. Everything here needs the server's answer (nothing is queued on the phone): an engaging step is never "saved for later".
 // The helpers come from app.js, so these screens look and behave like the existing ones.
-import { parseDecimal, parseInteger, parseWhole, CURRENCIES, errText, ERRORS_FR, fmtDate, countLinesFrom, requestSummary, supplierMetricsLine } from './logic.js';
+import { parseDecimal, parseInteger, parseWhole, CURRENCIES, errText, ERRORS_FR, fmtDate, fmtDateTime, countLinesFrom, requestSummary, supplierMetricsLine } from './logic.js';
 
 const INCOTERMS = ['EXW', 'FCA', 'FOB', 'CFR', 'CIF', 'DAP', 'DDP'];
 const LOC_FR = { WAREHOUSE: 'entrepôt', STORE: 'magasin', BACKROOM: 'réserve', TRANSIT: 'en transit', QUARANTINE: 'quarantaine' };
@@ -129,8 +129,8 @@ export function createV1Screens(env) {
     setHead('Historique', item.name, true); const box = h('div', {}); swap(main, box);
     const res = await getJson(`/api/stock/${item.itemId}/history`); if (!res.data) return put(box, fail(res));
     const m = [...res.data.movements].reverse();
-    put(box, stale(res), h('div', { class: 'card' }, h('h2', {}, 'Mouvements (du plus récent au plus ancien)'), m.length ? h('table', {}, h('tbody', {}, m.map((x) => h('tr', {}, h('td', {}, h('div', {}, KIND_FR[x.kind] ?? x.kind), h('div', { class: 'small muted' }, `${new Date(x.at).toLocaleString('fr-BE', { dateStyle: 'short', timeStyle: 'short' })} · ${x.location ?? ''} · ${x.actorId}${x.reason ? ` · ${x.reason}` : ''}`)), h('td', { class: 'n' }, `${x.bucket === 'RESERVED' ? '(réservé) ' : ''}${x.delta > 0 ? '+' : ''}${x.delta}`))))) : empty('Aucun mouvement.')),
-      h('div', { class: 'card' }, h('h2', {}, 'Journal'), res.data.events.length ? h('ul', { class: 'list' }, [...res.data.events].reverse().map((e) => h('li', {}, h('div', { class: 'grow' }, h('div', { class: 'nm' }, eventLabel(e.type)), h('div', { class: 'small muted' }, `${new Date(e.at).toLocaleString('fr-BE', { dateStyle: 'short', timeStyle: 'short' })} · ${e.actor?.id ?? ''}${e.approval ? ` · approuvé par ${e.approval.approverId}${e.approval.separationWaived ? ' (exception propriétaire)' : ''}` : ''}`))))) : empty('Aucun événement.')));
+    put(box, stale(res), h('div', { class: 'card' }, h('h2', {}, 'Mouvements (du plus récent au plus ancien)'), m.length ? h('table', {}, h('tbody', {}, m.map((x) => h('tr', {}, h('td', {}, h('div', {}, KIND_FR[x.kind] ?? x.kind), h('div', { class: 'small muted' }, `${fmtDateTime(x.at)} · ${x.location ?? ''} · ${x.actorId}${x.reason ? ` · ${x.reason}` : ''}`)), h('td', { class: 'n' }, `${x.bucket === 'RESERVED' ? '(réservé) ' : ''}${x.delta > 0 ? '+' : ''}${x.delta}`))))) : empty('Aucun mouvement.')),
+      h('div', { class: 'card' }, h('h2', {}, 'Journal'), res.data.events.length ? h('ul', { class: 'list' }, [...res.data.events].reverse().map((e) => h('li', {}, h('div', { class: 'grow' }, h('div', { class: 'nm' }, eventLabel(e.type)), h('div', { class: 'small muted' }, `${fmtDateTime(e.at)} · ${e.actor?.id ?? ''}${e.approval ? ` · approuvé par ${e.approval.approverId}${e.approval.separationWaived ? ' (exception propriétaire)' : ''}` : ''}`))))) : empty('Aucun événement.')));
   }
 
   // ------------------------------------------------------------------ inventory (count)

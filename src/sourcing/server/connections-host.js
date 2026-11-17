@@ -4,6 +4,7 @@
 // A failure here answers 5xx on those paths only. The provider flows are READ-ONLY: the runtime is built in NORDLA_PROVIDER_SCOPE_MODE=read, so Instagram and TikTok are asked for read scopes only.
 // RIGHTS. Reading: any session of this merchant. Connecting, choosing the account, verifying, reconnecting, disconnecting: OWNER or ADMIN only. The merchant is always the SESSION's merchant.
 // NO SECRET reaches the browser: the page is built from the service's allowlisted view; the only provider URL sent is the public authorization address (its `state` is single use).
+import { translateSettings } from '../../settings-preferences/hub-i18n.js';
 import { readFile } from 'node:fs/promises';
 import { PC_ERROR } from '../../provider-connections/constants.js';
 import { WRITER_ROLES } from '../../connections/service.js';
@@ -45,7 +46,7 @@ export async function connectionsPage() {
 }
 
 /** @param {{ gate: object, merchantId: string, runtime: object, service: object, registry: object }} o runtime = createProviderConnectionsRuntime(...) (real, or the test fakes) */
-export async function createConnectionsHost({ gate, merchantId, runtime, service, registry, reads = null }) {
+export async function createConnectionsHost({ gate, merchantId, runtime, service, registry, reads = null, langOf = null }) {
   const center = runtime.connectionCenter; const tenantOf = () => ({ merchantId, source: 'session' });
   const providerFor = (key) => { const p = registry.byProviderKey(key); return p && p.source === 'oauth' && p.status === 'AVAILABLE' ? p : null; };
   const overview = (role) => service.overview({ tenant: tenantOf(), role });
@@ -60,7 +61,11 @@ export async function createConnectionsHost({ gate, merchantId, runtime, service
           const access = a.access; if (access.merchantId !== merchantId) { if (cb) { redirect(res, `${PAGE}?connect_error=TENANT_MISMATCH`); return true; } json(res, 403, { error: { code: 'TENANT_MISMATCH' } }); return true; }
           const method = String(req.method ?? '').toUpperCase(); const writer = WRITER_ROLES.has(access.role); const actorRef = access.userId;
           if (method === 'GET' && p === '/api/connections') { json(res, 200, await overview(access.role)); return true; }
-          if (method === 'GET' && p === '/api/settings') { json(res, 200, await service.settings({ tenant: tenantOf(), role: access.role })); return true; }
+          if (method === 'GET' && p === '/api/settings') {
+            const payload = await service.settings({ tenant: tenantOf(), role: access.role });
+            let lang = null; if (langOf) { try { lang = await langOf({ tenant: tenantOf(), userId: access.userId }); } catch { lang = null; } } // the person's saved language (Paramètres > Préférences); none or a failure = French, as before
+            json(res, 200, translateSettings(payload, lang)); return true;
+          }
           // The provider sends the browser back here after the consent: GET, with the Nordla session cookie. Nothing from the query is echoed back.
           if (method === 'GET' && cb) {
             const provider = providerFor(cb[1]); if (!provider) { redirect(res, `${PAGE}?connect_error=PROVIDER_UNSUPPORTED`); return true; }

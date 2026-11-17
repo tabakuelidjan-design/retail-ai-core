@@ -3,7 +3,8 @@
 import { initToken, getToken, forgetToken, request, getJson, photoUrl, setStatusListener, HOSTED } from './api.js';
 import * as outbox from './outbox.js';
 import { createV1Screens } from './screens-v1.js';
-import { buildQuotePayload, parseDecimal, parseInteger, microToString, fmtMoney, fmtDate, PO_STATUS_FR, PO_GROUPS, poActions, describeOffer, addToCart, CURRENCIES, fxPlausibility, receiptLinesFrom, precisionWarning, currenciesOf, errText, ERRORS_FR } from './logic.js';
+import * as prefs from './prefs.js';
+import { buildQuotePayload, parseDecimal, parseInteger, microToString, fmtMoney, fmtDate, fmtTime, setRegional, PO_STATUS_FR, PO_GROUPS, poActions, describeOffer, addToCart, CURRENCIES, fxPlausibility, receiptLinesFrom, precisionWarning, currenciesOf, errText, ERRORS_FR } from './logic.js';
 
 const $ = (id) => document.getElementById(id);
 const main = $('main');
@@ -30,7 +31,7 @@ const put = (el, ...kids) => el.append(...kids.flat(Infinity).filter((k) => k !=
 const swap = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter((k) => k != null && k !== false));
 
 // ------------------------------------------------------------------ state, navigation
-const S = { me: null, tab: 'visits', stack: [], online: true, lastError: null };
+const S = { me: null, tab: 'visits', stack: [], online: true, lastError: null, prefs: false, openView: null, skipDefault: false };
 
 function banner(text, kind = '') { const b = $('banner'); b.textContent = text ?? ''; b.hidden = !text; b.className = `banner ${kind}`; if (text && kind !== 'err') setTimeout(() => { if (b.textContent === text) b.hidden = true; }, 6000); }
 function setHead(title, subtitle = '', back = false) { $('title').textContent = title; $('subtitle').textContent = subtitle; $('back').hidden = !back; }
@@ -67,7 +68,7 @@ function thumb(ref, cls = 'thumb') {
 }
 const chip = (t, k = '') => h('span', { class: `chip ${k}` }, t);
 const empty = (t) => h('p', { class: 'empty' }, t);
-const stale = (res) => (res.stale ? h('div', { class: 'note' }, `Connexion indisponible : données du ${fmtDate(res.at)} à ${new Date(res.at).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })}.`) : null);
+const stale = (res) => (res.stale ? h('div', { class: 'note' }, `Connexion indisponible : données du ${fmtDate(res.at)} à ${fmtTime(res.at)}.`) : null);
 const fail = (res) => h('div', { class: 'warn' }, res.status === 401 ? ERRORS_FR.UNAUTHORIZED : res.status === 0 ? 'Impossible de joindre le serveur (connexion coupée ou lente) et aucune donnée précédente n’est gardée pour cet écran.' : `Impossible de charger : ${res.error ?? res.status}`, res.status === 401 ? null : h('div', {}, h('button', { class: 'btn sec', onclick: () => render() }, 'Réessayer')));
 function field(label, input, hint) { return h('div', {}, h('label', {}, label), input, hint ? h('div', { class: 'small muted' }, hint) : null); }
 function select(options, value) { return h('select', {}, options.map(([v, t]) => h('option', { value: v, selected: v === value }, t))); }
@@ -168,8 +169,38 @@ async function screenItems() {
   const res = await getJson('/api/items'); if (!res.data) return put(box, fail(res));
   const search = h('input', { placeholder: 'Rechercher un produit', type: 'search' }); const out = h('ul', { class: 'list' });
   const draw = () => { const t = search.value.trim().toLowerCase(); const rows = res.data.items.filter((i) => !t || i.name.toLowerCase().includes(t) || i.sku.toLowerCase().includes(t)); out.replaceChildren(...(rows.length ? rows.map((i) => h('li', {}, h('button', { class: 'tap', onclick: () => go('item', { id: i.id }) }, i.photos[0] ? thumb(i.photos[0]) : h('div', { class: 'thumb' }), h('div', { class: 'grow' }, h('div', { class: 'nm' }, i.name), h('div', { class: 'sub' }, `${i.sku} · ${new Set(i.quotes.filter((q) => q.status !== 'SUPERSEDED').map((q) => q.supplierId)).size} fournisseur(s)`)), chip(i.status === 'PROSPECT' ? 'à étudier' : 'catalogue', i.status === 'PROSPECT' ? 'a' : 'g')))) : [empty('Aucun produit.')])); };
-  search.addEventListener('input', draw); draw(); put(box, stale(res), search, out);
+  search.addEventListener('input', draw);
+  // Saved views (Paramètres > Préférences): personal, only on the Nordla server and only when that module answers. Any failure = the standard screen, nothing blocks.
+  const notice = h('div', {}); const saver = h('div', {});
+  if (S.prefs) {
+    let applied = null; let note = null;
+    if (S.openView) { // opened from Préférences ("Ouvrir")
+      const id = S.openView; S.openView = null;
+      const l = await prefs.listViews(); const v = l.status === 200 ? (l.json.views ?? []).find((x) => x.id === id) : null;
+      if (v && v.status === 'OK') applied = { name: v.name, filters: v.filters, how: 'ouverte' };
+      else note = v ? `La vue « ${v.name} » ne s’applique plus : ${VIEW_REASON[v.reason] ?? 'elle n’est plus valide'}. La vue standard est affichée.` : 'Cette vue n’existe plus. La vue standard est affichée.';
+    } else if (!S.skipDefault) {
+      const d = await prefs.defaultView();
+      if (d.status === 200 && d.json?.view) applied = { name: d.json.view.name, filters: d.json.view.filters, how: 'par défaut' };
+      else if (d.status === 200 && d.json?.reason) note = `Votre vue par défaut « ${d.json.viewName} » ne s’applique plus : ${VIEW_REASON[d.json.reason] ?? 'elle n’est plus valide'}. La vue standard est affichée.`;
+    }
+    if (applied) { search.value = applied.filters?.q ?? ''; put(notice, h('div', { class: 'note' }, `Vue ${applied.how} « ${applied.name} » appliquée. `, h('button', { class: 'btn sec', onclick: () => { S.skipDefault = true; search.value = ''; swap(notice); draw(); } }, 'Voir la vue standard'))); }
+    else if (note) put(notice, h('div', { class: 'note' }, note));
+    const name = h('input', { placeholder: 'Nom de la vue (ex. Porte-clés)', maxlength: '60', autocomplete: 'off' }); const def = h('input', { type: 'checkbox' }); const msg = h('div', {});
+    const form = h('div', { class: 'card', hidden: true }, field('Nom de la vue', name), h('label', { class: 'small' }, def, ' Ouvrir cette vue par défaut'), msg,
+      h('div', { class: 'row' }, h('button', { class: 'btn', onclick: async (ev) => {
+        const q = search.value.trim(); swap(msg);
+        if (!q) return put(msg, h('div', { class: 'warn' }, 'Saisissez d’abord une recherche : une vue sans filtre est la vue standard.'));
+        if (!name.value.trim()) return put(msg, h('div', { class: 'warn' }, 'Donnez un nom à la vue.'));
+        ev.currentTarget.disabled = true; const r = await prefs.createView({ name: name.value, filters: { q }, makeDefault: def.checked }); ev.currentTarget.disabled = false;
+        if (r.status === 200) { form.hidden = true; name.value = ''; def.checked = false; if (r.json.isDefault) S.skipDefault = false; banner(`Vue « ${r.json.name} » enregistrée${r.json.isDefault ? ' et définie par défaut' : ''}.`, 'ok'); }
+        else put(msg, h('div', { class: 'warn' }, r.status === 0 ? 'Connexion indisponible : la vue n’a pas été enregistrée.' : r.json?.error?.code === 'NAME_TAKEN' ? 'Une vue porte déjà ce nom pour cet écran.' : r.json?.error?.code === 'TOO_MANY' ? r.json.error.message : `La vue n’a pas été enregistrée (${r.status}).`));
+      } }, 'Enregistrer'), h('button', { class: 'btn sec', onclick: () => { form.hidden = true; swap(msg); } }, 'Annuler')));
+    put(saver, h('button', { class: 'btn sec', onclick: () => { form.hidden = !form.hidden; if (!form.hidden) name.focus(); } }, 'Enregistrer cette vue'), form);
+  }
+  draw(); put(box, stale(res), notice, search, saver, out);
 }
+const VIEW_REASON = { FILTER_REMOVED: 'l’un de ses filtres n’existe plus', MODULE_INACCESSIBLE: 'ce module n’est plus accessible avec votre rôle', MODULE_REMOVED: 'cet écran n’existe plus' };
 async function screenItem({ id }) {
   setHead('Produit', '', true); const box = h('div', {}); swap(main, box);
   const res = await getJson(`/api/items/${id}`); if (!res.data) return put(box, fail(res));
@@ -369,5 +400,8 @@ async function render() {
   S.me = me.json ?? safe(() => JSON.parse(localStorage.getItem('nordla.proc.me')), { id: '?', role: 'BUYER', canApprove: false });
   if (me.json) save('nordla.proc.me', me.json);
   S.online = me.status !== 0;
+  // Preferences (optional, isolated): regional format + saved views. Any failure leaves the screens exactly as they were.
+  if (HOSTED) { try { const f = await prefs.loadFormatter(); if (f) { setRegional(f); S.prefs = true; } } catch { /* no preference applied */ } }
+  const openView = new URLSearchParams(location.search).get('view'); if (S.prefs && /^[0-9a-f-]{36}$/i.test(openView ?? '')) { S.openView = openView; S.tab = 'items'; history.replaceState(null, '', location.pathname); }
   render(); outbox.flush({ force: true }).then(refreshAfterSend);
 })();

@@ -6,7 +6,7 @@ const safe = (fn, fallback = null) => { try { return fn(); } catch { return fall
 /** Mounted on the Nordla server (page at /procurement/): the browser carries the Core session cookie, every change carries the CSRF token (same cookie pair as the Sourcing app), and the API lives under /api/procurement/. */
 export const HOSTED = typeof location !== 'undefined' && location.pathname.startsWith('/procurement');
 const CSRF_COOKIE = '__Host-nordla_sourcing_csrf';
-const csrf = () => { for (const part of String(globalThis.document?.cookie ?? '').split(';')) { const i = part.indexOf('='); if (i > 0 && part.slice(0, i).trim() === CSRF_COOKIE) return part.slice(i + 1).trim(); } return ''; };
+export const csrf = () => { for (const part of String(globalThis.document?.cookie ?? '').split(';')) { const i = part.indexOf('='); if (i > 0 && part.slice(0, i).trim() === CSRF_COOKIE) return part.slice(i + 1).trim(); } return ''; };
 export const apiPath = (p) => (HOSTED ? p.replace(/^\/api\//, '/api/procurement/') : p);
 const authHeaders = () => (HOSTED ? { 'x-nordla-csrf': csrf() } : { 'x-nordla-token': getToken() ?? '' });
 

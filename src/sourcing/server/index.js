@@ -72,7 +72,7 @@ export async function buildCreator({ env, gate, hosted, log = console.log }) {
 }
 
 /** Paramètres -> Connexions (staging module): built only when asked for AND hosted behind the Core identity. READ-ONLY provider scopes are forced. Any problem is logged and the server runs without it. */
-export async function buildConnections({ env, gate, hosted, log = console.log, supabase: injected = null, fetchImpl = globalThis.fetch }) {
+export async function buildConnections({ env, gate, hosted, log = console.log, supabase: injected = null, fetchImpl = globalThis.fetch, langOf = null }) {
   if (String(env.NORDLA_CONNECTIONS_MODULE ?? '') !== '1') return null;
   if (!hosted || !gate) { log('Connections: NOT built (needs the hosted Core identity)'); return null; }
   try {
@@ -86,7 +86,7 @@ export async function buildConnections({ env, gate, hosted, log = console.log, s
     const registry = createRegistry();
     const origin = String(env.NORDLA_PUBLIC_ORIGIN ?? '').trim();
     const service = createConnectionsService({
-      disabledSections: [...(String(env.NORDLA_TEAM_MODULE ?? '') === '1' ? [] : ['team']), ...(String(env.NORDLA_NOTIFICATIONS_MODULE ?? '') === '1' ? [] : ['notifications'])], // a card whose page is not built must not lead to a 404
+      disabledSections: [...(String(env.NORDLA_TEAM_MODULE ?? '') === '1' ? [] : ['team']), ...(String(env.NORDLA_NOTIFICATIONS_MODULE ?? '') === '1' ? [] : ['notifications']), ...(String(env.NORDLA_PREFERENCES_MODULE ?? '') === '1' ? [] : ['preferences'])], // a card whose page is not built must not lead to a 404
       registry, center: runtime.connectionCenter, connectorRepository: runtime.connectorRepository, appConfigPresent: runtime.appConfigPresent, appEnvNames: APP_ENV,
       redirectUriOf: (key) => { try { return runtime.appConfigFor(key).redirectUri; } catch { return origin ? `${origin}/api/connections/${key}/callback` : null; } },
       shopifySync: async (merchantId) => { const rows = await supabase.select('sync_runs', { merchant_id: `eq.${merchantId}`, order: 'started_at.desc', limit: '1' }); const r = rows?.[0]; return r ? { status: r.status, startedAt: r.started_at, finishedAt: r.finished_at } : null; },
@@ -97,7 +97,7 @@ export async function buildConnections({ env, gate, hosted, log = console.log, s
     const { createInstagramReaderFor } = await import('../../provider-connections/instagram-reader.js');
     const { createInstagramReadService } = await import('../../connections/instagram-read.js');
     const reads = createInstagramReadService({ connectorRepository: runtime.connectorRepository, readerFor: ({ merchantId, connectorId, grantedScopes }) => createInstagramReaderFor({ tokenManager: runtime.tokenManager, merchantId, connectorId, graphVersion: runtime.appConfigFor('instagram').graphVersion, grantedScopes, fetchImpl }) });
-    const host = await createConnectionsHost({ gate, merchantId: hosted.merchantId, runtime, service, registry, reads });
+    const host = await createConnectionsHost({ gate, merchantId: hosted.merchantId, runtime, service, registry, reads, langOf });
     log('Connections: ON (read-only; Instagram and TikTok ask read scopes only)');
     return Object.freeze({ ...host, settings: ({ tenant, role }) => service.settings({ tenant, role }), listConnections: ({ tenant }) => runtime.connectionCenter.listConnections({ tenant }) }); // the same menu, merchant name and environment are reused by Paramètres > Général
   } catch (e) { log(`Connections: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
@@ -202,6 +202,31 @@ export async function buildNotifications({ env, gate, hosted, log = console.log,
   } catch (e) { log(`Notifications: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
 }
 
+/** The personal preferences service (language, regional format, saved views): built once, shared by the Préférences host and by the hub (language). Null unless NORDLA_PREFERENCES_MODULE=1 or when it cannot be built. */
+export async function buildPreferencesService({ env, log = console.log, supabase: injected = null, generalService = null }) {
+  if (String(env.NORDLA_PREFERENCES_MODULE ?? '') !== '1') return null;
+  try {
+    const { createPreferencesService } = await import('../../settings-preferences/service.js');
+    const { createSupabasePreferencesRepository } = await import('../../settings-preferences/repository.js');
+    const supabase = injected ?? (await import('../../supabase/client.js')).createSupabaseClient((await import('../../supabase/client.js')).loadSupabaseConfigFromEnv(env));
+    // currency / time zone: Général is the SOURCE (read only); without it the formatter says it uses its fallback instead of guessing
+    const merchantRef = generalService ? async (tenant, role) => { const r = await generalService.read({ tenant, role, section: 'regional' }); return { currency: r?.data?.currency ?? null, timezone: r?.data?.timezone ?? null }; } : undefined;
+    return createPreferencesService({ repo: createSupabasePreferencesRepository({ supabase }), ...(merchantRef ? { merchantRef } : {}) });
+  } catch (e) { log(`Preferences service: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
+}
+
+/** Paramètres > Préférences (staging module): built only when asked for AND hosted behind the Core identity. Any problem is logged and the server runs without it. */
+export async function buildPreferences({ env, gate, hosted, log = console.log, shellOf = null, service = null }) {
+  if (String(env.NORDLA_PREFERENCES_MODULE ?? '') !== '1') return null;
+  if (!hosted || !gate || !service) { log('Preferences: NOT built (needs the hosted Core identity)'); return null; }
+  try {
+    const { createPreferencesHost } = await import('./preferences-host.js');
+    const host = await createPreferencesHost({ gate, merchantId: hosted.merchantId, service, shellOf });
+    log('Preferences: ON (Paramètres > Préférences: personal language, regional format, saved views; no permission is derived from them)');
+    return host;
+  } catch (e) { log(`Preferences: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
+}
+
 /** The video drafts (staging module, "Ajouter une vidéo"): built only when asked for AND hosted behind the Core identity. Any problem is logged and the server runs without it. */
 export async function buildVideos({ env, gate, hosted, log = console.log, contextOf = null }) {
   if (String(env.NORDLA_VIDEO_DRAFTS_MODULE ?? '') !== '1') return null;
@@ -300,15 +325,17 @@ export async function startSourcingServer({ env = process.env, log = console.log
   const core = await buildCore({ env, dir, merchantId: merchantKey, store, safety, log, readers: services?.readers ?? null, procurement: proc.assistant, merchantIdentity: generalService ? async () => { const t = { merchantId: merchantKey }; const name = (await generalService.contextFor({ tenant: t, module: 'core' })).profile.name; let context = null; try { const c = await generalService.contextFor({ tenant: t, module: 'sourcing' }); context = { activity: c.activity?.main ?? null, complementary: c.activity?.complementary ?? [], sellingModes: c.selling_modes?.modes ?? [], constraints: c.objectives?.constraints ?? null, places: (c.places ?? []).map((p) => ({ name: p.name, functions: p.functions, city: p.city })) }; } catch { context = null; } return { name, context }; } : null });
   let backups = null;
   const creator = await buildCreator({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_CREATOR_MODULE=1
-  const connections = await buildConnections({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_CONNECTIONS_MODULE=1
+  const preferencesService = hosted ? await buildPreferencesService({ env, log, generalService }) : null; // the person's saved language also reaches the Paramètres hub (below)
+  const connections = await buildConnections({ env, gate, hosted, log, langOf: preferencesService ? ({ tenant, userId }) => preferencesService.languageOf({ tenant, userId }) : null }); // optional, isolated: null unless NORDLA_CONNECTIONS_MODULE=1
   const general = await buildGeneral({ env, gate, hosted, log, shellOf: connections?.settings ?? null, service: generalService }); // optional, isolated: null unless NORDLA_GENERAL_MODULE=1
+  const preferences = await buildPreferences({ env, gate, hosted, log, service: preferencesService, shellOf: connections?.settings ? async ({ tenant, role, lang }) => (await import('../../settings-preferences/hub-i18n.js')).translateSettings(await connections.settings({ tenant, role }), lang) : null }); // optional, isolated: null unless NORDLA_PREFERENCES_MODULE=1
   const team = await buildTeam({ env, gate, hosted, log, shellOf: connections?.settings ?? null }); // optional, isolated: null unless NORDLA_TEAM_MODULE=1
   const security = await buildSecurity({ env, gate, hosted, log, shellOf: connections?.settings ?? null, services }); // optional, isolated: null unless NORDLA_SECURITY_MODULE=1
   const notifications = await buildNotifications({ env, gate, hosted, log, shellOf: connections?.settings ?? null, listConnections: connections?.listConnections ?? null }); // optional, isolated: null unless NORDLA_NOTIFICATIONS_MODULE=1
   const marketingContext = generalService ? () => generalService.contextFor({ tenant: { merchantId: merchantKey }, module: 'marketing' }) : null;
   const videos = await buildVideos({ env, gate, hosted, log, contextOf: marketingContext }); // optional, isolated: null unless NORDLA_VIDEO_DRAFTS_MODULE=1
   const gbp = await buildGbp({ env, gate, hosted, log, contextOf: marketingContext }); // optional, isolated: null unless NORDLA_GBP_DRAFTS_MODULE=1
-  const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, videos, connections, general, security, team, notifications, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
+  const app = createSourcingApp({ backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, videos, connections, general, security, team, notifications, preferences, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
   const server = http.createServer(app.handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); });
   const addr = server.address();

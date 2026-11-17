@@ -48,8 +48,16 @@ export function buildQuotePayload(f) {
 }
 
 export const microToString = (m) => `${Math.floor(m / 1e6)}.${String(m % 1e6).padStart(6, '0')}`.replace(/0+$/, '').replace(/\.$/, '.0');
-export const fmtMoney = (minor, currency = 'EUR', locale = 'fr-BE') => { try { return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(minor / 100); } catch { return `${(minor / 100).toFixed(2)} ${currency}`; } };
-export const fmtDate = (iso, locale = 'fr-BE') => { try { return new Date(iso).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return String(iso); } };
+// Regional format (Paramètres > Préférences): the SAME formatter as the preview, set once at start by app.js. Without it (local PC server, module off, or any failure) the screens behave exactly as before (fr-BE).
+// It changes presentation only: the amount keeps its own currency, nothing is converted, and instants are shown in the merchant's time zone.
+let regional = null;
+export const setRegional = (formatter) => { regional = formatter && typeof formatter.money === 'function' ? formatter : null; };
+export const regionalLocale = () => regional?.locale ?? 'fr-BE';
+export const fmtMoney = (minor, currency = 'EUR', locale = 'fr-BE') => { if (regional) { const t = regional.money(minor, currency); if (t) return t; } try { return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(minor / 100); } catch { return `${(minor / 100).toFixed(2)} ${currency}`; } };
+export const fmtDate = (iso, locale = 'fr-BE') => { if (regional) { const t = regional.date(iso); if (t) return t; } try { return new Date(iso).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return String(iso); } };
+export const fmtDateTime = (iso) => { if (regional) { const t = regional.dateTime(iso, { dateStyle: undefined, day: '2-digit', month: '2-digit', year: '2-digit' }); if (t) return t; } try { return new Date(iso).toLocaleString('fr-BE', { dateStyle: 'short', timeStyle: 'short' }); } catch { return String(iso); } };
+export const fmtTime = (iso) => { if (regional) { const t = regional.time(iso); if (t) return t; } try { return new Date(iso).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
+
 
 export const PO_STATUS_FR = { DRAFT: 'Brouillon', PENDING_APPROVAL: 'À approuver', APPROVED: 'Approuvé', ORDERED: 'Commandé', CONFIRMED: 'Confirmé', PARTIALLY_RECEIVED: 'Reçu en partie', RECEIVED: 'Reçu', CLOSED: 'Clos', CANCELLED: 'Annulé' };
 export const PO_GROUPS = [['DRAFT', 'Brouillons'], ['PENDING_APPROVAL', 'À approuver'], ['APPROVED', 'Approuvés, à commander'], ['ORDERED', 'Commandés'], ['CONFIRMED', 'Confirmés'], ['PARTIALLY_RECEIVED', 'Reçus en partie']];
@@ -104,7 +112,7 @@ const OFFER_FR = {
   PRICE_PRECISION_EXCEEDS_FINANCE_ENGINE: () => 'Prix trop précis pour le calcul du coût rendu (4 décimales max).',
 };
 /** French card text for one comparison offer. `money` formats EUR minor units. */
-const eur4 = (minor, qty) => (minor / 100 / qty).toLocaleString('fr-BE', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+const eur4 = (minor, qty) => (minor / 100 / qty).toLocaleString(regionalLocale(), { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 export function describeOffer(o, qty) {
   const chips = [];
   if (o.incoterm) chips.push({ t: o.incoterm, k: '' });

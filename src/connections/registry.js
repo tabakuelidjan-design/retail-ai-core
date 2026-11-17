@@ -98,7 +98,7 @@ export const SETTINGS_SECTIONS = Object.freeze([
   Object.freeze({ id: 'team', label: 'Équipe et accès', icon: 'users', description: 'Membres, invitations, rôles et permissions, historique des accès.', status: 'AVAILABLE', href: '/settings/team' }),
   Object.freeze({ id: 'connections', label: 'Connexions', icon: 'plug', description: 'Connecter vos outils (boutique, réseaux sociaux, banque, gestion).', status: 'AVAILABLE', href: '/settings/connections' }),
   Object.freeze({ id: 'notifications', label: 'Notifications', icon: 'bell', description: 'Choisir ce que vous recevez et par quel canal (e-mail, application).', status: 'AVAILABLE', href: '/settings/notifications' }),
-  Object.freeze({ id: 'preferences', label: 'Préférences', icon: 'sliders', description: 'Paramètres d’achats, de stocks, de pricing et d’affichage.', status: 'PLANNED', note: 'Pas encore disponible.' }),
+  Object.freeze({ id: 'preferences', label: 'Préférences', icon: 'sliders', description: 'Vos réglages personnels : langue de l’interface, format régional et vues par défaut.', status: 'AVAILABLE', href: '/settings/preferences' }),
   Object.freeze({ id: 'security', label: 'Sécurité', icon: 'shield', description: 'Connexion, sessions, activité de sécurité et protection de l’équipe.', status: 'AVAILABLE', href: '/settings/security' }),
 ]);
 

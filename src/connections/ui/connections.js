@@ -49,7 +49,7 @@
   async function hub() {
     const r = await api('/api/settings'); if (guard(r)) return;
     if (!r.ok) return app.replaceChildren(h('div', { class: 'cx-wrap' }, h('h1', { text: 'Paramètres' }), h('p', { class: 'cx-msg err', text: 'Cette page est indisponible pour le moment.' })));
-    const s = r.json;
+    const s = r.json; const T = s.texts ?? { title: 'Paramètres', subtitle: 'Aperçu général.' }; if (s.lang) document.documentElement.lang = s.lang; // the person's saved language (Préférences); no saved language = French as before
     const card = (c) => {
       const body = [h('div', { class: 'cx-card-head' }, h('span', { class: 'cx-card-ico' }, ico(c.icon)), h('h2', { text: c.label }), c.available ? h('span', { class: 'cx-chev' }, ico('chevron')) : h('span', { class: 'cx-avail', 'data-available': 'false', text: c.availabilityLabel })),
         h('p', { class: 'cx-card-desc', text: c.description }),
@@ -57,7 +57,7 @@
         !c.available && c.note ? h('p', { class: 'cx-card-note', text: c.note }) : null];
       return c.available ? h('a', { class: 'cx-set-card highlight', href: c.href, 'data-section': c.id }, body) : h('div', { class: 'cx-set-card', 'data-section': c.id, 'aria-disabled': 'true' }, body);
     };
-    app.replaceChildren(shell(s, 'settings', [h('h1', { text: 'Paramètres' }), h('p', { class: 'cx-sub', text: 'Aperçu général.' }), h('div', { class: 'cx-set-grid' }, s.cards.map(card))]));
+    app.replaceChildren(shell(s, 'settings', [h('h1', { text: T.title }), h('p', { class: 'cx-sub', text: T.subtitle }), h('div', { class: 'cx-set-grid' }, s.cards.map(card))]));
   }
 
   // ------------------------------------------------------------------ Paramètres › Connexions (list + detail)

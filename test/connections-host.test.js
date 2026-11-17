@@ -19,7 +19,7 @@ import { createFakeHttp } from './channel-fixtures.js';
 
 const SESSIONS = {
   'tok-owner': { merchantId: M1, userId: 'u-owner', role: 'OWNER', module: 'sourcing' }, 'tok-viewer': { merchantId: M1, userId: 'u-viewer', role: 'VIEWER', module: 'sourcing' },
-  'tok-other': { merchantId: M2, userId: 'u-other', role: 'OWNER', module: 'sourcing' },
+  'tok-other': { merchantId: M2, userId: 'u-other', role: 'OWNER', module: 'sourcing' }, 'tok-admin': { merchantId: M1, userId: 'u-admin', role: 'ADMIN', module: 'sourcing' },
 };
 function gateOver(sessions, moduleCode = 'sourcing') {
   const identity = { context: { module: moduleCode }, resolveAccessSession: async (t) => (sessions[t] ? { ok: true, ...sessions[t] } : { ok: false }), authenticateAndOpenSession: async () => ({ ok: false, status: 401 }), logoutSession: async () => ({ ok: true }) };
@@ -37,17 +37,17 @@ const READ_PERMS = 'instagram_business_basic,instagram_business_manage_insights'
 const ENV_READ = { ...ENV, NORDLA_PROVIDER_SCOPE_MODE: 'read' };
 const NO_APP = Object.fromEntries(Object.entries(ENV).filter(([k]) => !k.startsWith('INSTAGRAM_')));
 
-async function boot({ env = ENV_READ, routes = igRoutes({ permissions: READ_PERMS }), extra = [], shop = true, graph = null } = {}) {
+async function boot({ env = ENV_READ, routes = igRoutes({ permissions: READ_PERMS }), extra = [], shop = true, graph = null, langOf = null, disabledSections = [] } = {}) {
   const ctx = makeRuntime({ routes, env });
   if (shop) await ctx.rt.connectorRepository.link({ merchantId: M1, kind: 'shopify', externalId: 'gid://shopify/Shop/STAGING-1', status: 'CONFIGURED', config: {} });
   const registry = createRegistry({ extra });
   const service = createConnectionsService({
-    registry, center: ctx.rt.connectionCenter, connectorRepository: ctx.rt.connectorRepository, appConfigPresent: ctx.rt.appConfigPresent, appEnvNames: APP_ENV,
+    disabledSections, registry, center: ctx.rt.connectionCenter, connectorRepository: ctx.rt.connectorRepository, appConfigPresent: ctx.rt.appConfigPresent, appEnvNames: APP_ENV,
     redirectUriOf: (k) => { try { return ctx.rt.appConfigFor(k).redirectUri; } catch { return `https://sourcing-staging-staging.up.railway.app/api/connections/${k}/callback`; } },
     merchantLabel: async () => 'HABB (test staging)', environmentLabel: 'Staging', shopifySync: async () => ({ status: 'completed', startedAt: '2026-11-17T08:00:00Z', finishedAt: '2026-11-17T08:01:00Z' }), bankCatalog: BELGIAN_BANKS, bankProvider: { id: 'enable-banking', label: 'Enable Banking' },
   });
   const reads = createInstagramReadService({ connectorRepository: ctx.rt.connectorRepository, readerFor: ({ merchantId, connectorId, grantedScopes }) => createInstagramReaderFor({ tokenManager: ctx.rt.tokenManager, merchantId, connectorId, graphVersion: 'v25.0', grantedScopes, fetchImpl: graph?.fetchImpl ?? (async () => { throw new Error('no network in this test'); }) }) });
-  const host = await createConnectionsHost({ gate: gateOver(SESSIONS), merchantId: M1, runtime: ctx.rt, service, registry, reads });
+  const host = await createConnectionsHost({ gate: gateOver(SESSIONS), merchantId: M1, runtime: ctx.rt, service, registry, reads, langOf });
   const s = http.createServer(async (req, res) => { const u = new URL(req.url, 'http://x'); if (!(await host.handle(req, res, u))) { res.writeHead(404); res.end('{"error":"NOT_FOUND"}'); } });
   await new Promise((r) => s.listen(0, '127.0.0.1', r)); const base = `http://127.0.0.1:${s.address().port}`;
   const seen = [];
@@ -168,14 +168,28 @@ test('CX-7 the Settings home: six sections, the real availability of each, the C
     const page = await t.req('/settings'); assert.equal(page.status, 200); assert.match(page.text, /connections-assets\/connections\.js/); assert.equal((await t.req('/settings/')).status, 200); assert.equal((await t.req('/api/settings')).status, 401);
     const s = (await t.req('/api/settings', { token: 'tok-viewer' })).json;
     assert.deepEqual(s.cards.map((c) => c.id), ['general', 'team', 'connections', 'notifications', 'preferences', 'security']); assert.deepEqual(s.cards.map((c) => c.label), ['Général', 'Équipe et accès', 'Connexions', 'Notifications', 'Préférences', 'Sécurité']);
-    assert.deepEqual(s.cards.filter((c) => c.available).map((c) => c.id), ['general', 'team', 'connections', 'notifications', 'security'], 'Général, Équipe et accès, Connexions, Notifications and Sécurité have a screen'); const conn = s.cards.find((c) => c.id === 'connections'); assert.equal(conn.href, '/settings/connections');
-    assert.equal(s.cards.find((x) => x.id === 'general').href, '/settings/general'); assert.equal(s.cards.find((x) => x.id === 'security').href, '/settings/security'); for (const c of s.cards.filter((x) => !['connections', 'general', 'security', 'team', 'notifications'].includes(x.id))) { assert.deepEqual([c.available, c.href, c.availabilityLabel], [false, null, 'Prévu']); assert.ok(c.note, 'what already works, or that nothing does'); }
-    assert.equal(s.cards.find((c) => c.id === 'team').href, '/settings/team'); assert.deepEqual(conn.providers.map((p) => p.id), ['shopify', 'instagram', 'tiktok', 'google_business_profile', 'bank', 'odoo', 'woocommerce', 'prestashop']);
+    assert.deepEqual(s.cards.filter((c) => c.available).map((c) => c.id), ['general', 'team', 'connections', 'notifications', 'preferences', 'security'], 'Général, Équipe et accès, Connexions, Notifications, Préférences and Sécurité have a screen'); const conn = s.cards.find((c) => c.id === 'connections'); assert.equal(conn.href, '/settings/connections');
+    assert.equal(s.cards.find((x) => x.id === 'general').href, '/settings/general'); assert.equal(s.cards.find((x) => x.id === 'security').href, '/settings/security'); for (const c of s.cards.filter((x) => !['connections', 'general', 'security', 'team', 'preferences', 'notifications'].includes(x.id))) { assert.deepEqual([c.available, c.href, c.availabilityLabel], [false, null, 'Prévu']); assert.ok(c.note, 'what already works, or that nothing does'); }
+    assert.equal(s.cards.find((c) => c.id === 'team').href, '/settings/team'); assert.equal(s.cards.find((c) => c.id === 'preferences').href, '/settings/preferences'); assert.deepEqual(conn.providers.map((p) => p.id), ['shopify', 'instagram', 'tiktok', 'google_business_profile', 'bank', 'odoo', 'woocommerce', 'prestashop']);
     const st = Object.fromEntries(conn.providers.map((p) => [p.id, p.statusLabel])); assert.deepEqual([st.shopify, st.instagram, st.tiktok, st.google_business_profile, st.bank, st.odoo], ['Connecté', 'Application Meta à configurer', 'Prévu', 'En attente', 'En attente', 'Prévu']);
     assert.ok(!conn.providers.some((p) => /stripe|google analytics/i.test(p.label)), 'the catalogue providers, not the mock-up ones');
     assert.deepEqual(s.nav.map((n) => n.label), ['Accueil', 'Sourcing', 'Achats', 'Finance', 'Analyses', 'Growth', 'Marketing', 'Paramètres']); assert.equal(s.nav.find((n) => n.id === 'settings').href, '/settings'); assert.deepEqual([s.merchant.name, s.environment], ['HABB (test staging)', 'Staging']);
     const noShop = await boot({ shop: false }); try { const c2 = (await noShop.req('/api/settings', { token: 'tok-owner' })).json.cards.find((c) => c.id === 'connections'); assert.equal(c2.providers.find((p) => p.id === 'shopify').statusLabel, 'Non reliée', 'no shop linked to this merchant: said plainly'); } finally { await noShop.close(); }
   } finally { await t.close(); }
+});
+
+test('CX-7b the Settings hub follows the signed-in person’s saved language (Préférences); no saved language or a failing lookup = French as before; the card is a "Prévu" card when the module is off', async () => {
+  const langs = { 'u-owner': 'nl', 'u-viewer': 'en' };
+  const t = await boot({ env: { ...NO_APP, NORDLA_PROVIDER_SCOPE_MODE: 'read' }, langOf: async ({ userId }) => { if (userId === 'u-boom') throw new Error('down'); return langs[userId] ?? null; } });
+  try {
+    const nl = (await t.req('/api/settings', { token: 'tok-owner' })).json; assert.equal(nl.lang, 'nl'); assert.equal(nl.texts.title, 'Instellingen'); assert.equal(nl.cards.find((c) => c.id === 'preferences').label, 'Voorkeuren'); assert.equal(nl.cards.find((c) => c.id === 'preferences').href, '/settings/preferences'); assert.equal(nl.nav.at(-1).label, 'Instellingen');
+    const en = (await t.req('/api/settings', { token: 'tok-viewer' })).json; assert.equal(en.cards.find((c) => c.id === 'security').label, 'Security');
+    const fr = (await t.req('/api/settings', { token: 'tok-admin' })).json; assert.equal(fr.lang, undefined); assert.equal(fr.cards.find((c) => c.id === 'preferences').label, 'Préférences'); assert.equal(fr.nav.at(-1).label, 'Paramètres');
+  } finally { await t.close(); }
+  const off = await boot({ env: { ...NO_APP, NORDLA_PROVIDER_SCOPE_MODE: 'read' }, disabledSections: ['preferences'] });
+  try { const c = (await off.req('/api/settings', { token: 'tok-owner' })).json.cards.find((x) => x.id === 'preferences'); assert.deepEqual([c.available, c.href, c.availabilityLabel], [false, null, 'Prévu']); } finally { await off.close(); }
+  const boom = await boot({ env: { ...NO_APP, NORDLA_PROVIDER_SCOPE_MODE: 'read' }, langOf: async () => { throw new Error('down'); } });
+  try { const r = await boom.req('/api/settings', { token: 'tok-owner' }); assert.equal(r.status, 200); assert.equal(r.json.nav.at(-1).label, 'Paramètres'); } finally { await boom.close(); }
 });
 
 // ------------------------------------------------------------------ the Instagram READ through the host (simulated Graph answers)
