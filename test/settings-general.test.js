@@ -103,9 +103,13 @@ test('SG-9 the name written here is the name every module already reads (merchan
   await svc.save({ tenant: ta, role: 'OWNER', actor: 'u', section: 'profile', data: { name: 'Nouveau nom' } });
   assert.equal(await repo.merchantName(A), 'Nouveau nom'); assert.equal(await repo.merchantName(B), 'Atelier B');
   const { consumers } = await svc.overview({ tenant: ta, role: 'OWNER' });
-  const by = (st) => consumers.filter((c) => c.state === st).map((c) => c.module);
+  const by = (st) => consumers.filter((c) => c.state === st).map((c) => c.module); const proof = (p) => consumers.filter((c) => c.proof === p).map((c) => c.module);
   assert.deepEqual(by('VERIFIED'), ['Core', 'Marketing (brouillons Google et vidéo)']); assert.deepEqual(by('API_VERIFIED'), ['Stock, Achats et Sourcing']); assert.deepEqual(by('WAITING_SUPPLIER'), ['Connexions']);
-  assert.ok(!consumers.some((c) => c.state === 'READS'), 'no claim without a proof level'); assert.ok(consumers.filter((c) => c.state === 'AWAITS_SESSION').length >= 2 && consumers.filter((c) => c.state === 'TO_CONNECT').length >= 2); assert.deepEqual(by('WIRED'), ['Growth (objectifs)']);
+  assert.ok(!consumers.some((c) => c.state === 'READS'), 'no claim without a proof level'); assert.ok(consumers.every((c) => ['SESSION', 'TESTS', 'NONE'].includes(c.proof)), 'every usage says how it is proven');
+  assert.deepEqual(proof('SESSION'), ['Core', 'Marketing (brouillons Google et vidéo)', 'Stock, Achats et Sourcing'], 'only what was checked in a real session');
+  assert.ok(!consumers.filter((c) => ['VERIFIED', 'API_VERIFIED'].includes(c.state)).some((c) => c.proof !== 'SESSION'), '"Lit déjà" always means a real session');
+  const infl = consumers.find((c) => c.module === 'Growth (influence sur les recommandations)'); assert.deepEqual([infl.state, infl.proof], ['TO_CONNECT', 'NONE'], 'objectives and constraints do not influence the recommendations yet');
+  assert.equal(consumers.find((c) => c.module === 'Growth (offres prioritaires)').proof, 'TESTS');
 });
 
 test('SG-10 objectives: one priority (Autre needs its label), valid date, up to 10 distinct offers, budget needs its period; modules read only their allowlisted fields', async () => {
