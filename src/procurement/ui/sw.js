@@ -1,6 +1,6 @@
 // Service worker: keeps the SCREENS (the app shell) so the app opens even with a bad connection. It caches nothing from /api: data always comes from the server,
 // and the app itself keeps a send queue for what the phone captured while the connection was down. Bump VERSION when a shell file changes.
-const VERSION = 'nordla-achats-shell-v3';
+const VERSION = 'nordla-achats-shell-v4';
 const BASE = new URL('./', self.location).pathname; // '/' on the standalone server, '/procurement/' when mounted on the Nordla server
 const SHELL = [BASE, `${BASE}app.js`, `${BASE}app.css`, `${BASE}manifest.webmanifest`, `${BASE}icon.svg`];
 

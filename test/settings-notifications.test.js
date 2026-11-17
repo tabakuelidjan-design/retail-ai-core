@@ -17,16 +17,16 @@ const t1 = { merchantId: M1 };
 const reauth = (n = 1) => ({ merchantId: M1, type: 'connection_reauth', dedupeKey: `connection_reauth:conn-1:${n}`, data: { provider: 'Instagram' } });
 
 test('NT-1 registry: only the connection event is wired; the two others say why they are not; e-mail and digest are inactive with a reason', async () => {
-  assert.deepEqual(TYPE_IDS.filter((t) => isWired(t)), ['connection_reauth'], 'without a Growth address only the connection event is wired');
-  assert.deepEqual(TYPE_IDS.filter((t) => isWired(t, { growth_action_review: 'https://g.example/' })), ['connection_reauth', 'growth_action_review']);
-  for (const t of ['receipt_recorded', 'growth_action_review']) assert.ok(ALERT_TYPES[t].notWiredReason.length > 40, t);
+  assert.deepEqual(TYPE_IDS.filter((t) => isWired(t)), ['connection_reauth', 'receipt_recorded'], 'without a Growth address the Growth event is not wired');
+  assert.deepEqual(TYPE_IDS.filter((t) => isWired(t, { growth_action_review: 'https://g.example/' })), ['connection_reauth', 'receipt_recorded', 'growth_action_review']);
+  assert.ok(ALERT_TYPES.growth_action_review.notWiredReason.length > 40);
   const svc = createNotificationsService({ repo: createMemoryNotificationsRepository({ members: members() }) });
   const ov = await svc.overview({ tenant: t1, role: 'VIEWER', actor: U.viewer });
   assert.equal(ov.alerts.length, 3); assert.equal(ov.email.available, false); assert.match(ov.email.label, /E-mail indisponible/); assert.equal(ov.digest.available, false);
   const wired = ov.alerts.find((a) => a.id === 'connection_reauth'); assert.equal(wired.state, 'RACCORDEE'); assert.equal(wired.channels.find((c) => c.id === 'in_app').enabled, true);
   assert.equal(wired.channels.find((c) => c.id === 'email').available, false);
-  const off = ov.alerts.find((a) => a.id === 'receipt_recorded'); assert.equal(off.state, 'NON_RACCORDEE'); assert.equal(off.channels[0].available, false);
-  assert.equal(ov.alerts.find((a) => a.id === 'growth_action_review').state, 'NON_RACCORDEE', 'no Growth address configured: honest, not wired');
+  assert.equal(ov.alerts.find((a) => a.id === 'receipt_recorded').state, 'RACCORDEE');
+  const off = ov.alerts.find((a) => a.id === 'growth_action_review'); assert.equal(off.state, 'NON_RACCORDEE', 'no Growth address configured: honest, not wired'); assert.equal(off.channels[0].available, false);
 });
 
 test('NT-2 personal choices: per account and per merchant, a read-only member may set them, e-mail and unwired alerts are refused', async () => {
@@ -50,7 +50,7 @@ test('NT-3 emission: one alert per authorised recipient, a replay adds nothing, 
   assert.equal(repo._rows.length, 1); assert.equal(repo._rows[0].recipient_user_id, U.owner);
   const next = await svc.emit(reauth(2)); assert.equal(next.created, 1, 'a new expiry (new rotation version) is a new event');
   assert.equal((await svc.inbox({ tenant: { merchantId: M2 }, role: 'OWNER', actor: U.owner })).items.length, 0, 'the owner of another merchant sees nothing');
-  await assert.rejects(svc.emit({ merchantId: M1, type: 'receipt_recorded', dedupeKey: 'x-1' }), { code: 'TYPE_NOT_WIRED' });
+  await assert.rejects(svc.emit({ merchantId: M1, type: 'growth_action_review', dedupeKey: 'x-1' }), { code: 'TYPE_NOT_WIRED' }); // no Growth address in this service
 });
 
 test('NT-4 inbox: open leads to the registry page and marks as read; another member cannot open it; read-all and mark-read work; wording is never stored', async () => {

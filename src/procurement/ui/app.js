@@ -304,6 +304,16 @@ async function screenPo({ id }) {
     h('p', { class: 'small muted' }, 'Aucune commande n’est envoyée au fournisseur par Nordla. « Commandé » signifie qu’une personne habilitée l’a passée.'));
 }
 
+// One goods receipt (the target of a Notifications alert). Read only.
+async function screenReceipt({ id }) {
+  setHead('Réception', '', true); const box = h('div', {}); swap(main, box);
+  const res = await getJson(`/api/receipts/${id}`); if (!res.data) return put(box, res.status === 404 ? h('div', { class: 'warn' }, 'Cette réception est introuvable.') : fail(res));
+  const r = res.data; setHead(`Réception · ${r.poNumber ?? 'commande'}`, r.supplier.name ?? '', true);
+  put(box, stale(res), h('div', { class: 'card', 'data-receipt': r.id }, h('div', { class: 'row' }, h('div', {}, h('div', { class: 'small muted' }, 'Reçue le'), h('div', { class: 'big' }, fmtDate(r.receivedAt))), h('div', {}, h('div', { class: 'small muted' }, 'Dans les délais'), h('div', { class: 'big' }, r.onTime ? 'Oui' : 'Non')), r.locationName ? h('div', {}, h('div', { class: 'small muted' }, 'Lieu'), h('div', { class: 'big' }, r.locationName)) : null)),
+    h('div', { class: 'card' }, h('h2', {}, 'Produits reçus'), h('table', {}, h('tbody', {}, r.lines.map((l) => h('tr', {}, h('td', {}, l.name ?? l.sku ?? 'Produit'), h('td', { class: 'n' }, `${l.qtyAccepted} acceptée(s)${l.qtyDefective ? ` · ${l.qtyDefective} défectueuse(s)` : ''}${l.ordered != null ? ` / ${l.ordered} commandée(s)` : ''}`)))))),
+    h('button', { class: 'btn sec', onclick: () => go('po', { id: r.poId }) }, 'Ouvrir la commande'));
+}
+
 function screenOutbox() {
   setHead('Sur ce téléphone', 'Saisies pas encore envoyées', true);
   const q = outbox.list();
@@ -382,7 +392,7 @@ async function screenReceive({ id }) {
 }
 
 // ------------------------------------------------------------------ router
-const SCREENS = { visits: screenVisits, newVisit: screenNewVisit, visit: screenVisit, capture: screenCapture, items: screenItems, item: screenItem, compare: screenCompare, orders: screenOrders, po: screenPo, outbox: screenOutbox, import: screenImport, stock: screenStock, stockItem: screenStockItem, receive: screenReceive, newLocation: V1.newLocation, suppliers: V1.suppliers, newSupplier: V1.newSupplier, supplier: V1.supplier, newOffer: V1.newOffer, adjust: V1.adjust, transfer: V1.transfer, history: V1.history, count: V1.count, requests: V1.requests };
+const SCREENS = { visits: screenVisits, newVisit: screenNewVisit, visit: screenVisit, capture: screenCapture, items: screenItems, item: screenItem, compare: screenCompare, orders: screenOrders, po: screenPo, receipt: screenReceipt, outbox: screenOutbox, import: screenImport, stock: screenStock, stockItem: screenStockItem, receive: screenReceive, newLocation: V1.newLocation, suppliers: V1.suppliers, newSupplier: V1.newSupplier, supplier: V1.supplier, newOffer: V1.newOffer, adjust: V1.adjust, transfer: V1.transfer, history: V1.history, count: V1.count, requests: V1.requests };
 async function render() {
   document.querySelectorAll('.tabs button').forEach((b) => b.setAttribute('aria-current', String(b.dataset.tab === S.tab)));
   netBadge();
@@ -403,5 +413,6 @@ async function render() {
   // Preferences (optional, isolated): regional format + saved views. Any failure leaves the screens exactly as they were.
   if (HOSTED) { try { const f = await prefs.loadFormatter(); if (f) { setRegional(f); S.prefs = true; } } catch { /* no preference applied */ } }
   const openView = new URLSearchParams(location.search).get('view'); if (S.prefs && /^[0-9a-f-]{36}$/i.test(openView ?? '')) { S.openView = openView; S.tab = 'items'; history.replaceState(null, '', location.pathname); }
+  const openReceipt = new URLSearchParams(location.search).get('receipt'); if (/^[0-9a-f-]{36}$/i.test(openReceipt ?? '')) { S.stack.push({ name: 'receipt', params: { id: openReceipt.toLowerCase() } }); history.replaceState(null, '', location.pathname); } // deep link from a Notifications alert
   render(); outbox.flush({ force: true }).then(refreshAfterSend);
 })();

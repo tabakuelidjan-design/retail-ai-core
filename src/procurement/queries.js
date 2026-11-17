@@ -197,6 +197,7 @@ export function createProcurementQueries({ store, merchantId, now = () => new Da
     visit: (id) => store.get('visits', merchantId, id), visits: () => store.list('visits', merchantId),
     quote: (id) => store.get('quotes', merchantId, id), quotes: () => store.list('quotes', merchantId),
     purchaseOrder: (id) => store.get('purchaseOrders', merchantId, id),
+    receipt: (id) => store.get('receipts', merchantId, id), receipts: () => store.list('receipts', merchantId),
     purchaseOrders: async ({ status } = {}) => (await orders()).filter((po) => !status || po.status === status),
     locations: () => store.list('stockLocations', merchantId),
     events: async ({ objectId } = {}) => (await store.listEvents(merchantId)).filter((e) => !objectId || e.object.id === objectId),

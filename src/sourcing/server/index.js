@@ -184,14 +184,14 @@ export async function buildTeam({ env, gate, hosted, log = console.log, supabase
 }
 
 /** Paramètres > Notifications (staging module): built only when asked for AND hosted behind the Core identity. Reads Connexions (read only) to raise "connexion à renouveler". Any problem is logged and the server runs without it. */
-export async function buildNotifications({ env, gate, hosted, log = console.log, supabase: injected = null, shellOf = null, listConnections = null, sweepEveryMs = 60_000 }) {
+export async function buildNotifications({ env, gate, hosted, log = console.log, supabase: injected = null, shellOf = null, listConnections = null, procurement = null, onProcurementEvent = null, sweepEveryMs = 60_000 }) {
   if (String(env.NORDLA_NOTIFICATIONS_MODULE ?? '') !== '1') return null;
   if (!hosted || !gate) { log('Notifications: NOT built (needs the hosted Core identity)'); return null; }
   try {
     const { createNotificationsHost } = await import('./notifications-host.js');
     const { createNotificationsService } = await import('../../settings-notifications/service.js');
     const { createSupabaseNotificationsRepository } = await import('../../settings-notifications/repository.js');
-    const { createConnectionReauthEmitter, createGrowthReviewEmitter, combineEmitters } = await import('../../settings-notifications/emitters.js');
+    const { createConnectionReauthEmitter, createGrowthReviewEmitter, createReceiptEmitter, combineEmitters } = await import('../../settings-notifications/emitters.js');
     const client = await import('../../supabase/client.js');
     const supabase = injected ?? client.createSupabaseClient(client.loadSupabaseConfigFromEnv(env));
     const growthUrl = /^https:\/\/[a-z0-9.-]+(?::\d+)?\/?$/i.test(String(env.NORDLA_GROWTH_PUBLIC_URL ?? '').trim()) ? String(env.NORDLA_GROWTH_PUBLIC_URL).trim().replace(/\/$/, '') + '/' : null; // the page an "Action à revoir" alert leads to (Growth is its own service)
@@ -200,9 +200,12 @@ export async function buildNotifications({ env, gate, hosted, log = console.log,
     const today = () => { try { return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(new Date()); } catch { return new Date().toISOString().slice(0, 10); } };
     const sources = [listConnections ? createConnectionReauthEmitter({ service, merchantId: hosted.merchantId, listConnections, log }) : null,
       growthUrl ? createGrowthReviewEmitter({ service, merchantId: hosted.merchantId, today, log, listEntries: async (m) => (await supabase.select('growth_follow_up', { merchant_id: `eq.${m}`, select: 'entry_key,value', limit: '2000' })) ?? [] }) : null]; // read only
+    const receipts = procurement ? createReceiptEmitter({ service, merchantId: hosted.merchantId, log, poOf: async (id) => { const po = await procurement.queries.purchaseOrder(id); if (!po) return null; const sup = (await procurement.queries.suppliers()).find((x) => x.id === po.supplierId); return { number: po.number, status: po.status, supplierName: sup?.name ?? null }; }, listReceipts: (m) => procurement.queries.receipts() }) : null; // READ only
+    if (receipts && onProcurementEvent) onProcurementEvent((e) => receipts.handle(e));
+    sources.push(receipts);
     const emitter = sources.some(Boolean) ? combineEmitters(sources) : null;
     const host = await createNotificationsHost({ gate, merchantId: hosted.merchantId, service, emitter, shellOf, sweepEveryMs });
-    log(`Notifications: ON (Paramètres > Notifications; in Nordla only, e-mail unavailable; events wired: connection to renew${listConnections ? '' : ' (OFF: Connexions is off)'}, growth action to review${growthUrl ? '' : ' (OFF: NORDLA_GROWTH_PUBLIC_URL not set)'})`);
+    log(`Notifications: ON (Paramètres > Notifications; in Nordla only, e-mail unavailable; events wired: connection to renew${listConnections ? '' : ' (OFF: Connexions is off)'}, purchase receipt${procurement ? '' : ' (OFF: Stock / Achats is off)'}, growth action to review${growthUrl ? '' : ' (OFF: NORDLA_GROWTH_PUBLIC_URL not set)'})`);
     return host;
   } catch (e) { log(`Notifications: NOT built (${e?.code ?? e?.message ?? e})`); return null; }
 }
@@ -325,7 +328,8 @@ export async function startSourcingServer({ env = process.env, log = console.log
   const store = createFileStore(join(dir, 'cases'));
   const merchantKey = hosted ? hosted.merchantId : merchantProfile?.merchantId ?? 'local';
   const financeHandoff = await buildFinanceHandoff({ env, merchantId: merchantKey, log }); // Stock/Achats -> Finance inbox (hosted + Supabase + MERCHANT_TIMEZONE), else null
-  const proc = await buildHostedProcurement({ dir, merchantId: merchantKey, env, log, financeHandoff }); // Stock / Achats on the same sign-in and volume; if it cannot open, Nordla runs without it
+  const procurementEvents = { sink: null }; // Stock / Achats audit outlet -> Notifications (set below when that module is on; null = nobody listens)
+  const proc = await buildHostedProcurement({ dir, merchantId: merchantKey, env, log, financeHandoff, audit: async (e) => { await procurementEvents.sink?.(e); } }); // Stock / Achats on the same sign-in and volume; if it cannot open, Nordla runs without it
   const generalService = hosted ? await buildGeneralService({ env, log }) : null; // the common Général service (null unless NORDLA_GENERAL_MODULE=1): modules READ it, none rewrites it
   const core = await buildCore({ env, dir, merchantId: merchantKey, store, safety, log, readers: services?.readers ?? null, procurement: proc.assistant, merchantIdentity: generalService ? async () => { const t = { merchantId: merchantKey }; const name = (await generalService.contextFor({ tenant: t, module: 'core' })).profile.name; let context = null; try { const c = await generalService.contextFor({ tenant: t, module: 'sourcing' }); context = { activity: c.activity?.main ?? null, complementary: c.activity?.complementary ?? [], sellingModes: c.selling_modes?.modes ?? [], constraints: c.objectives?.constraints ?? null, places: (c.places ?? []).map((p) => ({ name: p.name, functions: p.functions, city: p.city })) }; } catch { context = null; } return { name, context }; } : null });
   let backups = null;
@@ -336,7 +340,7 @@ export async function startSourcingServer({ env = process.env, log = console.log
   const preferences = await buildPreferences({ env, gate, hosted, log, service: preferencesService, shellOf: connections?.settings ? async ({ tenant, role, lang }) => (await import('../../settings-preferences/hub-i18n.js')).translateSettings(await connections.settings({ tenant, role }), lang) : null }); // optional, isolated: null unless NORDLA_PREFERENCES_MODULE=1
   const team = await buildTeam({ env, gate, hosted, log, shellOf: connections?.settings ?? null }); // optional, isolated: null unless NORDLA_TEAM_MODULE=1
   const security = await buildSecurity({ env, gate, hosted, log, shellOf: connections?.settings ?? null, services }); // optional, isolated: null unless NORDLA_SECURITY_MODULE=1
-  const notifications = await buildNotifications({ env, gate, hosted, log, shellOf: connections?.settings ?? null, listConnections: connections?.listConnections ?? null }); // optional, isolated: null unless NORDLA_NOTIFICATIONS_MODULE=1
+  const notifications = await buildNotifications({ env, gate, hosted, log, shellOf: connections?.settings ?? null, listConnections: connections?.listConnections ?? null, procurement: proc.procurement ?? null, onProcurementEvent: (fn) => { procurementEvents.sink = fn; } }); // optional, isolated: null unless NORDLA_NOTIFICATIONS_MODULE=1
   const marketingContext = generalService ? () => generalService.contextFor({ tenant: { merchantId: merchantKey }, module: 'marketing' }) : null;
   const videos = await buildVideos({ env, gate, hosted, log, contextOf: marketingContext }); // optional, isolated: null unless NORDLA_VIDEO_DRAFTS_MODULE=1
   const gbp = await buildGbp({ env, gate, hosted, log, contextOf: marketingContext }); // optional, isolated: null unless NORDLA_GBP_DRAFTS_MODULE=1

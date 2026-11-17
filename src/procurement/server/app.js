@@ -179,6 +179,13 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, s
       r = await c.createPurchaseOrder(actor, idemKey(req), { supplierId, currency, expectedDate: b.expectedDate, destinationLocationId: dest, lines, ...(b.fx ? { fx: b.fx } : {}) });
       return send(res, r.replayed ? 200 : 201, { purchaseOrder: await poView(await q.purchaseOrder(r.purchaseOrder.id)), replayed: r.replayed });
     }
+    mm = /^\/api\/receipts\/([0-9a-f-]{36})$/i.exec(p); // one goods receipt (opened from a Notifications alert): read only
+    if (mm && m === 'GET') {
+      const r = await q.receipt(mm[1].toLowerCase()); if (!r) return send(res, 404, { error: 'RECEIPT_NOT_FOUND' });
+      const po = await q.purchaseOrder(r.poId); const items = new Map((await q.items()).map((i) => [i.id, i])); const sup = (await q.suppliers()).find((x) => x.id === r.supplierId); const loc = (await q.locations()).find((l) => l.id === r.locationId);
+      return send(res, 200, { id: r.id, poId: r.poId, poNumber: po?.number ?? null, poStatus: po?.status ?? null, supplier: { id: r.supplierId, name: sup?.name ?? null }, receivedAt: r.receivedAt, onTime: r.onTime, locationName: loc?.name ?? null, recordedBy: r.recordedBy,
+        lines: r.lines.map((l) => { const pl = po?.lines.find((x) => x.id === l.poLineId); const it = items.get(l.itemId); return { name: it?.name ?? it?.sku ?? null, sku: it?.sku ?? null, qtyAccepted: l.qtyAccepted, qtyDefective: l.qtyDefective, ordered: pl?.qty ?? null }; }) });
+    }
     mm = /^\/api\/purchase-orders\/([\w-]+)$/.exec(p);
     if (mm && m === 'GET') { const po = await q.purchaseOrder(mm[1]); return po ? send(res, 200, await poView(po)) : send(res, 404, { error: 'PO_NOT_FOUND' }); }
     mm = /^\/api\/purchase-orders\/([\w-]+)\/(submit|reject|approve|order|cancel)$/.exec(p);

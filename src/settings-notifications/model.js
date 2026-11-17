@@ -6,6 +6,7 @@
 // The text and the target page of an alert come from THIS registry (never from a stored row), so a stored row can never inject a link or a sentence.
 
 /** Roles that may see each module's items; mirrors MODULE_RIGHTS (src/settings-team/model.js): 'none' is absent from the list. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ALL_ROLES = Object.freeze(['OWNER', 'ADMIN', 'VIEWER', 'COLLABORATOR', 'ACCOUNTANT']);
 
 export const MODULES = Object.freeze({
@@ -25,13 +26,15 @@ export const ALERT_TYPES = Object.freeze({
     body: () => 'Nordla ne peut plus lire cette connexion tant qu’elle n’est pas renouvelée.',
   }),
   receipt_recorded: Object.freeze({
-    id: 'receipt_recorded', module: 'procurement', wired: false,
+    id: 'receipt_recorded', module: 'procurement', wired: true,
     label: 'Réception d’achat enregistrée',
-    trigger: 'Une réception de marchandises est enregistrée sur une commande fournisseur.',
+    trigger: 'Une réception de marchandises est confirmée sur une commande fournisseur (Stock / Achats).',
     channels: Object.freeze(['in_app']), defaultInApp: true,
-    viewers: ALL_ROLES, link: '/procurement', linkLabel: 'Ouvrir Stock / Achats',
-    notWiredReason: 'Stock / Achats enregistre la réception dans son propre magasin de données sans publier d’événement que Nordla puisse relire de façon fiable : aucune alerte n’est produite pour l’instant.',
-    title: () => 'Réception d’achat enregistrée', body: () => '',
+    viewers: ALL_ROLES, link: '/procurement/', linkLabel: 'Ouvrir la réception',
+    // the page of THIS receipt: built from the stored receipt id (a UUID, checked), never from stored text
+    linkOf: (d) => (UUID.test(String(d?.receiptId ?? '')) ? `/procurement/?receipt=${d.receiptId}` : null),
+    title: (d) => `Réception enregistrée${d.poNumber ? ` : commande ${d.poNumber}` : ''}${d.supplier ? ` (${d.supplier})` : ''}`,
+    body: (d) => (d.complete ? 'La commande est reçue en totalité.' : 'Réception partielle : la commande reste ouverte pour le solde.'),
   }),
   growth_action_review: Object.freeze({
     id: 'growth_action_review', module: 'growth', wired: true,
@@ -58,6 +61,6 @@ export const NOTE_ACCOUNT = 'Les messages indispensables à la connexion et à l
 /** Wording of one stored alert, from the registry only. `row.data` is the small non-secret object of the row. */
 export function describe(row, links = {}) {
   const t = ALERT_TYPES[row.type]; const d = row.data && typeof row.data === 'object' ? row.data : {};
-  return { id: row.id, type: row.type, module: t.module, moduleLabel: MODULES[t.module].label, title: String(t.title(d)).slice(0, 160), body: String(t.body(d)).slice(0, 300), link: t.link ?? links[row.type] ?? null, linkLabel: t.linkLabel, createdAt: row.created_at, readAt: row.read_at ?? null, read: row.read_at != null };
+  return { id: row.id, type: row.type, module: t.module, moduleLabel: MODULES[t.module].label, title: String(t.title(d)).slice(0, 160), body: String(t.body(d)).slice(0, 300), link: (t.linkOf ? t.linkOf(d) : null) ?? t.link ?? links[row.type] ?? null, linkLabel: t.linkLabel, createdAt: row.created_at, readAt: row.read_at ?? null, read: row.read_at != null };
 }
 export const PREF_DEFAULT = (type) => ALERT_TYPES[type]?.defaultInApp ?? false;

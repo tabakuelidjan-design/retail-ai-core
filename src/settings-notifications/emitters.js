@@ -67,3 +67,38 @@ export function createGrowthReviewEmitter({ service, merchantId, listEntries, to
 
 /** Several sources behind the single `run()` the host calls; each one already swallows its own failure. */
 export function combineEmitters(list) { const l = list.filter(Boolean); return Object.freeze({ async run() { const out = []; for (const e of l) out.push(await e.run()); return out; } }); }
+
+/**
+ * THIRD SOURCE: "Réception d'achat enregistrée" (Stock / Achats). Two paths, ONE alert key per receipt (`receipt_recorded:<receipt id>`):
+ *  - handle(event): Stock / Achats publishes GOODS_RECEIVED to its audit outlet AFTER the receipt is committed (service.js receiveGoods); the alert is raised at once;
+ *  - run(): catch-up over the receipts of the last `windowMs` (default 3 days), so a receipt committed while Notifications was down or restarting still alerts. A replay adds nothing.
+ * Both only READ Stock / Achats (`poOf`, `listReceipts`); a failure is logged and never reaches the receiving person's request (the audit outlet already swallows errors).
+ * @param {{ service: object, merchantId: string, poOf: (poId: string) => Promise<{ number: string, status: string, supplierName: string|null }|null>, listReceipts: (merchantId: string) => Promise<Array<{ id: string, poId: string, createdAt: string }>>, windowMs?: number, now?: () => number, log?: Function }} o
+ */
+export function createReceiptEmitter({ service, merchantId, poOf, listReceipts, windowMs = 3 * 24 * 3600_000, now = () => Date.now(), log = () => {} }) {
+  let running = null;
+  const raise = async (receiptId, poId, complete) => {
+    const po = await poOf(poId).catch(() => null);
+    return service.emit({ merchantId, type: 'receipt_recorded', dedupeKey: `receipt_recorded:${receiptId}`, data: { receiptId, ...(po?.number ? { poNumber: String(po.number).slice(0, 40) } : {}), ...(po?.supplierName ? { supplier: String(po.supplierName).slice(0, 60) } : {}), complete: complete === true } });
+  };
+  return Object.freeze({
+    /** The audit outlet of Stock / Achats: GOODS_RECEIVED only, only for this merchant. Never throws. */
+    async handle(event) {
+      try {
+        if (event?.type !== 'GOODS_RECEIVED' || event.merchantId !== merchantId || typeof event.detail?.receiptId !== 'string') return null;
+        return await raise(event.detail.receiptId, event.object?.id, event.detail.complete);
+      } catch (e) { log(`Notifications: receipt event failed (${e?.code ?? e?.message ?? e})`); return null; }
+    },
+    async run() {
+      if (running) return running;
+      running = (async () => {
+        const all = (await listReceipts(merchantId)).filter((r) => now() - Date.parse(r.createdAt) <= windowMs);
+        const lastOf = new Map(); for (const r of all) if (!lastOf.get(r.poId) || r.createdAt > lastOf.get(r.poId).createdAt) lastOf.set(r.poId, r);
+        const total = { seen: 0, created: 0, duplicate: 0, skipped: 0 };
+        for (const r of all) { const po = await poOf(r.poId).catch(() => null); const x = await raise(r.id, r.poId, po?.status === 'RECEIVED' && lastOf.get(r.poId)?.id === r.id); total.seen += 1; total.created += x.created; total.duplicate += x.duplicate; total.skipped += x.skipped; }
+        return total;
+      })().catch((e) => { log(`Notifications: receipt sweep failed (${e?.code ?? e?.message ?? e})`); return null; }).finally(() => { running = null; });
+      return running;
+    },
+  });
+}

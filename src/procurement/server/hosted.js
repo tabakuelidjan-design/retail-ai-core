@@ -42,7 +42,7 @@ export function procurementUserFor(actor, grants = configuredGrants) {
 }
 
 /** @returns {Promise<{ handler: Function|null, assistant: object|null, procurement: object|null, status: string }>} */
-export async function buildHostedProcurement({ dir, merchantId, env = process.env, log = () => {}, pgPool = null, lease = undefined, financeHandoff = null }) {
+export async function buildHostedProcurement({ dir, merchantId, env = process.env, log = () => {}, pgPool = null, lease = undefined, financeHandoff = null, audit = undefined }) {
   let closeStore = async () => {}; let offSignals = () => {};
   try {
     const base = join(dir, 'procurement');
@@ -67,7 +67,7 @@ export async function buildHostedProcurement({ dir, merchantId, env = process.en
         offSignals = () => { for (const sig of sigs) process.removeListener(sig, onSignal); };
       }
     }
-    const procurement = createProcurement({ store, merchantId, policy: SERVER_POLICY });
+    const procurement = createProcurement({ store, merchantId, policy: SERVER_POLICY, ...(audit ? { audit } : {}) }); // `audit` = the outlet of committed events (Notifications listens to GOODS_RECEIVED); its failure never undoes a command
     const system = { id: 'system', role: 'OWNER' };
     const have = new Set((await procurement.queries.locations()).map((l) => l.type));
     const boot = async (type, name) => { if (!have.has(type)) await procurement.commands.createLocation(system, `bootstrap:${type.toLowerCase()}:${merchantId}`, { name, type }).catch((e) => { if (e.code !== 'UNIQUE_VIOLATION') throw e; }); };
