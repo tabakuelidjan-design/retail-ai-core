@@ -1,5 +1,5 @@
 -- Sécurité V2: account recovery WITHOUT e-mail (no SMTP, ADR 0004 D7): an OWNER / ADMIN of the merchant issues a one-time recovery link for a member who lost
--- their password; the member opens it on a Nordla page and chooses a new password. Additive; rollback: supabase/rollback/20261118120000_account_recovery_down.sql.
+-- their password; the member opens it on a Nordla page and chooses a new password. Additive; rollback: supabase/rollback/20261118121000_account_recovery_down.sql.
 --
 -- Rules (decided here under the per-merchant lock, journalled in the same transaction):
 --   issuer   ACTIVE OWNER or ADMIN of the merchant; never for itself (a member who knows the password uses Sécurité > change password)
