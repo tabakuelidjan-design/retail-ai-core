@@ -631,6 +631,7 @@ window.NORDLA_DICTS.nl = Object.assign(window.NORDLA_DICTS.nl || {}, {
   'gr.op.fix.content.noCollection.why': 'Buiten een collectie is het product moeilijker te vinden in de webshop.',
   'gr.op.fix.content.duplicateTitle.title': '{0} producten met een dubbele titel',
   'gr.op.fix.content.duplicateTitle.why': 'Twee producten met dezelfde titel zijn moeilijk te onderscheiden, voor u en voor uw klanten.',
+  'gr.op.featured': 'Prioritair aanbod (Algemeen)',
   'gr.op.com.title': 'Commerciële kansen',
   'gr.op.com.intro': 'Alleen wat de Nordla-motoren met hun huidige drempels bevestigen.',
   'gr.op.com.emptyTitle': 'Voorlopig geen betrouwbare commerciële kans',

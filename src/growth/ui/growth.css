@@ -696,3 +696,6 @@ body.gr-pp-lock { overflow: hidden; }
 .gr-session-msg { color: var(--nd-text); border-left: 3px solid var(--nd-bronze); padding-left: 8px; }
 .gr-session-who { text-align: right; }
 @media (max-width: 480px) { .gr-session-who { text-align: left; } .gr-login-wrap { padding: 24px 16px; } }
+
+/* featured offer from Paramètres > Général: a badge on the opportunity row, no layout change */
+.gv-action[data-featured-offer]::before { content: attr(data-featured-label) ' : ' attr(data-featured-offer); display: inline-block; margin: 0 0 8px; padding: 3px 10px; border-radius: 999px; background: #eef3fb; border: 1px solid #c9d3e2; color: #183247; font-size: .8rem; font-weight: 700; max-width: 100%; overflow-wrap: anywhere; }

@@ -132,7 +132,7 @@ function opCommercialCard(d) {
   }
   const o = opOrdered(d);
   const ranked = o.order.filter((i) => o.weeklyById.has(i.id)); const others = o.order.filter((i) => !o.weeklyById.has(i.id));
-  const line = (i) => { const w = o.weeklyById.get(i.id) ?? null; return opFollowUp(d.historyScope, opSnapshot(i), { weekly: w, rank: w ? w.rank : null, priorityId: i.id, rowClass: true, onChange: () => render() }); };
+  const line = (i) => { const w = o.weeklyById.get(i.id) ?? null; return opFollowUp(d.historyScope, opSnapshot(i), { weekly: w, rank: w ? w.rank : null, priorityId: i.id, rowClass: true, featuredOffer: i.orientation?.featuredOffer ?? null, featuredLabel: i.orientation ? t('gr.op.featured') : null, onChange: () => render() }); };
   return h('div', { class: 'ex-card gr-pr-card gr-pr-commercial gv-work' },
     h('h2', { class: 'gv-head' }, ranked.length ? wk('title') : t('gr.op.com.title')),
     ranked.length ? h('div', { class: 'ex-movers gv-priorities' }, ranked.map(line)) : null,
@@ -625,7 +625,7 @@ function opFollowUp(scope, snapshot, view = {}) {
   let openPanel = null; // 'plan' | 'result' | null: a panel opens only when the merchant asks for it (or when the primary step needs it)
   let followOpen = false; let bodyOpen = !!view.open;
   const cmp = { key: null, status: 'idle', data: null }; // the server comparison of this action (product / variant), computed when the review is opened // the body (form, detail, follow-up) is closed until the merchant opens it
-  const root = h('article', { class: `gv-action${view.rowClass ? ' gr-pr-row' : ''}`, ...(view.priorityId ? { 'data-priority-id': view.priorityId } : {}), ...(view.rank != null ? { 'data-weekly-rank': String(view.rank) } : {}) });
+  const root = h('article', { class: `gv-action${view.rowClass ? ' gr-pr-row' : ''}`, ...(view.priorityId ? { 'data-priority-id': view.priorityId } : {}), ...(view.rank != null ? { 'data-weekly-rank': String(view.rank) } : {}), ...(view.featuredOffer ? { 'data-featured-offer': view.featuredOffer, 'data-featured-label': view.featuredLabel ?? '' } : {}) }); // a featured offer written in Paramètres > Général (the badge is CSS only: nothing else about the row changes)
   const status = h('p', { class: 'gv-status', role: 'status' });
 
   function read() { return key ? JSON.parse(growthStorage.getItem(key) ?? 'null') : null; }

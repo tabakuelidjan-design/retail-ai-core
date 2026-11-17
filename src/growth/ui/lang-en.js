@@ -631,6 +631,7 @@ window.NORDLA_DICTS.en = Object.assign(window.NORDLA_DICTS.en || {}, {
   'gr.op.fix.content.noCollection.why': 'Outside a collection, the product is harder to find in the online shop.',
   'gr.op.fix.content.duplicateTitle.title': '{0} products with a duplicate title',
   'gr.op.fix.content.duplicateTitle.why': 'Two products with the same title are hard to tell apart, for you and for your customers.',
+  'gr.op.featured': 'Featured offer (General)',
   'gr.op.com.title': 'Commercial opportunities',
   'gr.op.com.intro': 'Only what Nordla’s engines confirm with their current thresholds.',
   'gr.op.com.emptyTitle': 'No reliable commercial opportunity yet',

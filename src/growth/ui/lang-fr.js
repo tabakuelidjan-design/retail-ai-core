@@ -631,6 +631,7 @@ window.NORDLA_DICTS.fr = Object.assign(window.NORDLA_DICTS.fr || {}, {
   'gr.op.fix.content.noCollection.why': 'Hors collection, le produit est plus difficile à trouver dans la boutique en ligne.',
   'gr.op.fix.content.duplicateTitle.title': '{0} produits au titre en double',
   'gr.op.fix.content.duplicateTitle.why': 'Deux produits au même titre sont difficiles à distinguer, pour vous comme pour vos clients.',
+  'gr.op.featured': 'Offre prioritaire (Général)',
   'gr.op.com.title': 'Opportunités commerciales',
   'gr.op.com.intro': 'Uniquement ce que les moteurs Nordla confirment avec leurs seuils actuels.',
   'gr.op.com.emptyTitle': 'Aucune opportunité commerciale fiable pour l’instant',
