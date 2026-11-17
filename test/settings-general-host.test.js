@@ -27,7 +27,7 @@ test('GH-1 session and merchant: no session 401, another merchant 403, the page 
   try {
     assert.equal((await call('/api/general')).status, 401);
     assert.equal((await call('/api/general', { as: 'other' })).status, 403);
-    const ok = await call('/api/general', { as: 'owner' }); assert.equal(ok.status, 200); assert.equal(ok.json.sections.length, 6); assert.ok(ok.json.options.timezones.includes('Europe/Brussels')); assert.equal(ok.json.canWrite, true);
+    const ok = await call('/api/general', { as: 'owner' }); assert.equal(ok.status, 200); assert.equal(ok.json.sections.length, 7); assert.ok(ok.json.options.timezones.includes('Europe/Brussels')); assert.equal(ok.json.canWrite, true);
     const page = await call('/settings/general/legal'); assert.equal(page.status, 200); assert.match(page.text, /general-assets\/general\.js/); assert.match(page.text, /general-assets\/shell\.js/); assert.match(page.headers.get('content-security-policy'), /script-src 'self'/);
     assert.equal((await call('/settings/general/inconnu')).status, 404);
     for (const f of ['general.js', 'general.css', 'shell.js', 'connections.css']) assert.equal((await call(`/general-assets/${f}`)).status, 200, f);

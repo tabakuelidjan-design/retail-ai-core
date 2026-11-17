@@ -8,9 +8,9 @@
   const icon = (paths) => { const s = document.createElementNS(NS, 'svg'); s.setAttribute('viewBox', '0 0 24 24'); s.setAttribute('class', 'cx-ico gn-row-ico'); s.setAttribute('aria-hidden', 'true'); for (const d of paths) { const p = document.createElementNS(NS, 'path'); p.setAttribute('d', d); s.append(p); } return s; };
   const ICON = {
     profile: ['M3 9l1.5-5h15L21 9', 'M4 9v11h16V9', 'M9 20v-6h6v6'], activity: ['M3 12l9-9h9v9l-9 9-9-9z', 'M16 8h.01'], establishments: ['M5 5h14v15H5z', 'M5 10h14', 'M9 3v4', 'M15 3v4'],
-    selling_modes: ['M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z', 'M12 12l8-4.5', 'M12 12v9', 'M12 12L4 7.5'], regional: ['M12 3a9 9 0 100 18 9 9 0 000-18z', 'M3 12h18', 'M12 3c3 3 3 15 0 18', 'M12 3c-3 3-3 15 0 18'], legal: ['M6 3h9l4 4v14H6z', 'M14 3v5h5', 'M9 13h7', 'M9 17h7'],
+    selling_modes: ['M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z', 'M12 12l8-4.5', 'M12 12v9', 'M12 12L4 7.5'], regional: ['M12 3a9 9 0 100 18 9 9 0 000-18z', 'M3 12h18', 'M12 3c3 3 3 15 0 18', 'M12 3c-3 3-3 15 0 18'], objectives: ['M12 21V4', 'M12 4h8l-2 3 2 3h-8'], legal: ['M6 3h9l4 4v14H6z', 'M14 3v5h5', 'M9 13h7', 'M9 17h7'],
   };
-  const SLUG = { profile: 'profil', activity: 'activite', establishments: 'etablissements', selling_modes: 'modes-de-vente', regional: 'devise-fuseau', legal: 'legal' };
+  const SLUG = { profile: 'profil', activity: 'activite', establishments: 'etablissements', selling_modes: 'modes-de-vente', regional: 'devise-fuseau', legal: 'legal', objectives: 'objectifs' };
   const OF = Object.fromEntries(Object.entries(SLUG).map(([k, v]) => [v, k]));
   const wide = () => window.matchMedia('(min-width: 900px)').matches;
   const clone = (x) => (x === undefined ? undefined : JSON.parse(JSON.stringify(x)));
@@ -80,7 +80,24 @@
   }
 
   // ------------------------------------------------------------------ the six forms
+  // featured offers: a short list of free labels (the catalogue is not required)
+  function offersEditor(f) {
+    const box = h('div'); const draw = () => { const list = f.draft.featured_offers ?? (f.draft.featured_offers = []); box.replaceChildren();
+      list.forEach((o, i) => box.append(h('div', { class: 'gn-slot gn-mt' }, h('input', { class: 'gn-input', type: 'text', value: o.label ?? '', maxlength: 80, placeholder: 'Offre ou produit à mettre en avant', 'aria-label': 'Offre ' + (i + 1), disabled: !f.editable, on: { input: (e) => { o.label = e.target.value; f.touch(); } } }), f.editable ? h('button', { class: 'gn-x', type: 'button', 'aria-label': 'Retirer cette offre', text: '×', on: { click: () => { list.splice(i, 1); f.touch(); draw(); } } }) : null)));
+      if (f.editable && list.length < 10) box.append(h('button', { class: 'gn-add', type: 'button', text: '+ Ajouter une offre', on: { click: () => { list.push({ label: '' }); f.touch(); draw(); } } })); if (!list.length && !f.editable) box.append(h('span', { class: 'gn-help', text: 'À renseigner' })); };
+    draw(); return box;
+  }
   const BUILD = {
+    objectives: (f) => { const prio = h('div'); const drawPrio = () => { f.draft.priority ??= null; const p = f.draft.priority; prio.replaceChildren(...[h('select', { class: 'gn-select', disabled: !f.editable, on: { change: (e) => { f.draft.priority = e.target.value ? { value: e.target.value } : null; f.touch(); drawPrio(); } } }, h('option', { value: '', text: 'À renseigner' }), Object.entries(opts.priorities).map(([k, l]) => h('option', { value: k, text: l, selected: p?.value === k }))),
+        p?.value === 'other' ? h('input', { class: 'gn-input gn-mt', type: 'text', value: p.label ?? '', maxlength: 80, placeholder: 'Précisez (obligatoire)', 'aria-label': 'Précision pour Autre', disabled: !f.editable, on: { input: (e) => { p.label = e.target.value; f.touch(); } } }) : null,
+        p ? h('input', { class: 'gn-input gn-mt', type: 'text', value: p.note ?? '', maxlength: 200, placeholder: 'Précision (facultatif)', 'aria-label': 'Précision sur la priorité', disabled: !f.editable, on: { input: (e) => { p.note = e.target.value; f.touch(); } } }) : null].filter(Boolean)); }; drawPrio();
+      const bp = h('select', { class: 'gn-select gn-mt', 'aria-label': 'Période du budget', disabled: !f.editable, on: { change: (e) => { setp(f.draft, 'constraints.budget.period', e.target.value || null); f.touch(); } } }, h('option', { value: '', text: 'Période' }), Object.entries(opts.budgetPeriods).map(([k, l]) => h('option', { value: k, text: l }))); bp.value = getp(f.draft, 'constraints.budget.period') ?? '';
+      return h('form', { class: 'gn-form', novalidate: true, on: { submit: (e) => e.preventDefault() } }, head('Objectifs et priorités', 'Le contexte du moment pour les modules. Il ne prouve ni stock, ni délai, ni budget disponible.'), h('hr', { class: 'gn-rule' }),
+        field(f, 'priority', 'Priorité du moment', prio), field(f, 'expected_result', 'Résultat attendu', input(f, 'expected_result', { maxlength: 200, placeholder: 'Par exemple : 20 commandes de coques ce mois-ci' }), { optional: true }),
+        field(f, 'deadline', 'Échéance', input(f, 'deadline', { type: 'date' }), { optional: true }), field(f, 'featured_offers', 'Offres à mettre en avant', offersEditor(f), { optional: true }),
+        h('h3', { text: 'Contraintes' }),
+        field(f, 'constraints.budget.amount', 'Budget (' + (f.read.currency ?? 'devise de référence') + ')', h('div', {}, input(f, 'constraints.budget.amount', { type: 'number', inputmode: 'decimal', maxlength: 12 }), bp, f.slot('constraints.budget.period'), h('input', { class: 'gn-input gn-mt', type: 'text', value: getp(f.draft, 'constraints.budget.note') ?? '', maxlength: 200, placeholder: 'Précision (facultatif)', 'aria-label': 'Précision sur le budget', disabled: !f.editable, on: { input: (e) => { setp(f.draft, 'constraints.budget.note', e.target.value); f.touch(); } } })), { optional: true }),
+        field(f, 'constraints.time.note', 'Temps disponible', input(f, 'constraints.time.note', { maxlength: 200 }), { optional: true }), field(f, 'constraints.stock.note', 'Stock', input(f, 'constraints.stock.note', { maxlength: 200 }), { optional: true }), field(f, 'constraints.production.note', 'Production', input(f, 'constraints.production.note', { maxlength: 200 }), { optional: true }), bar(f)); },
     profile: (f) => h('form', { class: 'gn-form', novalidate: true, on: { submit: (e) => e.preventDefault() } }, head('Profil du commerce', 'Ces informations sont utilisées par les modules Nordla.'), h('hr', { class: 'gn-rule' }),
       field(f, 'name', 'Nom commercial', input(f, 'name', { maxlength: 80 })), field(f, 'description', 'Description courte', area(f, 'description'), { optional: true, help: 'Décrivez vos offres et services en termes concrets.' }),
       field(f, 'logo', 'Logo', h('p', { class: 'gn-note', text: f.read.logo?.reason ?? 'Non disponible.' }), { optional: true }),

@@ -20,11 +20,11 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const SLUGS = new Set(Object.values(SECTION_META).map((m) => m.slug));
 const SECTION_OF = Object.fromEntries(Object.entries(SECTION_META).map(([id, m]) => [m.slug, id]));
 const readJson = async (req) => { const chunks = []; let n = 0; for await (const c of req) { n += c.length; if (n > 200_000) throw Object.assign(new Error('too large'), { code: 'BODY_TOO_LARGE' }); chunks.push(c); } try { return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch { throw Object.assign(new Error('invalid json'), { code: 'BODY_INVALID' }); } };
-const STATUS = Object.freeze({ FORBIDDEN_ROLE: 403, VALIDATION: 422, CONFLICT: 409, NOT_FOUND: 404, SECTION_UNKNOWN: 404, PRIMARY_REQUIRED: 409, ARCHIVED: 409, TENANT_REQUIRED: 403 });
+const STATUS = Object.freeze({ MODULE_UNKNOWN: 404,FORBIDDEN_ROLE: 403, VALIDATION: 422, CONFLICT: 409, NOT_FOUND: 404, SECTION_UNKNOWN: 404, PRIMARY_REQUIRED: 409, ARCHIVED: 409, TENANT_REQUIRED: 403 });
 
 /** The option lists the forms need, so the page never carries a business list of its own. */
 export const OPTIONS = Object.freeze({
-  mainActivities: M.MAIN_ACTIVITIES, sideActivities: M.SIDE_ACTIVITIES, channels: M.CHANNELS, clientele: M.CLIENTELE, placeFunctions: M.PLACE_FUNCTIONS, sellingModes: M.SELLING_MODES, vatStatus: M.VAT_STATUS,
+  mainActivities: M.MAIN_ACTIVITIES, sideActivities: M.SIDE_ACTIVITIES, channels: M.CHANNELS, clientele: M.CLIENTELE, placeFunctions: M.PLACE_FUNCTIONS, sellingModes: M.SELLING_MODES, priorities: M.PRIORITIES, budgetPeriods: M.BUDGET_PERIODS, vatStatus: M.VAT_STATUS,
   days: M.DAYS.map((d) => ({ id: d, label: M.DAY_LABEL[d] })), countries: M.COUNTRIES, legalForms: M.LEGAL_FORMS,
   currencies: Intl.supportedValuesOf('currency'), timezones: Intl.supportedValuesOf('timeZone'),
 });
@@ -51,7 +51,8 @@ export async function createGeneralHost({ gate, merchantId, service, shellOf = n
               let shell = null; if (shellOf) { try { const s = await shellOf({ tenant, role }); shell = { nav: s.nav, merchant: s.merchant, environment: s.environment }; } catch { shell = null; } }
               json(res, 200, { ...(await service.overview({ tenant, role })), shell, options: OPTIONS }); return true;
             }
-            const rs = /^\/api\/general\/(profile|activity|establishments|selling_modes|regional|legal)$/.exec(p);
+            if (method === 'GET' && p === '/api/general/context') { json(res, 200, await service.contextFor({ tenant, module: url.searchParams.get('module') ?? '' })); return true; } // what a module may read (allowlisted fields)
+            const rs = /^\/api\/general\/(profile|activity|establishments|selling_modes|regional|legal|objectives)$/.exec(p);
             if (rs && method === 'GET') { json(res, 200, await service.read({ tenant, role, section: rs[1] })); return true; }
             if (rs && (method === 'POST' || method === 'PUT') && rs[1] !== 'establishments') {
               const body = await readJson(req);

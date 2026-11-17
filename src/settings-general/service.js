@@ -7,14 +7,22 @@ export const WRITER_ROLES = new Set(['OWNER', 'ADMIN']);
 const LEGAL_READERS = WRITER_ROLES;
 export class GeneralError extends Error { constructor(code, message, extra = {}) { super(message ?? code); this.name = 'GeneralError'; this.code = code; Object.assign(this, extra); } }
 
+// Fields each module may read from Général (the legal rubric is read by Finance only, through its own future link).
+const MODULE_FIELDS = Object.freeze({
+  core: { profile: ['name'] }, marketing: { profile: ['name', 'website', 'email', 'phone', 'description'], objectives: ['priority', 'expected_result', 'deadline', 'featured_offers', 'constraints'] },
+  growth: { activity: ['main', 'channels', 'clientele'], objectives: ['priority', 'expected_result', 'deadline', 'constraints'] }, stock: { selling_modes: ['modes'], objectives: ['constraints'] },
+  analytics: { regional: ['currency', 'timezone'], activity: ['channels'] },
+});
 export const SECTION_META = Object.freeze({
   profile: { label: 'Profil du commerce', slug: 'profil' }, activity: { label: 'Activité et canaux de vente', slug: 'activite' }, establishments: { label: 'Établissements et horaires', slug: 'etablissements' },
-  selling_modes: { label: 'Mode de vente et de production', slug: 'modes-de-vente' }, regional: { label: 'Devise et fuseau horaire', slug: 'devise-fuseau' }, legal: { label: 'Informations légales et facturation', slug: 'legal' },
+  selling_modes: { label: 'Mode de vente et de production', slug: 'modes-de-vente' }, regional: { label: 'Devise et fuseau horaire', slug: 'devise-fuseau' }, legal: { label: 'Informations légales et facturation', slug: 'legal' }, objectives: { label: 'Objectifs et priorités', slug: 'objectifs' },
 });
 // What reads Général today and what is still to be connected: shown as such in the page (never a promise).
 export const CONSUMERS = Object.freeze([
   { module: 'Core', reads: ['Nom commercial'], state: 'READS', note: 'Lit déjà le nom du commerce (merchants.name).' },
   { module: 'Analyses et Growth', reads: ['Fuseau horaire', 'Devise'], state: 'READS', note: 'Lisent déjà le fuseau et la devise (merchant_profile), sans changement de code.' },
+  { module: 'Marketing et Création', reads: ['Priorité du moment', 'Offres à mettre en avant', 'Contraintes'], state: 'TO_CONNECT', note: 'À raccorder : les briefs gardent leur propre objectif ; ils ne lisent pas encore « Objectifs et priorités ».' },
+  { module: 'Growth', reads: ['Priorité du moment', 'Échéance', 'Budget'], state: 'TO_CONNECT', note: 'À raccorder : Growth ne lit pas encore les objectifs (lecture prête via le service commun).' },
   { module: 'Marketing', reads: ['Nom', 'Site', 'Coordonnées publiques', 'Horaires'], state: 'TO_CONNECT', note: 'À raccorder : les brouillons ne lisent pas encore Général.' },
   { module: 'Finance', reads: ['Identité légale', 'Adresse de facturation'], state: 'TO_CONNECT', note: 'À raccorder : Finance garde son profil vendeur versionné ; un écart éventuel sera remonté, jamais écrasé.' },
   { module: 'Stock et Sourcing', reads: ['Mode de vente'], state: 'TO_CONNECT', note: 'À raccorder (contexte uniquement : aucun stock ni délai n’en est déduit).' },
@@ -22,6 +30,7 @@ export const CONSUMERS = Object.freeze([
 ]);
 
 const isoDate = (d) => d.toISOString();
+const EMPTY_OBJECTIVES = Object.freeze({ priority: null, expected_result: null, deadline: null, featured_offers: [], constraints: { budget: { amount: null, period: null, note: null }, time: { note: null }, stock: { note: null }, production: { note: null } } });
 const blank = (v) => v == null || v === '' || (Array.isArray(v) && !v.length);
 
 /** @param {{ repo: object, catalogueFamilies?: (merchantId) => Promise<string[]>, now?: () => Date }} deps */
@@ -43,11 +52,13 @@ export function createGeneralService({ repo, catalogueFamilies = async () => [],
   const READERS = {
     profile: readProfile, activity: (id) => readSimple(id, 'activity', { main: null, complementary: [], channels: [], clientele: null }),
     establishments: readEstablishments, selling_modes: (id) => readSimple(id, 'selling_modes', { modes: [], by_family: {} }), regional: readRegional,
+    objectives: (id) => readSimple(id, 'objectives', EMPTY_OBJECTIVES),
     legal: (id) => readSimple(id, 'legal', { legal_name: null, country: null, legal_form: null, enterprise_number: null, vat_status: 'unknown', vat_number: null, billing: { use_primary: true }, email: null }),
   };
   const FILLED = {
     profile: (d) => !blank(d.name) && [d.description, d.website, d.email, d.phone].some((v) => !blank(v)), activity: (d) => !!d.main || d.channels.length > 0, establishments: (d) => d.establishments.some((e) => !e.archived),
     selling_modes: (d) => d.modes.length > 0, regional: (d) => !!d.currency && !!d.timezone, legal: (d) => !blank(d.legal_name) || !blank(d.enterprise_number) || d.vat_status !== 'unknown',
+    objectives: (d) => !!d.priority || !blank(d.expected_result) || d.featured_offers.length > 0,
   };
 
   return Object.freeze({
@@ -66,8 +77,15 @@ export function createGeneralService({ repo, catalogueFamilies = async () => [],
       const id = merchantOf(tenant); if (!M.SECTIONS.includes(section)) throw new GeneralError('SECTION_UNKNOWN');
       if (section === 'legal') needLegalRead(role);
       const r = await READERS[section](id);
-      const extra = section === 'selling_modes' ? { catalogueFamilies: await catalogueFamilies(id) } : {};
+      const extra = section === 'selling_modes' ? { catalogueFamilies: await catalogueFamilies(id) } : section === 'objectives' ? { currency: (await repo.regional(id))?.currency ?? null } : {};
       return { section, ...r, ...extra, canWrite: canWrite(role) };
+    },
+    /** What a MODULE may read, and nothing more: each module names itself and receives only the fields it needs (never the legal section). */
+    async contextFor({ tenant, module }) {
+      const id = merchantOf(tenant); const wants = MODULE_FIELDS[module]; if (!wants) throw new GeneralError('MODULE_UNKNOWN', 'Module inconnu.');
+      const out = { module, merchantId: id };
+      for (const [section, keys] of Object.entries(wants)) { const r = await READERS[section](id); out[section] = Object.fromEntries(keys.map((k) => [k, r.data[k] ?? null])); }
+      return out;
     },
     /** Saves ONE section. `expectedVersion` is the version the form was loaded with (null while the section never existed). */
     async save({ tenant, role, actor, section, data, expectedVersion = null }) {
@@ -79,6 +97,7 @@ export function createGeneralService({ repo, catalogueFamilies = async () => [],
       else if (section === 'activity') checked = M.validateActivity(data);
       else if (section === 'selling_modes') checked = M.validateSellingModes(data, { catalogueFamilies: await catalogueFamilies(id) });
       else if (section === 'regional') checked = M.validateRegional(data);
+      else if (section === 'objectives') checked = M.validateObjectives(data);
       else checked = M.validateLegal(data);
       if (!checked.ok) throw new GeneralError('VALIDATION', 'Des champs sont invalides ; rien n’a été enregistré.', { errors: checked.errors });
       let result;

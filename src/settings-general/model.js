@@ -3,7 +3,7 @@
 // Every validator returns { ok, value, errors } where errors is { "<field path>": "<message in French>" }; an invalid input changes nothing.
 import { isIanaTimeZone } from '../metrics/profile.js';
 
-export const SECTIONS = Object.freeze(['profile', 'activity', 'establishments', 'selling_modes', 'regional', 'legal']);
+export const SECTIONS = Object.freeze(['profile', 'activity', 'establishments', 'selling_modes', 'regional', 'legal', 'objectives']);
 export const OTHER = 'other';
 export const MAIN_ACTIVITIES = Object.freeze({ retail: 'Vente au détail', wholesale: 'Commerce de gros ou distribution', craft: 'Fabrication ou artisanat', services: 'Prestation de services', food: 'Restauration', other: 'Autre' });
 export const SIDE_ACTIVITIES = Object.freeze({ personalisation: 'Personnalisation à la demande', printing: 'Impression ou marquage', craft: 'Fabrication artisanale', repair: 'Réparation ou installation', services: 'Prestation de services', b2b: 'Distribution B2B', other: 'Autre' });
@@ -11,6 +11,8 @@ export const CHANNELS = Object.freeze({ shop: 'Boutique physique', online: 'Bout
 export const CLIENTELE = Object.freeze({ individuals: 'Particuliers', professionals: 'Professionnels', both: 'Les deux' });
 export const PLACE_FUNCTIONS = Object.freeze({ shop: 'Boutique', workshop: 'Atelier', depot: 'Dépôt', office: 'Bureau', pickup: 'Point de retrait', other: 'Autre' });
 export const SELLING_MODES = Object.freeze({ stock: 'Vente sur stock', personalised: 'Personnalisation à la demande', made_to_order: 'Fabrication à la commande', preorder: 'Précommande', service: 'Prestation de services', other: 'Autre' });
+export const PRIORITIES = Object.freeze({ sales: 'Développer les ventes', traffic: 'Attirer du monde en boutique', awareness: 'Faire connaître le commerce', margin: 'Protéger la marge', clearance: 'Écouler un stock', launch: 'Lancer une offre ou un produit', retention: 'Fidéliser les clients', other: 'Autre' });
+export const BUDGET_PERIODS = Object.freeze({ month: 'Par mois', campaign: 'Par campagne', total: 'Au total' });
 export const VAT_STATUS = Object.freeze({ unknown: 'À renseigner', registered: 'Identifié à la TVA', none: 'Sans numéro de TVA' });
 export const DAYS = Object.freeze(['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']);
 export const DAY_LABEL = Object.freeze({ mon: 'Lundi', tue: 'Mardi', wed: 'Mercredi', thu: 'Jeudi', fri: 'Vendredi', sat: 'Samedi', sun: 'Dimanche' });
@@ -192,4 +194,26 @@ export function hoursOn(establishment, date) {
   if (exc) return { source: 'exception', closed: exc.closed || !exc.slots.length, slots: exc.slots, reason: exc.reason ?? null };
   const dow = DAYS[(new Date(`${date}T00:00:00Z`).getUTCDay() + 6) % 7]; const slots = establishment.hours?.[dow] ?? [];
   return { source: 'regular', closed: !slots.length, slots, reason: null };
+}
+
+/** Objectifs et priorités: what the merchant wants NOW. A context for the modules, not an order: it proves no stock, delay or budget by itself. */
+export function validateObjectives(input) {
+  const errors = {}; const v = isObj(input) ? input : {};
+  const pv = orNull(isObj(v.priority) ? v.priority.value : v.priority); const pl = orNull(isObj(v.priority) ? v.priority.label : null); const pn = orNull(isObj(v.priority) ? v.priority.note : null);
+  let priority = null;
+  if (pv) { if (!Object.hasOwn(PRIORITIES, pv)) bad(errors, 'priority', 'Priorité inconnue.'); else if (pv === OTHER && !pl) bad(errors, 'priority', 'Précisez la priorité pour « Autre ».'); else if (pl && pl.length > 80) bad(errors, 'priority', 'Libellé trop long (80 caractères au plus).'); else if (pn && pn.length > 200) bad(errors, 'priority', 'Précision trop longue (200 caractères au plus).'); else priority = { value: pv, ...(pl && pv === OTHER ? { label: pl } : {}), ...(pn ? { note: pn } : {}) }; }
+  const expected = orNull(v.expected_result); if (expected && expected.length > 200) bad(errors, 'expected_result', 'Résultat attendu trop long (200 caractères au plus).');
+  const deadline = orNull(v.deadline); if (deadline && !validDate(deadline)) bad(errors, 'deadline', 'Date invalide (AAAA-MM-JJ).');
+  const offers = [];
+  if (v.featured_offers != null) {
+    if (!Array.isArray(v.featured_offers)) bad(errors, 'featured_offers', 'Liste attendue.');
+    else if (v.featured_offers.length > 10) bad(errors, 'featured_offers', 'Au plus 10 offres.');
+    else { const seen = new Set(); for (const o of v.featured_offers) { const label = text(isObj(o) ? o.label : o); if (!label) { bad(errors, 'featured_offers', 'Une offre ne peut pas être vide.'); break; } if (label.length > 80) { bad(errors, 'featured_offers', 'Offre trop longue (80 caractères au plus).'); break; } if (seen.has(label.toLowerCase())) { bad(errors, 'featured_offers', 'Offre en double.'); break; } seen.add(label.toLowerCase()); offers.push({ label }); } }
+  }
+  const c = isObj(v.constraints) ? v.constraints : {}; const b = isObj(c.budget) ? c.budget : {};
+  const note = (x, path) => { const t = orNull(x); if (t && t.length > 200) bad(errors, path, 'Trop long (200 caractères au plus).'); return t; };
+  let amount = null; if (b.amount !== undefined && b.amount !== null && b.amount !== '') { const n = Number(b.amount); if (!Number.isFinite(n) || n < 0 || n > 1e9) bad(errors, 'constraints.budget.amount', 'Montant invalide (nombre positif).'); else amount = Math.round(n * 100) / 100; }
+  const period = orNull(b.period); if (period && !Object.hasOwn(BUDGET_PERIODS, period)) bad(errors, 'constraints.budget.period', 'Période inconnue.'); else if (amount !== null && !period) bad(errors, 'constraints.budget.period', 'Indiquez la période du budget.');
+  const constraints = { budget: { amount, period: period || null, note: note(b.note, 'constraints.budget.note') }, time: { note: note(c.time?.note, 'constraints.time.note') }, stock: { note: note(c.stock?.note, 'constraints.stock.note') }, production: { note: note(c.production?.note, 'constraints.production.note') } };
+  return done(errors, { priority, expected_result: expected, deadline, featured_offers: offers, constraints });
 }

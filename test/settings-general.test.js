@@ -12,7 +12,7 @@ const code = async (p) => { try { await p; return null; } catch (e) { return e i
 
 test('SG-1 a section never saved reads as "À renseigner" (empty), no default belongs to any merchant', async () => {
   const { svc } = mk();
-  const o = await svc.overview({ tenant: ta, role: 'OWNER' }); assert.equal(o.sections.length, 6); assert.ok(o.sections.filter((s) => s.id !== 'profile').every((s) => s.filled === false));
+  const o = await svc.overview({ tenant: ta, role: 'OWNER' }); assert.equal(o.sections.length, 7); assert.ok(o.sections.filter((s) => s.id !== 'profile').every((s) => s.filled === false));
   const act = await svc.read({ tenant: ta, role: 'OWNER', section: 'activity' }); assert.deepEqual([act.data.main, act.data.channels, act.data.clientele, act.version], [null, [], null, null]);
   const reg = await svc.read({ tenant: ta, role: 'OWNER', section: 'regional' }); assert.deepEqual(reg.data, { currency: null, timezone: null }, 'no Europe/Brussels / EUR default for a merchant that has none');
   assert.equal((await svc.read({ tenant: ta, role: 'OWNER', section: 'profile' })).data.name, 'Boutique A');
@@ -104,4 +104,18 @@ test('SG-9 the name written here is the name every module already reads (merchan
   assert.equal(await repo.merchantName(A), 'Nouveau nom'); assert.equal(await repo.merchantName(B), 'Atelier B');
   const { consumers } = await svc.overview({ tenant: ta, role: 'OWNER' });
   assert.deepEqual(consumers.filter((c) => c.state === 'READS').map((c) => c.module), ['Core', 'Analyses et Growth']); assert.ok(consumers.filter((c) => c.state === 'TO_CONNECT').length >= 3);
+});
+
+test('SG-10 objectives: one priority (Autre needs its label), valid date, up to 10 distinct offers, budget needs its period; modules read only their allowlisted fields', async () => {
+  const { svc } = mk();
+  const e = await svc.save({ tenant: ta, role: 'OWNER', actor: 'u', section: 'objectives', data: { priority: { value: 'other' }, deadline: '2026-02-30', featured_offers: [{ label: 'Coques' }, { label: 'coques' }], constraints: { budget: { amount: 300 }, stock: { note: 'x'.repeat(201) } } } }).catch((x) => x);
+  assert.deepEqual(Object.keys(e.errors).sort(), ['constraints.budget.period', 'constraints.stock.note', 'deadline', 'featured_offers', 'priority']);
+  assert.equal((await svc.read({ tenant: ta, role: 'OWNER', section: 'objectives' })).version, null, 'nothing stored');
+  const ok = await svc.save({ tenant: ta, role: 'OWNER', actor: 'u', section: 'objectives', data: { priority: { value: 'traffic', note: 'Avant Noël' }, expected_result: '30 visites de plus par semaine', deadline: '2026-12-24', featured_offers: [{ label: 'Coques personnalisées' }, { label: 'Verre trempé' }], constraints: { budget: { amount: '250.456', period: 'month' }, time: { note: '2 h par semaine' } } } });
+  assert.deepEqual([ok.data.priority.value, ok.data.constraints.budget.amount, ok.data.featured_offers.length, ok.version], ['traffic', 250.46, 2, 1]);
+  assert.equal((await svc.read({ tenant: tb, role: 'OWNER', section: 'objectives' })).data.priority, null, 'merchant B sees nothing');
+  const mk2 = await svc.contextFor({ tenant: ta, module: 'marketing' }); assert.equal(mk2.objectives.priority.value, 'traffic'); assert.equal(mk2.profile.name, 'Boutique A'); assert.ok(!('legal' in mk2));
+  const st = await svc.contextFor({ tenant: ta, module: 'stock' }); assert.deepEqual(Object.keys(st.objectives), ['constraints']); assert.ok(!('priority' in st.objectives));
+  assert.equal(await code(svc.contextFor({ tenant: ta, module: 'inconnu' })), 'MODULE_UNKNOWN');
+  assert.equal((await svc.overview({ tenant: ta, role: 'OWNER' })).sections.find((s) => s.id === 'objectives').filled, true);
 });
