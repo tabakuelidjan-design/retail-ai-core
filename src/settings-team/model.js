@@ -35,7 +35,7 @@ export const MODULE_RIGHTS = Object.freeze([
   Object.freeze({ id: 'creator', label: 'Création', levels: lvl('edit', 'edit', 'view', { COLLABORATOR: 'edit' }), enforcedBy: 'src/creative-autonomy/creator/hosted.js (CREATOR_WRITERS)' }),
   Object.freeze({ id: 'gbp', label: 'Google Business', levels: lvl('edit', 'edit', 'view'), enforcedBy: 'src/sourcing/server/gbp-host.js (GBP_WRITERS)', note: 'Approuver ou retirer une approbation : propriétaire et administrateur.' }),
   Object.freeze({ id: 'videos', label: 'Vidéos', levels: lvl('edit', 'edit', 'view'), enforcedBy: 'src/sourcing/server/video-host.js (VIDEO_WRITERS)' }),
-  Object.freeze({ id: 'sourcing', label: 'Sourcing Chine', levels: lvl('edit', 'edit', 'edit'), enforcedBy: 'src/sourcing/server/app.js (aucun contrôle de rôle sur ses routes /api)', note: 'Constat : cette partie n’applique pas encore de rôle côté serveur. Tout membre actif, « Lecture seule » compris, peut y modifier des données. À corriger dans une tâche dédiée (signalé au bilan).' }),
+  Object.freeze({ id: 'sourcing', label: 'Sourcing Chine', levels: lvl('edit', 'edit', 'view', { COLLABORATOR: 'edit' }), enforcedBy: 'src/sourcing/server/app.js (SOURCING_WRITERS : propriétaire, administrateur, collaborateur)', note: 'Les routes de modification de China Sourcing et de Nordla Core refusent « Lecture seule » (et Comptable) côté serveur ; consulter et interroger Nordla restent ouverts.' }),
 ]);
 
 /** Sensitive actions that the servers really control (an action that no server checks is NOT listed). */

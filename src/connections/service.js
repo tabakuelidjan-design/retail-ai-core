@@ -26,7 +26,7 @@ const accountOf = (c) => c.external_display_name || c.external_id || 'Compte san
  *           shopifySync?: (merchantId)=>Promise<object|null>, bankCatalog?: object[], bankProvider?: object, now?: ()=>Date }} deps
  */
 export function createConnectionsService({
-  registry, center = null, connectorRepository = null, merchantLabel = async () => null, environmentLabel = null, moduleLinks = {}, appConfigPresent = () => false, appEnvNames = {}, redirectUriOf = () => null, shopifySync = async () => null, bankCatalog = [], bankProvider = null, now = () => new Date(),
+  registry, center = null, connectorRepository = null, merchantLabel = async () => null, environmentLabel = null, moduleLinks = {}, disabledSections = [], appConfigPresent = () => false, appEnvNames = {}, redirectUriOf = () => null, shopifySync = async () => null, bankCatalog = [], bankProvider = null, now = () => new Date(),
 }) {
   const actionsFor = (role, state, canRead = false) => {
     if (!WRITER_ROLES.has(role)) return [];
@@ -118,7 +118,7 @@ export function createConnectionsService({
     async settings({ tenant, role }) {
       const ov = await this.overview({ tenant, role }); const providers = ov.categories.flatMap((c) => c.providers);
       const chip = (p) => ({ id: p.id, label: p.label, status: p.status, statusLabel: p.status === 'AVAILABLE' ? (p.connections.some((c) => c.state === 'VERIFIED' || c.state === 'LINKED') ? 'Connecté' : p.setup.state === 'APP_MISSING' ? p.setup.label : p.source === 'shopify' ? 'Non reliée' : 'Prêt') : p.statusLabel });
-      const cards = SETTINGS_SECTIONS.map((sec) => ({ id: sec.id, label: sec.label, icon: sec.icon, description: sec.description, available: sec.status === 'AVAILABLE', availabilityLabel: sec.status === 'AVAILABLE' ? 'Disponible' : 'Prévu', note: sec.note ?? null, href: sec.status === 'AVAILABLE' ? sec.href : null, ...(sec.id === 'connections' ? { providers: providers.map(chip) } : {}) }));
+      const cards = SETTINGS_SECTIONS.map((raw) => (disabledSections.includes(raw.id) ? { ...raw, status: 'PLANNED', href: null, note: 'Pas encore activé sur ce serveur.' } : raw)).map((sec) => ({ id: sec.id, label: sec.label, icon: sec.icon, description: sec.description, available: sec.status === 'AVAILABLE', availabilityLabel: sec.status === 'AVAILABLE' ? 'Disponible' : 'Prévu', note: sec.note ?? null, href: sec.status === 'AVAILABLE' ? sec.href : null, ...(sec.id === 'connections' ? { providers: providers.map(chip) } : {}) }));
       const payload = { generatedAt: ov.generatedAt, role, canManage: ov.canManage, merchant: ov.merchant, environment: ov.environment, nav: NAV.map((n) => ({ ...n, href: n.id === 'settings' ? '/settings' : (moduleLinks[n.id] ?? '/') })), cards };
       if (findSecretLeaks(payload).length) throw new Error('SETTINGS_PAYLOAD_LEAK');
       return payload;

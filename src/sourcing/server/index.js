@@ -73,6 +73,7 @@ export async function buildConnections({ env, gate, hosted, log = console.log, s
     const registry = createRegistry();
     const origin = String(env.NORDLA_PUBLIC_ORIGIN ?? '').trim();
     const service = createConnectionsService({
+      disabledSections: String(env.NORDLA_TEAM_MODULE ?? '') === '1' ? [] : ['team'], // a card whose page is not built must not lead to a 404
       registry, center: runtime.connectionCenter, connectorRepository: runtime.connectorRepository, appConfigPresent: runtime.appConfigPresent, appEnvNames: APP_ENV,
       redirectUriOf: (key) => { try { return runtime.appConfigFor(key).redirectUri; } catch { return origin ? `${origin}/api/connections/${key}/callback` : null; } },
       shopifySync: async (merchantId) => { const rows = await supabase.select('sync_runs', { merchant_id: `eq.${merchantId}`, order: 'started_at.desc', limit: '1' }); const r = rows?.[0]; return r ? { status: r.status, startedAt: r.started_at, finishedAt: r.finished_at } : null; },
