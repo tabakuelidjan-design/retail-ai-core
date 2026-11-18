@@ -8,8 +8,8 @@ import { renderClassicPdf } from './pdf-classic.js';
 
 export const PDF_RENDERER_V1 = PDF_RENDERER_VERSION; // 'nordla-pdf/1'
 export const PDF_RENDERER_V2 = 'nordla-pdf/2';
-// Set to the moment model A was deployed to staging. Any document locked before it keeps the legacy layout.
-export const RENDERER_V2_SINCE = '2026-11-18T23:59:59.000Z';
+// Model A cut-over (staging, 2026-11-18 12:00 UTC). Any document locked before it keeps the legacy layout.
+export const RENDERER_V2_SINCE = '2026-11-18T12:00:00.000Z';
 
 export function rendererVersionOf(doc) {
   if (!doc?.lockedAt) return PDF_RENDERER_V2;

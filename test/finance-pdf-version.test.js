@@ -7,9 +7,10 @@ import { issueInvoice, makeService } from './finance-fixtures.js';
 
 test('renderer version: drafts and documents locked on/after the cut-over use nordla-pdf/2; older documents keep nordla-pdf/1', () => {
   assert.equal(rendererVersionOf({ lockedAt: null }), PDF_RENDERER_V2);
-  assert.equal(rendererVersionOf({ lockedAt: '2026-11-19T10:00:00.000Z' }), PDF_RENDERER_V2);
+  assert.equal(rendererVersionOf({ lockedAt: '2026-11-18T13:00:00.000Z' }), PDF_RENDERER_V2);
   assert.equal(rendererVersionOf({ lockedAt: '2026-09-21T10:00:00.000Z' }), PDF_RENDERER_V1);
-  assert.equal(rendererVersionOf({ lockedAt: RENDERER_V2_SINCE.replace('23:59:59', '23:59:58') }), PDF_RENDERER_V1);
+  assert.equal(rendererVersionOf({ lockedAt: new Date(Date.parse(RENDERER_V2_SINCE) - 1000).toISOString() }), PDF_RENDERER_V1);
+  assert.equal(rendererVersionOf({ lockedAt: RENDERER_V2_SINCE }), PDF_RENDERER_V2);
 });
 
 test('the reference printed on the PDF equals the structured communication used by the archive (VCS)', () => {
