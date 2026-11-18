@@ -8,6 +8,14 @@ import { randomUUID } from 'node:crypto';
 import { FinanceError, settlement } from './document.js';
 import { toCents } from './money.js';
 import { NoBankAdapter, assertReadOnlyAdapter, maskIban, observedBalance, parseBankCsv } from './bank.js';
+import { parseCamt053 } from './bank-camt053.js';
+
+// One import contract for every statement format: the format only changes the parser. Matching, idempotence and storage are shared (no second engine).
+const parseStatement = (text, format) => {
+  if (format === 'csv') return parseBankCsv(text);
+  if (format === 'camt053') return parseCamt053(text);
+  throw new FinanceError('BANK_STATEMENT_FORMAT_UNSUPPORTED', String(format));
+};
 import { suggest } from './reconcile.js';
 import { eurOfSupplier } from './currency.js';
 import { dueForProjection } from './payables/index.js';
@@ -93,12 +101,12 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
      * CSV preview: parses and compares with what is already stored - WRITES NOTHING. The merchant sees the lines, the period, the recognised columns, the invalid lines and the
      * duplicates before deciding to import. Two lines that look the same inside one file are two transactions (identicalInFile): they are never merged.
      */
-    async previewCsv(text) {
-      const p = parseBankCsv(text);
+    async previewCsv(text, { format = 'csv' } = {}) {
+      const p = parseStatement(text, format);
       const existing = new Set((await store.listBankTransactions({ merchantId })).filter((t) => t.accountId === CSV_ACCOUNT).map((t) => String(t.providerTxId)));
       let already = 0; let importable = 0; let identical = 0;
       for (const r of p.rows) { if (/#\d+$/.test(r.id)) identical += 1; if (existing.has(String(r.id))) already += 1; else importable += 1; }
-      return { dataLines: p.dataLines, validRows: p.rows.length, invalid: p.errors, period: p.period, columns: p.columns, delimiter: p.delimiter,
+      return { format, account: p.account ?? null, dataLines: p.dataLines, validRows: p.rows.length, invalid: p.errors, period: p.period, columns: p.columns, delimiter: p.delimiter,
         duplicates: { alreadyImported: already, inFile: 0 }, identicalInFile: identical, importable, canImportValidRows: p.errors.length > 0 && p.rows.length > 0,
         sample: p.rows.slice(0, 5).map((r) => ({ line: r.line, date: r.date, amountCents: r.amountCents, currency: r.currency, counterpartyName: r.counterpartyName, reference: r.reference })) };
     },
@@ -106,8 +114,8 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
      * Default: all-or-nothing (a file with ANY invalid line imports nothing). With { allowPartial: true } the VALID lines are imported and every invalid line is returned with its
      * number and reason (nothing is dropped silently). Idempotent either way: known transactions are skipped.
      */
-    async importCsv(text, { allowPartial = false } = {}) {
-      const { rows, errors } = parseBankCsv(text);
+    async importCsv(text, { allowPartial = false, format = 'csv' } = {}) {
+      const { rows, errors } = parseStatement(text, format);
       if (errors.length && !(allowPartial && rows.length)) throw new FinanceError('BANK_CSV_ROWS_INVALID', errors.map((e) => `${e.line}:${e.reason}`).join(',').slice(0, 500));
       let r;
       try { r = await store1(CSV_ACCOUNT, rows, 'csv'); } catch (e) {
