@@ -791,7 +791,7 @@ async function workspaceSettingsCards() {
       h('div', { class: 'chips' }, h('span', { class: 'chip mute' }, tt('Sending: {0}', tt(pp.outgoing.configured ? 'Active' : 'NOT CONFIGURED'))), h('span', { class: 'chip mute' }, tt('Receiving: {0}', tt('NOT CONFIGURED')))), save('Save', () => ({ peppol: { topology: t } }))));
   }
   let cn = null; try { cn = (await api('GET', '/api/connectors')).connectors; } catch (e) { /* ignore */ }
-  if (cn) wrap.appendChild(cardOf(tt('Connectors'), tt('Replaceable: nothing is hard-wired to one provider'), h('div', { class: 'connlist' }, cn.map((c) => h('div', { class: 'conn' }, h('span', { class: `dot2 ${c.configured ? 'on' : ''}` }), h('span', { class: 'cl' }, tr(c.label)), h('span', { class: 'chip mute' }, c.kind === 'peppolProvider' ? (c.configured ? 'Prêt' : 'À configurer') : tt(c.configured ? 'Active' : 'NOT CONFIGURED')), ...(c.kind === 'peppolProvider' ? [h('span', { class: 'chip mute' }, `Envoi : ${c.sending}`), h('span', { class: 'chip mute' }, `Réception : ${c.receiving}`), ...(c.environment ? [h('span', { class: 'chip mute' }, c.environment === 'production' ? 'Production' : 'Test')] : [])] : []))))));
+  if (cn) wrap.appendChild(cardOf(tt('Connectors'), tt('Replaceable: nothing is hard-wired to one provider'), h('div', { class: 'connlist' }, cn.map((c) => h('div', { class: 'conn', id: c.kind === 'peppolProvider' ? 'peppol-connector' : undefined }, h('span', { class: `dot2 ${c.configured ? 'on' : ''}` }), h('span', { class: 'cl' }, tr(c.label)), h('span', { class: 'chip mute' }, c.kind === 'peppolProvider' ? (c.configured ? 'Prêt' : 'À configurer') : tt(c.configured ? 'Active' : 'NOT CONFIGURED')), ...(c.kind === 'peppolProvider' ? [h('span', { class: 'chip mute' }, `Envoi : ${c.sending}`), h('span', { class: 'chip mute' }, `Réception : ${c.receiving}`), ...(c.environment ? [h('span', { class: 'chip mute' }, c.environment === 'production' ? 'Production' : 'Test')] : [])] : []))))));
   return wrap;
 }
 
@@ -801,6 +801,12 @@ function stockMovementsCard(d) {
   const STATUS = { PENDING: 'Pending', APPLYING: 'Applying', APPLIED: 'Applied', FAILED: 'Failed', UNCERTAIN: 'Uncertain', SKIPPED: 'Skipped' };
   return h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Stock movements'), h('table', null, h('tr', null, ['Line', 'SKU', 'Change', 'Status', 'Shopify adjustment'].map((x) => h('th', null, tt(x)))),
     d.stockMovements.map((m) => h('tr', null, h('td', null, String(m.linePosition)), h('td', { class: 'mono' }, m.sku || '-'), h('td', null, h('strong', null, m.delta > 0 ? `+${m.delta}` : String(m.delta))), h('td', null, h('span', { class: `chip ${m.status === 'APPLIED' ? 'ok' : m.status === 'FAILED' || m.status === 'UNCERTAIN' ? 'bad' : 'mute'}` }, tt(STATUS[m.status] || m.status)), m.error ? h('div', { class: 'small muted' }, m.error) : null), h('td', { class: 'mono small' }, m.shopifyAdjustmentId ? m.shopifyAdjustmentId.split('/').pop() : '-')))));
+}
+// "Configurer Peppol": opens Settings and scrolls to the Peppol card of the Connexions list (the same card that shows the provider and both statuses).
+function openPeppolConnector() {
+  location.hash = '#/settings';
+  const go = (tries) => { const el = document.getElementById('peppol-connector'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('highlight'); } else if (tries > 0) setTimeout(() => go(tries - 1), 250); };
+  setTimeout(() => go(20), 200);
 }
 function peppolCard(d, reload) {
   if (!d.peppol || !['invoice', 'credit_note'].includes(d.type) || !d.doc.lockedAt) return null;
@@ -816,7 +822,7 @@ function peppolCard(d, reload) {
     p.note ? h('p', { class: 'muted small' }, tt(p.note)) : null,
     !p.topologyConfirmed && p.configured ? h('p', { class: 'muted small' }, tt('Confirm the Peppol topology in Settings before sending.')) : null,
     compliance,
-    h('div', { class: 'actions' }, h('button', { class: 'primary', disabled: !p.canSend || p.transmitted || ['QUEUED', 'SUBMITTING'].includes(p.status), on: { click: () => modal('Send via Peppol', h('p', null, tt('This sends the structured invoice through your Peppol provider. It cannot be recalled.')), (close) => [h('button', { class: 'primary', on: { click: async () => { close(); try { const r = await api('POST', `/api/documents/${d.id}/peppol/send`, { approve: true }); toast(r.state === 'DELIVERED' ? tt('Delivered') : tt('Accepted by the Peppol provider (not yet delivered)'), 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('APPROVE and send')), h('button', { on: { click: close } }, tt('Cancel'))]) } }, tt('Send via Peppol')),
+    h('div', { class: 'actions' }, (p.status === 'NOT_CONFIGURED' || p.configured === false) ? h('button', { on: { click: () => openPeppolConnector() } }, tt('Configurer Peppol')) : null, h('button', { class: 'primary', disabled: !p.canSend || p.transmitted || ['QUEUED', 'SUBMITTING'].includes(p.status), on: { click: () => modal('Send via Peppol', h('p', null, tt('This sends the structured invoice through your Peppol provider. It cannot be recalled.')), (close) => [h('button', { class: 'primary', on: { click: async () => { close(); try { const r = await api('POST', `/api/documents/${d.id}/peppol/send`, { approve: true }); toast(r.state === 'DELIVERED' ? tt('Delivered') : tt('Accepted by the Peppol provider (not yet delivered)'), 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('APPROVE and send')), h('button', { on: { click: close } }, tt('Cancel'))]) } }, tt('Send via Peppol')),
       p.transmitted ? h('button', { on: { click: async () => { try { await api('POST', `/api/documents/${d.id}/peppol/refresh`, {}); reload(); } catch (e) { fail(e); } } } }, tt('Refresh status')) : null));
 }
 // Belgian compliance of an issued document: the route decision (with its reason), the payment reference, the archived originals (exact bytes, hash) and the official validation result.
