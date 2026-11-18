@@ -584,7 +584,7 @@ const PURCHASE_TABS = {
 async function viewPurchasesWorkspace(q) {
   let tab = q.get('tab') === 'analytics' ? 'analytics' : PURCHASE_TABS[q.get('tab')] ? q.get('tab') : 'inbox';
   let text = '';
-  let selectedId = null;
+  let selectedId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(q.get('open') ?? '') ? q.get('open').toLowerCase() : null; // #/purchases?open=<file id>: the supplier-invoice file opened from Nordla (Stock/Achats)
   const shell = h('div', { class: 'page-shell premium' });
   layout('#/purchases', shell);
   shell.appendChild(h('div', { class: 'hero-row subpage' }, h('div', { class: 'hero-block' }, h('h1', null, tt('Purchases')), h('div', { class: 'subtitle' }, tt('Process supplier invoices, validate the data and track what remains to pay.'))),

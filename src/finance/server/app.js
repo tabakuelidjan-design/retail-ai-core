@@ -385,7 +385,7 @@ export function createFinanceApp(deps) {
     // ?include=settings (startup): a signed-in browser also receives exactly what GET /api/settings returns, saving one round trip.
     // Never included for an anonymous caller.
     const withSettings = s && ctx.url.searchParams.get('include') === 'settings';
-    json(ctx.res, 200, s ? { authenticated: true, csrf: s.csrf, ...(withSettings ? { settings: await settingsPayload() } : {}) } : { authenticated: false });
+    json(ctx.res, 200, s ? { authenticated: true, csrf: s.csrf, ...(deps.homeUrl ? { nordlaHome: deps.homeUrl } : {}), ...(withSettings ? { settings: await settingsPayload() } : {}) } : { authenticated: false });
   }, { public: true });
 
   on('POST', '/api/logout', async (ctx) => { sessions.delete(cookies(ctx.req)[COOKIE]); json(ctx.res, 200, { ok: true }, { 'Set-Cookie': `${COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${cookieFlags}` }); });
@@ -1438,7 +1438,8 @@ export function createFinanceApp(deps) {
     const sid = randomBytes(32).toString('hex');
     sessions.set(sid, { csrf: randomBytes(24).toString('hex'), expires: Date.now() + SESSION_MS });
     await audit({ at: clock.now(), action: 'LOGIN_SSO' });
-    send(res, 302, '', { Location: '/', 'Cache-Control': 'no-store', 'Set-Cookie': `${COOKIE}=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${cookieFlags}` });
+    const openId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(url.searchParams.get('open') ?? '') ? url.searchParams.get('open').toLowerCase() : null; // a landing hint (which supplier-invoice file to show): it is not a credential, the page reads it under the session
+    send(res, 302, '', { Location: openId ? `/#/purchases?open=${openId}` : '/', 'Cache-Control': 'no-store', 'Set-Cookie': `${COOKIE}=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${cookieFlags}` });
   }
 
   const handler = (req, res) => readCache.run(() => handleRequest(req, res));

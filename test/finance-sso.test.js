@@ -97,3 +97,26 @@ test('buildFinanceSso: only a clean https origin and a 24+ character secret give
   for (const env of [{}, { FINANCE_PUBLIC_URL: 'http://finance.example.app', FINANCE_SSO_SECRET: SECRET }, { FINANCE_PUBLIC_URL: 'https://finance.example.app/path', FINANCE_SSO_SECRET: SECRET },
     { FINANCE_PUBLIC_URL: `https://user:pw${String.fromCharCode(64)}finance.example.app`, FINANCE_SSO_SECRET: SECRET }, { FINANCE_PUBLIC_URL: 'https://finance.example.app', FINANCE_SSO_SECRET: 'short' }]) assert.equal(buildFinanceSso(env, M), null);
 });
+
+const FILE = '6c714261-0e3d-44ae-aced-981beedff16b';
+test('integrated navigation: /sso?open=<file id> lands on that Finance file, a malformed id lands on the dashboard, the session still comes from the ticket alone', async () => {
+  const a = await startApp({ merchantId: M, deps: { sso: { secret: SECRET } } });
+  try {
+    const go = (t, q) => fetch(`${a.base}/sso?t=${encodeURIComponent(t)}${q}`, { redirect: 'manual' });
+    const ok = await go(issueTicket({ secret: SECRET, merchantId: M }), `&open=${FILE.toUpperCase()}`);
+    assert.equal(ok.status, 302); assert.equal(ok.headers.get('location'), `/#/purchases?open=${FILE}`);
+    for (const bad of ['&open=../../etc', '&open=<script>', '&open=123', '&open=']) { const r = await go(issueTicket({ secret: SECRET, merchantId: M }), bad); assert.equal(r.status, 302); assert.equal(r.headers.get('location'), '/', bad); }
+    assert.equal((await go('forged', `&open=${FILE}`)).status, 403, 'the hint never replaces the ticket');
+  } finally { await a.close(); }
+});
+
+test('integrated navigation: the Finance session carries the Nordla home address only when it is a clean https origin', async () => {
+  for (const [homeUrl, expected] of [['https://nordla.example.app', 'https://nordla.example.app'], [null, undefined]]) {
+    const a = await startApp({ merchantId: M, deps: { sso: { secret: SECRET }, ...(homeUrl ? { homeUrl } : {}) } });
+    try {
+      const ok = await fetch(`${a.base}/sso?t=${encodeURIComponent(issueTicket({ secret: SECRET, merchantId: M }))}`, { redirect: 'manual' });
+      const s = await (await fetch(`${a.base}/api/session`, { headers: { Cookie: ok.headers.get('set-cookie').split(';')[0] } })).json();
+      assert.equal(s.nordlaHome, expected);
+    } finally { await a.close(); }
+  }
+});
