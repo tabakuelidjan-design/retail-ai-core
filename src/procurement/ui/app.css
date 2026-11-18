@@ -40,3 +40,6 @@ td .chip{white-space:nowrap}
 .thumb.missing{display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted);text-align:center;line-height:1.1;padding:2px}
 .tabs button{font-size:11px}
 .bar{height:8px;border-radius:4px;background:var(--grey-bg);overflow:hidden}.bar>i{display:block;height:100%;background:var(--green)}
+/* Réception (opened from a Notifications alert): the facts wrap instead of overflowing at 375 px */
+.rc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
+.rc-grid .big { font-size: 18px; overflow-wrap: anywhere; }
