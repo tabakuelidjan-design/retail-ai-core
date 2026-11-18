@@ -44,6 +44,8 @@ export function parseCamt053(xml, { timeZone = 'Europe/Brussels' } = {}) {
   // The account is identified by its IBAN, kept MASKED only (never the full number).
   const ibanNode = first(root, ['BkToCstmrStmt', 'Stmt', 'Acct', 'Id', 'IBAN']);
   const ibanMasked = ibanNode ? maskIban(ibanNode.text.trim()) : null;
+  // The account is part of every identifier: two bank accounts never share an id, a fingerprint or a reliable reference (only a hash of the IBAN is used, never the number).
+  const accountTag = ibanNode ? createHash('sha256').update(ibanNode.text.replace(/\s+/g, '').toUpperCase()).digest('hex').slice(0, 12) : 'noiban';
   const entries = find(root, 'Ntry');
   if (!entries.length) throw new FinanceError('BANK_CAMT_NO_ENTRIES');
   if (entries.length > MAX_ENTRIES) throw new FinanceError('BANK_CAMT_TOO_MANY_ENTRIES', String(entries.length));
@@ -82,7 +84,7 @@ export function parseCamt053(xml, { timeZone = 'Europe/Brussels' } = {}) {
     const cpPath = ind === 'CRDT' ? 'Dbtr' : 'Cdtr';
     const counterpartyName = textAt(e, ['NtryDtls', 'TxDtls', 'RltdPties', cpPath, 'Nm']).slice(0, 140);
     // The "camt053|" prefix keeps a CAMT fallback id apart from a CSV fingerprint: the same text in the two formats is NOT the same identifier.
-    const fingerprint = createHash('sha256').update(`camt053|${date}|${signed}|${ccy === 'EUR' ? '' : ccy + '|'}${reference}|${counterpartyName}`).digest('hex').slice(0, 24);
+    const fingerprint = createHash('sha256').update(`camt053|${accountTag}|${date}|${signed}|${ccy === 'EUR' ? '' : ccy + '|'}${reference}|${counterpartyName}`).digest('hex').slice(0, 24);
     const ref = textAt(e, ['AcctSvcrRef']) || textAt(e, ['NtryRef']) || null;
     parsed.push({ line, fileId: ref, date, valueDate, amountCents: signed, currency: ccy, counterpartyName, reference, structuredReference, fingerprint });
   });
@@ -93,8 +95,9 @@ export function parseCamt053(xml, { timeZone = 'Europe/Brussels' } = {}) {
   const seen = new Map();
   const rows = parsed.map(({ line, fileId, fingerprint, ...r }) => {
     const n = (seen.get(fingerprint) ?? 0) + 1; seen.set(fingerprint, n);
-    const id = refsUsable ? fileId : (n > 1 ? `${fingerprint}#${n}` : fingerprint);
-    return { id, line, fingerprint, ...r };
+    const id = refsUsable ? `${accountTag}:${fileId}` : (n > 1 ? `${fingerprint}#${n}` : fingerprint);
+    const bankReference = refsUsable ? fileId : null; // the bank's own reference, shared with the CSV id column (same movement, other format)
+    return { id, line, fingerprint, bankReference, ...r };
   });
   const dates = rows.map((r) => r.date).sort();
   return {

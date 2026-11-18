@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { parseCamt053 } from '../src/finance/bank-camt053.js';
 import { startApp, invoiceBody } from './finance-dashboard-helpers.js';
+import { createMemoryStore } from '../src/finance/memory-store.js';
 import { structuredCommunication } from '../src/finance/pdf.js';
 
 // CAMT.053 adapter: same import contract as the CSV parser. SYNTHETIC XML only; the element layout is NOT verified against a real Belgian bank export.
@@ -52,7 +53,7 @@ test('CAMT: identical entries inside one file are two transactions ("#2"); a uni
   const twins = parseCamt053(doc(entry({ amt: '25.00', cp: 'Boutique X' }), entry({ amt: '25.00', cp: 'Boutique X' })));
   assert.equal(twins.rows.length, 2); assert.notEqual(twins.rows[0].id, twins.rows[1].id); assert.ok(twins.rows[1].id.endsWith('#2'));
   const withRefs = parseCamt053(doc(entry({ ref: 'R1' }), entry({ ref: 'R2', amt: '5.00' })));
-  assert.deepEqual(withRefs.rows.map((r) => r.id), ['R1', 'R2']); assert.equal(withRefs.columns.id, 'AcctSvcrRef');
+  assert.deepEqual(withRefs.rows.map((r) => r.id.split(':')[1]), ['R1', 'R2'], 'the id is account-scoped: <accountTag>:<AcctSvcrRef>'); assert.deepEqual(withRefs.rows.map((r) => r.bankReference), ['R1', 'R2'], 'the plain bank reference is kept for cross-format matching'); assert.equal(withRefs.columns.id, 'AcctSvcrRef');
   // the same file parsed twice gives the same ids (idempotent reimport)
   assert.deepEqual(parseCamt053(doc(entry({ amt: '25.00' }))).rows[0].id, parseCamt053(doc(entry({ amt: '25.00' }))).rows[0].id);
 });
@@ -176,7 +177,7 @@ test('CROSS-FORMAT without a reliable reference: the same-looking movement is IM
     const imp = await c.post('/api/bank/import-csv', { csv: xml, format: 'camt053' }); assert.equal(imp.status, 200, JSON.stringify(imp.data));
     assert.equal(imp.data.created, 0, 'held: not stored by default');
     assert.equal(imp.data.possibleDuplicates.length, 1);
-    const acc = await c.post('/api/bank/import-csv', { csv: xml, format: 'camt053', acceptPossibleDuplicates: true });
+    const acc = await c.post('/api/bank/import-csv', { csv: xml, format: 'camt053', acceptHeldLines: [{ line: 1, justification: 'Deux virements distincts vérifiés sur le relevé' }] });
     assert.equal(acc.data.created, 1, 'stored only after the merchant accepts it explicitly');
   } finally { await a.close(); }
 });
@@ -227,7 +228,7 @@ test('CONFLICT: the same bank reference with a DIFFERENT amount is never stored 
     const xml = doc(entry({ amt: '80.00', ref: 'BANK-REF-9', ustrd: 'INV-2026-0001', cp: 'Client Exemple SA', date: '2026-09-22' }));
     const r = await c.post('/api/bank/import-csv', { csv: xml, format: 'camt053' }); assert.equal(r.status, 200, JSON.stringify(r.data));
     assert.equal(r.data.created, 0, 'not stored over the existing reference');
-    assert.equal(r.data.possibleDuplicates.length, 1); assert.equal(r.data.possibleDuplicates[0].reason, 'SAME_ID_OTHER_MOVEMENT'); assert.equal(r.data.possibleDuplicates[0].stored, false);
+    assert.equal(r.data.possibleDuplicates.length, 1); assert.match(r.data.possibleDuplicates[0].reason, /OTHER_MOVEMENT/); assert.equal(r.data.possibleDuplicates[0].stored, false);
   } finally { await a.close(); }
 });
 
@@ -247,4 +248,125 @@ test('DOUBLE-COUNT GUARD: a suspected duplicate without a reliable reference is 
     const rows = (await c.get('/api/bank/transactions')).data.rows.filter((t) => t.amountCents === 3000);
     assert.equal(rows.length, 1, 'only one bank movement of 30.00 exists to be confirmed');
   } finally { await a.close(); }
+});
+
+// --- Per-line acceptance, audit, no double payment, concurrency, account scope (synthetic) ---
+const withIban = (xml, iban) => xml.replace('BE68539007547034', iban);
+const J = 'Deux virements distincts vérifiés sur le relevé du 22/09';
+const setupInvoice = async (c, over = {}) => {
+  const d = (await c.post('/api/documents', invoiceBody(over))).data; await c.post(`/api/documents/${d.id}/submit`, {});
+  assert.equal((await c.post(`/api/documents/${d.id}/approve`, {})).status, 200); return (await c.get(`/api/documents/${d.id}`)).data;
+};
+
+test('PER-LINE: a held line is refused without a justification, and nothing is stored', async () => {
+  const a = await startApp({ bankVaultKey: KEY });
+  try {
+    const c = await a.authed();
+    await c.post('/api/bank/import-csv', { csv: ['Date;Montant;Contrepartie;Communication', '22/09/2026;30,00;Client Exemple SA;'].join('\n') });
+    const xml = doc(entry({ amt: '30.00', cp: 'Client Exemple SA', date: '2026-09-22' }));
+    const r = await c.post('/api/bank/import-csv', { csv: xml, format: 'camt053', acceptHeldLines: [{ line: 1, justification: 'court' }] });
+    assert.ok(r.status >= 400, JSON.stringify(r.data)); assert.match(JSON.stringify(r.data), /HELD_DECISION_INVALID/);
+    assert.equal((await c.get('/api/bank/transactions')).data.rows.length, 1, 'nothing stored by the refused request');
+  } finally { await a.close(); }
+});
+
+test('PER-LINE: only the requested line is stored; a line number that is not held is refused', async () => {
+  const a = await startApp({ bankVaultKey: KEY });
+  try {
+    const c = await a.authed();
+    await c.post('/api/bank/import-csv', { csv: ['Date;Montant;Contrepartie;Communication', '22/09/2026;30,00;Client Exemple SA;', '23/09/2026;-4,00;Fournisseur X;'].join('\n') });
+    const xml = doc(entry({ amt: '30.00', cp: 'Client Exemple SA', date: '2026-09-22' }), entry({ amt: '4.00', ind: 'DBIT', cp: 'Fournisseur X', date: '2026-09-23' }));
+    const wrong = await c.post('/api/bank/import-csv', { csv: xml, format: 'camt053', acceptHeldLines: [{ line: 9, justification: J }] });
+    assert.ok(wrong.status >= 400); assert.match(JSON.stringify(wrong.data), /HELD_LINE_NOT_FOUND/);
+    const ok = await c.post('/api/bank/import-csv', { csv: xml, format: 'camt053', acceptHeldLines: [{ line: 1, justification: J }] });
+    assert.equal(ok.status, 200, JSON.stringify(ok.data)); assert.equal(ok.data.created, 1, 'only line 1 is stored');
+    assert.deepEqual(ok.data.possibleDuplicates.map((p) => p.line), [2], 'line 2 was not decided on: it stays held, not stored');
+  } finally { await a.close(); }
+});
+
+test('PER-LINE: a held CONFLICT (same bank reference, other data) cannot be accepted; the audit records each accepted line with operator and justification', async () => {
+  const a = await startApp({ bankVaultKey: KEY });
+  try {
+    const c = await a.authed();
+    await c.post('/api/bank/import-csv', { csv: ['Id;Date;Montant;Contrepartie;Communication', 'REF-7;22/09/2026;30,00;Client Exemple SA;'].join('\n') });
+    const conflict = doc(entry({ amt: '80.00', ref: 'REF-7', cp: 'Client Exemple SA', date: '2026-09-22' }));
+    const refused = await c.post('/api/bank/import-csv', { csv: conflict, format: 'camt053', acceptHeldLines: [{ line: 1, justification: J }] });
+    assert.ok(refused.status >= 400); assert.match(JSON.stringify(refused.data), /HELD_CONFLICT_NOT_ACCEPTABLE/);
+    const suspect = doc(entry({ amt: '30.00', cp: 'Client Exemple SA', date: '2026-09-22' }));
+    const acc = await c.post('/api/bank/import-csv', { csv: suspect, format: 'camt053', acceptHeldLines: [{ line: 1, justification: J }] });
+    assert.equal(acc.data.created, 1);
+    const rec = a.audits.find((e) => e.action === 'BANK_HELD_LINE_ACCEPTED');
+    assert.ok(rec, 'an audit entry exists for the accepted line');
+    assert.equal(rec.line, 1); assert.equal(rec.reason, 'NO_RELIABLE_BANK_REFERENCE'); assert.equal(rec.justification, J);
+    assert.ok(rec.movement && rec.movement.amountCents === 3000, 'the movement is recorded');
+    assert.ok('operator' in rec, 'the operator is recorded');
+  } finally { await a.close(); }
+});
+
+test('NO DOUBLE PAYMENT: two identical partial movements for one invoice, one accepted: neither can be confirmed until one is set aside', async () => {
+  const a = await startApp({ bankVaultKey: KEY });
+  try {
+    const c = await a.authed();
+    const inv = await setupInvoice(c);
+    const csv = ['Date;Montant;Contrepartie;Communication', `22/09/2026;30,00;Client Exemple SA;${inv.number}`].join('\n');
+    assert.equal((await c.post('/api/bank/import-csv', { csv })).data.created, 1);
+    const xml = doc(entry({ amt: '30.00', ustrd: inv.number, cp: 'Client Exemple SA', date: '2026-09-22' }));
+    assert.equal((await c.post('/api/bank/import-csv', { csv: xml, format: 'camt053', acceptHeldLines: [{ line: 1, justification: J }] })).data.created, 1);
+    const rows = (await c.get('/api/bank/transactions')).data.rows.filter((t) => t.amountCents === 3000);
+    assert.equal(rows.length, 2);
+    const first = await c.post(`/api/bank/transactions/${rows[0].id}/confirm`, { documentId: inv.id, amount: '30.00', idempotencyKey: 'dbl-first-0001' });
+    assert.ok(first.status >= 400, 'refused while the identical twin is unresolved'); assert.match(JSON.stringify(first.data), /BANK_POSSIBLE_DUPLICATE/);
+    const second = await c.post(`/api/bank/transactions/${rows[1].id}/confirm`, { documentId: inv.id, amount: '30.00', idempotencyKey: 'dbl-second-01' });
+    assert.ok(second.status >= 400, 'and the twin is refused too');
+    assert.equal((await c.post(`/api/bank/transactions/${rows[1].id}/ignore`, { reason: 'doublon du même virement' })).status, 200);
+    const ok = await c.post(`/api/bank/transactions/${rows[0].id}/confirm`, { documentId: inv.id, amount: '30.00', idempotencyKey: 'dbl-first-0002' });
+    assert.equal(ok.status, 200, JSON.stringify(ok.data));
+    const paid = (await c.get(`/api/documents/${inv.id}`)).data;
+    assert.equal(paid.payments.reduce((s, p) => s + p.amountCents, 0), 3000, 'the invoice received 30.00 once, not twice');
+  } finally { await a.close(); }
+});
+
+test('CONCURRENT imports of the same accepted line store it ONCE', async () => {
+  const a = await startApp({ bankVaultKey: KEY });
+  try {
+    const c = await a.authed();
+    await c.post('/api/bank/import-csv', { csv: ['Date;Montant;Contrepartie;Communication', '22/09/2026;30,00;Client Exemple SA;'].join('\n') });
+    const xml = doc(entry({ amt: '30.00', cp: 'Client Exemple SA', date: '2026-09-22' }));
+    const body = { csv: xml, format: 'camt053', acceptHeldLines: [{ line: 1, justification: J }] };
+    const rs = await Promise.all([c.post('/api/bank/import-csv', body), c.post('/api/bank/import-csv', body), c.post('/api/bank/import-csv', body)]);
+    const stored = (await c.get('/api/bank/transactions')).data.rows.filter((t) => t.amountCents === 3000);
+    assert.equal(stored.length, 2, 'the CSV movement and ONE accepted copy, never more');
+    assert.equal(rs.reduce((n, r) => n + (r.data.created ?? 0), 0), 1, 'exactly one request created the accepted copy');
+  } finally { await a.close(); }
+});
+
+test('ACCOUNT SCOPE: the same movement on a statement WITH an account and one WITHOUT is held (never silently merged)', async () => {
+  const a = await startApp({ bankVaultKey: KEY });
+  try {
+    const c = await a.authed();
+    const first = withIban(doc(entry({ amt: '30.00', cp: 'Client Exemple SA', date: '2026-09-22' })), 'BE68539007547034');
+    assert.equal((await c.post('/api/bank/import-csv', { csv: first, format: 'camt053' })).data.created, 1);
+    // A statement WITHOUT an account identity is a different scope from one WITH an IBAN: never merged silently.
+    const other = doc(entry({ amt: '30.00', cp: 'Client Exemple SA', date: '2026-09-22' })).replace(/<Acct>[\s\S]*?<\/Acct>/, '');
+    const r = await c.post('/api/bank/import-csv', { csv: other, format: 'camt053' });
+    assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.equal(r.data.created, 0, 'not stored silently');
+    assert.equal(r.data.possibleDuplicates.length, 1, 'held for a manual decision');
+  } finally { await a.close(); }
+});
+
+test('MERCHANT ISOLATION: the same statement imported by another merchant is not known to this one, and nothing leaks across', async () => {
+  const shared = createMemoryStore();
+  const a = await startApp({ bankVaultKey: KEY, store: shared, merchantId: 'merchant-a' });
+  const b = await startApp({ bankVaultKey: KEY, store: shared, merchantId: 'merchant-b' });
+  try {
+    const ca = await a.authed(); const cb = await b.authed();
+    const xml = doc(entry({ amt: '30.00', ref: 'SAME-REF-1', cp: 'Client Exemple SA', date: '2026-09-22' }));
+    assert.equal((await ca.post('/api/bank/import-csv', { csv: xml, format: 'camt053' })).data.created, 1);
+    const rb = await cb.post('/api/bank/import-csv', { csv: xml, format: 'camt053' });
+    assert.equal(rb.status, 200, JSON.stringify(rb.data));
+    assert.equal(rb.data.created, 1, 'merchant B does not see merchant A\'s movement as known');
+    assert.equal((await cb.get('/api/bank/transactions')).data.rows.length, 1, 'B sees only its own movement');
+    assert.equal((await ca.get('/api/bank/transactions')).data.rows.length, 1, 'A is unchanged');
+  } finally { await a.close(); await b.close(); }
 });

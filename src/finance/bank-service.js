@@ -9,10 +9,10 @@ import { FinanceError, settlement } from './document.js';
 import { toCents } from './money.js';
 import { NoBankAdapter, assertReadOnlyAdapter, maskIban, observedBalance, parseBankCsv } from './bank.js';
 import { parseCamt053 } from './bank-camt053.js';
-import { classifyIncoming, acceptedHeld, heldSummary } from './bank-identity.js';
+import { classifyIncoming, heldSummary, movementKey } from './bank-identity.js';
 
 // The bank's own id is trusted as a reference only when the statement has a usable id column (CSV) or AcctSvcrRef (CAMT.053).
-const bankRefRows = (parsed) => { const reliable = parsed.columns?.id != null; return parsed.rows.map((r) => ({ ...r, bankReference: reliable ? String(r.id) : null })); };
+const bankRefRows = (parsed) => { const reliable = parsed.columns?.id != null; return parsed.rows.map((r) => ({ ...r, bankReference: reliable ? String(r.bankReference ?? r.id) : null })); };
 
 // One import contract for every statement format: the format only changes the parser. Matching, idempotence and storage are shared (no second engine).
 const parseStatement = (text, format) => {
@@ -57,6 +57,16 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
   const payables = async (cur = 'EUR') => (await payablesAll()).map((r) => toPayable(r, cur)).filter((p) => p.grossCents !== null && p.remainingCents > 0);
   // All rows of a list are stored in ONE atomic batch: completely or not at all (never a partial import). The identity of a row (provider id / fingerprint+occurrence) makes a retry idempotent.
   // Identity keys are limited to this merchant (the store is per merchant), the CSV/CAMT pseudo-account and the file source.
+  // A held row is accepted only per LINE with a justification, by a merchant. Anything else is refused.
+  const normalizeDecisions = (list) => (Array.isArray(list) ? list : []).map((d) => ({ line: Number(d?.line), justification: String(d?.justification ?? '').trim() }));
+  // Two stored file movements that are identical (and not told apart by two different bank references) are the same payment until one is set aside (IGNORED).
+  const assertNoUnresolvedTwin = async (tx) => {
+    if (tx.accountId !== CSV_ACCOUNT) return;
+    const key = movementKey(tx);
+    const twins = (await storedFileRows()).filter((s) => String(s.providerTxId) !== String(tx.providerTxId) && movementKey(s) === key
+      && !(s.bankReference && tx.bankReference && s.bankReference !== tx.bankReference) && ![s.reconciliationStatus, s.status].includes('IGNORED'));
+    if (twins.length) throw new FinanceError('BANK_POSSIBLE_DUPLICATE', `${twins.length} identical movement(s) unresolved: set one of them aside (IGNORED) first`);
+  };
   const storedFileRows = async () => (await store.listBankTransactions({ merchantId })).filter((t) => t.accountId === CSV_ACCOUNT && t.source === 'csv');
   const store1 = async (accountId, list, source) => {
     const rows = list.map((t) => ({ merchantId, accountId, providerTxId: String(t.id), date: t.date, valueDate: t.valueDate ?? null, amountCents: t.amountCents, currency: t.currency ?? 'EUR', counterpartyName: t.counterpartyName ?? null, counterpartyAccountMasked: t.counterpartyAccountMasked ?? null,
@@ -123,14 +133,25 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
      * Default: all-or-nothing (a file with ANY invalid line imports nothing). With { allowPartial: true } the VALID lines are imported and every invalid line is returned with its
      * number and reason (nothing is dropped silently). Idempotent either way: known transactions are skipped.
      */
-    async importCsv(text, { allowPartial = false, format = 'csv', acceptPossibleDuplicates = false } = {}) {
+    async importCsv(text, { allowPartial = false, format = 'csv', acceptHeldLines = [] } = {}, actor = null) {
       const parsed = parseStatement(text, format);
       const { rows, errors } = parsed;
       if (errors.length && !(allowPartial && rows.length)) throw new FinanceError('BANK_CSV_ROWS_INVALID', errors.map((e) => `${e.line}:${e.reason}`).join(',').slice(0, 500));
       // Known movements are not stored twice. A SUSPECTED duplicate is HELD (not stored) unless the merchant accepts it explicitly for this request.
       const { kept, known, possible } = classifyIncoming(bankRefRows(parsed), await storedFileRows());
       let r;
-      const toStore = [...kept, ...acceptedHeld(possible, acceptPossibleDuplicates === true)];
+      const decisions = normalizeDecisions(acceptHeldLines);
+      if (decisions.length) merchantOnly(actor);
+      const seen = new Set(); const accepted = [];
+      for (const d of decisions) {
+        if (!Number.isInteger(d.line) || d.justification.length < 10) throw new FinanceError('HELD_DECISION_INVALID', `line ${d.line}: a justification of at least 10 characters is required`);
+        if (seen.has(d.line)) throw new FinanceError('HELD_DECISION_DUPLICATE', `line ${d.line}`); seen.add(d.line);
+        const held = possible.find((p) => p.line === d.line);
+        if (!held) throw new FinanceError('HELD_LINE_NOT_FOUND', `line ${d.line}`);
+        if (!held.stored) throw new FinanceError('HELD_CONFLICT_NOT_ACCEPTABLE', `line ${d.line}: ${held.reason}`);
+        accepted.push({ held, justification: d.justification });
+      }
+      const toStore = [...kept, ...accepted.map((a) => a.held.row)];
       try { r = await store1(CSV_ACCOUNT, toStore, 'csv'); } catch (e) {
         // The batch is atomic: nothing of this statement was stored. Say so, keep the technical detail out of the answer, and let the merchant retry.
         try { await audit({ at: clock.now(), action: 'BANK_CSV_IMPORT_FAILED', rows: rows.length }); } catch { /* auditing must not hide the failure */ }
@@ -138,8 +159,13 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
       }
       // duplicates = every line already known: by identifier (stored by the batch) or by identity (same movement stored under another format or file).
       const duplicates = known + r.duplicates;
-      await audit({ at: clock.now(), action: 'BANK_CSV_IMPORTED', created: r.created, duplicates, held: possible.length, heldAccepted: acceptPossibleDuplicates === true, rejected: errors.length });
-      return { created: r.created, duplicates, rejected: errors, ...(possible.length ? { possibleDuplicates: heldSummary(possible) } : {}) };
+      // One audit line per accepted row: merchant, operator, the movement, the reason it was held and the justification.
+      for (const a of accepted) {
+        try { await audit({ at: clock.now(), action: 'BANK_HELD_LINE_ACCEPTED', operator: actor?.id ?? null, line: a.held.line, reason: a.held.reason, storedId: a.held.storedId, movement: { date: a.held.row.date, amountCents: a.held.row.amountCents, currency: a.held.row.currency, counterpartyName: a.held.row.counterpartyName ?? null }, justification: a.justification.slice(0, 300) }); } catch { /* the stored movement stays; the audit failure is kept visible to ops */ }
+      }
+      const remaining = possible.filter((p) => !accepted.some((a) => a.held === p));
+      await audit({ at: clock.now(), action: 'BANK_CSV_IMPORTED', created: r.created, duplicates, held: remaining.length, acceptedLines: accepted.length, rejected: errors.length });
+      return { created: r.created, duplicates, rejected: errors, ...(remaining.length ? { possibleDuplicates: heldSummary(remaining) } : {}) };
     },
     async transactions(f = {}) { return (await store.listBankTransactions({ merchantId, ...f })).map(txView).sort((a, b) => String(b.date).localeCompare(String(a.date))); },
     /** Accounts with their OBSERVED balance and how old it is (never "the current balance"). */
@@ -167,6 +193,7 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
     async reconcile(txId, input, actor) {
       merchantOnly(actor);
       const tx = await store.getBankTransaction(txId); if (!tx || tx.merchantId !== merchantId) throw new FinanceError('BANK_TX_NOT_FOUND', String(txId));
+      await assertNoUnresolvedTwin(tx);
       const suggestion = input.fromSuggestion ? await evidenceFor(txId) : (input.suggestion ?? null); const inbound = tx.amountCents > 0;
       if (input.create?.method != null && !isPaymentMethod(input.create.method)) throw new FinanceError('PAYMENT_METHOD_INVALID', String(input.create.method));
       if (input.payments?.length) {
