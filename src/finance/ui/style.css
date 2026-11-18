@@ -1529,3 +1529,5 @@ body:has(.modal-back) .contact-support { display: none; }
 
 /* Treasury V1: basis chips stay inline inside a metric (observed / calculated / forecast / scenario) */
 .tmetric .chip { display: inline-block; width: auto; margin-left: 6px; }
+/* Retour vers l'accueil Nordla (only when the server knows its address) */
+.back-nordla { font-size: 12.5px; color: var(--ink-soft); text-decoration: underline; white-space: nowrap; margin-right: 12px; }

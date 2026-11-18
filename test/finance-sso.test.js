@@ -97,3 +97,43 @@ test('buildFinanceSso: only a clean https origin and a 24+ character secret give
   for (const env of [{}, { FINANCE_PUBLIC_URL: 'http://finance.example.app', FINANCE_SSO_SECRET: SECRET }, { FINANCE_PUBLIC_URL: 'https://finance.example.app/path', FINANCE_SSO_SECRET: SECRET },
     { FINANCE_PUBLIC_URL: `https://user:pw${String.fromCharCode(64)}finance.example.app`, FINANCE_SSO_SECRET: SECRET }, { FINANCE_PUBLIC_URL: 'https://finance.example.app', FINANCE_SSO_SECRET: 'short' }]) assert.equal(buildFinanceSso(env, M), null);
 });
+
+const FILE = '6c714261-0e3d-44ae-aced-981beedff16b';
+test('integrated navigation: /sso?open=<file id> lands on that Finance file, a malformed id lands on the dashboard, the session still comes from the ticket alone', async () => {
+  const a = await startApp({ merchantId: M, deps: { sso: { secret: SECRET } } });
+  try {
+    const go = (t, q) => fetch(`${a.base}/sso?t=${encodeURIComponent(t)}${q}`, { redirect: 'manual' });
+    const ok = await go(issueTicket({ secret: SECRET, merchantId: M }), `&open=${FILE.toUpperCase()}`);
+    assert.equal(ok.status, 302); assert.equal(ok.headers.get('location'), `/#/purchases?open=${FILE}`);
+    for (const bad of ['&open=../../etc', '&open=<script>', '&open=123', '&open=']) { const r = await go(issueTicket({ secret: SECRET, merchantId: M }), bad); assert.equal(r.status, 302); assert.equal(r.headers.get('location'), '/', bad); }
+    assert.equal((await go('forged', `&open=${FILE}`)).status, 403, 'the hint never replaces the ticket');
+  } finally { await a.close(); }
+});
+
+test('integrated navigation: the Finance session carries the Nordla home address only when it is a clean https origin', async () => {
+  for (const [homeUrl, expected] of [['https://nordla.example.app', 'https://nordla.example.app'], [null, undefined]]) {
+    const a = await startApp({ merchantId: M, deps: { sso: { secret: SECRET }, ...(homeUrl ? { homeUrl } : {}) } });
+    try {
+      const ok = await fetch(`${a.base}/sso?t=${encodeURIComponent(issueTicket({ secret: SECRET, merchantId: M }))}`, { redirect: 'manual' });
+      const s = await (await fetch(`${a.base}/api/session`, { headers: { Cookie: ok.headers.get('set-cookie').split(';')[0] } })).json();
+      assert.equal(s.nordlaHome, expected);
+    } finally { await a.close(); }
+  }
+});
+
+test('integrated navigation: Nordla issues the Finance link with the file to open (UUID only) and shows the Analytics address only for a clean https origin', async () => {
+  const sso = { publicUrl: 'https://finance.example.app', secret: SECRET, merchantId: M };
+  const mk = (env) => createCoreHttp({ runtime: null, store: {}, finance: { source: 'Finance · test', inbox: async () => ({}) }, financeSso: sso, env });
+  const call = async (core, bodyText) => {
+    const chunks = []; let status = 0; const res = { writeHead: (s) => { status = s; }, end: (b) => chunks.push(String(b ?? '')), setHeader() {} };
+    await core.handle({ method: 'POST', url: '/api/core/finance/open', headers: {}, on() {}, [Symbol.asyncIterator]: async function* () { yield Buffer.from(bodyText); } }, res, new URL('http://x/api/core/finance/open'), { role: 'OWNER', userId: 'u1' });
+    return { status, body: JSON.parse(chunks.join('')) };
+  };
+  const core = mk({});
+  assert.equal(new URL((await call(core, JSON.stringify({ dossier: FILE }))).body.url).searchParams.get('open'), FILE);
+  for (const bad of [{ dossier: 'x' }, { dossier: '../../a' }, {}, { dossier: 42 }]) assert.equal(new URL((await call(core, JSON.stringify(bad))).body.url).searchParams.get('open'), null);
+  assert.equal(new URL((await call(core, 'not json')).body.url).searchParams.get('open'), null, 'a broken body still opens the dashboard');
+  const modules = async (env) => { const chunks = []; await mk(env).handle({ method: 'GET', url: '/api/core/modules', headers: {}, on() {} }, { writeHead() {}, end: (b) => chunks.push(String(b ?? '')), setHeader() {} }, new URL('http://x/api/core/modules'), { role: 'OWNER' }); return JSON.parse(chunks.join('')).modules; };
+  assert.equal((await modules({ ANALYTICS_PUBLIC_URL: 'https://analytics.example.app/' })).find((m) => m.key === 'analytics').analytics_url, 'https://analytics.example.app');
+  for (const bad of [undefined, 'http://a.example', 'javascript:alert(1)']) assert.equal((await modules({ ANALYTICS_PUBLIC_URL: bad })).find((m) => m.key === 'analytics').analytics_url, undefined);
+});

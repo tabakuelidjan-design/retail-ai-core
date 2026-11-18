@@ -61,6 +61,7 @@ export async function startFinanceServer({ env = process.env, runtimeDeps = {}, 
       return latestSyncStatus(rt.supabase, rt.merchant.id, { staleAfterMinutes: Number(env.SYNC_STALE_AFTER_MINUTES || 60) });
     },
     allowedHosts: hosting.allowedHosts ?? undefined, secureCookie: hosting.secureCookie, trustProxyHops: hosting.trustProxyHops,
+    homeUrl: (() => { try { const u = new URL(String(env.NORDLA_HOME_URL ?? '').trim()); return u.protocol === 'https:' && !u.username && !u.password ? u.origin : null; } catch { return null; } })(), // "Retour à Nordla": the Nordla home address (https only); none = no link
     sso: hosting.hosted && env.FINANCE_SSO_ENABLED === '1' ? { secret: token } : null, // /sso: Nordla single sign-on, hosted and explicitly enabled only
     settings: {
       load: () => loadSettings(),

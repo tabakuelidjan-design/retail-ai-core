@@ -287,7 +287,7 @@ function layout(active, ...content) {
   // The merchant's own name, not a hardcoded brand string - this Finance shell is generic/multi-tenant
   // under the hood (see tenant-isolation tests), so the context label must reflect whoever is actually
   // signed in rather than one fixed name.
-  const topbar2 = h('div', { class: 'topbar2' }, globalSearch(), h('div', { class: 'tb-right' }, h('span', { class: 'sync-pill', 'data-sync-pill': '' }, h('span', { class: 'sync-dot warn' }), h('span', { class: 'sync-label' }, tt('Sales source sync unknown'))), langSwitch(), accountMenu(seller)));
+  const topbar2 = h('div', { class: 'topbar2' }, globalSearch(), h('div', { class: 'tb-right' }, state.nordlaHome ? h('a', { class: 'back-nordla', href: state.nordlaHome, title: 'Retour à l’accueil Nordla' }, '← Accueil Nordla') : null, h('span', { class: 'sync-pill', 'data-sync-pill': '' }, h('span', { class: 'sync-dot warn' }), h('span', { class: 'sync-label' }, tt('Sales source sync unknown'))), langSwitch(), accountMenu(seller)));
   setTimeout(refreshSyncPill, 0);
   const main = h('main', { class: 'main premium' }, content);
   const support = h('button', { class: 'contact-support', type: 'button', on: { click: openContactSupport } }, svgIcon('inbox', 16), h('span', null, tt('Contact us')));
@@ -1342,7 +1342,7 @@ try {
 
 async function route() {
   // One request instead of two at startup: the session answer carries the settings when signed in.
-  if (!state.csrf) { try { const s = await api('GET', '/api/session?include=settings'); if (s.authenticated) { state.csrf = s.csrf; await loadSettings(s.settings); } else return renderLogin(); } catch (e) { return renderLogin(); } }
+  if (!state.csrf) { try { const s = await api('GET', '/api/session?include=settings'); if (s.authenticated) { state.csrf = s.csrf; state.nordlaHome = s.nordlaHome || null; await loadSettings(s.settings); } else return renderLogin(); } catch (e) { return renderLogin(); } }
   if (pendingBankReturn) { const ret = pendingBankReturn; pendingBankReturn = null; await processBankReturn(ret); }
   const [path, qs] = (location.hash.slice(1) || '/').split('?'); const q = new URLSearchParams(qs || ''); const parts = path.split('/').filter(Boolean);
   try {
