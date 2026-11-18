@@ -53,6 +53,7 @@ import { orderTotalsFromLedger } from '../linking.js';
 import { formatCents, fromScaled, percentToBp, toCents } from '../money.js';
 import { money, unitPrice as unitPriceText } from '../pdf.js';
 import { renderDocumentVersioned } from '../pdf-version.js';
+import { createOcrExtractor, withOcrFallback } from '../ocr-scan.js';
 import { buildContacts, contactDetail, contactExportRow, planImport, activityCounts, contactDisplayName, possibleNameDuplicate, roleChangeProblems } from '../contacts.js';
 import { buildPeriodReport, buildPurchaseAnalytics, buildSalesAnalytics } from '../analytics.js';
 import { toCsv } from '../export-csv.js';
@@ -1004,7 +1005,7 @@ export function createFinanceApp(deps) {
   const attachmentStore = deps.attachmentStore ?? createMemoryAttachmentStore();
   // the merchant's own identity (Settings > seller): a PDF shows both parties, the reader must never take ours for the supplier's
   const ownIdentity = async () => { const s = (await settingsIo.load()).seller ?? {}; return { vatNumbers: [s.vatNumber].filter(Boolean), enterpriseNumbers: [s.enterpriseNumber].filter(Boolean), ibans: [s.iban].filter(Boolean), names: [s.name].filter(Boolean) }; };
-  const inboxFor = () => createInboxService({ store, attachments: attachmentStore, extractor: deps.documentExtractor ?? defaultExtractor, merchantId, now: clock.now, audit, ownIdentity });
+  const inboxFor = () => createInboxService({ store, attachments: attachmentStore, extractor: deps.documentExtractor ?? withOcrFallback(defaultExtractor, createOcrExtractor({ command: process.env.FINANCE_OCR_COMMAND || null })), merchantId, now: clock.now, audit, ownIdentity });
   // the merchant's civil date (their configured time zone), for every day-based reading of a due date; never the server's zone
   // `today` = the merchant's civil date, computed once per request by a list (not once per purchase: each computation builds an Intl formatter)
   const itemView = (raw, today = clock.today()) => { const r = new Proxy(raw, { get: (t, k) => t[k] ?? null }); return {
