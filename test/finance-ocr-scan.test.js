@@ -7,10 +7,10 @@ import { createInboxService, createMemoryAttachmentStore } from '../src/finance/
 
 // SYNTHETIC scan text (fictitious supplier, invented numbers).
 const LINES = [
-  'FACTURE FOURNISSEUR (FICTIF)', 'Fournisseur Exemple Papier SRL', 'Rue Imaginaire 7, 4000 Liege', 'TVA BE0555.555.555',
+  'FACTURE FOURNISSEUR (FICTIF)', 'Fournisseur Exemple Papier SRL', 'Rue Imaginaire 7, 4000 Liege', 'TVA BE0000000555',
   'Numéro de facture : F-2026-0815', 'Date de facture : 02/11/2026', 'Date d’échéance : 02/12/2026',
   'Description : Papier et enveloppes (exemple) Montant HTVA : 250,00 EUR', 'TVA 21 % : 52,50 EUR', 'Total TTC : 302,50 EUR',
-  'IBAN : BE71 0961 2345 6769   BIC : GKCCBEBB', 'Communication : +++002/0260/81537+++',
+  'IBAN : BE68 5390 0754 7034   BIC : GKCCBEBB', 'Communication : +++002/0260/81537+++',
 ];
 const PDF = Buffer.from('%PDF-1.4\n% synthetic scan, no text layer\n%%EOF\n');
 
@@ -22,15 +22,15 @@ test('scan text -> invoice fields with confidences; the supplier name is flagged
   assert.equal(r.fields.netCents.value, 25000);
   assert.equal(r.fields.vatCents.value, 5250);
   assert.equal(r.fields.grossCents.value, 30250);
-  assert.equal(r.fields.supplierVatNumber.value, 'BE0555555555');
+  assert.equal(r.fields.supplierVatNumber.value, 'BE0000000555');
   assert.equal(r.fields.paymentReference.value, '+++002/0260/81537+++');
   assert.ok(r.warnings.includes('OCR_UNVERIFIED'));
   assert.ok(r.warnings.includes('FIELD_UNCERTAIN:supplierName'));
 });
 
 test('the merchant own VAT is never read as the supplier', () => {
-  const r = readScanFields(['TVA BE0000000097', 'Numéro de facture : X-1', 'TVA BE0555.555.555'], { ownVats: ['BE0000000097'] });
-  assert.equal(r.fields.supplierVatNumber.value, 'BE0555555555');
+  const r = readScanFields(['TVA BE0000000097', 'Numéro de facture : X-1', 'TVA BE0000000555'], { ownVats: ['BE0000000097'] });
+  assert.equal(r.fields.supplierVatNumber.value, 'BE0000000555');
 });
 
 test('inconsistent totals are reported, never corrected', () => {
@@ -68,7 +68,7 @@ test('OCR output becomes a TO_REVIEW draft with the fields filled', async () => 
 
 test('fallback: a text PDF keeps the normal reader; a scan or an image goes to OCR', async () => {
   const calls = [];
-  const ocr = { name: 'ocr', extract: async () => { calls.push('ocr'); return { extractor: 'ocr', fields: {}, warnings: ['OCR_UNVERIFIED'] }; } };
+  const ocr = { name: 'ocr', configured: true, extract: async () => { calls.push('ocr'); return { extractor: 'ocr', fields: {}, warnings: ['OCR_UNVERIFIED'] }; } };
   const base = { name: 'base', label: 'base', extract: async (f) => ({ extractor: 'pdf_text', fields: {}, warnings: f.scan ? ['SCAN_REQUIRES_OCR'] : [] }) };
   const ex = withOcrFallback(base, ocr);
   await ex.extract({ contentType: 'application/pdf', data: PDF, scan: false });
@@ -77,4 +77,11 @@ test('fallback: a text PDF keeps the normal reader; a scan or an image goes to O
   await ex.extract({ contentType: 'image/png', data: PDF });
   assert.deepEqual(calls, ['ocr', 'ocr']);
   assert.ok(defaultExtractor);
+});
+
+test('without a configured OCR the base reader result is returned untouched', async () => {
+  const base = { name: 'base', label: 'base', extract: async () => ({ extractor: 'pdf_text', fields: {}, warnings: ['SCAN_REQUIRES_OCR'] }) };
+  const r = await withOcrFallback(base, createOcrExtractor({})).extract({ contentType: 'application/pdf', data: PDF });
+  assert.equal(r.extractor, 'pdf_text');
+  assert.deepEqual(r.warnings, ['SCAN_REQUIRES_OCR']);
 });

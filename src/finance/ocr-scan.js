@@ -82,6 +82,7 @@ export function runOcrCommand(command, data, { contentType = 'application/pdf', 
 export function createOcrExtractor({ command = null, runOcr = null } = {}) {
   return {
     name: 'ocr',
+    configured: !!(command || runOcr),
     label: 'Scan : lecture OCR (brouillon à valider)',
     async extract({ data, contentType, context = {} }) {
       if (!command && !runOcr) return { extractor: 'ocr', fields: {}, warnings: ['SCAN_REQUIRES_OCR'] };
@@ -107,7 +108,8 @@ export function withOcrFallback(base, ocr) {
       const r = await base.extract(file);
       const scanned = file.contentType === 'application/pdf' && (r.warnings ?? []).includes('SCAN_REQUIRES_OCR');
       const image = typeof file.contentType === 'string' && file.contentType.startsWith('image/');
-      if (!scanned && !image) return r;
+      // Without a configured OCR the base result is kept unchanged (same extractor name, same warnings as before).
+      if (!ocr.configured || (!scanned && !image)) return r;
       return ocr.extract(file);
     },
   };
