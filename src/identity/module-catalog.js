@@ -24,6 +24,8 @@ export const CATALOG = Object.freeze([
   Object.freeze({ key: 'video', label: 'Vidéo', status: MODULE_STATUS.DEMO, entitlement: null, openRoles: null, note: 'brouillons uniquement, derrière un indicateur d’environnement' }),
   Object.freeze({ key: 'gbp', label: 'Google Business', status: MODULE_STATUS.DEMO, entitlement: null, openRoles: null, note: 'brouillons ; aucune publication Google possible' }),
   Object.freeze({ key: 'connections', label: 'Connexions', status: MODULE_STATUS.DEMO, entitlement: null, openRoles: null, note: 'Instagram non configuré' }),
+  Object.freeze({ key: 'brand', label: 'Marque (Branding)', status: MODULE_STATUS.PLANNED, entitlement: null, openRoles: null, note: 'pas d’entitlement défini ; le panneau Core affiche seulement l’état d’approbation de la marque' }),
+  Object.freeze({ key: 'marketing', label: 'Marketing', status: MODULE_STATUS.PLANNED, entitlement: null, openRoles: null, note: 'pas d’entitlement défini ; aucune diffusion possible' }),
   Object.freeze({ key: 'market-radar', label: 'Market Radar', status: MODULE_STATUS.PLANNED, entitlement: null, openRoles: null, note: 'non audité dans cette phase' }),
 ]);
 

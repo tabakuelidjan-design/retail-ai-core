@@ -113,3 +113,13 @@ test('Core panel: Growth is listed as NON ACTIVÉ without an entitlement, and po
   const g = (await call(core, 'GET', '/api/core/modules', { role: 'OWNER', userId: 'u1' })).body.modules.find((m) => m.key === 'growth');
   assert.equal(g.state, 'NON ACTIVÉ'); assert.equal(g.growth_url, null); assert.equal(g.growth_sso, false);
 });
+
+test('Brand, Marketing, Creator and the other unfinished modules stay closed: no entitlement, never AVAILABLE', () => {
+  for (const key of ['brand', 'marketing', 'creator', 'video', 'gbp', 'connections', 'market-radar']) {
+    const m = catalogOf(key);
+    assert.ok(m, `${key} is listed`);
+    assert.notEqual(m.status, MODULE_STATUS.AVAILABLE, `${key} is not presented as working`);
+    assert.equal(m.entitlement, null);
+    assert.deepEqual(decideModuleOpen({ key, role: 'OWNER', activeCodes: new Set(MODULE_CODES) }).ok, false, `${key} cannot be opened even with every code active`);
+  }
+});
