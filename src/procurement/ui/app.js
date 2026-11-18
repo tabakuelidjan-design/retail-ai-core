@@ -34,7 +34,8 @@ const swap = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter((
 const S = { me: null, tab: 'visits', stack: [], online: true, lastError: null, prefs: false, openView: null, skipDefault: false };
 
 function banner(text, kind = '') { const b = $('banner'); b.textContent = text ?? ''; b.hidden = !text; b.className = `banner ${kind}`; if (text && kind !== 'err') setTimeout(() => { if (b.textContent === text) b.hidden = true; }, 6000); }
-function setHead(title, subtitle = '', back = false) { $('nordla-home').hidden = !HOSTED; $('title').textContent = title; $('subtitle').textContent = subtitle; $('back').hidden = !back; }
+function setHead(title, subtitle = '', back = false) { const home = $('nordla-home'); if (HOSTED) home.setAttribute('href', '/'); home.hidden = !HOSTED; // the link to the Nordla home exists only when the page is served by Nordla (no absolute URL in the static page)
+  $('title').textContent = title; $('subtitle').textContent = subtitle; $('back').hidden = !back; }
 function go(name, params = {}) { S.stack.push({ name, params }); render(); }
 function back() { S.stack.pop(); render(); }
 function tab(t) { S.tab = t; S.stack = []; render(); }
