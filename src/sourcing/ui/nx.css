@@ -201,3 +201,5 @@ body.sl-mode .nx .nx-catform label{font-size:14px;line-height:20px;font-weight:6
 body.sl-mode .nx .nx-catform select{min-height:48px;font:inherit;font-size:16px;padding:0 var(--s3);border:1px solid var(--nx-line);border-radius:var(--r-ctl);background:var(--nx-card);color:var(--nx-ink)}
 body.sl-mode .nx .nx-catform .nx-btn{min-height:48px;width:100%;margin:0}
 body.sl-mode .nx .nx-blkacts{display:flex;flex-wrap:wrap;gap:var(--s2);margin:var(--s2) 0}
+
+.nx-growth{margin:0 0 var(--s2)}.nx-growth p{display:flex;flex-wrap:wrap;gap:var(--s2);margin:0 0 var(--s2)}.nx-growth a{flex:1 1 140px;min-height:48px;padding:10px var(--s4);display:inline-flex;align-items:center;justify-content:center;text-align:center;border-radius:var(--r-ctl);background:var(--nx-accent-soft);color:var(--nx-accent);font-weight:600;text-decoration:none}.nx-growth .muted{flex:1 1 100%}

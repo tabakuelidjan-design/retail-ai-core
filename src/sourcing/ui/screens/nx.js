@@ -57,7 +57,7 @@ export function supplierCards(list, selected = [], { compact = false } = {}) {
 }
 
 // ---- 1. ACCUEIL -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-export function homeHtml({ overview, sync, counts, conflicts = 0, flash = '', now = Date.now() }) {
+export function homeHtml({ overview, sync, counts, conflicts = 0, flash = '', now = Date.now(), growth = '' }) {
   const tile = (icon, label, act, key = '') => `<button type="button" class="nx-tile" data-act="${esc(act)}"${key !== '' ? ` data-key="${esc(key)}"` : ''}>${ic(icon)}<span>${esc(label)}</span></button>`;
   const todo = [counts.toConfirm ? [counts.toConfirm, counts.toConfirm > 1 ? 'informations à confirmer' : 'information à confirmer', 'confirm'] : null, counts.waiting ? [counts.waiting, counts.waiting > 1 ? 'réponses attendues' : 'réponse attendue', 'waiting'] : null, counts.conflicts ? [counts.conflicts, counts.conflicts > 1 ? 'contradictions à lever' : 'contradiction à lever', 'conflict'] : null].filter(Boolean)
     .map(([n, t, key]) => `<button type="button" class="nx-todo" data-act="sl-nav-filter" data-key="${key}"><b>${n}</b><span>${esc(t)}</span>${ic('chev')}</button>`).join('');
@@ -70,7 +70,7 @@ export function homeHtml({ overview, sync, counts, conflicts = 0, flash = '', no
   return `<div class="nx">${brandBar(sync)}${conflictBanner(conflicts)}${flashHtml(flash)}
     <form data-form="sl-search" class="nx-searchf" role="search"><label class="nx-search">${ic('search')}<input type="search" name="q" placeholder="Rechercher un fournisseur…" autocomplete="off" enterkeyhint="search" aria-label="Rechercher"></label></form>
     ${hero}${last ? `<div class="nx-tiles">${tile('plus', 'Nouveau fournisseur', 'sl-nav', 'new')}${tile('ask', 'Poser une question', 'sl-ask', '')}${tile('compare', 'Comparer', 'sl-nav', 'compare')}</div>` : ''}
-    ${todo ? `<h2 class="nx-h">À poursuivre</h2><div class="nx-todos">${todo}</div>` : ''}
+    ${todo ? `<h2 class="nx-h">À poursuivre</h2><div class="nx-todos">${todo}</div>` : ''}${growth}
     ${rest.length ? `<h2 class="nx-h">Autres dossiers <button type="button" class="nx-link" data-act="sl-nav" data-key="suppliers">Voir tout</button></h2>${supplierCards(rest, [], { compact: true })}` : ''}</div>`;
 }
 

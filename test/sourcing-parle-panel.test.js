@@ -76,3 +76,28 @@ test('the Développement des ventes module appears only with a https growth_url,
   assert.ok(!/data-nx-growth/.test(await html({ growth_url: 'javascript:alert(1)' })), 'a non-https value is never linked');
   assert.ok(!/data-nx-growth/.test(await html({})), 'no growth_url, no link'); assert.ok(!/data-nx-module="growth"/.test(await html(null)));
 });
+
+test('HOME: the Développement des ventes card (same two links) shows on the home without opening the panel, from ONE light read of the module list; absent without a https address, offline, or on failure', async () => {
+  const mods = (extra) => ({ modules: ['core', 'sourcing', 'finance'].map((key) => ({ key, label: key, state: 'LIMITÉ', detail: 'x' })).concat(extra ? [{ key: 'growth', label: 'Développement des ventes', state: 'DISPONIBLE', detail: 'x', ...extra }] : []) });
+  const calls = []; let repaints = 0;
+  const mk = (api, S = { online: true, token: 'synthetic' }) => createModulesPanel({ S, api: async (p) => { calls.push(p); return api(p); }, refresh: () => {}, repaintHome: () => { repaints += 1; } });
+  const p = mk(async () => mods({ growth_url: 'https://growth.example' })); assert.equal(p.growthHomeCard(), '', 'nothing before the list is read');
+  await p.loadHomeModules(); await p.loadHomeModules();
+  assert.deepEqual(calls, ['/api/core/modules'], 'one light read, once: no branding, campaigns or creation'); assert.equal(repaints, 1);
+  const card = p.growthHomeCard(); assert.match(card, /data-nx-growth-home/); assert.match(card, /Développement des ventes/);
+  assert.match(card, /href="https:\/\/growth\.example\/#\/dropoff" target="_blank" rel="noopener"[^>]*>Où les visiteurs abandonnent/); assert.match(card, /href="https:\/\/growth\.example\/#\/opportunities" target="_blank" rel="noopener"[^>]*>Opportunités/);
+  for (const bad of [null, { growth_url: 'http://growth.example' }, { growth_url: 'javascript:alert(1)' }]) { const q = mk(async () => mods(bad)); await q.loadHomeModules(); assert.equal(q.growthHomeCard(), '', JSON.stringify(bad)); }
+  const off = mk(async () => mods({ growth_url: 'https://growth.example' }), { online: false, token: 'x' }); await off.loadHomeModules(); assert.equal(off.growthHomeCard(), '');
+  const boom = mk(async () => { throw new Error('down'); }); await boom.loadHomeModules(); assert.equal(boom.growthHomeCard(), '', 'a failed read leaves the home exactly as it was');
+});
+
+test('the modules counter reflects the list actually shown (no fixed number)', async () => {
+  const api = async (path) => (path === '/api/core/modules' ? { modules: ['core', 'sourcing', 'finance', 'analytics', 'branding', 'marketing', 'creative', 'procurement', 'growth'].map((key) => ({ key, label: key, state: 'LIMITÉ', detail: 'x' })) } : { status: 'NOT_CONNECTED' });
+  const { panel } = make(api); assert.doesNotMatch(panel.section(), /\(7 modules\)|\d+ modules\)/);
+  await panel.load(); const html = panel.section(); assert.match(html, /9 modules — état réel sur ce serveur/); assert.equal((html.match(/data-nx-module="/g) ?? []).length, 9);
+});
+
+test('HOME markup: the card sits on the Salon home after the to-do list, and the home is unchanged without it', async () => {
+  const { homeHtml } = await loadUi('screens/nx.js'); const base = { overview: [], sync: { kind: 'ok', label: 'ok' }, counts: { toConfirm: 0, waiting: 0, conflicts: 0, cases: { confirm: 0, waiting: 0, conflict: 0 } } };
+  assert.equal(homeHtml(base), homeHtml({ ...base, growth: '' })); assert.match(homeHtml({ ...base, growth: '<section data-nx-growth-home></section>' }), /data-nx-growth-home/);
+});

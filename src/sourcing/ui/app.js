@@ -191,9 +191,9 @@ const embeddedHtml = createEmbedded({ S, ls, cur, run, status, render: () => ren
 
 // SALON (Field V1): the whole field loop on the phone. Created on first use, after the local storage has been read.
 let salonInstance = null;
-const salon = () => (salonInstance ??= createSalon({ S, ls, render: () => render(), persist, markDirty, queueSync, externals, setMode: (m) => setMode(m), openMenu: () => openMenu(), embedded: embeddedHtml, expertSections: () => TABS, syncInfo, conflictVersions, keepBoth, takeServer, syncNow, exportCase, voice: () => voice, capabilities: () => showCapabilities() }));
+const salon = () => (salonInstance ??= createSalon({ S, ls, loadHomeModules: () => nxPanel.loadHomeModules(), growthHomeCard: () => nxPanel.growthHomeCard(), render: () => render(), persist, markDirty, queueSync, externals, setMode: (m) => setMode(m), openMenu: () => openMenu(), embedded: embeddedHtml, expertSections: () => TABS, syncInfo, conflictVersions, keepBoth, takeServer, syncNow, exportCase, voice: () => voice, capabilities: () => showCapabilities() }));
 
-const backup = createBackup({ S, ls, api, getBlob, photoKeysFor, dirty, isSyncing: () => syncing, persist, paintHeader, refresh: () => openMenu() }); const corePanel = createCorePanel({ S, api, refresh: () => openMenu() }); const nxPanel = createModulesPanel({ S, api, refresh: () => openMenu() }); const { syncInfo, conflictVersions, keepBoth, takeServer, syncNow, exportCase } = createSyncHelpers({ S, dirty, status, persist, markDirty, queueSync, ping, sync, getBlob, putBlob, buildExport, exportSummary });
+const backup = createBackup({ S, ls, api, getBlob, photoKeysFor, dirty, isSyncing: () => syncing, persist, paintHeader, refresh: () => openMenu() }); const corePanel = createCorePanel({ S, api, refresh: () => openMenu() }); const nxPanel = createModulesPanel({ S, api, refresh: () => openMenu(), repaintHome: () => render() }); const { syncInfo, conflictVersions, keepBoth, takeServer, syncNow, exportCase } = createSyncHelpers({ S, dirty, status, persist, markDirty, queueSync, ping, sync, getBlob, putBlob, buildExport, exportSummary });
 
 const menuCase = () => activeMenuCase(S, cur(), S.mode === 'salon' ? salon().state().view : null);
 const readForm = (f) => Object.fromEntries(new FormData(f).entries());

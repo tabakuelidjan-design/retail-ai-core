@@ -7,13 +7,19 @@ import { coreDisabledReason, coreErrorMessage } from './core-journal-errors.js';
 const BADGE = { DISPONIBLE: '#1b7f3b', 'LECTURE SEULE': '#1b5e7f', LIMITÉ: '#8a6d00', 'À APPROUVER': '#8a6d00', 'À VÉRIFIER': '#8a6d00', BLOQUÉ: '#a12', 'NON RACCORDÉ': '#666', 'NON CONFIGURÉ': '#666' };
 const QUICK = { finance: [['Factures fournisseurs à payer', 'quelles factures fournisseurs dois-je payer et quelles sont les échéances ?'], ['Trésorerie', 'ma trésorerie'], ['Achats du mois', 'mes achats du mois']], analytics: [['Évolution des ventes', 'comment évoluent mes ventes et pourquoi certaines performances changent-elles ?']] };
 
-export function createModulesPanel({ S, api, refresh }) {
+export function createModulesPanel({ S, api, refresh, repaintHome = () => {} }) {
   const st = (S.nx ??= { modules: null, branding: null, campaigns: null, creation: null, photo: null, answer: null, check: null, busy: false, error: '' });
   const fail = (e) => { st.error = coreErrorMessage(e); };
   async function load({ preserveError = false } = {}) {
     try { const [m, b, c, v] = await Promise.all([api('/api/core/modules'), api('/api/core/branding'), api('/api/core/campaigns'), api('/api/core/creation')]); st.modules = m.modules; st.branding = b; st.campaigns = c.campaigns; st.creation = v;
       st.financeInbox = m.modules.find((x) => x.key === 'finance')?.state === 'LECTURE SEULE' ? await api('/api/core/finance/inbox').catch(() => null) : null; /* read-only, own session: no token */ if (!preserveError) st.error = ''; } catch (e) { if (!preserveError || !st.error) fail(e); }
     refresh();
+  }
+  // ACCUEIL: only the module list is read (one light GET, once per page load), so "Développement des ventes" can be shown on the home. Nothing else is loaded; a failure leaves the home exactly as it was.
+  async function loadHomeModules() {
+    if (st.homeTried || !S.online || !S.token) return; st.homeTried = true;
+    try { const m = await api('/api/core/modules'); st.homeModules = Array.isArray(m?.modules) ? m.modules : null; } catch { st.homeModules = null; }
+    if (st.homeModules) repaintHome();
   }
   async function post(path, body, after) { st.busy = true; st.error = ''; refresh(); let failed = false; try { const r = await api(path, { method: 'POST', body: JSON.stringify(body ?? {}) }); after?.(r); /* NOT after?.(await api()): optional chaining would skip the request itself when there is no callback */ } catch (e) { failed = true; fail(e); } st.busy = false; await load({ preserveError: failed }); }
   const val = (id) => document.getElementById(id)?.value.trim() ?? '';
@@ -61,6 +67,8 @@ export function createModulesPanel({ S, api, refresh }) {
   const videoLink = (m) => (m?.video_screen ? '<p class="small"><a class="btn" href="/videos">Ajouter une vidéo</a> <span class="muted">— un MP4 de CapCut et ses légendes TikTok et Instagram, en brouillon.</span></p>' : '');
   const settingsBar = (m) => (m?.connections_screen ? '<p class="small" data-nx-settings><a class="btn" href="/settings">Paramètres</a> <a class="btn sec" href="/settings/connections">Connexions</a> <span class="muted">— comptes reliés et leur état réel, en lecture seule.</span></p>' : '');
   const growthLink = (m) => (m?.growth_url && /^https:\/\//.test(m.growth_url) ? `<p class="small" data-nx-growth><a class="btn" href="${esc(m.growth_url)}/#/dropoff" target="_blank" rel="noopener">Où les visiteurs abandonnent</a> <a class="btn sec" href="${esc(m.growth_url)}/#/opportunities" target="_blank" rel="noopener">Opportunités</a> <span class="muted">— nouvel onglet ; Nordla ne publie, ne modifie et ne dépense rien.</span></p>` : '');
+  // The same entry and the same two links as in the Nordla panel (growthLink): the home only shows them without the person having to open the panel. Absent without a confirmed https address from the server.
+  const growthHomeCard = () => { const m = (st.modules ?? st.homeModules)?.find((x) => x.key === 'growth'); const links = growthLink(m); return links ? `<section class="nx-growth" data-nx-growth-home aria-label="Développement des ventes"><h2 class="nx-h">Développement des ventes</h2>${links}</section>` : ''; };
   const gbpLink = (m) => (m?.gbp_screen ? '<p class="small"><a class="btn" href="/gbp">Voir et approuver les publications Google</a> <span class="muted">— deux brouillons ; Nordla ne publie rien sur Google.</span></p>' : '');
   const financeOpenButton = (m) => (m?.dashboard ? ` <button class="btn" data-act="nx-open-finance">Ouvrir le tableau de bord Finance</button>` : '');
   // ---- Parle à Nordla: one input, one answer zone, on the person's own session (the server resolves the merchant). Read-only: Nordla answers, it executes nothing.
@@ -86,8 +94,8 @@ export function createModulesPanel({ S, api, refresh }) {
   const financeInboxCard = () => { const i = st.financeInbox; if (!i) return ''; const money = (c, cur) => (Number.isInteger(c) ? `${(c / 100).toFixed(2)} ${esc(cur ?? '')}` : 'montant à saisir'); return `<div class="card" data-nx-finance-inbox><p class="small"><b>Boîte factures fournisseurs</b> — ${i.total} fiche(s), ${i.toReview} à vérifier <span class="muted">(${esc(i.source)})</span></p>${i.items.slice(0, 10).map((r) => `<p class="small">${esc(FIN_STATUS[r.status] ?? r.status)} · ${esc(r.supplier ?? 'fournisseur ?')} · ${esc(r.invoiceNumber ?? 'n° de facture à saisir')}${r.orderReference ? ` · bon ${esc(r.orderReference)}` : ''} · ${money(r.grossCents, r.currency)}</p>`).join('') || '<p class="small muted">Aucune fiche.</p>'}<p class="small muted">Lecture seule : rien n’est validé ni payé depuis Nordla.</p></div>`; };
   function section() {
     const head = '<h2 id="nx-head">Nordla</h2>';
-    if (!S.online || !S.token) return `${head}<p class="small muted">Hors ligne : seul China Sourcing fonctionne (vos dossiers et photos restent sur ce téléphone). Les six autres modules demandent le serveur.</p>`;
-    if (!st.modules) return `${head}${parleCard()}${st.error ? `<p class="warn">${esc(st.error)}</p>` : ''}<button class="btn" data-act="nx-load">Ouvrir Nordla (7 modules)</button>`;
+    if (!S.online || !S.token) return `${head}<p class="small muted">Hors ligne : seul China Sourcing fonctionne (vos dossiers et photos restent sur ce téléphone). Les autres modules demandent le serveur.</p>`;
+    if (!st.modules) return `${head}${parleCard()}${st.error ? `<p class="warn">${esc(st.error)}</p>` : ''}<button class="btn" data-act="nx-load">Ouvrir Nordla</button>`;
     const by = Object.fromEntries(st.modules.map((m) => [m.key, m]));
     const mod = (m, body = '') => `<details class="card" data-nx-module="${esc(m.key)}" ${st.open === m.key ? 'open' : ''}><summary><b>${esc(m.label)}</b> <span class="small" style="color:#fff;background:${BADGE[m.state] ?? '#666'};border-radius:4px;padding:1px 6px">${esc(m.state)}</span>${m.offline ? ' <span class="small muted">hors ligne</span>' : ''}</summary><p class="small muted">${esc(m.key === 'core' && m.state === 'NON CONFIGURÉ' ? coreDisabledReason(m.detail) : m.detail)}</p>${body}</details>`;
     const quick = (k) => (QUICK[k] ?? []).map(([l, q]) => `<button class="btn sec" data-act="nx-ask" data-label="${esc(l)}" data-q="${esc(q)}" ${['LECTURE SEULE'].includes(by[k]?.state) ? '' : 'disabled'}>${esc(l)}</button>`).join(' ');
@@ -95,12 +103,12 @@ export function createModulesPanel({ S, api, refresh }) {
     const brandBody = b?.status === 'PROPOSED_NOT_APPROVED' || b?.status === 'APPROVED' ? `<p class="small">Positionnement : ${esc(b.positioning)}</p><p class="small">Interdits proposés : ${esc(b.rules.map((r) => `« ${r.forbidden} » (${r.severity === 'BLOCK' ? 'bloquant' : 'à revoir'})`).join(', '))}</p>${b.status === 'APPROVED' ? `<p class="small">Approuvé le ${esc(String(b.approvedAt).slice(0, 16).replace('T', ' '))}.</p>` : `<p class="small muted">Questions ouvertes : ${esc(b.questions.join(' '))}</p><button class="btn sec" data-act="nx-approve-brand">Approuver ces règles (propriétaire)</button>`}` : '';
     const check = st.check ? `<div class="card" data-nx-check><p class="small"><b>${st.check.official ? `Vérification officielle : ${esc(st.check.outcome)}` : 'Aperçu indicatif (règles non approuvées)'}</b></p>${(st.check.findings ?? []).map((f) => `<p class="small warn">${esc(f.forbidden ?? f.rule)} — ${esc(f.why ?? f.reason ?? f.outcome)}</p>`).join('') || '<p class="small">Rien de signalé.</p>'}</div>` : '';
     const form = `<label class="small">Produit<input id="nx-product"></label><label class="small">Objectif<input id="nx-objective" placeholder="ex. ventes en boutique à Namur"></label><label class="small">Public<input id="nx-audience" placeholder="ex. parents cherchant un cadeau"></label><label class="small">Canal<input id="nx-channel" placeholder="ex. Instagram"></label><label class="small">Texte proposé<textarea id="nx-copy" rows="2"></textarea></label><div class="row"><button class="btn sec" data-act="nx-check">Vérifier la marque</button><button class="btn" data-act="nx-campaign">Préparer la proposition</button></div>`;
-    return `${head}${parleCard()}${settingsBar(by.core)}${st.error ? `<p class="warn" role="status">${esc(st.error)}</p>` : ''}<p class="small muted">État réel des modules sur ce serveur. Rien n’est publié, payé ni commandé par Nordla.</p>
+    return `${head}${parleCard()}${settingsBar(by.core)}${st.error ? `<p class="warn" role="status">${esc(st.error)}</p>` : ''}<p class="small muted">${st.modules.length} modules — état réel sur ce serveur. Rien n’est publié, payé ni commandé par Nordla.</p>
       ${mod(by.core, `<p class="small muted">Voir « Nordla Core » plus bas (décisions d’achat, suivi).</p>`)}
       ${mod(by.finance, quick('finance') + financeOpenButton(by.finance) + financeInboxCard())}${by.procurement ? mod(by.procurement, '<p class="small"><a href="/procurement/">Ouvrir Stock / Achats</a></p>') : ''}${mod(by.analytics, quick('analytics'))}
       ${mod(by.sourcing, '<p class="small muted">Écran principal de l’application.</p>')}
       ${mod(by.branding, brandBody)}${mod(by.marketing, `${form}${check}${(st.campaigns ?? []).slice(0, 5).map(campaignCard).join('')}${gbpLink(by.marketing)}${videoLink(by.marketing)}`)}${mod(by.creative, creationBody() + creatorLink(by.creative))}${by.growth ? mod(by.growth, growthLink(by.growth)) : ''}
       `;
   }
-  return { section, load, ask: parle };
+  return { section, load, ask: parle, loadHomeModules, growthHomeCard };
 }

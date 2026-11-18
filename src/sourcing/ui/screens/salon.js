@@ -173,7 +173,7 @@ export function createSalon(ctx) {
     const e = eng(); const cases = allCases();
     try {
       const name = view.name;
-      if (name === 'home') { const ov = overviewOf(cases); return N.homeHtml({ overview: ov, sync: sync(), counts: countsOf(ov), conflicts: Object.keys(S.conflicts ?? {}).length, flash: takeFlash(), now: Date.now() }); }
+      if (name === 'home') { const ov = overviewOf(cases); return N.homeHtml({ overview: ov, sync: sync(), counts: countsOf(ov), conflicts: Object.keys(S.conflicts ?? {}).length, flash: takeFlash(), now: Date.now(), growth: (() => { try { ctx.loadHomeModules?.(); return ctx.growthHomeCard?.() ?? ''; } catch { return ''; } })() }); }
       if (name === 'new') return N.newHtml({ flash: takeFlash() });
       if (name === 'suppliers') { const ov = overviewOf(cases); const list = filtered(ov); return N.suppliersHtml({ overview: list, total: ov.length, selected, filter, query, sync: sync(), conflicts: Object.keys(S.conflicts ?? {}).length, counts: countsOf(ov), flash: takeFlash() }); }
       if (name === 'visits') { const ov = overviewOf(cases); return N.visitsHtml({ items: ov, filter: visitFilter, now: Date.now(), sync: sync(), conflicts: Object.keys(S.conflicts ?? {}).length, flash: takeFlash() }); }
