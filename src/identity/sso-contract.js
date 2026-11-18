@@ -15,6 +15,7 @@
 //    not suspended, not removed, same role as the ticket, role still allowed for the module, entitlement still ACTIVE.
 //    So a person suspended or removed after issuance loses access as soon as they use a ticket.
 //    The ticket is the only identity the service accepts from the Nordla side; no shared permanent token is used for it.
+// Keys: one per module, canonical base64url of 32 random bytes, never the dashboard token (identity/sso-keys.js, docs/sso-keys.md).
 // 4. Return to Core: each service keeps a link back to the Nordla home (NORDLA_HOME_URL, https only); it carries no ticket.
 // 5. Refusals are named (SSO_*, MEMBER_*, ROLE_CHANGED, MODULE_*) in the journal; the browser sees only a generic 403.
 //

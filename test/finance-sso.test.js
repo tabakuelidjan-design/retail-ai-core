@@ -5,7 +5,8 @@ import { startApp } from './finance-dashboard-helpers.js';
 import { createCoreHttp } from '../src/core-pilot/http.js';
 import { buildFinanceSso } from '../src/sourcing/server/index.js';
 
-const SECRET = 'a-shared-server-side-secret-0123456789';
+import { K_FINANCE, K_WRONG } from './fixtures/sso-test-keys.js';
+const SECRET = K_FINANCE;
 const M = 'merchant-test-1';
 const P_F = { userId: 'u1', role: 'OWNER', module: 'finance' };
 const T0 = Date.parse('2026-11-16T12:00:00.000Z');
@@ -25,7 +26,7 @@ test('an expired ticket, a ticket of another merchant, a forged or altered one a
   assert.equal(v.verify(old).code, 'SSO_EXPIRED');
   const other = issueTicket({ secret: SECRET, merchantId: 'someone-else', now: c.now });
   assert.equal(v.verify(other).code, 'SSO_WRONG_MERCHANT');
-  const forged = issueTicket({ secret: 'another-secret-another-secret-123', merchantId: M, now: c.now });
+  const forged = issueTicket({ secret: K_WRONG, merchantId: M, now: c.now });
   assert.equal(v.verify(forged).code, 'SSO_BAD_SIGNATURE');
   const good = issueTicket({ secret: SECRET, merchantId: M, now: c.now });
   const [body, sig] = good.split('.');
@@ -61,7 +62,7 @@ test('the Finance dashboard: /sso opens a session without any token, once; direc
     // the same ticket again, a ticket for another merchant, and a ticket signed with another key: refused, no cookie
     const again = await go(t); assert.equal(again.status, 403); assert.equal(again.headers.get('set-cookie'), null);
     assert.equal((await go(issueTicket({ secret: SECRET, merchantId: 'other-merchant' }))).status, 403);
-    assert.equal((await go(issueTicket({ secret: 'another-secret-another-secret-123', person: P_F, merchantId: M }))).status, 403);
+    assert.equal((await go(issueTicket({ secret: K_WRONG, person: P_F, merchantId: M }))).status, 403);
     assert.ok(a.audits.some((e) => e.action === 'LOGIN_SSO') && a.audits.some((e) => e.action === 'LOGIN_SSO_REFUSED'));
     // the token login still works as before
     assert.equal((await a.client().login()).status, 200);

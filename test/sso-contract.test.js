@@ -8,7 +8,8 @@ import { createCoreHttp } from '../src/core-pilot/http.js';
 
 const M = '67646dbb-5e2e-4cd7-aad6-0ab289b068cb';
 const OTHER = '7e570000-0000-4000-8000-000000000001';
-const SECRET = 'a'.repeat(40);
+import { K_FINANCE, K_WRONG } from './fixtures/sso-test-keys.js';
+const SECRET = K_FINANCE;
 const U = '5c2f4d6e-ea34-452d-8107-0197a3eb54da';
 
 // A tiny in-memory stand-in for the Supabase REST reader (only select with eq filters is used by the checker).

@@ -7,7 +7,8 @@ import { createGuard, ANALYTICS_SSO_AUDIENCE } from '../src/analytics-premium/se
 import { issueTicket } from '../src/finance/sso-ticket.js';
 import { createAccessChecker } from '../src/identity/sso-contract.js';
 
-const HOST = 'analytics-staging.up.railway.app'; const TOKEN = 't'.repeat(32); const SECRET = 'an-sso-secret-0123456789-abcdefghij'; const M = 'merchant-1';
+const HOST = 'analytics-staging.up.railway.app'; const TOKEN = 't'.repeat(32); import { K_ANALYTICS } from './fixtures/sso-test-keys.js';
+const SECRET = K_ANALYTICS; const M = 'merchant-1';
 const U = '5c2f4d6e-ea34-452d-8107-0197a3eb54da';
 let T = Date.parse('2026-11-19T08:00:00Z'); const now = () => T;
 const res = () => { const r = { status: 0, headers: {}, body: '', writeHead(s, h) { r.status = s; Object.assign(r.headers, h); }, setHeader(k, v) { r.headers[k] = v; }, end(b) { r.body = String(b ?? ''); } }; return r; };

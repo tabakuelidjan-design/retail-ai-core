@@ -30,6 +30,7 @@ import { checkJournalDeployment } from '../../core-pilot/deployment-guard.js';
 import { createCoreRuntime } from '../../core-pilot/runtime.js';
 import { createCoreHttp } from '../../core-pilot/http.js';
 import { activeEntitlementsOf } from '../../identity/entitlements.js';
+import { parseSsoKey, ssoKeyReuseOf } from '../../identity/sso-keys.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const DATA_DIR = 'data/local/sourcing';
@@ -279,7 +280,9 @@ export async function buildCore({ env, dir, merchantId, store, safety, log = () 
   const campaigns = createCampaignService({ merchantId, branding, analytics: readers.analytics, file: join(dir, 'core', 'campaigns.jsonl'), env });
   let creation = null; // local visual (owner's photo + headline), only when the merchant's typography is configured; no provider, no network
   try { const { createCreationService, loadCreationConfig } = await import('../../core-pilot/creation.js'); const cfg = await loadCreationConfig(env, root); if (cfg) creation = createCreationService({ merchantId, config: cfg, branding, dir: join(dir, 'core', 'creations') }); } catch (e) { log(`Création (local visual): NOT connected (${e.message}).`); }
-  const financeSso = buildFinanceSso(env, merchantId); const analyticsSso = buildAnalyticsSso(env, merchantId);
+  let financeSso = buildFinanceSso(env, merchantId); let analyticsSso = buildAnalyticsSso(env, merchantId);
+  // one key per module: the same value for Finance and Analyses is refused on both (no ticket can be replayed across audiences)
+  if (financeSso && analyticsSso && ssoKeyReuseOf(financeSso.secret, { otherKeys: [analyticsSso.secret] })) { financeSso = null; analyticsSso = null; log('Nordla SSO: FINANCE_SSO_SECRET and ANALYTICS_SSO_SECRET must be different keys: both single sign-on links are OFF.'); }
   // ACTIVE modules of THIS merchant, read on each call (default deny). No Supabase configuration (local PC) = no entitlement reader = nothing opens.
   let entitlements = entitlementsInjected; // injected: tests only
   if (!entitlements) { try { const client = await import('../../supabase/client.js'); const supabase = client.createSupabaseClient(client.loadSupabaseConfigFromEnv(env)); entitlements = () => activeEntitlementsOf({ supabase, merchantId }); } catch { entitlements = null; } }
@@ -293,7 +296,7 @@ export async function buildCore({ env, dir, merchantId, store, safety, log = () 
 export function buildFinanceSso(env, merchantId) {
   try {
     const u = new URL(String(env.FINANCE_PUBLIC_URL ?? '').trim()); const secret = String(env.FINANCE_SSO_SECRET ?? '');
-    if (u.protocol !== 'https:' || u.pathname !== '/' || u.search || u.hash || u.username || u.password || secret.length < 24) return null;
+    if (u.protocol !== 'https:' || u.pathname !== '/' || u.search || u.hash || u.username || u.password || !parseSsoKey(secret).ok) return null; // canonical base64url, 32 random bytes
     return { publicUrl: u.origin, secret, merchantId };
   } catch { return null; }
 }
@@ -302,7 +305,7 @@ export function buildFinanceSso(env, merchantId) {
 export function buildAnalyticsSso(env, merchantId) {
   try {
     const u = new URL(String(env.ANALYTICS_PUBLIC_URL ?? '').trim()); const secret = String(env.ANALYTICS_SSO_SECRET ?? '');
-    if (u.protocol !== 'https:' || u.pathname !== '/' || u.search || u.hash || u.username || u.password || secret.length < 24) return null;
+    if (u.protocol !== 'https:' || u.pathname !== '/' || u.search || u.hash || u.username || u.password || !parseSsoKey(secret).ok) return null; // canonical base64url, 32 random bytes
     return { publicUrl: u.origin, secret, merchantId };
   } catch { return null; }
 }

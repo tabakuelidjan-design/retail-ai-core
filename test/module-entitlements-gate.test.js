@@ -2,6 +2,7 @@
 // Scenarios: OWNER opens an authorised module, ADMIN/ACCOUNTANT/VIEWER rules, suspended or removed person (no role), absence of an
 // entitlement, another merchant's entitlement never counts, a failing reader refuses, and the Core panel never shows a module as active.
 import test from 'node:test';
+import { K_FINANCE, K_ANALYTICS, K_WRONG } from './fixtures/sso-test-keys.js';
 import assert from 'node:assert/strict';
 import { CATALOG, MODULE_STATUS, decideModuleOpen, catalogOf } from '../src/identity/module-catalog.js';
 import { MODULE_CODES } from '../src/identity/modules.js';
@@ -64,8 +65,8 @@ test('entitlements: a failing read propagates (the caller then refuses), a missi
 
 // --- Core HTTP ----------------------------------------------------------------------------------------------------------------
 
-const SSO = { publicUrl: 'https://finance-staging-staging.up.railway.app', secret: 'x'.repeat(32), merchantId: M };
-const ASSO = { publicUrl: 'https://analytics-staging-staging.up.railway.app', secret: 'y'.repeat(32), merchantId: M };
+const SSO = { publicUrl: 'https://finance-staging-staging.up.railway.app', secret: K_FINANCE, merchantId: M };
+const ASSO = { publicUrl: 'https://analytics-staging-staging.up.railway.app', secret: K_ANALYTICS, merchantId: M };
 
 async function call(core, method, route, actor) {
   const chunks = []; let status = 0;

@@ -6,7 +6,8 @@ import { issueTicket } from '../src/finance/sso-ticket.js';
 import { createAccessChecker } from '../src/identity/sso-contract.js';
 import { startApp } from './finance-dashboard-helpers.js';
 
-const SECRET = 'a-shared-server-side-secret-0123456789';
+import { K_FINANCE } from './fixtures/sso-test-keys.js';
+const SECRET = K_FINANCE;
 const M = 'merchant-test-1';
 const U = '5c2f4d6e-ea34-452d-8107-0197a3eb54da';
 

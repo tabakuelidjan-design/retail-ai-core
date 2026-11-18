@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { createGuard, ANALYTICS_SSO_AUDIENCE } from '../src/analytics-premium/server/hosting.js';
 import { issueTicket } from '../src/finance/sso-ticket.js';
 
-const HOST = 'analytics-staging.up.railway.app'; const TOKEN = 't'.repeat(32); const SECRET = 'an-sso-secret-0123456789-abcdefghij'; const M = 'merchant-1';
+const HOST = 'analytics-staging.up.railway.app'; const TOKEN = 't'.repeat(32); import { K_ANALYTICS, K_WRONG } from './fixtures/sso-test-keys.js';
+const SECRET = K_ANALYTICS; const M = 'merchant-1';
 let T = Date.parse('2026-11-18T12:00:00Z'); const now = () => T;
 const res = () => { const r = { status: 0, headers: {}, body: '', writeHead(s, h) { r.status = s; Object.assign(r.headers, h); }, setHeader(k, v) { r.headers[k] = v; }, end(b) { r.body = String(b ?? ''); } }; return r; };
 const run = async (guard, { url = '/', cookie, auth } = {}) => { const r = res(); const ok = await guard({ method: 'GET', url, headers: { host: HOST, ...(cookie ? { cookie } : {}), ...(auth ? { authorization: auth } : {}) }, socket: { remoteAddress: '1.2.3.4' } }, r); return { ok, r }; };
@@ -22,7 +23,7 @@ test('AS-1 a good ticket opens a session (302 to /, HttpOnly Secure SameSite=Str
 
 test('AS-2 refused: no ticket, another merchant, another audience (a Finance ticket), another key, an expired ticket, a forged cookie; the host allow-list still comes first', async () => {
   const g = mk();
-  for (const t of ['', 'garbage', tk({ merchantId: 'other' }), issueTicket({ secret: SECRET, merchantId: M, now }) /* Finance audience */, issueTicket({ secret: 'another-secret-another-secret-123', merchantId: M, audience: ANALYTICS_SSO_AUDIENCE, now })]) {
+  for (const t of ['', 'garbage', tk({ merchantId: 'other' }), issueTicket({ secret: SECRET, merchantId: M, now }) /* Finance audience */, issueTicket({ secret: K_WRONG, merchantId: M, audience: ANALYTICS_SSO_AUDIENCE, now })]) {
     const r = await run(mk(), { url: `/sso?t=${encodeURIComponent(t)}` }); assert.equal(r.ok, false); assert.equal(r.r.status, 403); assert.equal(r.r.headers['Set-Cookie'], undefined);
   }
   const old = tk(); T += 61_000; assert.equal((await run(mk(), { url: `/sso?t=${encodeURIComponent(old)}` })).r.status, 403); T -= 61_000;

@@ -5,22 +5,24 @@
 //  - Finance verifies: signature, audience, shape, lifetime (60 s by default, never more than 120 s), the merchant it serves, and that the id was never used.
 //  The ticket travels once, in the URL of one navigation; a copy of it is useless after its first use or after its expiry.
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
+import { parseSsoKey } from '../identity/sso-keys.js';
 
 export const SSO_AUDIENCE = 'nordla-finance';
 /** The same ticket mechanism, another audience (and so another key): the Analytics dashboard. */
 export const ANALYTICS_SSO_AUDIENCE = 'nordla-analytics';
 export const SSO_MAX_TTL_SECONDS = 120;
-export const SSO_MIN_SECRET_LENGTH = 24;
+export const SSO_MIN_SECRET_LENGTH = 32; // bytes of entropy (base64url, 43 characters): see identity/sso-keys.js
 
 const b64u = (buf) => Buffer.from(buf).toString('base64url');
 // The Finance key derivation is unchanged; any other audience (e.g. the Analytics dashboard) derives its own key, so a ticket never works for another audience even with the same secret.
 const keyOf = (secret, audience = SSO_AUDIENCE) => createHash('sha256').update(audience === SSO_AUDIENCE ? `nordla-finance-sso-v1:${String(secret)}` : `nordla-sso-v1:${audience}:${String(secret)}`).digest();
 const sign = (secret, body, audience = SSO_AUDIENCE) => createHmac('sha256', keyOf(secret, audience)).update(body).digest();
-const secretOk = (secret) => typeof secret === 'string' && secret.length >= SSO_MIN_SECRET_LENGTH;
+const secretOk = (secret) => parseSsoKey(secret).ok;
+const secretError = (secret) => parseSsoKey(secret).message ?? 'la clé SSO est invalide';
 
 /** @returns {string} `<payload>.<signature>` (base64url) */
 export function issueTicket({ secret, merchantId, audience = SSO_AUDIENCE, ttlSeconds = 60, now = () => Date.now(), id = () => randomBytes(16).toString('hex'), person = null }) {
-  if (!secretOk(secret)) throw Object.assign(new Error('the SSO secret is missing or shorter than 24 characters'), { code: 'SSO_NOT_CONFIGURED' });
+  if (!secretOk(secret)) throw Object.assign(new Error(secretError(secret)), { code: 'SSO_NOT_CONFIGURED', keyCode: parseSsoKey(secret).code });
   if (typeof merchantId !== 'string' || !merchantId) throw Object.assign(new Error('a merchant is required'), { code: 'SSO_MERCHANT_REQUIRED' });
   const ttl = Math.min(Math.max(1, Math.trunc(ttlSeconds)), SSO_MAX_TTL_SECONDS);
   const iat = Math.floor(now() / 1000);
@@ -41,7 +43,7 @@ export function issueTicket({ secret, merchantId, audience = SSO_AUDIENCE, ttlSe
  * @param {Function|null} [o.checkAccess=null] async ({merchantId,userId,role,module}) => {ok:true}|{ok:false,code}: re-checked at USE time
  */
 export function createTicketVerifier({ secret, merchantId, audience = SSO_AUDIENCE, now = () => Date.now(), skewSeconds = 30, requirePerson = false, module = null, checkAccess = null }) {
-  if (!secretOk(secret)) throw Object.assign(new Error('the SSO secret is missing or shorter than 24 characters'), { code: 'SSO_NOT_CONFIGURED' });
+  if (!secretOk(secret)) throw Object.assign(new Error(secretError(secret)), { code: 'SSO_NOT_CONFIGURED', keyCode: parseSsoKey(secret).code });
   const used = new Map(); // jti -> exp (seconds)
   const prune = (nowS) => { for (const [k, exp] of used) if (exp < nowS - skewSeconds) used.delete(k); };
   /** @returns {{ ok: true } | { ok: false, code: 'SSO_MALFORMED'|'SSO_BAD_SIGNATURE'|'SSO_INVALID'|'SSO_EXPIRED'|'SSO_NOT_YET_VALID'|'SSO_WRONG_MERCHANT'|'SSO_REPLAYED' }} */
