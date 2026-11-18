@@ -730,3 +730,18 @@ body.gr-pp-lock { overflow: hidden; }
   .gr-do-funnel td { min-width: 0; padding: 4px 0; border: 0; }
   .gr-do-funnel td::before { content: attr(data-label); display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--nd-text-2, #6b6b6b); }
   .gr-do-dl { grid-template-columns: 1fr; } .gr-do-cmp { grid-template-columns: 1fr; } .gr-do-c { min-width: 120px; } }
+
+/* Où les visiteurs abandonnent > personalizer events: a list (nothing to scroll sideways), and the events table stacked on phones. Namespaced .gr-do-pz / .gr-do-events. */
+.gr-do-pz-list { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 0; }
+.gr-do-pz-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding: 10px 0; border-top: 1px solid var(--nd-border); }
+.gr-do-pz-row:first-child { border-top: 0; }
+.gr-do-pz-label { flex: 1 1 60%; min-width: 0; overflow-wrap: anywhere; color: var(--nd-text); }
+.gr-do-pz-n { font-size: 18px; color: var(--nd-text); }
+.gr-do-pz-dev { flex: 1 0 100%; font-size: 12.5px; }
+.gr-do-pz-prov { margin: 6px 0; }
+@media (max-width: 560px) {
+  .gr-do-events, .gr-do-events thead, .gr-do-events tbody, .gr-do-events tr, .gr-do-events th, .gr-do-events td { display: block; width: 100%; box-sizing: border-box; }
+  .gr-do-events thead { position: absolute; left: -9999px; }
+  .gr-do-events tr { padding: 10px 0; border-top: 1px solid var(--nd-border); }
+  .gr-do-events th, .gr-do-events td { padding: 2px 0; border: 0; text-align: left; overflow-wrap: anywhere; }
+}

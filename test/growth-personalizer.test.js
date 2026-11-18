@@ -113,7 +113,7 @@ test('PZ-4 the drop-off source attaches a FRESH summary of the events (never cac
   assert.equal(second.personalizer.outcomes.CONFIRMED, 1); assert.equal(second.personalizer.outcomes.LAST_EVENT_OBSTACLE, 1); assert.equal(second.personalizer.obstacles.thenContinued, 1);
   const nc = await createDropoffSource({ load: async () => null, timeZone: TZ, now: () => NOW, personalizerStore: store, cacheMs: 0 })(); assert.equal(nc.state, 'NOT_CONNECTED'); assert.equal(nc.personalizer.attempts, 2);
   const failing = await createDropoffSource({ load: async () => snapshot(), timeZone: TZ, now: () => NOW, personalizerStore: { list: async () => { throw new Error('db down'); } }, cacheMs: 0 })(); assert.equal(failing.state, 'OK'); assert.equal(failing.personalizer.status, 'UNAVAILABLE');
-  const none = await createDropoffSource({ load: async () => snapshot(), timeZone: TZ, now: () => NOW, cacheMs: 0 })(); assert.equal('personalizer' in none, false);
+  const none = await createDropoffSource({ load: async () => snapshot(), timeZone: TZ, now: () => NOW, cacheMs: 0 })(); assert.equal(none.personalizer.status, 'INACTIVE'); assert.equal(none.personalizer.provenance, 'draft_theme_tests'); // no store: collection inactive, said so (never a silent zero)
 });
 
 test('PZ-6 the screen: attempt vs confirmed add, obstacle vs abandon, counts only, no confirmed-abandon claim; shown even when the funnel snapshot is not connected', async () => {
@@ -128,5 +128,25 @@ test('PZ-6 the screen: attempt vs confirmed add, obstacle vs abandon, counts onl
     assert.doesNotMatch(t, /\bIMG_|\.jpg|\.png|TEXTE/);
   }
   const empty = await growthDom('#/dropoff', { dropoff: JSON.parse(JSON.stringify(await createDropoffSource({ load: async () => snapshot(), timeZone: TZ, now: () => NOW, personalizerStore: createMemoryPersonalizerStore(), cacheMs: 0 })())) });
-  assert.match(text(empty.root), /Aucun événement reçu pour l’instant/);
+  assert.match(text(empty.root), /Collecte active : aucun événement reçu pour l’instant/); // active, zero events: not the same as inactive or unavailable
+});
+
+test('PZ-8 the events table reads the SAME summary as the card: photo_chosen -> Photo chargée, design_ready -> Personnalisation terminée, cart_submit stays an attempt, cart_confirmed the confirmed add; three states; provenance', async () => {
+  const store = createMemoryPersonalizerStore(); await twoCases(store);
+  const mk = (personalizerStore, load = async () => snapshot()) => createDropoffSource({ load, timeZone: TZ, now: () => NOW, personalizerStore, cacheMs: 0 })().then((x) => JSON.parse(JSON.stringify(x)));
+  const d = await growthDom('#/dropoff', { dropoff: await mk(store) }); const t = text(d.root);
+  const evRows = (root) => { const rows = []; const walk = (n) => { if (n.tagName === 'TR' && /gr-do-pz-ev/.test(n.className)) rows.push(text(n)); (n.children || []).forEach(walk); }; walk(root); return rows; };
+  const rows = evRows(d.root); const row = (re) => rows.find((r) => re.test(r)) || '';
+  assert.match(row(/Photo chargée/i), /habb_personalizer › photo_chosen.*Mesuré.*1 tentatives \(mobile 1 · ordinateur 0\)/);
+  assert.match(row(/Personnalisation terminée/i), /habb_personalizer › design_ready.*Mesuré.*1 tentatives/);
+  assert.match(row(/Tentative d’ajout au panier/i), /cart_submit.*1 tentatives/); assert.match(row(/Ajout confirmé par le panier Shopify/i), /cart_confirmed.*1 tentatives/);
+  assert.match(row(/Refus « photo manquante »/i), /submit_blocked_no_photo.*2 tentatives/);
+  // the same numbers in the card
+  assert.match(t, /Photo ajoutée1mobile 1 · ordinateur 0/); assert.match(t, /Ajout confirmé par le panier Shopify1mobile 1 · ordinateur 0/); assert.match(t, /Tentative d’ajout au panier \(cart_submit\)1mobile 1/);
+  assert.match(t, /Provenance : essais réalisés sur le thème brouillon, pas des visites de clients/); assert.match(t, /dernier événement : refus sans photo \(arrêt non confirmé\)/);
+  // three different states, never the same message
+  const inactive = text((await growthDom('#/dropoff', { dropoff: await mk(null) })).root); assert.match(inactive, /Collecte inactive/); assert.match(inactive, /collecte inactive/); assert.doesNotMatch(inactive, /Collecte active/);
+  const zero = text((await growthDom('#/dropoff', { dropoff: await mk(createMemoryPersonalizerStore()) })).root); assert.match(zero, /Collecte active : aucun événement reçu/); assert.match(zero, /collecte active, 0 événement reçu/); assert.doesNotMatch(zero, /Collecte inactive/);
+  const down = text((await growthDom('#/dropoff', { dropoff: await mk({ list: async () => { throw new Error('db'); } }) })).root); assert.match(down, /Données indisponibles : les événements n’ont pas pu être lus/); assert.match(down, /données indisponibles/);
+  for (const x of [zero, down, inactive]) assert.doesNotMatch(x, /Ajout confirmé par le panier Shopify.{0,3}[1-9]/); // no invented number in a state without data
 });

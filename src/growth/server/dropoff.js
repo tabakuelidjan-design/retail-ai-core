@@ -14,14 +14,14 @@ export const supabaseDropoffLoader = (supabase, merchantId, { table = 'growth_fu
   return rows?.[0]?.payload ?? null;
 };
 
-export function createDropoffSource({ load = null, timeZone, now = () => new Date(), config = DROPOFF_CONFIG, cacheMs = 60_000, personalizerStore = null } = {}) {
+export function createDropoffSource({ load = null, timeZone, now = () => new Date(), config = DROPOFF_CONFIG, cacheMs = 60_000, personalizerStore = null, provenance = 'draft_theme_tests' } = {}) {
   let cached = null; let cachedAt = 0;
   // The personalizer's technical events (docs/growth/DROPOFF_EVENTS.md): counts of DISTINCT attempts, read fresh on every answer (never cached with the snapshot). No store = not collected here (null).
   const withEvents = async (payload, t) => {
-    if (!personalizerStore || typeof personalizerStore.list !== 'function') return payload;
+    if (!personalizerStore || typeof personalizerStore.list !== 'function') return { ...payload, personalizer: { status: 'INACTIVE', provenance } }; // this server does not receive the events
     const since = new Date(t.getTime() - PZ_RETENTION_DAYS * 86400000);
-    try { return { ...payload, personalizer: summarizePersonalizer(await personalizerStore.list({ since }), { since: since.toISOString(), until: t.toISOString() }) }; }
-    catch (e) { console.error('growth personalizer events: read failed:', e?.message ?? e); return { ...payload, personalizer: { status: 'UNAVAILABLE' } }; }
+    try { return { ...payload, personalizer: { ...summarizePersonalizer(await personalizerStore.list({ since }), { since: since.toISOString(), until: t.toISOString() }), provenance } }; }
+    catch (e) { console.error('growth personalizer events: read failed:', e?.message ?? e); return { ...payload, personalizer: { status: 'UNAVAILABLE', provenance } }; }
   };
   return async function dropoff() {
     const t = now(); if (cached && t.getTime() - cachedAt < cacheMs) return withEvents(cached, t);

@@ -88,10 +88,22 @@ function doProductsCard(d) {
     list.length ? h('div', { class: 'ex-table-wrap' }, h('table', { class: 'ex-table gr-table gr-do-table' }, h('thead', null, h('tr', null, h('th', null, t('gr.do.col.product')), h('th', null, t('gr.do.col.landings')), h('th', null, t('gr.do.col.carts')), h('th', null, t('gr.do.col.rate')), h('th', null, t('gr.do.col.status')))), h('tbody', null, rows))) : h('p', { class: 'gr-pp-na' }, t('gr.do.unavailable')));
 }
 
+// The personalizer's events fill two steps of this table (same numbers as the card below: both read d.personalizer). cart_submit stays an ATTEMPT, cart_confirmed the CONFIRMED add.
+const DO_PZ_VIA = { photo_upload: 'photo_chosen', personalization_done: 'design_ready' };
+const DO_PZ_EXTRA = ['submit_blocked_no_photo', 'cart_submit', 'cart_confirmed'];
+const doPzCount = (p, k) => { const v = (p.steps && p.steps[k]) || { total: 0, mobile: 0, desktop: 0 }; return t('gr.do.pz.evCount', num(v.total), t('gr.do.pz.split', num(v.mobile), num(v.desktop))); };
 function doEventsCard(d) {
-  const rows = d.events.map((e) => h('tr', null, h('th', { scope: 'row' }, t(`gr.do.step.${e.step}`)), h('td', null, h('code', null, e.event)), h('td', null, e.measured ? chip(t('gr.do.measured'), 'gr-good') : chip(t('gr.do.notMeasured'), 'gr-warn')), h('td', { class: 'gr-muted' }, e.where)));
+  const p = d.personalizer || null; const ok = p && p.status === 'OK';
+  const stateNote = p && !ok ? h('span', { class: 'gr-muted gr-do-pz-state' }, ` · ${t(`gr.do.pz.evState.${p.status}`)}`) : null;
+  const rows = d.events.map((e) => {
+    const via = DO_PZ_VIA[e.step];
+    if (via && ok) return h('tr', { class: 'gr-do-pz-ev' }, h('th', { scope: 'row' }, t(`gr.do.step.${e.step}`)), h('td', null, h('code', null, `habb_personalizer › ${via}`)), h('td', null, chip(t('gr.do.measured'), 'gr-good'), ' ', h('span', { class: 'gr-do-pz-evcount' }, doPzCount(p, via))), h('td', { class: 'gr-muted' }, t('gr.do.pz.evVia')));
+    return h('tr', null, h('th', { scope: 'row' }, t(`gr.do.step.${e.step}`)), h('td', null, h('code', null, e.event)), h('td', null, e.measured ? chip(t('gr.do.measured'), 'gr-good') : chip(t('gr.do.notMeasured'), 'gr-warn'), via ? stateNote : null), h('td', { class: 'gr-muted' }, e.where));
+  });
+  if (ok) for (const k of DO_PZ_EXTRA) rows.push(h('tr', { class: 'gr-do-pz-ev' }, h('th', { scope: 'row' }, t(`gr.do.pz.step.${k}`)), h('td', null, h('code', null, `habb_personalizer › ${k}`)), h('td', null, chip(t('gr.do.measured'), 'gr-good'), ' ', h('span', { class: 'gr-do-pz-evcount' }, doPzCount(p, k))), h('td', { class: 'gr-muted' }, t('gr.do.pz.evVia'))));
   return h('section', { class: 'ex-card gr-do-card gr-do-wide' }, cardHead('dataHealth', t('gr.do.events.title')), h('p', { class: 'gr-muted' }, t('gr.do.events.def')),
-    h('div', { class: 'ex-table-wrap' }, h('table', { class: 'ex-table gr-table gr-do-table' }, h('thead', null, h('tr', null, h('th', null, t('gr.do.col.step')), h('th', null, t('gr.do.col.event')), h('th', null, t('gr.do.col.status')), h('th', null, t('gr.do.col.where')))), h('tbody', null, rows))),
+    p ? h('p', { class: 'gr-muted gr-do-pz-prov' }, t(`gr.do.pz.provenance.${p.provenance || 'unknown'}`)) : null,
+    h('div', { class: 'ex-table-wrap' }, h('table', { class: 'ex-table gr-table gr-do-table gr-do-events' }, h('thead', null, h('tr', null, h('th', null, t('gr.do.col.step')), h('th', null, t('gr.do.col.event')), h('th', null, t('gr.do.col.status')), h('th', null, t('gr.do.col.where')))), h('tbody', null, rows))),
     h('p', { class: 'gr-muted' }, t('gr.do.question')));
 }
 
@@ -101,13 +113,17 @@ const DO_PZ_OUTCOMES = ['CONFIRMED', 'SUBMITTED_UNCONFIRMED', 'SUBMITTED_NOT_FOU
 function doPersonalizerCard(d) {
   const p = d.personalizer;
   if (!p) return null;
-  if (p.status === 'UNAVAILABLE') return h('section', { class: 'ex-card gr-do-card gr-do-pz' }, cardHead('content', t('gr.do.pz.title')), h('p', { class: 'gr-muted' }, t('gr.do.pz.unavailable')));
-  if (p.status === 'NO_DATA') return h('section', { class: 'ex-card gr-do-card gr-do-pz' }, cardHead('content', t('gr.do.pz.title')), h('p', { class: 'gr-muted' }, t('gr.do.pz.noData')));
-  const steps = DO_PZ_STEPS.map((s) => { const v = p.steps[s] || { total: 0, mobile: 0, desktop: 0 }; return h('tr', { class: `gr-do-pz-${s}` }, h('th', { scope: 'row', class: 'gr-do-step' }, t(`gr.do.pz.step.${s}`)), h('td', { class: 'gr-do-c' }, h('strong', null, num(v.total))), h('td', { class: 'gr-do-c gr-muted' }, t('gr.do.pz.split', num(v.mobile), num(v.desktop)))); });
+  const prov = h('p', { class: 'gr-muted gr-do-pz-prov' }, t(`gr.do.pz.provenance.${p.provenance || 'unknown'}`));
+  const stateCard = (key) => h('section', { class: `ex-card gr-do-card gr-do-pz gr-do-pz-${p.status}` }, cardHead('content', t('gr.do.pz.title')), h('p', { class: 'gr-muted' }, t(key)), prov);
+  if (p.status === 'INACTIVE') return stateCard('gr.do.pz.inactive');
+  if (p.status === 'UNAVAILABLE') return stateCard('gr.do.pz.unavailable');
+  if (p.status === 'NO_DATA') return stateCard('gr.do.pz.noData');
+  const steps = DO_PZ_STEPS.map((s) => { const v = p.steps[s] || { total: 0, mobile: 0, desktop: 0 }; return h('li', { class: `gr-do-pz-row gr-do-pz-${s}` }, h('span', { class: 'gr-do-pz-label' }, t(`gr.do.pz.step.${s}`)), h('strong', { class: 'gr-do-pz-n' }, num(v.total)), h('span', { class: 'gr-do-pz-dev gr-muted' }, t('gr.do.pz.split', num(v.mobile), num(v.desktop)))); });
   const outcomes = DO_PZ_OUTCOMES.filter((k) => (p.outcomes || {})[k] > 0).map((k) => h('li', { class: `gr-do-pz-outcome gr-do-pz-${k}` }, h('strong', null, num(p.outcomes[k])), ' ', t(`gr.do.pz.outcome.${k}`)));
   return h('section', { class: 'ex-card gr-do-card gr-do-wide gr-do-pz' }, cardHead('content', t('gr.do.pz.title')),
     h('p', { class: 'gr-muted' }, t('gr.do.pz.source', num(p.attempts), num(p.events))),
-    h('div', { class: 'ex-table-wrap' }, h('table', { class: 'ex-table gr-table gr-do-table' }, h('thead', null, h('tr', null, h('th', null, t('gr.do.col.step')), h('th', null, t('gr.do.pz.col.attempts')), h('th', null, t('gr.do.pz.col.devices')))), h('tbody', null, ...steps))),
+    prov,
+    h('ul', { class: 'gr-do-pz-list' }, ...steps),
     h('p', { class: 'gr-muted' }, t('gr.do.pz.attemptNote')),
     p.obstacles && p.obstacles.met > 0 ? h('p', null, t('gr.do.pz.obstacle', num(p.obstacles.met), num(p.obstacles.thenContinued))) : null,
     h('h4', null, t('gr.do.pz.outcomes')), h('ul', { class: 'gr-do-list' }, ...outcomes),
