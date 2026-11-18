@@ -150,7 +150,7 @@ export function cleanPaymentInput(b) {
   if (amount === null && !(typeof p.amount === 'string' && /^-\d{1,9}(\.\d{1,2})?$/.test(p.amount.trim()))) errors.push({ field: 'amount', code: 'AMOUNT_INVALID' });
   if (!isDate(p.paidOn)) errors.push({ field: 'paidOn', code: 'DATE_INVALID' });
   const method = sanitizeText(p.method, 40);
-  const METHODS = ['bank_transfer', 'cash', 'card', 'other'];
+  const METHODS = ['bank_transfer', 'cash', 'card', 'qr_kbc', 'other'];
   if (method && !METHODS.includes(method)) errors.push({ field: 'method', code: 'METHOD_INVALID' });
   // idempotency key: chosen by the client when the form opens, so a double click or a retry after a lost answer is the SAME operation (absent = a fresh operation each time)
   const idempotencyKey = typeof p.idempotencyKey === 'string' && /^[A-Za-z0-9_.:-]{8,120}$/.test(p.idempotencyKey) ? p.idempotencyKey : undefined;
