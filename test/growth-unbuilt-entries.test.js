@@ -12,8 +12,8 @@ import { createGrowthApp } from '../src/growth/server/app.js';
 import { growthDom, all, text, navState, title } from './growth-dom.js';
 
 const DISABLED = ['ai', 'settings'];
-const BUILT = ['overview', 'opportunities', 'potential', 'audience', 'content', 'storeGrowth'];
-const HASH = { overview: '#/', opportunities: '#/opportunities', potential: '#/potential', audience: '#/audience', content: '#/content', storeGrowth: '#/storeGrowth' };
+const BUILT = ['overview', 'opportunities', 'potential', 'audience', 'content', 'dropoff', 'storeGrowth'];
+const HASH = { overview: '#/', opportunities: '#/opportunities', potential: '#/potential', audience: '#/audience', content: '#/content', storeGrowth: '#/storeGrowth', dropoff: '#/dropoff' };
 const GROWTH = new URL('../src/growth/', import.meta.url);
 const EXPERIMENTS = /exp[ée]rience|experiment/i; // FR "Expériences", NL "Experimenten", EN "Experiments"
 

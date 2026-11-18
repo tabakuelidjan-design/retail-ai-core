@@ -91,7 +91,7 @@ test('honest promise: shown on Vue d\'ensemble; no measurable growth, causality,
 
 test('Expériences stays out of the product, Nordla AI and Paramètres stay disabled entries (unchanged decision)', async () => {
   const { root, ctx } = await growthDom('#/');
-  assert.equal(vm.runInContext('Object.keys(PAGES).join()', ctx), 'overview,opportunities,potential,audience,content,storeGrowth');
+  assert.equal(vm.runInContext('Object.keys(PAGES).join()', ctx), 'overview,opportunities,potential,audience,content,dropoff,storeGrowth');
   const inert = all(root, (n) => hasClass(n, 'nav-item') && hasClass(n, 'inert')).map(text);
   assert.deepEqual(inert, ['Nordla AI', 'Paramètres']);
   assert.ok(!/exp[ée]rience|experiment/i.test(text(root)));

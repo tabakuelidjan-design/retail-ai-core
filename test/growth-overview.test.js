@@ -92,7 +92,7 @@ test('growth UI: no data value lives in the UI - every figure, name and text com
 test('growth UI: sidebar is Growth\'s own navigation (6 built pages + disabled entries Nordla AI, Paramètres), no Campagnes, no other module', async () => {
   const src = await readFile(new URL('app.js', UI), 'utf8');
   const keys = (block) => [...src.split(`const ${block} = [`)[1].split('];')[0].matchAll(/key: '(\w+)'/g)].map((m) => m[1]);
-  assert.deepEqual(keys('GROWTH_NAV'), ['overview', 'opportunities', 'potential', 'content', 'storeGrowth', 'audience']);
+  assert.deepEqual(keys('GROWTH_NAV'), ['overview', 'opportunities', 'potential', 'content', 'storeGrowth', 'audience', 'dropoff']);
   assert.deepEqual(keys('GROWTH_NAV_FOOT'), ['ai', 'settings']);
   assert.ok(!/gr\.nav\.(finance|analytics|buying|afterSales|compliance|campaigns)|tresorerie|buyingSuppliers/.test(src), 'no other Nordla module in the Growth navigation');
 });
@@ -168,7 +168,7 @@ test('growth UI: FR, NL and EN dictionaries have exactly the same keys, and ever
   }
   // Keys built from an engine value: every value an engine can emit has its text in the three languages.
   const dyn = [
-    ...['overview', 'opportunities', 'potential', 'content', 'storeGrowth', 'audience', 'ai', 'settings'].map((k) => `gr.nav.${k}`),
+    ...['overview', 'opportunities', 'potential', 'content', 'storeGrowth', 'audience', 'dropoff', 'ai', 'settings'].map((k) => `gr.nav.${k}`),
     ...CONTENT_CHECKS.flatMap((c) => [`gr.op.fix.content.${c.code}.title`, `gr.op.fix.content.${c.code}.why`]),
     ...POTENTIAL_STATUSES.map((s) => `gr.op.f.potential.${s}`),
     ...['risingBlocked', 'watch', 'declining', 'lowMargin', 'returns', 'storeSuggestionThin', 'notValidated', 'noProductEngine'].map((c) => `gr.op.why.${c}`),

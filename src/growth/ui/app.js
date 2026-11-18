@@ -103,6 +103,7 @@ const GROWTH_NAV = [
   { key: 'content', icon: 'content', href: '#/content', mobile: true },
   { key: 'storeGrowth', icon: 'storeGrowth', href: '#/storeGrowth', more: true },
   { key: 'audience', icon: 'audience', href: '#/audience', mobile: true },
+  { key: 'dropoff', icon: 'needsAttention', href: '#/dropoff', more: true },
 ];
 // Secondary zone (bottom of the rail). Nordla AI keeps the official "Parle à Nordla" asset, as in Analytics.
 const GROWTH_NAV_FOOT = [
@@ -171,7 +172,9 @@ function langSwitch() {
 /** Top bar. The period comes from the PAGE definition (PAGES), so the pill is identical in every state; it is the window the page's engines use. */
 function topbar(page) {
   const p = page.period;
-  const pill = p.weeks
+  const pill = p.custom
+    ? h('span', { class: 'period-pill locked', title: t('gr.do.periodNote'), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), doData && doData.window ? doWindow(doData) : t('gr.do.periodPending'))
+    : p.weeks
     ? h('span', { class: 'period-pill locked', title: t('gr.period.weeksNote', p.weeks), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), t('gr.period.lastWeeks', p.weeks), h('span', { class: 'period-fixed' }, t('gr.period.fixed')))
     : p.days === 30
       ? h('span', { class: 'period-pill locked', title: t('gr.period.fixedNote'), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), t('gr.period.last30'), h('span', { class: 'period-fixed' }, t('gr.period.fixed')))
@@ -254,7 +257,7 @@ function opportunitiesCard(d) {
 // Hash routes inside Growth only: '#/' = Overview, '#/opportunities' = Opportunités, '#/potential' = Produits Potentiels,
 // '#/audience' = Audience, '#/content' = Contenu, '#/storeGrowth' = Croissance magasin. Any other hash (e.g. a former '#/campaigns'
 // link) shows Vue d'ensemble. Each page's payload is fetched once and cached; a language or filter change re-renders from the cache.
-let data = null; let oppData = null; let potData = null; let audData = null; let ctData = null; let stData = null;
+let data = null; let oppData = null; let potData = null; let audData = null; let ctData = null; let stData = null; let doData = null;
 // Load state per page: undefined (not requested), 'loading', or { code } after a failed request (safe, known codes only).
 const loadState = {};
 const ERROR_CODES = ['TENANT_NOT_CONFIGURED', 'DATA_UNAVAILABLE', 'NETWORK', 'UNKNOWN'];
@@ -265,6 +268,7 @@ const PAGES = {
   potential: { title: 'gr.pp.title', subtitle: 'gr.pp.subtitle', url: '/api/growth/products', period: { weeks: 8 }, get: () => potData, set: (v) => { potData = v; }, render: renderPotential },
   audience: { title: 'gr.au.title', subtitle: 'gr.au.subtitle', url: '/api/growth/audience', period: { days: 90 }, get: () => audData, set: (v) => { audData = v; }, render: renderAudience },
   content: { title: 'gr.ct.title', subtitle: 'gr.ct.subtitle', url: '/api/growth/content', period: { weeks: 8 }, get: () => ctData, set: (v) => { ctData = v; }, render: renderContent },
+  dropoff: { title: 'gr.do.title', subtitle: 'gr.do.subtitle', url: '/api/growth/dropoff', period: { custom: true }, get: () => doData, set: (v) => { doData = v; }, render: renderDropoff },
   storeGrowth: { title: 'gr.st.title', subtitle: 'gr.st.subtitle', url: '/api/growth/store', period: { weeks: 8 }, get: () => stData, set: (v) => { stData = v; }, render: renderStore },
 };
 function currentPage() { const p = location.hash.replace(/^#\/?/, '').split('?')[0]; return PAGES[p] && p !== 'overview' ? p : 'overview'; }

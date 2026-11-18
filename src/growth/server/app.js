@@ -35,6 +35,7 @@ const STATIC = {
   '/audience.js': [UI, 'audience.js', JS],
   '/content.js': [UI, 'content.js', JS],
   '/store.js': [UI, 'store.js', JS],
+  '/dropoff.js': [UI, 'dropoff.js', JS],
   '/growth.css': [UI, 'growth.css', CSS],
   '/lang-fr.js': [UI, 'lang-fr.js', JS],
   '/lang-nl.js': [UI, 'lang-nl.js', JS],
@@ -60,7 +61,7 @@ const IMG = { svg: 'image/svg+xml', png: 'image/png', webp: 'image/webp' };
 // productPotential: the tenant's Potentiel produits source (server/products.js), created from the Growth server's context
 // (NORDLA_MERCHANT_ID). Nothing in a request can choose or change the merchant: the route reads no parameter at all.
 // audience / content / store: the tenant's Audience, Contenu and Croissance magasin sources (server/*.js), same contract.
-export function createGrowthApp({ now = () => new Date(), generalContext = null, productPotential = null, audience = null, content = null, store = null, merchantId = null, review = null, corrections = null, ads = null, site = null, siteReview = null, social = null, socialReview = null, inbox = null, inboxReview = null, guide = null, hosted = false } = {}) {
+export function createGrowthApp({ now = () => new Date(), generalContext = null, productPotential = null, audience = null, content = null, store = null, merchantId = null, review = null, corrections = null, ads = null, site = null, siteReview = null, social = null, socialReview = null, inbox = null, inboxReview = null, dropoff = null, guide = null, hosted = false } = {}) {
   const historyScope = merchantId ? createHash('sha256').update(String(merchantId)).digest('hex') : null;
   const priorities = createPrioritiesSource({ productPotential, audience, content, store, ads, site, social, inbox, general: generalContext, now });
   const send = (res, status, type, body) => { res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', ...SECURITY_HEADERS }); res.end(body); };
@@ -123,6 +124,10 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
         const date = /^\d{4}-\d{2}-\d{2}$/;
         if (!['product', 'variant', 'page', 'post', 'inbox'].includes(q.type) || !q.id || q.id.length > 200 || !date.test(q.applied ?? '') || !date.test(q.review ?? '')) return json(res, 400, { error: { code: 'BAD_REQUEST' } });
         try { if (q.type === 'inbox') { if (!inboxReview) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } }); if (!['instagram', 'tiktok'].includes(q.network) || !q.account || q.account.length > 200 || !/^\d{1,3}$/.test(q.days ?? '') || !date.test(q.from ?? '') || (q.qualified ?? '').length > 4000 || (q.notQualified ?? '').length > 4000 || (q.declared ?? '').length > 4000) return json(res, 400, { error: { code: 'BAD_REQUEST' } }); return json(res, 200, await inboxReview({ id: q.id, network: q.network, account: q.account, days: q.days, from: q.from, type: q.type2 ?? q.requestType, qualified: q.qualified, notQualified: q.notQualified, declared: q.declared })); } if (q.type === 'post') { if (!socialReview) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } }); if (!['instagram', 'tiktok'].includes(q.network) || !q.account || q.account.length > 200 || !/^\d{1,3}$/.test(q.days ?? '')) return json(res, 400, { error: { code: 'BAD_REQUEST' } }); return json(res, 200, await socialReview({ id: q.id, network: q.network, account: q.account, days: q.days })); } if (q.type === 'page') { if (!siteReview) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } }); return json(res, 200, await siteReview({ id: q.id, applied: q.applied, review: q.review })); } return json(res, 200, await review({ type: q.type, id: q.id, applied: q.applied, review: q.review })); } catch (e) { console.error('growth review failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
+      }
+      if (url.pathname === '/api/growth/dropoff') {
+        if (!dropoff) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });
+        try { return json(res, 200, await dropoff()); } catch (e) { console.error('growth dropoff failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
       }
       if (url.pathname === '/api/growth/store') {
         if (!store) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });
