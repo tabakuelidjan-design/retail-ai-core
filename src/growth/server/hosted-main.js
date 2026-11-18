@@ -19,6 +19,8 @@ import { createPersonalizerCollector, collectChannels } from './collect-personal
 import { createSupabaseFollowUpStore } from './follow-up-store.js';
 import { hostedConfig, verifyPinnedProject } from '../../sourcing/server/hosted.js';
 import { createSessionGate } from '../../sourcing/server/session-gate.js';
+import { createGrowthSso } from './sso.js';
+import { createHandoffVerifier, openSessionForHandoff, HANDOFF_MIN_SECRET_LENGTH } from '../../identity/handoff.js';
 import { createIdentityService, loadIdentityServiceEnv } from '../../identity/service.js';
 import { createHttpSecurity } from '../../security/index.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/client.js';
@@ -27,6 +29,14 @@ import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/
 export function growthHostedConfig(env = process.env) {
   if (String(env.GROWTH_HOSTED ?? '').trim() !== '1') throw Object.assign(new Error('GROWTH_HOSTED=1 is required: this is the hosted server (the local launcher is src/growth/server/serve.js)'), { code: 'HOSTED_NOT_ENABLED' });
   return hostedConfig({ ...env, SOURCING_PUBLIC_ORIGIN: env.GROWTH_PUBLIC_ORIGIN, SOURCING_HOST: env.GROWTH_HOST, SOURCING_MERCHANT_ID: env.NORDLA_MERCHANT_ID });
+}
+
+/** Growth single sign-on from the Nordla server (GROWTH_SSO_SECRET, the same value as on the Nordla server). No secret (or too short): no /sso route, the sign-in form stays the only way in. */
+export function buildGrowthSso(env, hosted, services = null) {
+  const secret = String(env.GROWTH_SSO_SECRET ?? ''); if (secret.length < HANDOFF_MIN_SECRET_LENGTH) return null;
+  const security = services?.security ?? createHttpSecurity({ environment: 'hosted', proxy: 'railway', allowedHosts: hosted.allowedHosts, allowedOrigins: [hosted.origin], moduleCode: 'growth', csrfKey: env.NORDLA_CSRF_KEY });
+  const supabase = services?.supabase ?? createSupabaseClient(loadSupabaseConfigFromEnv(env)); const sessions = loadIdentityServiceEnv(env).sessions;
+  return createGrowthSso({ verifier: createHandoffVerifier({ secret, merchantId: hosted.merchantId }), openSession: (userId) => openSessionForHandoff({ supabase, merchantId: hosted.merchantId, moduleCode: 'growth', userId, absoluteMs: sessions.absoluteMs }), cookiesFor: (token) => [security.cookies.sessionCookie(token), security.cookies.csrfCookie(security.csrfTokenFor(token))] });
 }
 
 /** The Core identity sign-in for the 'growth' module of THIS merchant. `services` lets a test inject both collaborators. */
@@ -48,7 +58,8 @@ export async function startGrowthHosted({ env = process.env, log = console.log, 
   const historyScope = createHash('sha256').update(hosted.merchantId).digest('hex');
   const collectOrigins = String(env.GROWTH_COLLECT_ORIGINS ?? 'https://habb.be').split(',').map((s) => s.trim()).filter(Boolean); // the shop origins allowed to send personalizer events
   const collect = sources.personalizerStore ? createPersonalizerCollector({ store: sources.personalizerStore, allowedOrigins: collectOrigins, channels: collectChannels(env) }) : null;
-  const handler = createHostedGrowth({ gate, merchantId: hosted.merchantId, historyScope, app, store, collect, homeUrl: (() => { try { const u = new URL(String(env.NORDLA_HOME_URL ?? '').trim()); return u.protocol === 'https:' && !u.username && !u.password ? u.origin : null; } catch { return null; } })() });
+  const sso = buildGrowthSso(env, hosted, services);
+  const handler = createHostedGrowth({ gate, merchantId: hosted.merchantId, historyScope, app, store, collect, sso, homeUrl: (() => { try { const u = new URL(String(env.NORDLA_HOME_URL ?? '').trim()); return u.protocol === 'https:' && !u.username && !u.password ? u.origin : null; } catch { return null; } })() });
   const server = http.createServer(handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, hosted.host, resolve); });
   log(`Nordla Growth HOSTED for ${hosted.origin}: Core identity sign-in (module growth, merchant ${hosted.merchantId}), follow-up on the server, port ${server.address().port}.`);
