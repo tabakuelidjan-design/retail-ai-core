@@ -11,7 +11,8 @@ import { DEFAULT_SETTINGS, validateSettings } from '../settings.js';
 import { createFinanceApp } from './app.js';
 import { createFinanceService } from '../service.js';
 import { configFromSettings } from '../settings.js';
-import { createInboxService, createMemoryAttachmentStore } from '../inbox.js';
+import { createInboxService, createMemoryAttachmentStore, defaultExtractor } from '../inbox.js';
+import { createOcrExtractor, withOcrFallback } from '../ocr-scan.js';
 import { randomBytes } from 'node:crypto';
 
 const MERCHANT = 'demo-merchant';
@@ -63,7 +64,8 @@ async function seedDemo({ store, attachmentStore, settings, cfg }) {
   const q = await mk('quote', cust('Atelier Exemple SRL', '0000000196', 'Namur'), [line('Coffret cadeaux', 30, '48.00')], { issueDate: '2026-09-18' });
   await svc.sendQuote(q.id, merchant);
   // finance inbox / purchases
-  const inbox = createInboxService({ store, attachments: attachmentStore, merchantId: MERCHANT, now: clock.now });
+  // same extractor as the hosted server (src/finance/server/app.js): OCR only when FINANCE_OCR_COMMAND is set
+  const inbox = createInboxService({ store, attachments: attachmentStore, merchantId: MERCHANT, now: clock.now, extractor: withOcrFallback(defaultExtractor, createOcrExtractor({ command: process.env.FINANCE_OCR_COMMAND || null })) });
   const ubl = (id, net, vat, issueDate = '2026-09-10', dueDate = '2026-10-10') => Buffer.from(`<?xml version="1.0"?><Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2"><cbc:ID>${id}</cbc:ID><cbc:IssueDate>${issueDate}</cbc:IssueDate><cbc:DueDate>${dueDate}</cbc:DueDate><cbc:DocumentCurrencyCode>EUR</cbc:DocumentCurrencyCode><cac:AccountingSupplierParty><cac:Party><cac:PartyTaxScheme><cbc:CompanyID>BE0000000097</cbc:CompanyID></cac:PartyTaxScheme><cac:PartyLegalEntity><cbc:RegistrationName>Fournisseur Exemple SRL</cbc:RegistrationName></cac:PartyLegalEntity></cac:Party></cac:AccountingSupplierParty><cac:TaxTotal><cbc:TaxAmount currencyID="EUR">${vat}</cbc:TaxAmount></cac:TaxTotal><cac:LegalMonetaryTotal><cbc:TaxExclusiveAmount currencyID="EUR">${net}</cbc:TaxExclusiveAmount><cbc:TaxInclusiveAmount currencyID="EUR">${(Number(net) + Number(vat)).toFixed(2)}</cbc:TaxInclusiveAmount></cac:LegalMonetaryTotal></Invoice>`);
   const one = (await inbox.ingest({ fileName: 'facture-F-2026-0042.xml', data: ubl('F-2026-0042', '250.00', '52.50'), source: 'peppol' })).item;
   await inbox.ingest({ fileName: 'scan-fournisseur.pdf', data: Buffer.from('%PDF-1.4\n% synthetic demo scan\n%%EOF\n') });
