@@ -24,8 +24,8 @@ export function suggestForCredit(tx, open) {
   const ref = String(tx.reference ?? ''); const refDigits = digits(tx.structuredReference ?? (OGM.exec(ref) ?? []).slice(1).join(''));
   const scored = open.map((inv) => {
     const reasons = []; let score = 0;
-    // A payment in another currency never matches: amounts are compared in the invoice currency only.
-    if (inv.currency && tx.currency && inv.currency !== tx.currency) return { ...inv, score: 0, reasons: ['CURRENCY_MISMATCH'] };
+    // Fail closed, same rule as the debit side: no transaction currency or another currency never matches. An invoice without currency is EUR.
+    if (!tx.currency || tx.currency !== (inv.currency ?? 'EUR')) return { ...inv, score: 0, reasons: [tx.currency ? 'CURRENCY_MISMATCH' : 'CURRENCY_UNKNOWN'] };
     const ogm = digits(structuredCommunication(inv.number));
     if (refDigits && ogm && refDigits === ogm) { score += 100; reasons.push('STRUCTURED_REFERENCE_MATCHES'); }
     if (inv.number && new RegExp(`(^|[^A-Za-z0-9])${inv.number.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^A-Za-z0-9]|$)`, 'i').test(ref)) { score += 60; reasons.push('INVOICE_NUMBER_IN_REFERENCE'); }
@@ -51,6 +51,8 @@ export function suggestForDebit(tx, payables) {
   const abs = Math.abs(tx.amountCents); const refDigits = digits(tx.structuredReference ?? (OGM.exec(String(tx.reference ?? '')) ?? []).slice(1).join(''));
   const scored = payables.map((p) => {
     const reasons = []; let score = 0;
+    // Fail closed: a payment with no currency, or in another currency, never matches. A payable without currency is EUR (the only currency payables carry).
+    if (!tx.currency || tx.currency !== (p.currency ?? 'EUR')) return { ...p, score: 0, reasons: [tx.currency ? 'CURRENCY_MISMATCH' : 'CURRENCY_UNKNOWN'] };
     if (refDigits && digits(p.paymentReference) === refDigits) { score += 100; reasons.push('PAYMENT_REFERENCE_MATCHES'); }
     if (p.invoiceNumber && String(tx.reference ?? '').includes(p.invoiceNumber)) { score += 60; reasons.push('INVOICE_NUMBER_IN_REFERENCE'); }
     if (abs === p.grossCents) { score += 25; reasons.push('AMOUNT_EQUALS_INVOICE_TOTAL'); }
