@@ -1,0 +1,3 @@
+# PDF scans (OPTIONAL, NOT installed by deploy/finance-ocr/Dockerfile): PyMuPDF is AGPL-3.0 (or an Artifex commercial licence).
+# Add it only after the licence has been decided by the owner. Not verified in the build. ocr.py imports it only for application/pdf.
+pymupdf==2.1
