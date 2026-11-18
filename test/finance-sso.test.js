@@ -74,7 +74,7 @@ test('without a secret configured, /sso does not exist (404)', async () => {
 
 test('Nordla side: the ticket is issued only to owner / administrator / accountant, from the server merchant, and the link carries no secret', async () => {
   const sso = { publicUrl: 'https://finance.example.app', secret: SECRET, merchantId: M };
-  const core = createCoreHttp({ runtime: null, store: {}, finance: { source: 'Finance · test', inbox: async () => ({}) }, financeSso: sso });
+  const core = createCoreHttp({ runtime: null, store: {}, finance: { source: 'Finance · test', inbox: async () => ({}) }, financeSso: sso, entitlements: async () => new Set(['finance']) });
   const call = async (role) => {
     const chunks = []; let status = 0;
     const res = { writeHead: (s) => { status = s; }, end: (b) => chunks.push(String(b ?? '')), setHeader() {} };
@@ -123,7 +123,7 @@ test('integrated navigation: the Finance session carries the Nordla home address
 
 test('integrated navigation: Nordla issues the Finance link with the file to open (UUID only) and shows the Analytics address only for a clean https origin', async () => {
   const sso = { publicUrl: 'https://finance.example.app', secret: SECRET, merchantId: M };
-  const mk = (env) => createCoreHttp({ runtime: null, store: {}, finance: { source: 'Finance · test', inbox: async () => ({}) }, financeSso: sso, env });
+  const mk = (env) => createCoreHttp({ runtime: null, store: {}, finance: { source: 'Finance · test', inbox: async () => ({}) }, financeSso: sso, entitlements: async () => new Set(['finance', 'analytics']), env });
   const call = async (core, bodyText) => {
     const chunks = []; let status = 0; const res = { writeHead: (s) => { status = s; }, end: (b) => chunks.push(String(b ?? '')), setHeader() {} };
     await core.handle({ method: 'POST', url: '/api/core/finance/open', headers: {}, on() {}, [Symbol.asyncIterator]: async function* () { yield Buffer.from(bodyText); } }, res, new URL('http://x/api/core/finance/open'), { role: 'OWNER', userId: 'u1' });

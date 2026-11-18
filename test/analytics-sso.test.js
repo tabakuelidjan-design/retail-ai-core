@@ -51,7 +51,7 @@ import { buildAnalyticsSso } from '../src/sourcing/server/index.js';
 
 test('AS-6 Nordla side: the Analytics ticket is issued only to owner / administrator / accountant, for the server merchant, with the Analytics audience, and the link carries no secret', async () => {
   const sso = { publicUrl: 'https://analytics.example.app', secret: SECRET, merchantId: M };
-  const core = createCoreHttp({ runtime: null, store: {}, analytics: { source: 'Analytics · test' }, analyticsSso: sso });
+  const core = createCoreHttp({ runtime: null, store: {}, analytics: { source: 'Analytics · test' }, analyticsSso: sso, entitlements: async () => new Set(['analytics']) });
   const call = async (role, c = core) => { const chunks = []; let status = 0; await c.handle({ method: 'POST', url: '/api/core/analytics/open', headers: {}, on() {}, [Symbol.asyncIterator]: async function* () { yield Buffer.from('{}'); } }, { writeHead: (s) => { status = s; }, end: (b) => chunks.push(String(b ?? '')), setHeader() {} }, new URL('http://x/api/core/analytics/open'), { role, userId: 'u1' }); return { status, body: chunks.join('') ? JSON.parse(chunks.join('')) : null }; };
   for (const role of ['VIEWER', 'COLLABORATOR', 'READ_ONLY', undefined]) assert.equal((await call(role)).status, 403, String(role));
   for (const role of ['OWNER', 'ADMIN', 'ACCOUNTANT']) {
