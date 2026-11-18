@@ -11,7 +11,9 @@
 //   - HSTS and X-Robots-Tag: noindex are sent.
 // HABB business figures are never served without the token.
 
-import { timingSafeEqual, createHash } from 'node:crypto';
+import { timingSafeEqual, createHash, randomBytes } from 'node:crypto';
+import { createTicketVerifier, ANALYTICS_SSO_AUDIENCE } from '../../finance/sso-ticket.js';
+export { ANALYTICS_SSO_AUDIENCE };
 import { isIP } from 'node:net';
 
 export class HostingConfigError extends Error {}
@@ -73,7 +75,17 @@ export function basicPassword(header) {
  * Request guard: returns true when the request may proceed; otherwise it has already answered (403 wrong host, 401 no/wrong token,
  * 429 locked out). Constant-time token comparison.
  */
-export function createGuard({ allowedHosts, token, trustProxyHops = 0, now = () => Date.now() }) {
+/** The audience of the Nordla single-sign-on ticket for this dashboard (its own key: a Finance ticket never opens Analytics). */
+const SSO_SESSION_MS = 8 * 3600_000; const SSO_COOKIE = 'an_sid';
+const cookieOf = (req, name) => { for (const part of String(req.headers?.cookie ?? '').split(';')) { const i = part.indexOf('='); if (i > 0 && part.slice(0, i).trim() === name) return part.slice(i + 1).trim(); } return ''; };
+
+/**
+ * sso (optional, hosted): { secret, merchantId } - GET /sso?t=<ticket> issued by the Nordla server for a signed-in person with the right role: a valid, unused, unexpired ticket for THIS merchant opens an
+ * 8 h session (HttpOnly, Secure, SameSite=Strict cookie, kept in memory) and lands on the dashboard. The access token keeps working as before; nothing is served without one of the two.
+ */
+export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = null, now = () => Date.now() }) {
+  const verifier = sso ? createTicketVerifier({ secret: sso.secret, merchantId: sso.merchantId, audience: ANALYTICS_SSO_AUDIENCE, now }) : null;
+  const sessions = new Map(); // sid -> expiry (ms)
   const tokenHash = sha(token);
   const failures = new Map();
   const base = { 'Cache-Control': 'no-store', 'Strict-Transport-Security': 'max-age=31536000', 'X-Robots-Tag': 'noindex, nofollow' };
@@ -84,6 +96,17 @@ export function createGuard({ allowedHosts, token, trustProxyHops = 0, now = () 
     const ip = clientIpOf(req, trustProxyHops);
     const f = failures.get(ip) ?? { n: 0, until: 0 };
     if (f.until > now()) return deny(res, 429, 'TOO_MANY_ATTEMPTS');
+    if (verifier && req.method === 'GET' && String(req.url ?? '').split('?')[0] === '/sso') {
+      const r = verifier.verify(new URL(req.url, 'http://localhost').searchParams.get('t') ?? '');
+      if (!r.ok) { f.n += 1; if (f.n >= 5) { f.until = now() + 5 * 60_000; f.n = 0; } failures.set(ip, f); return deny(res, 403, r.code); }
+      failures.delete(ip);
+      for (const [k, v] of sessions) if (v < now()) sessions.delete(k);
+      const sid = randomBytes(32).toString('hex'); sessions.set(sid, now() + SSO_SESSION_MS);
+      res.writeHead(302, { ...base, Location: '/', 'Set-Cookie': `${SSO_COOKIE}=${sid}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${SSO_SESSION_MS / 1000}` }); res.end();
+      return false; // answered (redirect)
+    }
+    const sid = verifier ? cookieOf(req, SSO_COOKIE) : '';
+    if (sid && (sessions.get(sid) ?? 0) > now()) { failures.delete(ip); for (const [k, v] of Object.entries(base)) res.setHeader(k, v); return true; }
     const supplied = basicPassword(req.headers.authorization);
     if (!supplied || !timingSafeEqual(sha(supplied), tokenHash)) {
       if (supplied) { f.n += 1; if (f.n >= 5) { f.until = now() + 5 * 60_000; f.n = 0; } failures.set(ip, f); }

@@ -25,12 +25,14 @@ const REPORTS_DIR = new URL('../../../reports/', import.meta.url);
  */
 export async function startAnalyticsServer({ env = process.env, supabase: injectedSupabase, reportsDir = REPORTS_DIR, log = console.log, runReport = null, createClient = null } = {}) {
   const hosting = resolveHosting(env); // fails fast, before anything is served
-  const guard = hosting.hosted ? createGuard({ allowedHosts: hosting.allowedHosts, token: hosting.token, trustProxyHops: hosting.trustProxyHops }) : undefined;
+  let guard; // built after the tenant is known (the single-sign-on ticket is bound to this merchant)
 
   // The tenant, before anything is served. Supabase holds the synced data Analytics reads - it is required.
   const supabase = injectedSupabase ?? createSupabaseClient(loadSupabaseConfigFromEnv(env));
   const tenant = await resolveAnalyticsTenant({ env, supabase, log, createClient });
   const merchantId = tenant.merchantId;
+  const ssoSecret = String(env.ANALYTICS_SSO_SECRET ?? ''); // optional: lets the Nordla server open this dashboard for a signed-in person (no token typed); 24+ characters or it stays off
+  guard = hosting.hosted ? createGuard({ allowedHosts: hosting.allowedHosts, token: hosting.token, trustProxyHops: hosting.trustProxyHops, sso: ssoSecret.length >= 24 ? { secret: ssoSecret, merchantId } : null }) : undefined;
   bindReportsTenant(reportsDir, merchantId); // from now on, only this tenant's report files are served from reportsDir
 
   // Sync health of THIS merchant only (sync_runs written by Core). No sales connector at all -> a neutral state, not a failure.

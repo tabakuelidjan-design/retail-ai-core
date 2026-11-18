@@ -278,8 +278,8 @@ export async function buildCore({ env, dir, merchantId, store, safety, log = () 
   const campaigns = createCampaignService({ merchantId, branding, analytics: readers.analytics, file: join(dir, 'core', 'campaigns.jsonl'), env });
   let creation = null; // local visual (owner's photo + headline), only when the merchant's typography is configured; no provider, no network
   try { const { createCreationService, loadCreationConfig } = await import('../../core-pilot/creation.js'); const cfg = await loadCreationConfig(env, root); if (cfg) creation = createCreationService({ merchantId, config: cfg, branding, dir: join(dir, 'core', 'creations') }); } catch (e) { log(`Création (local visual): NOT connected (${e.message}).`); }
-  const financeSso = buildFinanceSso(env, merchantId);
-  return { core: createCoreHttp({ runtime, store, externals, ...readers, branding, campaigns, creation, financeSso, merchantIdentity, merchantId, env }), status: `Nordla Core ON for merchant ${merchantId} (owner rules: ${config.ownerRules.length || 'none configured'}); Finance ${readers.finance ? 'read-only' : 'not connected'}; Analytics ${readers.analytics ? 'read-only' : 'not connected'}` };
+  const financeSso = buildFinanceSso(env, merchantId); const analyticsSso = buildAnalyticsSso(env, merchantId);
+  return { core: createCoreHttp({ runtime, store, externals, ...readers, branding, campaigns, creation, financeSso, analyticsSso, merchantIdentity, merchantId, env }), status: `Nordla Core ON for merchant ${merchantId} (owner rules: ${config.ownerRules.length || 'none configured'}); Finance ${readers.finance ? 'read-only' : 'not connected'}; Analytics ${readers.analytics ? 'read-only' : 'not connected'}` };
 }
 
 /** Read-only Finance and Analytics for the Core, on the SAME Supabase project and merchant as the sign-in (hosted mode only). Finance needs
@@ -289,6 +289,15 @@ export async function buildCore({ env, dir, merchantId, store, safety, log = () 
 export function buildFinanceSso(env, merchantId) {
   try {
     const u = new URL(String(env.FINANCE_PUBLIC_URL ?? '').trim()); const secret = String(env.FINANCE_SSO_SECRET ?? '');
+    if (u.protocol !== 'https:' || u.pathname !== '/' || u.search || u.hash || u.username || u.password || secret.length < 24) return null;
+    return { publicUrl: u.origin, secret, merchantId };
+  } catch { return null; }
+}
+
+/** Analytics dashboard single sign-on: ANALYTICS_PUBLIC_URL (https origin, no path) + ANALYTICS_SSO_SECRET (server-side only, 24+ characters, distinct from the Finance and Growth ones). Otherwise null (the plain link, which asks for the access token). */
+export function buildAnalyticsSso(env, merchantId) {
+  try {
+    const u = new URL(String(env.ANALYTICS_PUBLIC_URL ?? '').trim()); const secret = String(env.ANALYTICS_SSO_SECRET ?? '');
     if (u.protocol !== 'https:' || u.pathname !== '/' || u.search || u.hash || u.username || u.password || secret.length < 24) return null;
     return { publicUrl: u.origin, secret, merchantId };
   } catch { return null; }

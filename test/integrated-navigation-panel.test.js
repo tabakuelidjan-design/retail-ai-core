@@ -24,3 +24,8 @@ test('Growth module: links to Où les visiteurs abandonnent and Opportunités, a
   assert.match(html, /href="https:\/\/growth\.example\.app\/#\/dropoff" target="_blank" rel="noopener"/); assert.match(html, /href="https:\/\/growth\.example\.app\/#\/opportunities"/);
   const n = make(api()); await n.panel.load(); assert.ok(!/data-nx-module="growth"/.test(n.panel.section()));
 });
+
+test('Analytics: with the single sign-on configured the module shows a button (asks the server for a ticket, no token), not a plain link', async () => {
+  const sso = make(api({ analytics: { dashboard: true, analytics_url: 'https://analytics.example.app' } })); await sso.panel.load(); const html = sso.panel.section();
+  assert.match(html, /data-act="nx-open-analytics">Ouvrir Analyses<\/button>/); assert.match(html, /aucun jeton à saisir/); assert.ok(!/analytics\.example\.app/.test(html), 'the address is only reached through a one-time ticket');
+});
