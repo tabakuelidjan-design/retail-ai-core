@@ -52,7 +52,7 @@ export function backupHealth(st, nowMs, { maxAgeH = 26, firstRunGraceMin = 30 } 
 /** Who may change data in China Sourcing / Core (hosted). Matches the grid of Paramètres > Équipe et accès (tested). */
 export const SOURCING_WRITERS = new Set(['OWNER', 'ADMIN', 'COLLABORATOR']);
 /** POST routes that only compute or read (no stored change): open to every member. */
-export const READ_ONLY_POSTS = new Set(['/api/safety/check', '/api/core/ask', '/api/core/finance/open']);
+export const READ_ONLY_POSTS = new Set(['/api/safety/check', '/api/core/ask', '/api/core/finance/open', '/api/core/growth/open']);
 export function createSourcingApp({ backupStatus = null, token, gate = null, core = null, procurement = null, creator = null, gbp = null, videos = null, connections = null, general = null, security = null, team = null, notifications = null, preferences = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
   if (!gate && (!token || String(token).length < 24)) throw new Error('a token of at least 24 characters is required'); // hosted: the session gate (Core identity) replaces the token
   // Host header allow-list (blocks DNS-rebinding on the loopback server). A tunnel's public host name must be added by the owner (SOURCING_ALLOWED_HOSTS).

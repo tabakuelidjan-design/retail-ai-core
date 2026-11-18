@@ -101,3 +101,10 @@ test('HOME markup: the card sits on the Salon home after the to-do list, and the
   const { homeHtml } = await loadUi('screens/nx.js'); const base = { overview: [], sync: { kind: 'ok', label: 'ok' }, counts: { toConfirm: 0, waiting: 0, conflicts: 0, cases: { confirm: 0, waiting: 0, conflict: 0 } } };
   assert.equal(homeHtml(base), homeHtml({ ...base, growth: '' })); assert.match(homeHtml({ ...base, growth: '<section data-nx-growth-home></section>' }), /data-nx-growth-home/);
 });
+
+test('with single sign-on on (growth_sso) the two Growth links ask the server for a ticket (data-act) and keep the plain href as fallback; without it they are plain links', async () => {
+  const mods = (sso) => ({ modules: [{ key: 'core', label: 'core', state: 'LIMITÉ', detail: 'x' }, { key: 'growth', label: 'Développement des ventes', state: 'DISPONIBLE', detail: 'x', growth_url: 'https://growth.example', growth_sso: sso }] });
+  for (const sso of [true, false]) { const p = createModulesPanel({ S: { online: true, token: 't' }, api: async () => mods(sso), refresh: () => {}, repaintHome: () => {} }); await p.loadHomeModules(); const card = p.growthHomeCard();
+    assert.equal(/data-act="nx-open-growth" data-to="dropoff"/.test(card), sso); assert.equal(/data-act="nx-open-growth" data-to="opportunities"/.test(card), sso);
+    assert.match(card, /href="https:\/\/growth\.example\/#\/dropoff"/); assert.match(card, /href="https:\/\/growth\.example\/#\/opportunities"/); }
+});

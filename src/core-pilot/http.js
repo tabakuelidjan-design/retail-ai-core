@@ -11,6 +11,7 @@
 import { CoreError } from './runtime.js';
 import { askNordla, NOT_CONNECTED } from './ask.js';
 import { issueTicket } from '../finance/sso-ticket.js';
+import { issueHandoff, HANDOFF_DESTINATIONS, HANDOFF_MIN_SECRET_LENGTH } from '../identity/handoff.js';
 import { validateConversation } from './field-context.js';
 import { creativeCapability } from './campaign.js';
 
@@ -42,7 +43,10 @@ export function growthOrigin(env) { return httpsOrigin(env?.GROWTH_PUBLIC_URL); 
 /** Same rule for any module address given by the environment (ANALYTICS_PUBLIC_URL, ...). */
 export function httpsOrigin(value) { try { const u = new URL(String(value ?? '').trim()); return u.protocol === 'https:' && !u.username && !u.password ? u.origin : null; } catch { return null; } }
 
-export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null, procurement = null, branding = null, campaigns = null, creation = null, financeSso = null, merchantIdentity = null, env = process.env }) {
+/** Growth single sign-on: the https origin (GROWTH_PUBLIC_URL) AND GROWTH_SSO_SECRET (server-side only, 24+ characters, the same on the Growth server). Anything missing: null (the links stay plain links and Growth asks its own sign-in). */
+export function growthSsoConfig(env, merchantId) { const origin = growthOrigin(env); const secret = String(env?.GROWTH_SSO_SECRET ?? ''); return origin && secret.length >= HANDOFF_MIN_SECRET_LENGTH && merchantId ? { origin, secret, merchantId } : null; }
+
+export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null, procurement = null, branding = null, campaigns = null, creation = null, financeSso = null, merchantIdentity = null, merchantId = null, env = process.env }) {
   const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
   async function body(req, max = MAX) {
     const chunks = []; let n = 0;
@@ -68,7 +72,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
       creation && creation.status().status === 'LOCAL_AVAILABLE'
         ? row('creative', 'Création', 'LIMITÉ', `Visuel local disponible : votre photo telle quelle + un titre (${creation.status().typography}), PNG et contrôles de fidélité. Génération IA : ${c.status === 'PROVIDER_NOT_CONNECTED' ? 'aucun fournisseur connecté' : 'à vérifier'}.`)
         : row('creative', 'Création', c.status === 'PROVIDER_NOT_CONNECTED' ? 'BLOQUÉ' : 'À VÉRIFIER', c.status === 'PROVIDER_NOT_CONNECTED' ? `Aucun fournisseur de génération connecté (${c.missing.join(', ') || c.error}). Rien n’est produit ni simulé.` : c.note),
-      ...(growthOrigin(env) ? [{ ...row('growth', 'Développement des ventes', 'DISPONIBLE', 'Opportunités, produits, audience, abandons des visiteurs : écran dédié, ouvert dans un nouvel onglet avec la même adresse e-mail Nordla (connexion demandée).'), growth_url: growthOrigin(env) }] : []),
+      ...(growthOrigin(env) ? [{ ...row('growth', 'Développement des ventes', 'DISPONIBLE', 'Opportunités, produits, audience, abandons des visiteurs : écran dédié, ouvert dans un nouvel onglet'+(growthSsoConfig(env, merchantId) ? ' avec votre session Nordla (aucune seconde connexion).' : ' avec la même adresse e-mail Nordla (connexion demandée).')), growth_url: growthOrigin(env), growth_sso: Boolean(growthSsoConfig(env, merchantId)) }] : []),
     ].map((m) => (m.key === 'core' ? { ...m, connections_screen: env?.NORDLA_CONNECTIONS_MODULE === '1' } : m.key === 'creative' ? { ...m, creator_screen: env?.NORDLA_CREATOR_MODULE === '1' } : m.key === 'marketing' ? { ...m, gbp_screen: env?.NORDLA_GBP_DRAFTS_MODULE === '1', video_screen: env?.NORDLA_VIDEO_DRAFTS_MODULE === '1' } : m)) }; // the Creator screen exists only where the isolated module is built
   }
 
@@ -93,6 +97,15 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
         const ticket = issueTicket({ secret: financeSso.secret, merchantId: financeSso.merchantId, ttlSeconds: 60 });
         const ob = await body(req).catch(() => ({})); const dossier = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(ob?.dossier ?? '')) ? `&open=${String(ob.dossier).toLowerCase()}` : ''; // a navigation hint only (the file to land on): it grants nothing, Finance still reads it under the signed-in session
         json(res, 200, { url: `${financeSso.publicUrl}/sso?t=${ticket}${dossier}`, expiresInSeconds: 60 }); return true;
+      }
+      if (p === '/api/core/growth/open' && m === 'POST') { // a one-time ticket to open Growth on its own domain with THIS Nordla session (no second sign-in). Any signed-in person may ask: Growth re-checks membership, module and role itself.
+        const sso = growthSsoConfig(env, merchantId);
+        if (!sso) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
+        if (!actor?.userId) { json(res, 409, { error: 'NOT_AVAILABLE', message: 'single sign-on needs a signed-in Nordla account' }); return true; }
+        const b = await body(req); const to = b.to === undefined ? 'dropoff' : String(b.to);
+        if (!Object.hasOwn(HANDOFF_DESTINATIONS, to)) { json(res, 400, { error: 'INVALID_DESTINATION' }); return true; }
+        const ticket = issueHandoff({ secret: sso.secret, merchantId: sso.merchantId, userId: actor.userId, ttlSeconds: 60 });
+        json(res, 200, { url: `${sso.origin}/sso?t=${ticket}&to=${to}`, expiresInSeconds: 60 }); return true;
       }
       if (p === '/api/core/finance/inbox' && m === 'GET') { // read-only list of the Finance supplier-invoice inbox of THIS server's merchant; owner, administrator and accountant only
         if (!finance?.inbox) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
