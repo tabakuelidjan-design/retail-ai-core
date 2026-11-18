@@ -8,6 +8,7 @@
 //     (/api/growth/follow-up): plans, applied actions, review results, requests and commercial follow-up - never a message, a publication or a Shopify change.
 //   - Roles: OWNER, ADMIN and COLLABORATOR may save follow-up; every other role reads (a change is refused with FORBIDDEN_ROLE).
 import { followUpKeyOk, followUpValueError } from './follow-up-store.js';
+import { COLLECT_PATH } from './collect-personalizer.js';
 
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
 export const GROWTH_WRITERS = new Set(['OWNER', 'ADMIN', 'COLLABORATOR']);
@@ -27,7 +28,7 @@ async function readJson(req) {
  *  app         the Growth app handler (createGrowthApp built for this merchant, with hosted: true)
  *  store       the follow-up store (createSupabaseFollowUpStore / createMemoryFollowUpStore)
  */
-export function createHostedGrowth({ gate, merchantId, historyScope, app, store, now = () => new Date() }) {
+export function createHostedGrowth({ gate, merchantId, historyScope, app, store, collect = null, now = () => new Date() }) {
   if (!gate || typeof gate.authorize !== 'function' || typeof gate.handle !== 'function') throw new TypeError('a session gate is required');
   if (typeof merchantId !== 'string' || !merchantId) throw new TypeError('the merchant id of this server is required');
   if (typeof historyScope !== 'string' || !historyScope) throw new TypeError('the history scope of this merchant is required');
@@ -57,6 +58,7 @@ export function createHostedGrowth({ gate, merchantId, historyScope, app, store,
     try {
       const pathname = new URL(req.url, 'http://localhost').pathname;
       if (pathname === '/healthz') return json(res, 200, { ok: true }); // the platform's health check: no data, no session
+      if (collect && pathname === COLLECT_PATH) return await collect(req, res); // PUBLIC (a visitor has no session): the receiver's own origin / schema / rate checks apply
       if (pathname.startsWith('/api/auth/')) { if (await gate.handle(req, res, pathname)) return; return json(res, 404, { error: 'NOT_FOUND' }); }
       if (!pathname.startsWith('/api/')) return app(req, res); // the page, its scripts, the design system, Growth icons: no data
       const a = await gate.authorize(req);

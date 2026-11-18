@@ -95,13 +95,33 @@ function doEventsCard(d) {
     h('p', { class: 'gr-muted' }, t('gr.do.question')));
 }
 
+const DO_PZ_STEPS = ['submit_blocked_no_photo', 'photo_chosen', 'send_clicked', 'design_ready', 'cart_submit', 'cart_confirmed'];
+const DO_PZ_OUTCOMES = ['CONFIRMED', 'SUBMITTED_UNCONFIRMED', 'SUBMITTED_NOT_FOUND', 'EXPORT_FAILED', 'SENT_NOT_SUBMITTED', 'PHOTO_ADDED_NOT_SENT', 'LAST_EVENT_OBSTACLE', 'OTHER'];
+/** The personalizer's own events received from the shop (distinct attempts, never raw events). cart_submit is an ATTEMPT; only cart_confirmed is an add confirmed by Shopify's cart. */
+function doPersonalizerCard(d) {
+  const p = d.personalizer;
+  if (!p) return null;
+  if (p.status === 'UNAVAILABLE') return h('section', { class: 'ex-card gr-do-card gr-do-pz' }, cardHead('content', t('gr.do.pz.title')), h('p', { class: 'gr-muted' }, t('gr.do.pz.unavailable')));
+  if (p.status === 'NO_DATA') return h('section', { class: 'ex-card gr-do-card gr-do-pz' }, cardHead('content', t('gr.do.pz.title')), h('p', { class: 'gr-muted' }, t('gr.do.pz.noData')));
+  const steps = DO_PZ_STEPS.map((s) => { const v = p.steps[s] || { total: 0, mobile: 0, desktop: 0 }; return h('tr', { class: `gr-do-pz-${s}` }, h('th', { scope: 'row', class: 'gr-do-step' }, t(`gr.do.pz.step.${s}`)), h('td', { class: 'gr-do-c' }, h('strong', null, num(v.total))), h('td', { class: 'gr-do-c gr-muted' }, t('gr.do.pz.split', num(v.mobile), num(v.desktop)))); });
+  const outcomes = DO_PZ_OUTCOMES.filter((k) => (p.outcomes || {})[k] > 0).map((k) => h('li', { class: `gr-do-pz-outcome gr-do-pz-${k}` }, h('strong', null, num(p.outcomes[k])), ' ', t(`gr.do.pz.outcome.${k}`)));
+  return h('section', { class: 'ex-card gr-do-card gr-do-wide gr-do-pz' }, cardHead('content', t('gr.do.pz.title')),
+    h('p', { class: 'gr-muted' }, t('gr.do.pz.source', num(p.attempts), num(p.events))),
+    h('div', { class: 'ex-table-wrap' }, h('table', { class: 'ex-table gr-table gr-do-table' }, h('thead', null, h('tr', null, h('th', null, t('gr.do.col.step')), h('th', null, t('gr.do.pz.col.attempts')), h('th', null, t('gr.do.pz.col.devices')))), h('tbody', null, ...steps))),
+    h('p', { class: 'gr-muted' }, t('gr.do.pz.attemptNote')),
+    p.obstacles && p.obstacles.met > 0 ? h('p', null, t('gr.do.pz.obstacle', num(p.obstacles.met), num(p.obstacles.thenContinued))) : null,
+    h('h4', null, t('gr.do.pz.outcomes')), h('ul', { class: 'gr-do-list' }, ...outcomes),
+    h('p', { class: 'gr-muted' }, t('gr.do.pz.abandon')));
+}
+
 function renderDropoff(main, safe) {
   const d = PAGES.dropoff.get();
-  if (d.state !== 'OK') { main.appendChild(h('div', { class: 'ex-card gr-st-empty' }, h('div', { class: 'gr-pp-empty' }, h('strong', { class: 'gr-ink' }, t(`gr.do.state.${d.state}.title`)), h('p', null, t(`gr.do.state.${d.state}.text`)), d.errors && d.errors.length ? h('p', { class: 'gr-muted' }, d.errors.slice(0, 5).join(' · ')) : null))); return; }
+  if (d.state !== 'OK') { main.appendChild(h('div', { class: 'ex-card gr-st-empty' }, h('div', { class: 'gr-pp-empty' }, h('strong', { class: 'gr-ink' }, t(`gr.do.state.${d.state}.title`)), h('p', null, t(`gr.do.state.${d.state}.text`)), d.errors && d.errors.length ? h('p', { class: 'gr-muted' }, d.errors.slice(0, 5).join(' · ')) : null))); const pz0 = safe(doPersonalizerCard); if (pz0) main.appendChild(pz0); return; }
   if (d.notes && d.notes.length) main.appendChild(h('div', { class: 'gr-au-banner', role: 'note' }, gi('dataHealth', 'md'), h('span', null, d.notes.join(' '))));
   main.appendChild(safe(doFunnelCard));
   main.appendChild(safe(doFindingsCard));
   main.appendChild(h('div', { class: 'gr-grid gr-do-grid' }, safe(doComparisonCard), safe(doUploadCard)));
+  const pz = safe(doPersonalizerCard); if (pz) main.appendChild(pz);
   main.appendChild(safe(doProductsCard));
   main.appendChild(safe(doEventsCard));
 }

@@ -71,12 +71,12 @@ export function overviewPayload({ store = storePayload(), priorities = prioritie
   return buildOverview({ now: NOW, store, priorities });
 }
 
-export async function growthDom(hash, { products = potentialPayload(), productsStatus = 200, audience = audiencePayload(), audienceStatus = 200, content = contentPayload(), contentStatus = 200, store = storePayload(), storeStatus = 200, overview = overviewPayload(), opportunities = prioritiesPayload(), lang = 'fr', review = null } = {}) {
+export async function growthDom(hash, { products = potentialPayload(), productsStatus = 200, audience = audiencePayload(), audienceStatus = 200, content = contentPayload(), contentStatus = 200, store = storePayload(), storeStatus = 200, overview = overviewPayload(), opportunities = prioritiesPayload(), lang = 'fr', review = null, dropoff = null } = {}) {
   const root = new Node('div');
   const errors = [];
   const listeners = {};
   const doc = { createElement: (t) => new Node(t), createElementNS: (_, t) => new Node(t), createTextNode: (s) => ({ nodeType: 3, data: s }), getElementById: () => root, querySelector: () => null, documentElement: { lang: '' } };
-  const payloads = { '/api/growth/overview': overview, '/api/growth/opportunities': opportunities, '/api/growth/products': products, '/api/growth/audience': audience, '/api/growth/content': content, '/api/growth/store': store };
+  const payloads = { '/api/growth/overview': overview, '/api/growth/opportunities': opportunities, '/api/growth/products': products, '/api/growth/audience': audience, '/api/growth/content': content, '/api/growth/store': store, '/api/growth/dropoff': dropoff };
   const el = () => new Node('div');
   const ctx = {
     document: doc, location: { hash }, console: { error: (...a) => errors.push(a.join(' ')), log() {} },

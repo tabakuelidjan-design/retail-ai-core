@@ -4,6 +4,7 @@
 //   no load / nothing to read -> NOT_CONNECTED;  facts that fail the contract -> INVALID (reasons);  unreadable -> UNAVAILABLE;  else OK.
 import { readFile } from 'node:fs/promises';
 import { normalizeDropoff, buildDropoff, DROPOFF_CONFIG, DROPOFF_RULE } from '../dropoff/dropoff.js';
+import { summarizePersonalizer, PZ_RETENTION_DAYS } from '../dropoff/personalizer.js';
 
 export const DROPOFF_FILE = 'data/local/marketing/shop-funnel.json';
 export const fileDropoffLoader = (path = DROPOFF_FILE) => async () => { try { return JSON.parse(await readFile(path, 'utf8')); } catch (e) { if (e?.code === 'ENOENT') return null; throw e; } };
@@ -13,17 +14,24 @@ export const supabaseDropoffLoader = (supabase, merchantId, { table = 'growth_fu
   return rows?.[0]?.payload ?? null;
 };
 
-export function createDropoffSource({ load = null, timeZone, now = () => new Date(), config = DROPOFF_CONFIG, cacheMs = 60_000 } = {}) {
+export function createDropoffSource({ load = null, timeZone, now = () => new Date(), config = DROPOFF_CONFIG, cacheMs = 60_000, personalizerStore = null } = {}) {
   let cached = null; let cachedAt = 0;
+  // The personalizer's technical events (docs/growth/DROPOFF_EVENTS.md): counts of DISTINCT attempts, read fresh on every answer (never cached with the snapshot). No store = not collected here (null).
+  const withEvents = async (payload, t) => {
+    if (!personalizerStore || typeof personalizerStore.list !== 'function') return payload;
+    const since = new Date(t.getTime() - PZ_RETENTION_DAYS * 86400000);
+    try { return { ...payload, personalizer: summarizePersonalizer(await personalizerStore.list({ since }), { since: since.toISOString(), until: t.toISOString() }) }; }
+    catch (e) { console.error('growth personalizer events: read failed:', e?.message ?? e); return { ...payload, personalizer: { status: 'UNAVAILABLE' } }; }
+  };
   return async function dropoff() {
-    const t = now(); if (cached && t.getTime() - cachedAt < cacheMs) return cached;
+    const t = now(); if (cached && t.getTime() - cachedAt < cacheMs) return withEvents(cached, t);
     const base = { rule: DROPOFF_RULE, generatedAt: t.toISOString() }; let payload;
     if (typeof load !== 'function') payload = { ...base, state: 'NOT_CONNECTED', missing: ['SHOP_ANALYTICS_SNAPSHOT'] };
     else {
-      let raw; try { raw = await load(); } catch (e) { console.error('growth dropoff: source unavailable:', e?.message ?? e); return { ...base, state: 'UNAVAILABLE' }; }
+      let raw; try { raw = await load(); } catch (e) { console.error('growth dropoff: source unavailable:', e?.message ?? e); return withEvents({ ...base, state: 'UNAVAILABLE' }, t); }
       if (!raw) payload = { ...base, state: 'NOT_CONNECTED', missing: ['SHOP_ANALYTICS_SNAPSHOT'] };
       else { const { funnel, errors } = normalizeDropoff(raw); payload = funnel ? { ...base, ...buildDropoff({ funnel, now: t, timeZone, config }) } : { ...base, state: 'INVALID', errors }; }
     }
-    cached = payload; cachedAt = t.getTime(); return payload;
+    cached = payload; cachedAt = t.getTime(); return withEvents(payload, t);
   };
 }
