@@ -93,7 +93,7 @@ export function createFinanceApp(deps) {
   const packCache = new Map();
   const tokenHash = sha(token);
   // Single sign-on from the Nordla server (src/finance/sso-ticket.js): only when the launcher gives a secret; otherwise /sso does not exist.
-  const ssoVerifier = deps.sso?.secret ? createTicketVerifier({ secret: deps.sso.secret, merchantId, now: () => (deps.nowMs ?? Date.now)() }) : null;
+  const ssoVerifier = deps.sso?.secret ? createTicketVerifier({ secret: deps.sso.secret, merchantId, now: () => (deps.nowMs ?? Date.now)(), module: 'finance', requirePerson: deps.sso.requirePerson === true, checkAccess: deps.sso.checkAccess ?? null }) : null;
   const cookieFlags = deps.secureCookie ? '; Secure' : ''; // hosted mode: HTTPS is terminated by the platform
 
   // ---------- plumbing ----------
@@ -1422,7 +1422,7 @@ export function createFinanceApp(deps) {
     const ip = clientIpOf(req, deps.trustProxyHops ?? 0);
     const f = failures.get(ip) ?? { n: 0, until: 0 };
     if (f.until > Date.now()) throw new HttpError(429, 'TOO_MANY_ATTEMPTS');
-    const r = ssoVerifier.verify(url.searchParams.get('t') ?? '');
+    const r = await ssoVerifier.verifyAsync(url.searchParams.get('t') ?? '');
     if (!r.ok) {
       f.n += 1; if (f.n >= 5) { f.until = Date.now() + 5 * 60_000; f.n = 0; } failures.set(ip, f);
       await audit({ at: clock.now(), action: 'LOGIN_SSO_REFUSED', code: r.code });

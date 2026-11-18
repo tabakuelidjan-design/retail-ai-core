@@ -84,7 +84,7 @@ const cookieOf = (req, name) => { for (const part of String(req.headers?.cookie 
  * 8 h session (HttpOnly, Secure, SameSite=Strict cookie, kept in memory) and lands on the dashboard. The access token keeps working as before; nothing is served without one of the two.
  */
 export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = null, now = () => Date.now() }) {
-  const verifier = sso ? createTicketVerifier({ secret: sso.secret, merchantId: sso.merchantId, audience: ANALYTICS_SSO_AUDIENCE, now }) : null;
+  const verifier = sso ? createTicketVerifier({ secret: sso.secret, merchantId: sso.merchantId, audience: ANALYTICS_SSO_AUDIENCE, now, module: 'analytics', requirePerson: sso.requirePerson === true, checkAccess: sso.checkAccess ?? null }) : null;
   const sessions = new Map(); // sid -> expiry (ms)
   const tokenHash = sha(token);
   const failures = new Map();
@@ -97,7 +97,7 @@ export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = nul
     const f = failures.get(ip) ?? { n: 0, until: 0 };
     if (f.until > now()) return deny(res, 429, 'TOO_MANY_ATTEMPTS');
     if (verifier && req.method === 'GET' && String(req.url ?? '').split('?')[0] === '/sso') {
-      const r = verifier.verify(new URL(req.url, 'http://localhost').searchParams.get('t') ?? '');
+      const r = await verifier.verifyAsync(new URL(req.url, 'http://localhost').searchParams.get('t') ?? '');
       if (!r.ok) { f.n += 1; if (f.n >= 5) { f.until = now() + 5 * 60_000; f.n = 0; } failures.set(ip, f); return deny(res, 403, r.code); }
       failures.delete(ip);
       for (const [k, v] of sessions) if (v < now()) sessions.delete(k);

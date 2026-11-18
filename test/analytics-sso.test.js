@@ -9,7 +9,8 @@ let T = Date.parse('2026-11-18T12:00:00Z'); const now = () => T;
 const res = () => { const r = { status: 0, headers: {}, body: '', writeHead(s, h) { r.status = s; Object.assign(r.headers, h); }, setHeader(k, v) { r.headers[k] = v; }, end(b) { r.body = String(b ?? ''); } }; return r; };
 const run = async (guard, { url = '/', cookie, auth } = {}) => { const r = res(); const ok = await guard({ method: 'GET', url, headers: { host: HOST, ...(cookie ? { cookie } : {}), ...(auth ? { authorization: auth } : {}) }, socket: { remoteAddress: '1.2.3.4' } }, r); return { ok, r }; };
 const mk = (sso = { secret: SECRET, merchantId: M }) => createGuard({ allowedHosts: [HOST], token: TOKEN, trustProxyHops: 0, sso, now });
-const tk = (o = {}) => issueTicket({ secret: SECRET, merchantId: M, audience: ANALYTICS_SSO_AUDIENCE, now, ...o });
+const P_A = { userId: 'u1', role: 'OWNER', module: 'analytics' };
+const tk = (o = {}) => issueTicket({ secret: SECRET, merchantId: M, audience: ANALYTICS_SSO_AUDIENCE, now, person: P_A, ...o });
 
 test('AS-1 a good ticket opens a session (302 to /, HttpOnly Secure SameSite=Strict cookie); the cookie then passes the guard; the same ticket again is refused', async () => {
   const g = mk(); const t = tk();
@@ -56,7 +57,7 @@ test('AS-6 Nordla side: the Analytics ticket is issued only to owner / administr
   for (const role of ['VIEWER', 'COLLABORATOR', 'READ_ONLY', undefined]) assert.equal((await call(role)).status, 403, String(role));
   for (const role of ['OWNER', 'ADMIN', 'ACCOUNTANT']) {
     const r = await call(role); assert.equal(r.status, 200, role); const u = new URL(r.body.url); assert.equal(u.origin, 'https://analytics.example.app'); assert.equal(u.pathname, '/sso'); assert.ok(!r.body.url.includes(SECRET));
-    assert.deepEqual(createTicketVerifier({ secret: SECRET, merchantId: M, audience: ANALYTICS_SSO_AUDIENCE }).verify(u.searchParams.get('t')), { ok: true });
+    assert.deepEqual(createTicketVerifier({ secret: SECRET, merchantId: M, audience: ANALYTICS_SSO_AUDIENCE }).verify(u.searchParams.get('t')).ok, true);
     assert.equal(createTicketVerifier({ secret: SECRET, merchantId: M }).verify(new URL((await call(role)).body.url).searchParams.get('t')).ok, false, 'not a Finance ticket');
   }
   assert.equal((await call('OWNER', createCoreHttp({ runtime: null, store: {}, analytics: { source: 's' }, analyticsSso: null }))).status, 503);

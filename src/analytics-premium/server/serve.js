@@ -15,6 +15,7 @@ import { HostingConfigError, createGuard, resolveHosting } from './hosting.js';
 import { reportRefreshState, runReportOnce, startSyncAwareRefresh } from './report-refresh.js';
 import { bindReportsTenant, datasetOwnedBy, resolveAnalyticsTenant, salesSourceOf } from './tenant.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/client.js';
+import { createAccessChecker } from '../../identity/sso-contract.js';
 import { latestSyncStatus } from '../../sync/run-log.js';
 
 const REPORTS_DIR = new URL('../../../reports/', import.meta.url);
@@ -32,7 +33,7 @@ export async function startAnalyticsServer({ env = process.env, supabase: inject
   const tenant = await resolveAnalyticsTenant({ env, supabase, log, createClient });
   const merchantId = tenant.merchantId;
   const ssoSecret = String(env.ANALYTICS_SSO_SECRET ?? ''); // optional: lets the Nordla server open this dashboard for a signed-in person (no token typed); 24+ characters or it stays off
-  guard = hosting.hosted ? createGuard({ allowedHosts: hosting.allowedHosts, token: hosting.token, trustProxyHops: hosting.trustProxyHops, sso: ssoSecret.length >= 24 ? { secret: ssoSecret, merchantId } : null }) : undefined;
+  guard = hosting.hosted ? createGuard({ allowedHosts: hosting.allowedHosts, token: hosting.token, trustProxyHops: hosting.trustProxyHops, sso: ssoSecret.length >= 24 ? { secret: ssoSecret, merchantId, requirePerson: true, checkAccess: createAccessChecker({ supabase, merchantId }) } : null }) : undefined;
   bindReportsTenant(reportsDir, merchantId); // from now on, only this tenant's report files are served from reportsDir
 
   // Sync health of THIS merchant only (sync_runs written by Core). No sales connector at all -> a neutral state, not a failure.

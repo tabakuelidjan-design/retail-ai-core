@@ -19,17 +19,28 @@ const sign = (secret, body, audience = SSO_AUDIENCE) => createHmac('sha256', key
 const secretOk = (secret) => typeof secret === 'string' && secret.length >= SSO_MIN_SECRET_LENGTH;
 
 /** @returns {string} `<payload>.<signature>` (base64url) */
-export function issueTicket({ secret, merchantId, audience = SSO_AUDIENCE, ttlSeconds = 60, now = () => Date.now(), id = () => randomBytes(16).toString('hex') }) {
+export function issueTicket({ secret, merchantId, audience = SSO_AUDIENCE, ttlSeconds = 60, now = () => Date.now(), id = () => randomBytes(16).toString('hex'), person = null }) {
   if (!secretOk(secret)) throw Object.assign(new Error('the SSO secret is missing or shorter than 24 characters'), { code: 'SSO_NOT_CONFIGURED' });
   if (typeof merchantId !== 'string' || !merchantId) throw Object.assign(new Error('a merchant is required'), { code: 'SSO_MERCHANT_REQUIRED' });
   const ttl = Math.min(Math.max(1, Math.trunc(ttlSeconds)), SSO_MAX_TTL_SECONDS);
   const iat = Math.floor(now() / 1000);
-  const body = b64u(JSON.stringify({ v: 1, aud: audience, m: merchantId, jti: id(), iat, exp: iat + ttl }));
+  // Person claims (contract v2, see identity/sso-contract.js): the person, their role and the module they open. Set by the Nordla server only.
+  const personClaims = person ? (() => {
+    if (typeof person.userId !== 'string' || !person.userId || typeof person.role !== 'string' || !person.role || typeof person.module !== 'string' || !person.module) throw Object.assign(new Error('a person needs userId, role and module'), { code: 'SSO_PERSON_REQUIRED' });
+    return { u: person.userId, r: person.role, mod: person.module, iss: 'nordla-core' };
+  })() : {};
+  const body = b64u(JSON.stringify({ v: person ? 2 : 1, aud: audience, m: merchantId, ...personClaims, jti: id(), iat, exp: iat + ttl }));
   return `${body}.${b64u(sign(secret, body, audience))}`;
 }
 
 /** The verifier keeps the ids it has accepted (in memory, until they expire): one ticket opens ONE session. */
-export function createTicketVerifier({ secret, merchantId, audience = SSO_AUDIENCE, now = () => Date.now(), skewSeconds = 30 }) {
+/**
+ * @param {object} o
+ * @param {boolean} [o.requirePerson=false] refuse any ticket without person claims (contract v2): the service then knows who opens it
+ * @param {string|null} [o.module=null] when set, the ticket must be for this module (SSO_WRONG_MODULE otherwise)
+ * @param {Function|null} [o.checkAccess=null] async ({merchantId,userId,role,module}) => {ok:true}|{ok:false,code}: re-checked at USE time
+ */
+export function createTicketVerifier({ secret, merchantId, audience = SSO_AUDIENCE, now = () => Date.now(), skewSeconds = 30, requirePerson = false, module = null, checkAccess = null }) {
   if (!secretOk(secret)) throw Object.assign(new Error('the SSO secret is missing or shorter than 24 characters'), { code: 'SSO_NOT_CONFIGURED' });
   const used = new Map(); // jti -> exp (seconds)
   const prune = (nowS) => { for (const [k, exp] of used) if (exp < nowS - skewSeconds) used.delete(k); };
@@ -40,16 +51,32 @@ export function createTicketVerifier({ secret, merchantId, audience = SSO_AUDIEN
     const expected = sign(secret, parts[0], audience); const given = Buffer.from(parts[1], 'base64url');
     if (given.length !== expected.length || !timingSafeEqual(given, expected)) return { ok: false, code: 'SSO_BAD_SIGNATURE' };
     let p; try { p = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8')); } catch { return { ok: false, code: 'SSO_INVALID' }; }
-    if (!p || p.v !== 1 || p.aud !== audience || typeof p.m !== 'string' || typeof p.jti !== 'string' || !/^[0-9a-f]{16,64}$/.test(p.jti)
+    if (!p || (p.v !== 1 && p.v !== 2) || p.aud !== audience || typeof p.m !== 'string' || typeof p.jti !== 'string' || !/^[0-9a-f]{16,64}$/.test(p.jti)
         || !Number.isInteger(p.iat) || !Number.isInteger(p.exp) || p.exp <= p.iat || p.exp - p.iat > SSO_MAX_TTL_SECONDS) return { ok: false, code: 'SSO_INVALID' };
     const nowS = Math.floor(now() / 1000);
     if (p.iat > nowS + skewSeconds) return { ok: false, code: 'SSO_NOT_YET_VALID' };
     if (p.exp < nowS) return { ok: false, code: 'SSO_EXPIRED' };
     if (p.m !== merchantId) return { ok: false, code: 'SSO_WRONG_MERCHANT' };
+    const hasPerson = typeof p.u === 'string' && typeof p.r === 'string' && typeof p.mod === 'string';
+    if (p.v === 2 && !hasPerson) return { ok: false, code: 'SSO_INVALID' };
+    if (requirePerson && !hasPerson) return { ok: false, code: 'SSO_NO_PERSON' };
+    if (module !== null && (!hasPerson || p.mod !== module)) return { ok: false, code: 'SSO_WRONG_MODULE' };
     prune(nowS);
     if (used.has(p.jti)) return { ok: false, code: 'SSO_REPLAYED' };
     used.set(p.jti, p.exp);
-    return { ok: true };
+    return hasPerson ? { ok: true, claims: Object.freeze({ userId: p.u, role: p.r, module: p.mod }) } : { ok: true };
   }
-  return Object.freeze({ verify });
+  /**
+   * The full check, used by the services: the ticket (as verify) AND, when a checkAccess is given, the person's CURRENT access
+   * (membership, role, entitlement) at the moment of use. Any error in the check is a refusal (SSO_ACCESS_UNAVAILABLE).
+   */
+  async function verifyAsync(ticket) {
+    const r = verify(ticket);
+    if (!r.ok || !checkAccess || !r.claims) return r;
+    let a;
+    try { a = await checkAccess({ merchantId, userId: r.claims.userId, role: r.claims.role, module: r.claims.module }); } catch { return { ok: false, code: 'SSO_ACCESS_UNAVAILABLE' }; }
+    if (!a || a.ok !== true) return { ok: false, code: (a && typeof a.code === 'string' && a.code) || 'SSO_ACCESS_DENIED' };
+    return { ok: true, claims: r.claims, access: Object.freeze({ role: a.role ?? r.claims.role }) };
+  }
+  return Object.freeze({ verify, verifyAsync });
 }
