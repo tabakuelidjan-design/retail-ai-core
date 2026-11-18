@@ -9,7 +9,7 @@ import { FinanceError, settlement } from './document.js';
 import { toCents } from './money.js';
 import { NoBankAdapter, assertReadOnlyAdapter, maskIban, observedBalance, parseBankCsv } from './bank.js';
 import { parseCamt053 } from './bank-camt053.js';
-import { classifyIncoming } from './bank-identity.js';
+import { classifyIncoming, acceptedHeld, heldSummary } from './bank-identity.js';
 
 // The bank's own id is trusted as a reference only when the statement has a usable id column (CSV) or AcctSvcrRef (CAMT.053).
 const bankRefRows = (parsed) => { const reliable = parsed.columns?.id != null; return parsed.rows.map((r) => ({ ...r, bankReference: reliable ? String(r.id) : null })); };
@@ -56,6 +56,8 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
   // EUR-only: a foreign-currency payable never enters matching or the projection (unless the merchant typed its EUR amount)
   const payables = async (cur = 'EUR') => (await payablesAll()).map((r) => toPayable(r, cur)).filter((p) => p.grossCents !== null && p.remainingCents > 0);
   // All rows of a list are stored in ONE atomic batch: completely or not at all (never a partial import). The identity of a row (provider id / fingerprint+occurrence) makes a retry idempotent.
+  // Identity keys are limited to this merchant (the store is per merchant), the CSV/CAMT pseudo-account and the file source.
+  const storedFileRows = async () => (await store.listBankTransactions({ merchantId })).filter((t) => t.accountId === CSV_ACCOUNT && t.source === 'csv');
   const store1 = async (accountId, list, source) => {
     const rows = list.map((t) => ({ merchantId, accountId, providerTxId: String(t.id), date: t.date, valueDate: t.valueDate ?? null, amountCents: t.amountCents, currency: t.currency ?? 'EUR', counterpartyName: t.counterpartyName ?? null, counterpartyAccountMasked: t.counterpartyAccountMasked ?? null,
       reference: t.reference ?? null, structuredReference: t.structuredReference ?? null, bankReference: t.bankReference ?? null, fingerprint: t.fingerprint ?? null, source, status: 'NEW', importedAt: clock.now() }));
@@ -107,36 +109,37 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
      */
     async previewCsv(text, { format = 'csv' } = {}) {
       const p = parseStatement(text, format);
-      const stored = (await store.listBankTransactions({ merchantId })).filter((t) => t.accountId === CSV_ACCOUNT);
+      const stored = await storedFileRows();
       const existing = new Set(stored.map((t) => String(t.providerTxId)));
       let already = 0; let identical = 0;
       for (const r of p.rows) { if (/#\d+$/.test(r.id)) identical += 1; if (existing.has(String(r.id))) already += 1; }
       // Identity across formats (bank-identity.js): a reliable bank reference, or the same movement to check by hand. Nothing is dropped silently.
       const { kept, known, possible } = classifyIncoming(bankRefRows(p), stored);
       return { format, account: p.account ?? null, dataLines: p.dataLines, validRows: p.rows.length, invalid: p.errors, period: p.period, columns: p.columns, delimiter: p.delimiter,
-        duplicates: { alreadyImported: known, inFile: 0 }, identicalInFile: identical, importable: kept.length, possibleDuplicates: possible, canImportValidRows: p.errors.length > 0 && p.rows.length > 0,
+        duplicates: { alreadyImported: known, inFile: 0 }, identicalInFile: identical, importable: kept.length, possibleDuplicates: heldSummary(possible), canImportValidRows: p.errors.length > 0 && p.rows.length > 0,
         sample: p.rows.slice(0, 5).map((r) => ({ line: r.line, date: r.date, amountCents: r.amountCents, currency: r.currency, counterpartyName: r.counterpartyName, reference: r.reference })) };
     },
     /**
      * Default: all-or-nothing (a file with ANY invalid line imports nothing). With { allowPartial: true } the VALID lines are imported and every invalid line is returned with its
      * number and reason (nothing is dropped silently). Idempotent either way: known transactions are skipped.
      */
-    async importCsv(text, { allowPartial = false, format = 'csv' } = {}) {
+    async importCsv(text, { allowPartial = false, format = 'csv', acceptPossibleDuplicates = false } = {}) {
       const parsed = parseStatement(text, format);
       const { rows, errors } = parsed;
       if (errors.length && !(allowPartial && rows.length)) throw new FinanceError('BANK_CSV_ROWS_INVALID', errors.map((e) => `${e.line}:${e.reason}`).join(',').slice(0, 500));
-      // Known movements (same id, or same reliable bank reference) are not stored twice. Possible duplicates are stored AND reported for a manual check.
-      const { kept, known, possible } = classifyIncoming(bankRefRows(parsed),(await store.listBankTransactions({ merchantId })).filter((t) => t.accountId === CSV_ACCOUNT));
+      // Known movements are not stored twice. A SUSPECTED duplicate is HELD (not stored) unless the merchant accepts it explicitly for this request.
+      const { kept, known, possible } = classifyIncoming(bankRefRows(parsed), await storedFileRows());
       let r;
-      try { r = await store1(CSV_ACCOUNT, kept, 'csv'); } catch (e) {
+      const toStore = [...kept, ...acceptedHeld(possible, acceptPossibleDuplicates === true)];
+      try { r = await store1(CSV_ACCOUNT, toStore, 'csv'); } catch (e) {
         // The batch is atomic: nothing of this statement was stored. Say so, keep the technical detail out of the answer, and let the merchant retry.
         try { await audit({ at: clock.now(), action: 'BANK_CSV_IMPORT_FAILED', rows: rows.length }); } catch { /* auditing must not hide the failure */ }
         throw new FinanceError('BANK_IMPORT_FAILED_NOTHING_SAVED');
       }
       // duplicates = every line already known: by identifier (stored by the batch) or by identity (same movement stored under another format or file).
       const duplicates = known + r.duplicates;
-      await audit({ at: clock.now(), action: 'BANK_CSV_IMPORTED', created: r.created, duplicates, possibleDuplicates: possible.length, rejected: errors.length });
-      return { created: r.created, duplicates, rejected: errors, ...(possible.length ? { possibleDuplicates: possible } : {}) };
+      await audit({ at: clock.now(), action: 'BANK_CSV_IMPORTED', created: r.created, duplicates, held: possible.length, heldAccepted: acceptPossibleDuplicates === true, rejected: errors.length });
+      return { created: r.created, duplicates, rejected: errors, ...(possible.length ? { possibleDuplicates: heldSummary(possible) } : {}) };
     },
     async transactions(f = {}) { return (await store.listBankTransactions({ merchantId, ...f })).map(txView).sort((a, b) => String(b.date).localeCompare(String(a.date))); },
     /** Accounts with their OBSERVED balance and how old it is (never "the current balance"). */

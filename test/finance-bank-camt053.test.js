@@ -134,7 +134,7 @@ test('IDENTITY (unit): same reliable reference = known; same movement without re
   const same = classifyIncoming([{ id: 'R1', line: 1, bankReference: 'R1', date: '2026-09-22', amountCents: 7190, currency: 'EUR', reference: 'INV-2026-0001', counterpartyName: 'Client A' }], stored);
   assert.equal(same.known, 1); assert.equal(same.kept.length, 0, 'the same bank reference is not stored again');
   const noRef = classifyIncoming([{ id: 'fp1', line: 1, bankReference: null, date: '2026-09-22', amountCents: 7190, currency: 'EUR', reference: 'INV-2026-0001', counterpartyName: 'Client A' }], stored);
-  assert.equal(noRef.kept.length, 1, 'never dropped silently'); assert.equal(noRef.possible.length, 1); assert.equal(noRef.possible[0].reason, 'NO_RELIABLE_BANK_REFERENCE');
+  assert.equal(noRef.kept.length, 0, 'a suspected duplicate is NOT stored by default'); assert.equal(noRef.possible.length, 1, 'it is held and reported'); assert.equal(noRef.possible[0].reason, 'NO_RELIABLE_BANK_REFERENCE'); assert.equal(noRef.possible[0].stored, true, 'storable only on explicit acceptance');
   const other = classifyIncoming([{ id: 'R2', line: 1, bankReference: 'R2', date: '2026-09-22', amountCents: 7190, currency: 'EUR', reference: 'INV-2026-0001', counterpartyName: 'Client A' }], stored);
   assert.equal(other.kept.length, 1, 'two different bank references: two movements, both kept'); assert.equal(other.possible.length, 0, 'and not flagged: the bank says they differ');
   assert.equal(movementKey({ ...stored[0], reference: 'inv 2026-0001!' }), movementKey(stored[0]), 'case, accents and punctuation do not change the identity');
@@ -174,8 +174,10 @@ test('CROSS-FORMAT without a reliable reference: the same-looking movement is IM
     const pv = await c.post('/api/bank/import-csv/preview', { csv: xml, format: 'camt053' }); assert.equal(pv.status, 200, JSON.stringify(pv.data));
     assert.equal(pv.data.possibleDuplicates.length, 1, 'the preview shows the possible duplicate before any import');
     const imp = await c.post('/api/bank/import-csv', { csv: xml, format: 'camt053' }); assert.equal(imp.status, 200, JSON.stringify(imp.data));
-    assert.equal(imp.data.created, 1, 'stored for the manual check, not silently dropped');
+    assert.equal(imp.data.created, 0, 'held: not stored by default');
     assert.equal(imp.data.possibleDuplicates.length, 1);
+    const acc = await c.post('/api/bank/import-csv', { csv: xml, format: 'camt053', acceptPossibleDuplicates: true });
+    assert.equal(acc.data.created, 1, 'stored only after the merchant accepts it explicitly');
   } finally { await a.close(); }
 });
 
@@ -226,5 +228,23 @@ test('CONFLICT: the same bank reference with a DIFFERENT amount is never stored 
     const r = await c.post('/api/bank/import-csv', { csv: xml, format: 'camt053' }); assert.equal(r.status, 200, JSON.stringify(r.data));
     assert.equal(r.data.created, 0, 'not stored over the existing reference');
     assert.equal(r.data.possibleDuplicates.length, 1); assert.equal(r.data.possibleDuplicates[0].reason, 'SAME_ID_OTHER_MOVEMENT'); assert.equal(r.data.possibleDuplicates[0].stored, false);
+  } finally { await a.close(); }
+});
+
+// --- Financial safety: a suspected duplicate must not become a second confirmed payment by default ---
+test('DOUBLE-COUNT GUARD: a suspected duplicate without a reliable reference is HELD, not stored, so it cannot be confirmed as a second payment', async () => {
+  const a = await startApp({ bankVaultKey: KEY });
+  try {
+    const c = await a.authed();
+    const d = (await c.post('/api/documents', invoiceBody({}))).data; await c.post(`/api/documents/${d.id}/submit`, {}); assert.equal((await c.post(`/api/documents/${d.id}/approve`, {})).status, 200);
+    const number = (await c.get(`/api/documents/${d.id}`)).data.number;
+    const csv = ['Date;Montant;Contrepartie;Communication', `22/09/2026;30,00;Client Exemple SA;${number}`].join('\n');
+    assert.equal((await c.post('/api/bank/import-csv', { csv })).data.created, 1, 'the first movement is stored');
+    const xml = doc(entry({ amt: '30.00', ustrd: number, cp: 'Client Exemple SA', date: '2026-09-22' }));
+    const again = await c.post('/api/bank/import-csv', { csv: xml, format: 'camt053' }); assert.equal(again.status, 200, JSON.stringify(again.data));
+    assert.equal(again.data.created, 0, 'the suspected duplicate is NOT stored by default');
+    assert.equal(again.data.possibleDuplicates.length, 1, 'and it is reported for a manual decision');
+    const rows = (await c.get('/api/bank/transactions')).data.rows.filter((t) => t.amountCents === 3000);
+    assert.equal(rows.length, 1, 'only one bank movement of 30.00 exists to be confirmed');
   } finally { await a.close(); }
 });
