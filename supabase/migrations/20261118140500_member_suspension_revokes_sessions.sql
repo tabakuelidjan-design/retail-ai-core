@@ -12,3 +12,6 @@ after update of status on public.merchant_members
 for each row
 when (new.status = 'SUSPENDED' and old.status is distinct from 'SUSPENDED')
 execute function public.merchant_members_revoke_sessions();
+
+-- The trigger function is invoked by the trigger only: no role may call it directly (same ACL as the staging project: postgres + service_role).
+revoke execute on function public.merchant_members_revoke_sessions() from public, anon, authenticated;
