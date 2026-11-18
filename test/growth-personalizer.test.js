@@ -8,7 +8,7 @@ import { validatePersonalizerEvent, summarizePersonalizer, PZ_ALLOWED_KEYS, PZ_S
 import { createPersonalizerCollector, createMemoryPersonalizerStore, COLLECT_PATH, collectChannels, channelProvenance } from '../src/growth/server/collect-personalizer.js';
 import { createDropoffSource } from '../src/growth/server/dropoff.js';
 import { createHostedGrowth } from '../src/growth/server/hosted.js';
-import { growthDom, text } from './growth-dom.js';
+import { growthDom, text, all, hasClass } from './growth-dom.js';
 
 const A = 'a1b2c3d4e5f60718'; const B = '0f1e2d3c4b5a6978'; const M = '36b1a1a7-2a48-416a-9dfe-ce66fe1ec2a5';
 const ev = (attempt, step, status = 'ok', n = 1, extra = {}) => ({ v: 1, attempt, step, status, device: 'mobile', product: 'coque-personnalisee-apple-iphone-13', n, consent: 'analytics', ...extra });
@@ -209,6 +209,7 @@ test('PZ-12 the customer view without any live event says so and still shows the
   const mk = (collect) => createDropoffSource({ load: async () => snapshot(), timeZone: TZ, now: () => NOW, personalizerStore: store, cacheMs: 0, collect }).call().then((x) => JSON.parse(JSON.stringify(x)));
   const off = await mk({ test: T, live: null }); assert.equal(off.personalizer.status, 'NO_DATA'); assert.equal(off.collect.liveEnabled, false); assert.equal(off.personalizerTests.attempts, 2);
   const tOff = text((await growthDom('#/dropoff', { dropoff: off })).root); assert.match(tOff, /Collecte live non activée : aucun chiffre client/); assert.match(tOff, /collecte live non activée/); assert.match(tOff, /Essais sur le thème brouillon/); assert.doesNotMatch(tOff, /Ajout confirmé par le panier Shopify1mobile/);
+  const notes = all((await growthDom('#/dropoff', { dropoff: off })).root, (n) => hasClass(n, 'gr-do-pz-state')); assert.equal(notes.length, 2); assert.notEqual(notes[0], notes[1], 'a DOM node cannot sit in two rows: one note per row (Photo chargée + Personnalisation terminée)');
   const on = await mk(CH); const tOn = text((await growthDom('#/dropoff', { dropoff: on })).root); assert.match(tOn, /Collecte live active : aucun événement client reçu/); assert.match(tOn, /collecte live active, 0 événement client/);
 });
 

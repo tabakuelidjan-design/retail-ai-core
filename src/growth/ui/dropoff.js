@@ -95,11 +95,11 @@ const doPzCount = (p, k) => { const v = (p.steps && p.steps[k]) || { total: 0, m
 function doEventsCard(d) {
   const p = d.personalizer || null; const ok = p && p.status === 'OK';
   const stKey = p && p.status === 'NO_DATA' && !(d.collect && d.collect.liveEnabled) ? 'NO_LIVE' : (p && p.status);
-  const stateNote = p && !ok ? h('span', { class: 'gr-muted gr-do-pz-state' }, ` · ${t(`gr.do.pz.evState.${stKey}`)}`) : null;
+  const stateNote = () => p && !ok ? h('span', { class: 'gr-muted gr-do-pz-state' }, ` · ${t(`gr.do.pz.evState.${stKey}`)}`) : null;
   const rows = d.events.map((e) => {
     const via = DO_PZ_VIA[e.step];
     if (via && ok) return h('tr', { class: 'gr-do-pz-ev' }, h('th', { scope: 'row' }, t(`gr.do.step.${e.step}`)), h('td', null, h('code', null, `habb_personalizer › ${via}`)), h('td', null, chip(t('gr.do.measured'), 'gr-good'), ' ', h('span', { class: 'gr-do-pz-evcount' }, doPzCount(p, via))), h('td', { class: 'gr-muted' }, t('gr.do.pz.evVia')));
-    return h('tr', null, h('th', { scope: 'row' }, t(`gr.do.step.${e.step}`)), h('td', null, h('code', null, e.event)), h('td', null, e.measured ? chip(t('gr.do.measured'), 'gr-good') : chip(t('gr.do.notMeasured'), 'gr-warn'), via ? stateNote : null), h('td', { class: 'gr-muted' }, e.where));
+    return h('tr', null, h('th', { scope: 'row' }, t(`gr.do.step.${e.step}`)), h('td', null, h('code', null, e.event)), h('td', null, e.measured ? chip(t('gr.do.measured'), 'gr-good') : chip(t('gr.do.notMeasured'), 'gr-warn'), via ? stateNote() : null), h('td', { class: 'gr-muted' }, e.where));
   });
   if (ok) for (const k of DO_PZ_EXTRA) rows.push(h('tr', { class: 'gr-do-pz-ev' }, h('th', { scope: 'row' }, t(`gr.do.pz.step.${k}`)), h('td', null, h('code', null, `habb_personalizer › ${k}`)), h('td', null, chip(t('gr.do.measured'), 'gr-good'), ' ', h('span', { class: 'gr-do-pz-evcount' }, doPzCount(p, k))), h('td', { class: 'gr-muted' }, t('gr.do.pz.evVia'))));
   return h('section', { class: 'ex-card gr-do-card gr-do-wide' }, cardHead('dataHealth', t('gr.do.events.title')), h('p', { class: 'gr-muted' }, t('gr.do.events.def')),
