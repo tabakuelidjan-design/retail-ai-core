@@ -10,7 +10,7 @@ import http from 'node:http';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRuntime } from '../runtime.js';
-import { createAccessChecker } from '../../identity/sso-contract.js';
+import { financeSsoOptions } from '../sso-config.js';
 import { LOGO_DIR, SETTINGS_PATH, loadSettings, saveSettings } from '../settings.js';
 import { createShopifyPriceSource } from '../catalog.js';
 import { createShopifyStockApplier } from '../stock.js';
@@ -63,7 +63,7 @@ export async function startFinanceServer({ env = process.env, runtimeDeps = {}, 
     },
     allowedHosts: hosting.allowedHosts ?? undefined, secureCookie: hosting.secureCookie, trustProxyHops: hosting.trustProxyHops,
     homeUrl: (() => { try { const u = new URL(String(env.NORDLA_HOME_URL ?? '').trim()); return u.protocol === 'https:' && !u.username && !u.password ? u.origin : null; } catch { return null; } })(), // "Retour à Nordla": the Nordla home address (https only); none = no link
-    sso: hosting.hosted && env.FINANCE_SSO_ENABLED === '1' ? { secret: token, requirePerson: true, checkAccess: createAccessChecker({ supabase: rt.supabase, merchantId: rt.merchant.id }) } : null, // /sso: Nordla single sign-on, hosted and explicitly enabled only
+    sso: financeSsoOptions({ hosted: hosting.hosted, enabled: env.FINANCE_SSO_ENABLED === '1', env, dashboardToken: token, supabase: rt.supabase, merchantId: rt.merchant.id }), // /sso: Nordla single sign-on, hosted and explicitly enabled only
     settings: {
       load: () => loadSettings(),
       save: (s) => saveSettings(s),
