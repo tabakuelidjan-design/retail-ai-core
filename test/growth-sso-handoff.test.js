@@ -64,3 +64,9 @@ test('the ticket cannot be replayed, expired, forged, retargeted to another merc
   assert.deepEqual(Object.keys(HANDOFF_DESTINATIONS).sort(), ['dropoff', 'opportunities']);
   assert.equal(issueHandoff({ secret: SECRET, merchantId: M, userId: U, now, ttlSeconds: 9999 }).length > 0, true);
 });
+
+test('the module is shown as « Sourcing » in the modules list (menu, card and title come from it) while its key stays « sourcing »', async () => {
+  const chunks = []; const res = { writeHead() {}, end: (b) => chunks.push(String(b)), setHeader() {} };
+  await createCoreHttp({ runtime: null, store: {}, merchantId: M, env: ENV }).handle({ method: 'GET', url: '/api/core/modules', headers: {}, on() {} }, res, new URL('http://x/api/core/modules'), { role: 'OWNER', userId: U });
+  const row = JSON.parse(chunks.join('')).modules.find((m) => m.key === 'sourcing'); assert.equal(row.label, 'Sourcing'); assert.equal(row.offline, true);
+});

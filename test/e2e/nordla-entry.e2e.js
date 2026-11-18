@@ -82,7 +82,7 @@ try {
     await click(tab, '[data-act="nx-load"]'); await tab.waitFor("document.querySelectorAll('[data-nx-module]').length === 7", 10000);
     const states = await tab.eval("[...document.querySelectorAll('[data-nx-module] summary')].map((s) => s.innerText.replace(/\\s+/g, ' ').trim()).join(' | ')");
     await shot(tab, '1-modules', '#nx-head');
-    for (const s of ['Nordla Core DISPONIBLE', 'Finance LECTURE SEULE', 'Analytics LECTURE SEULE', 'China Sourcing DISPONIBLE', 'Branding À APPROUVER', 'Marketing LIMITÉ', 'Création LIMITÉ']) ok(states.includes(s), `missing "${s}" in ${states}`);
+    for (const s of ['Nordla Core DISPONIBLE', 'Finance LECTURE SEULE', 'Analytics LECTURE SEULE', 'Sourcing DISPONIBLE', 'Branding À APPROUVER', 'Marketing LIMITÉ', 'Création LIMITÉ']) ok(states.includes(s), `missing "${s}" in ${states}`);
   });
   await check('2. Finance: "invoices to pay" answers with Finance\'s figures, due dates and its source', async () => {
     await tab.run(`document.querySelector('[data-nx-module="finance"]').open = true; document.querySelector('[data-nx-module="finance"] [data-act="nx-ask"]').click(); await __t.sleep(800); return 1;`);
