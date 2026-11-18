@@ -48,7 +48,7 @@ export function parseCamt053(xml, { timeZone = 'Europe/Brussels' } = {}) {
   if (!entries.length) throw new FinanceError('BANK_CAMT_NO_ENTRIES');
   if (entries.length > MAX_ENTRIES) throw new FinanceError('BANK_CAMT_TOO_MANY_ENTRIES', String(entries.length));
 
-  const parsed = []; const errors = [];
+  const parsed = []; const errors = []; const batches = [];
   entries.forEach((e, idx) => {
     const line = idx + 1;
     const status = textAt(e, ['Sts']) || 'BOOK';
@@ -68,12 +68,21 @@ export function parseCamt053(xml, { timeZone = 'Europe/Brussels' } = {}) {
     const valueDate = textAt(e, ['ValDt', 'Dt']) || null;
     const signed = ind === 'CRDT' ? cents : -cents;
     const unstructured = find(e, 'Ustrd').map((n) => n.text.trim()).filter(Boolean).join(' ');
-    const strdRef = find(e, 'Ref').map((n) => n.text.replace(/\D/g, '')).find((d) => d.length === 12) ?? '';
+    // A batch entry (several TxDtls) may carry several creditor references: a structured reference is used only when it is UNIQUE in the entry.
+    const strdRefs = [...new Set(find(e, 'Ref').map((n) => n.text.replace(/\D/g, '')).filter((d) => d.length === 12))];
+    const strdRef = strdRefs.length === 1 ? strdRefs[0] : '';
+    // Batch detail: the entry amount is the bank's truth; the TxDtls sum is only reported (fees or several items can make it differ).
+    const details = find(e, 'TxDtls');
+    if (details.length > 1) {
+      const detailSum = details.reduce((s, d) => { const a = first(d, ['Amt']); const v = a ? centsOf(a.text.trim()) : null; return v === null ? s : s + v; }, 0);
+      batches.push({ line, txCount: details.length, detailSumCents: detailSum, entryCents: cents, consistent: detailSum === cents });
+    }
     const reference = unstructured.slice(0, 300);
     const structuredReference = strdRef || ((OGM.exec(reference) ?? []).slice(1).join('') || null);
     const cpPath = ind === 'CRDT' ? 'Dbtr' : 'Cdtr';
     const counterpartyName = textAt(e, ['NtryDtls', 'TxDtls', 'RltdPties', cpPath, 'Nm']).slice(0, 140);
-    const fingerprint = createHash('sha256').update(`${date}|${signed}|${ccy === 'EUR' ? '' : ccy + '|'}${reference}|${counterpartyName}`).digest('hex').slice(0, 24);
+    // The "camt053|" prefix keeps a CAMT fallback id apart from a CSV fingerprint: the same text in the two formats is NOT the same identifier.
+    const fingerprint = createHash('sha256').update(`camt053|${date}|${signed}|${ccy === 'EUR' ? '' : ccy + '|'}${reference}|${counterpartyName}`).digest('hex').slice(0, 24);
     const ref = textAt(e, ['AcctSvcrRef']) || textAt(e, ['NtryRef']) || null;
     parsed.push({ line, fileId: ref, date, valueDate, amountCents: signed, currency: ccy, counterpartyName, reference, structuredReference, fingerprint });
   });
@@ -89,7 +98,7 @@ export function parseCamt053(xml, { timeZone = 'Europe/Brussels' } = {}) {
   });
   const dates = rows.map((r) => r.date).sort();
   return {
-    rows, errors, delimiter: null, dataLines: entries.length, account: { ibanMasked },
+    rows, errors, batches, delimiter: null, dataLines: entries.length, account: { ibanMasked },
     columns: { date: 'BookgDt/Dt', amount: 'Amt+CdtDbtInd', reference: 'RmtInf/Ustrd', counterparty: 'RltdPties/Dbtr|Cdtr/Nm', id: refsUsable ? 'AcctSvcrRef' : null },
     period: dates.length ? { from: dates[0], to: dates[dates.length - 1] } : null,
     currencies: [...new Set(rows.map((r) => r.currency))],

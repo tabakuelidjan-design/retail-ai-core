@@ -120,3 +120,111 @@ test('CAMT: a payment in another currency than the document never matches, even 
   assert.equal(s.status, 'NO_MATCH');
   assert.ok(suggestForDebit({ ...usd, amountCents: -7190 }, [{ itemId: 'p1', invoiceNumber: 'INV-2026-0001', supplierName: 'X', grossCents: 7190, currency: 'EUR' }]).status === 'NO_MATCH');
 });
+
+// --- Cross-format duplicates and batch entries (synthetic only) ---
+import { classifyIncoming, movementKey } from '../src/finance/bank-identity.js';
+
+const csvBank = (rows) => ['Id;Date;Montant;Contrepartie;Communication', ...rows].join('\n');
+const camtRef = (ref, amt, date, cp, ustrd) => doc(entry({ amt, date, cp, ustrd, ref }));
+const batchEntry = (amt, refs, cps) => `<Ntry><Amt Ccy="EUR">${amt}</Amt><CdtDbtInd>CRDT</CdtDbtInd><Sts>BOOK</Sts><BookgDt><Dt>2026-09-22</Dt></BookgDt>
+  <NtryDtls>${refs.map((r, i) => `<TxDtls><Amt Ccy="EUR">${cps[i].amt}</Amt><RltdPties><Dbtr><Nm>${cps[i].name}</Nm></Dbtr></RltdPties><RmtInf><Strd><CdtrRefInf><Ref>${r}</Ref></CdtrRefInf></Strd></RmtInf></TxDtls>`).join('')}</NtryDtls></Ntry>`;
+
+test('IDENTITY (unit): same reliable reference = known; same movement without reference = possible duplicate, kept; distinct references = two movements', () => {
+  const stored = [{ providerTxId: 'R1', bankReference: 'R1', date: '2026-09-22', amountCents: 7190, currency: 'EUR', reference: 'INV 2026 0001', counterpartyName: 'Client A' }];
+  const same = classifyIncoming([{ id: 'R1', line: 1, bankReference: 'R1', date: '2026-09-22', amountCents: 7190, currency: 'EUR', reference: 'INV-2026-0001', counterpartyName: 'Client A' }], stored);
+  assert.equal(same.known, 1); assert.equal(same.kept.length, 0, 'the same bank reference is not stored again');
+  const noRef = classifyIncoming([{ id: 'fp1', line: 1, bankReference: null, date: '2026-09-22', amountCents: 7190, currency: 'EUR', reference: 'INV-2026-0001', counterpartyName: 'Client A' }], stored);
+  assert.equal(noRef.kept.length, 1, 'never dropped silently'); assert.equal(noRef.possible.length, 1); assert.equal(noRef.possible[0].reason, 'NO_RELIABLE_BANK_REFERENCE');
+  const other = classifyIncoming([{ id: 'R2', line: 1, bankReference: 'R2', date: '2026-09-22', amountCents: 7190, currency: 'EUR', reference: 'INV-2026-0001', counterpartyName: 'Client A' }], stored);
+  assert.equal(other.kept.length, 1, 'two different bank references: two movements, both kept'); assert.equal(other.possible.length, 0, 'and not flagged: the bank says they differ');
+  assert.equal(movementKey({ ...stored[0], reference: 'inv 2026-0001!' }), movementKey(stored[0]), 'case, accents and punctuation do not change the identity');
+});
+
+test('CROSS-FORMAT with reliable references, CSV then CAMT.053: the same movement is stored ONCE; the other movement of the statement is stored', async () => {
+  const a = await startApp({ bankVaultKey: KEY });
+  try {
+    const c = await a.authed();
+    const csv = csvBank(['BANK-REF-1;22/09/2026;71,90;Client Exemple SA;INV-2026-0001']);
+    const first = await c.post('/api/bank/import-csv', { csv }); assert.equal(first.status, 200, JSON.stringify(first.data)); assert.equal(first.data.created, 1);
+    const xml = doc(entry({ amt: '71.90', ref: 'BANK-REF-1', ustrd: 'INV-2026-0001', cp: 'Client Exemple SA', date: '2026-09-22' }), entry({ amt: '3.00', ind: 'DBIT', ref: 'BANK-REF-2', cp: 'Fournisseur X', date: '2026-09-23' }));
+    const second = await c.post('/api/bank/import-csv', { csv: xml, format: 'camt053' }); assert.equal(second.status, 200, JSON.stringify(second.data));
+    assert.equal(second.data.created, 1); assert.equal(second.data.duplicates, 1); assert.equal(second.data.possibleDuplicates, undefined);
+    assert.equal((await c.get('/api/bank/transactions')).data.rows.filter((t) => t.amountCents === 7190).length, 1);
+  } finally { await a.close(); }
+});
+
+test('CROSS-FORMAT with reliable references, CAMT.053 then CSV: stored ONCE', async () => {
+  const a = await startApp({ bankVaultKey: KEY });
+  try {
+    const c = await a.authed();
+    const xml = doc(entry({ amt: '71.90', ref: 'BANK-REF-1', ustrd: 'INV-2026-0001', cp: 'Client Exemple SA', date: '2026-09-22' }));
+    assert.equal((await c.post('/api/bank/import-csv', { csv: xml, format: 'camt053' })).data.created, 1);
+    const again = await c.post('/api/bank/import-csv', { csv: csvBank(['BANK-REF-1;22/09/2026;71,90;Client Exemple SA;INV-2026-0001']) });
+    assert.equal(again.status, 200, JSON.stringify(again.data)); assert.equal(again.data.created, 0); assert.equal(again.data.duplicates, 1);
+  } finally { await a.close(); }
+});
+
+test('CROSS-FORMAT without a reliable reference: the same-looking movement is IMPORTED and REPORTED for a manual check, never dropped', async () => {
+  const a = await startApp({ bankVaultKey: KEY });
+  try {
+    const c = await a.authed();
+    const csv = ['Date;Montant;Contrepartie;Communication', '22/09/2026;71,90;Client Exemple SA;INV-2026-0001'].join('\n');
+    assert.equal((await c.post('/api/bank/import-csv', { csv })).data.created, 1);
+    const xml = doc(entry({ amt: '71.90', ustrd: 'INV-2026-0001', cp: 'Client Exemple SA', date: '2026-09-22' }));
+    const pv = await c.post('/api/bank/import-csv/preview', { csv: xml, format: 'camt053' }); assert.equal(pv.status, 200, JSON.stringify(pv.data));
+    assert.equal(pv.data.possibleDuplicates.length, 1, 'the preview shows the possible duplicate before any import');
+    const imp = await c.post('/api/bank/import-csv', { csv: xml, format: 'camt053' }); assert.equal(imp.status, 200, JSON.stringify(imp.data));
+    assert.equal(imp.data.created, 1, 'stored for the manual check, not silently dropped');
+    assert.equal(imp.data.possibleDuplicates.length, 1);
+  } finally { await a.close(); }
+});
+
+test('IDENTICAL-LOOKING distinct movements (same date, amount, counterparty, distinct bank references) are both kept', async () => {
+  const a = await startApp({ bankVaultKey: KEY });
+  try {
+    const c = await a.authed();
+    const one = doc(entry({ amt: '10.00', ref: 'REF-A', cp: 'Client Exemple SA', date: '2026-09-22' }));
+    const two = doc(entry({ amt: '10.00', ref: 'REF-B', cp: 'Client Exemple SA', date: '2026-09-22' }));
+    assert.equal((await c.post('/api/bank/import-csv', { csv: one, format: 'camt053' })).data.created, 1);
+    const r2 = await c.post('/api/bank/import-csv', { csv: two, format: 'camt053' });
+    assert.equal(r2.data.created, 1, 'both movements are real and both are kept'); assert.equal(r2.data.possibleDuplicates, undefined);
+  } finally { await a.close(); }
+});
+
+test('BATCH: several TxDtls keep the bank amount; one creditor reference is used, two different ones are not guessed', () => {
+  const same = structuredCommunication('INV-2026-0001');
+  const one = parseCamt053(doc(batchEntry('25.00', [same, same], [{ amt: '10.00', name: 'Client A' }, { amt: '15.00', name: 'Client A' }])));
+  assert.equal(one.rows[0].amountCents, 2500, 'the entry amount is the bank truth');
+  assert.ok(one.rows[0].structuredReference && one.rows[0].structuredReference.length === 12, 'one creditor reference: used');
+  const two = parseCamt053(doc(batchEntry('25.00', [structuredCommunication('INV-2026-0001'), structuredCommunication('INV-2026-0002')], [{ amt: '10.00', name: 'Client A' }, { amt: '15.00', name: 'Client B' }])));
+  assert.equal(two.rows[0].structuredReference, null, 'two different creditor references: none is guessed');
+  assert.equal(two.batches.length, 1); assert.equal(two.batches[0].txCount, 2); assert.equal(two.batches[0].detailSumCents, 2500); assert.equal(two.batches[0].consistent, true);
+});
+
+test('BATCH: a detail that does not add up to the entry is reported, the entry is not silently changed', () => {
+  const r = parseCamt053(doc(batchEntry('30.00', ['000000000000', '000000000000'], [{ amt: '10.00', name: 'A' }, { amt: '15.00', name: 'A' }])));
+  assert.equal(r.rows[0].amountCents, 3000); assert.equal(r.batches[0].consistent, false); assert.equal(r.batches[0].detailSumCents, 2500);
+});
+
+test('FORMAT: an unknown statement format is refused, never read as CSV', async () => {
+  const a = await startApp({ bankVaultKey: KEY });
+  try {
+    const c = await a.authed();
+    const r = await c.post('/api/bank/import-csv', { csv: doc(entry()), format: 'CAMT053' });
+    assert.ok(r.status >= 400, 'an unknown format is refused');
+    assert.match(JSON.stringify(r.data), /BANK_STATEMENT_FORMAT_UNSUPPORTED/);
+    assert.equal((await c.get('/api/bank/transactions')).data.rows.length, 0, 'nothing stored');
+  } finally { await a.close(); }
+});
+
+test('CONFLICT: the same bank reference with a DIFFERENT amount is never stored over the first and never silently dropped: reported, not stored', async () => {
+  const a = await startApp({ bankVaultKey: KEY });
+  try {
+    const c = await a.authed();
+    assert.equal((await c.post('/api/bank/import-csv', { csv: csvBank(['BANK-REF-9;22/09/2026;71,90;Client Exemple SA;INV-2026-0001']) })).data.created, 1);
+    const xml = doc(entry({ amt: '80.00', ref: 'BANK-REF-9', ustrd: 'INV-2026-0001', cp: 'Client Exemple SA', date: '2026-09-22' }));
+    const r = await c.post('/api/bank/import-csv', { csv: xml, format: 'camt053' }); assert.equal(r.status, 200, JSON.stringify(r.data));
+    assert.equal(r.data.created, 0, 'not stored over the existing reference');
+    assert.equal(r.data.possibleDuplicates.length, 1); assert.equal(r.data.possibleDuplicates[0].reason, 'SAME_ID_OTHER_MOVEMENT'); assert.equal(r.data.possibleDuplicates[0].stored, false);
+  } finally { await a.close(); }
+});
