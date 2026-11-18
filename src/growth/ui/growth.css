@@ -741,6 +741,7 @@ body.gr-pp-lock { overflow: hidden; }
 .gr-do-pz-prov { margin: 6px 0; }
 @media (max-width: 560px) {
   .gr-do-events, .gr-do-events thead, .gr-do-events tbody, .gr-do-events tr, .gr-do-events th, .gr-do-events td { display: block; width: 100%; box-sizing: border-box; }
+  .gr-do-events.ex-table.gr-table { min-width: 0; } /* the generic table minimum (380-440 px) would force a sideways scroll */
   .gr-do-events thead { position: absolute; left: -9999px; }
   .gr-do-events tr { padding: 10px 0; border-top: 1px solid var(--nd-border); }
   .gr-do-events th, .gr-do-events td { padding: 2px 0; border: 0; text-align: left; overflow-wrap: anywhere; }
