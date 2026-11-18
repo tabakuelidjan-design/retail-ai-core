@@ -9,6 +9,7 @@ test('the trigger fires only when a membership BECOMES suspended, revokes only t
   assert.match(up, /after update of status on merchant_members/);
   assert.match(up, /when \(new\.status = 'SUSPENDED' and old\.status is distinct from 'SUSPENDED'\)/);
   assert.match(up, /where merchant_id = new\.merchant_id and user_id = new\.user_id and revoked_at is null/);
+  assert.match(up, /revoked_reason = 'REVOKED'/);
   assert.match(up, /security definer set search_path = ''/);
   assert.match(up, /revoke execute on function merchant_members_revoke_sessions\(\) from public, anon, authenticated/);
   assert.doesNotMatch(up, /\b(delete|drop|truncate)\b\s+(from|table|function|trigger)/i);

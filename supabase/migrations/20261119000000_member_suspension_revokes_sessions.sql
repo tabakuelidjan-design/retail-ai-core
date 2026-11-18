@@ -1,4 +1,4 @@
--- Team access hygiene (branch fix/team-removal-revokes-sessions). NOT applied anywhere: awaiting owner review.
+-- Team access hygiene (branch fix/team-removal-revokes-sessions). applied on staging only (owner approval 2026-11-18); production not applied.
 -- Today a member who is removed or suspended is refused at once (the access layer re-reads the membership on EVERY request), but their app_sessions rows stay
 -- "open" (revoked_at null) until that session makes one more request. If the same person is later reactivated or re-invited within the session lifetime (12 h at most,
 -- see app_sessions_expiry_ck), an OLD cookie would work again without a new sign-in.
@@ -7,7 +7,7 @@
 create or replace function merchant_members_revoke_sessions() returns trigger language plpgsql security definer set search_path = '' as $$
 begin
   update public.app_sessions
-     set revoked_at = new.updated_at, revoked_reason = 'MEMBER_ACCESS_ENDED'
+     set revoked_at = new.updated_at, revoked_reason = 'REVOKED'
    where merchant_id = new.merchant_id and user_id = new.user_id and revoked_at is null;
   return null;
 end $$;
