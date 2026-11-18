@@ -326,7 +326,7 @@ export function creditNoteFromInvoice(invoice, { creditNoteId, reason, lines, ex
   const { doc, errors } = createDraft({
     id: creditNoteId, merchantId: invoice.merchantId, type: 'credit_note', currency: invoice.currency, language: invoice.language, customer: invoice.customer, seller: invoice.seller,
     lines: inputs, vat: invoice.vat, paymentTermsDays: 0, issueDate: null, relatedDocumentId: invoice.id, creditReason: reason ?? null,
-    revenueBasis: invoice.revenueBasis, sourceOrderId: invoice.sourceOrderId, notes: invoice.notes,
+    revenueBasis: invoice.revenueBasis, sourceOrderId: invoice.sourceOrderId, notes: null, // the invoice's notes (e.g. its delivery or approval remarks) do not belong on the credit note
   });
   if (errors.length) throw new FinanceError('CREDIT_NOTE_INVALID', errors.join(', '));
   const remaining = payableOf(invoice.totals) - creditedCents(existingCreditNotes);

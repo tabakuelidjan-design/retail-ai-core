@@ -24,6 +24,8 @@ export function suggestForCredit(tx, open) {
   const ref = String(tx.reference ?? ''); const refDigits = digits(tx.structuredReference ?? (OGM.exec(ref) ?? []).slice(1).join(''));
   const scored = open.map((inv) => {
     const reasons = []; let score = 0;
+    // A payment in another currency never matches: amounts are compared in the invoice currency only.
+    if (inv.currency && tx.currency && inv.currency !== tx.currency) return { ...inv, score: 0, reasons: ['CURRENCY_MISMATCH'] };
     const ogm = digits(structuredCommunication(inv.number));
     if (refDigits && ogm && refDigits === ogm) { score += 100; reasons.push('STRUCTURED_REFERENCE_MATCHES'); }
     if (inv.number && new RegExp(`(^|[^A-Za-z0-9])${inv.number.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^A-Za-z0-9]|$)`, 'i').test(ref)) { score += 60; reasons.push('INVOICE_NUMBER_IN_REFERENCE'); }

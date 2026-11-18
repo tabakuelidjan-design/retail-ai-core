@@ -10,7 +10,7 @@
 
 import { createHash } from 'node:crypto';
 import { FinanceError } from './document.js';
-import { PDF_RENDERER_VERSION } from './pdf.js';
+import { rendererVersionOf } from './pdf-version.js';
 import { buildUbl, endpointOf, validatePeppolReadiness } from './peppol.js';
 import { CURRENT_PEPPOL_VERSION, artifactsFor, rulesetFor, validateStructured } from './peppol-validation.js';
 import { STRUCTURED_ROUTES, determineInvoiceRoute, routingContextOf, vcsForInvoiceNumber, vcsFormat } from './belgium-compliance.js';
@@ -65,7 +65,7 @@ export function createLegalArtifacts({ store, merchantId, storage, clock, render
       const version = await recordSeller(sellerProfile, actor); const route = await api.routeOf(doc, { agreement });
       const reference = doc.type === 'invoice' ? vcsForInvoiceNumber(doc.number) : null; const printed = reference ? vcsFormat(reference) : null;
       const at = clock.now();
-      const provenance = { source: atIssue ? 'issue' : 'repair', rendererVersion: PDF_RENDERER_VERSION, snapshotHash: doc.snapshotHash, documentNumber: doc.number, issuedAt: doc.lockedAt, archivedAt: at, routing: route, sellerProfileVersion: version.version, sellerProfileSha256: version.profileSha256, paymentReference: reference };
+      const provenance = { source: atIssue ? 'issue' : 'repair', rendererVersion: rendererVersionOf(doc), snapshotHash: doc.snapshotHash, documentNumber: doc.number, issuedAt: doc.lockedAt, archivedAt: at, routing: route, sellerProfileVersion: version.version, sellerProfileSha256: version.profileSha256, paymentReference: reference };
       // 1. the human PDF, from the snapshot, bytes kept as they are
       const pdfBytes = await renderPdf(doc, { settlement, originalNumber, branding, paymentReference: printed });
       let ref; try { ref = await putBytes(doc.id, 'pdf', pdfBytes); } catch (e) { await event(doc, 'ARTIFACT_STORAGE_FAILED', { kind: 'PDF', error: String(e.message).slice(0, 120) }, actor ?? undefined); throw new FinanceError('ARTIFACT_STORAGE_FAILED', 'the document stays issued; archive it again'); }

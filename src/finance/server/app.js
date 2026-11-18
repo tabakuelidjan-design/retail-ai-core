@@ -51,7 +51,8 @@ import { FinanceError, createDraft, daysBetween, effectiveStatus, settlement, va
 import { cleanBankReconcile, cleanCompany, cleanDocumentInput, cleanLines, cleanPaymentCommand, cleanPaymentFollowUp, cleanPaymentInput, cleanVat, isDate } from '../input.js';
 import { orderTotalsFromLedger } from '../linking.js';
 import { formatCents, fromScaled, percentToBp, toCents } from '../money.js';
-import { money, renderDocumentPdf, unitPrice as unitPriceText } from '../pdf.js';
+import { money, unitPrice as unitPriceText } from '../pdf.js';
+import { renderDocumentVersioned } from '../pdf-version.js';
 import { buildContacts, contactDetail, contactExportRow, planImport, activityCounts, contactDisplayName, possibleNameDuplicate, roleChangeProblems } from '../contacts.js';
 import { buildPeriodReport, buildPurchaseAnalytics, buildSalesAnalytics } from '../analytics.js';
 import { toCsv } from '../export-csv.js';
@@ -142,7 +143,7 @@ export function createFinanceApp(deps) {
   // Legal artifacts and Peppol, behind the provider contract (no provider selected: the null provider transmits nothing and pretends nothing)
   const peppolProvider = () => deps.peppolProvider ?? (deps.accessPoint ? legacyAdapterAsProvider(deps.accessPoint) : NoPeppolProvider);
   const legalServices = (settings) => {
-    const legal = createLegalArtifacts({ store, merchantId, storage: attachmentStore, clock, renderPdf: renderDocumentPdf, audit, defaultBuyerReference: settings.peppol?.defaultBuyerReference ?? 'document_number' });
+    const legal = createLegalArtifacts({ store, merchantId, storage: attachmentStore, clock, renderPdf: async (doc, o) => (await renderDocumentVersioned(doc, o)).buffer, audit, defaultBuyerReference: settings.peppol?.defaultBuyerReference ?? 'document_number' });
     const own = endpointOf({ address: { countryCode: 'BE' }, enterpriseNumber: settings.seller?.enterpriseNumber, vatNumber: settings.seller?.vatNumber });
     const peppol = createPeppolService({ store, merchantId, provider: peppolProvider(), legal, storage: attachmentStore, inbox: inboxFor(), clock, ownEndpoints: own ? [`${own.scheme}:${own.id}`] : [] });
     return { legal, peppol };
@@ -602,9 +603,10 @@ export function createFinanceApp(deps) {
     const original = v.doc.type === 'credit_note' && v.doc.relatedDocumentId ? (await svc.get(v.doc.relatedDocumentId).catch(() => null))?.number : null;
     let buf = null; let archived = null;
     if (v.doc.lockedAt) { const o = await legalServices(settings).legal.originalPdf(v.doc.id).catch(() => null); if (o?.verified) { buf = o.data; archived = o.artifact.classification; } }
-    buf ??= await renderDocumentPdf(v.doc, { settlement: v.settlement ?? null, originalNumber: original, branding: settings.branding });
+    let rendererVersion = 'ARCHIVED';
+    if (!buf) { const r = await renderDocumentVersioned(v.doc, { settlement: v.settlement ?? null, originalNumber: original, branding: settings.branding }); buf = r.buffer; rendererVersion = r.rendererVersion; }
     const name = safeName(`${v.doc.type}_${v.doc.number ?? 'draft'}`);
-    send(ctx.res, 200, buf, { 'Content-Type': 'application/pdf', 'Content-Disposition': `${ctx.url.searchParams.get('download') ? 'attachment' : 'inline'}; filename="${name}.pdf"`, 'Cache-Control': 'no-store', 'X-Nordla-Artifact': archived ?? 'REGENERATED_ON_DEMAND' });
+    send(ctx.res, 200, buf, { 'Content-Type': 'application/pdf', 'Content-Disposition': `${ctx.url.searchParams.get('download') ? 'attachment' : 'inline'}; filename="${name}.pdf"`, 'Cache-Control': 'no-store', 'X-Nordla-Artifact': archived ?? 'REGENERATED_ON_DEMAND', 'X-Nordla-Renderer': rendererVersion });
   });
 
   // ---------- Belgian compliance, legal artifacts, Peppol ----------
@@ -1177,7 +1179,7 @@ export function createFinanceApp(deps) {
   // ---------- Accountant export (data package): CSV + manifest + SHA-256 + README + missing-artifacts. Read-only on the truths; the package is in memory only and expires. ----------
   const exportsMem = new Map();
   const exportFor = async () => { const settings = await settingsIo.load(); return createAccountantExportService({ store, merchantId, clock, merchant: { name: settings.seller?.name ?? null }, attachments: attachmentStore, inbox: inboxFor(), sourceSchemaVersion: '20261005090000',
-    finance: { listInvoices: () => loadDocsForReports(store, merchantId) }, renderPdf: async (doc, x) => renderDocumentPdf(doc, { settlement: x.settlement ?? null, branding: settings.branding }), cashCurrency: settings.defaults.currency }); };
+    finance: { listInvoices: () => loadDocsForReports(store, merchantId) }, renderPdf: async (doc, x) => (await renderDocumentVersioned(doc, { settlement: x.settlement ?? null, branding: settings.branding })).buffer, cashCurrency: settings.defaults.currency }); };
   const periodSpec = (src) => { const g = (k) => (src instanceof URLSearchParams ? src.get(k) : src?.[k]); return { kind: g('kind'), year: g('year'), month: g('month'), quarter: g('quarter'), from: g('from'), to: g('to') }; };
   const exportPeriodGuard = async (fn) => { try { return await fn(); } catch (e) { if (e?.code === 'PERIOD_INVALID') fields([{ field: 'period', code: 'PERIOD_INVALID' }]); throw e; } };
   on('GET', '/api/accountant-export/preview', async (ctx) => json(ctx.res, 200, await exportPeriodGuard(async () => (await exportFor()).preview(periodSpec(ctx.url.searchParams)))));

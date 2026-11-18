@@ -83,7 +83,8 @@ export async function renderDocumentPdf(doc, { settlement = null, originalNumber
 
   pdf.font('Helvetica-Bold').fontSize(20).fillColor(accent).text(t[doc.type], 330, 50, { width: 215, align: 'right' });
   pdf.fontSize(9).fillColor('#111111').font('Helvetica');
-  const meta = [[t.number, doc.number ?? '—'], [t.date, doc.issueDate ?? ''], ...(doc.type === 'quote' ? [[t.valid, doc.validUntil ?? '—']] : [[t.due, doc.dueDate ?? '']])];
+  // A credit note has no due date: printing one (the issue date) would suggest a payment deadline that does not exist.
+  const meta = [[t.number, doc.number ?? '—'], [t.date, doc.issueDate ?? ''], ...(doc.type === 'quote' ? [[t.valid, doc.validUntil ?? '—']] : doc.type === 'invoice' ? [[t.due, doc.dueDate ?? '']] : [])];
   if (doc.type === 'credit_note' && originalNumber) meta.push([t.original, originalNumber]);
   let my = 80;
   for (const [k, v] of meta) { pdf.text(`${k}: ${v}`, 330, my, { width: 215, align: 'right' }); my += 13; }
