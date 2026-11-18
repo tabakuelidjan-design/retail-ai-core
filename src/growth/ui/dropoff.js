@@ -94,7 +94,8 @@ const DO_PZ_EXTRA = ['submit_blocked_no_photo', 'cart_submit', 'cart_confirmed']
 const doPzCount = (p, k) => { const v = (p.steps && p.steps[k]) || { total: 0, mobile: 0, desktop: 0 }; return t('gr.do.pz.evCount', num(v.total), t('gr.do.pz.split', num(v.mobile), num(v.desktop))); };
 function doEventsCard(d) {
   const p = d.personalizer || null; const ok = p && p.status === 'OK';
-  const stateNote = p && !ok ? h('span', { class: 'gr-muted gr-do-pz-state' }, ` · ${t(`gr.do.pz.evState.${p.status}`)}`) : null;
+  const stKey = p && p.status === 'NO_DATA' && !(d.collect && d.collect.liveEnabled) ? 'NO_LIVE' : (p && p.status);
+  const stateNote = p && !ok ? h('span', { class: 'gr-muted gr-do-pz-state' }, ` · ${t(`gr.do.pz.evState.${stKey}`)}`) : null;
   const rows = d.events.map((e) => {
     const via = DO_PZ_VIA[e.step];
     if (via && ok) return h('tr', { class: 'gr-do-pz-ev' }, h('th', { scope: 'row' }, t(`gr.do.step.${e.step}`)), h('td', null, h('code', null, `habb_personalizer › ${via}`)), h('td', null, chip(t('gr.do.measured'), 'gr-good'), ' ', h('span', { class: 'gr-do-pz-evcount' }, doPzCount(p, via))), h('td', { class: 'gr-muted' }, t('gr.do.pz.evVia')));
@@ -117,7 +118,7 @@ function doPersonalizerCard(d) {
   const stateCard = (key) => h('section', { class: `ex-card gr-do-card gr-do-pz gr-do-pz-${p.status}` }, cardHead('content', t('gr.do.pz.title')), h('p', { class: 'gr-muted' }, t(key)), prov);
   if (p.status === 'INACTIVE') return stateCard('gr.do.pz.inactive');
   if (p.status === 'UNAVAILABLE') return stateCard('gr.do.pz.unavailable');
-  if (p.status === 'NO_DATA') return stateCard('gr.do.pz.noData');
+  if (p.status === 'NO_DATA') return stateCard(d.collect && d.collect.liveEnabled ? 'gr.do.pz.noData' : 'gr.do.pz.noLive');
   const steps = DO_PZ_STEPS.map((s) => { const v = p.steps[s] || { total: 0, mobile: 0, desktop: 0 }; return h('li', { class: `gr-do-pz-row gr-do-pz-${s}` }, h('span', { class: 'gr-do-pz-label' }, t(`gr.do.pz.step.${s}`)), h('strong', { class: 'gr-do-pz-n' }, num(v.total)), h('span', { class: 'gr-do-pz-dev gr-muted' }, t('gr.do.pz.split', num(v.mobile), num(v.desktop)))); });
   const outcomes = DO_PZ_OUTCOMES.filter((k) => (p.outcomes || {})[k] > 0).map((k) => h('li', { class: `gr-do-pz-outcome gr-do-pz-${k}` }, h('strong', null, num(p.outcomes[k])), ' ', t(`gr.do.pz.outcome.${k}`)));
   return h('section', { class: 'ex-card gr-do-card gr-do-wide gr-do-pz' }, cardHead('content', t('gr.do.pz.title')),
@@ -130,14 +131,27 @@ function doPersonalizerCard(d) {
     h('p', { class: 'gr-muted' }, t('gr.do.pz.abandon')));
 }
 
+/** The tests (events the SERVER classed 'test') and the unknown ones: shown APART, never added to the customer figures above. */
+function doPersonalizerTestsCard(d) {
+  const tt = d.personalizerTests; const u = d.personalizerUnknown;
+  const hasTests = tt && tt.status === 'OK'; const hasUnknown = u && u.events > 0;
+  if (!hasTests && !hasUnknown) return null;
+  const rows = hasTests ? DO_PZ_STEPS.map((s) => h('li', { class: `gr-do-pz-row gr-do-pz-t-${s}` }, h('span', { class: 'gr-do-pz-label' }, t(`gr.do.pz.step.${s}`)), h('strong', { class: 'gr-do-pz-n' }, num((tt.steps[s] || {}).total || 0)))) : [];
+  return h('section', { class: 'ex-card gr-do-card gr-do-wide gr-do-pz gr-do-pz-tests' }, cardHead('content', t('gr.do.pz.tests.title')),
+    hasTests ? h('p', { class: 'gr-muted' }, t('gr.do.pz.tests.note', num(tt.attempts), num(tt.events))) : null,
+    rows.length ? h('ul', { class: 'gr-do-pz-list' }, ...rows) : null,
+    hasUnknown ? h('p', { class: 'gr-muted gr-do-pz-unknown' }, t('gr.do.pz.unknown', num(u.events))) : null);
+}
+
 function renderDropoff(main, safe) {
   const d = PAGES.dropoff.get();
-  if (d.state !== 'OK') { main.appendChild(h('div', { class: 'ex-card gr-st-empty' }, h('div', { class: 'gr-pp-empty' }, h('strong', { class: 'gr-ink' }, t(`gr.do.state.${d.state}.title`)), h('p', null, t(`gr.do.state.${d.state}.text`)), d.errors && d.errors.length ? h('p', { class: 'gr-muted' }, d.errors.slice(0, 5).join(' · ')) : null))); const pz0 = safe(doPersonalizerCard); if (pz0) main.appendChild(pz0); return; }
+  if (d.state !== 'OK') { main.appendChild(h('div', { class: 'ex-card gr-st-empty' }, h('div', { class: 'gr-pp-empty' }, h('strong', { class: 'gr-ink' }, t(`gr.do.state.${d.state}.title`)), h('p', null, t(`gr.do.state.${d.state}.text`)), d.errors && d.errors.length ? h('p', { class: 'gr-muted' }, d.errors.slice(0, 5).join(' · ')) : null))); const pz0 = safe(doPersonalizerCard); if (pz0) main.appendChild(pz0); const pt0 = safe(doPersonalizerTestsCard); if (pt0) main.appendChild(pt0); return; }
   if (d.notes && d.notes.length) main.appendChild(h('div', { class: 'gr-au-banner', role: 'note' }, gi('dataHealth', 'md'), h('span', null, d.notes.join(' '))));
   main.appendChild(safe(doFunnelCard));
   main.appendChild(safe(doFindingsCard));
   main.appendChild(h('div', { class: 'gr-grid gr-do-grid' }, safe(doComparisonCard), safe(doUploadCard)));
   const pz = safe(doPersonalizerCard); if (pz) main.appendChild(pz);
+  const pt = safe(doPersonalizerTestsCard); if (pt) main.appendChild(pt);
   main.appendChild(safe(doProductsCard));
   main.appendChild(safe(doEventsCard));
 }

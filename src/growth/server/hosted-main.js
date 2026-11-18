@@ -15,7 +15,7 @@ import { pathToFileURL } from 'node:url';
 import { createGrowthApp } from './app.js';
 import { buildGrowthSources } from './sources.js';
 import { createHostedGrowth } from './hosted.js';
-import { createPersonalizerCollector } from './collect-personalizer.js';
+import { createPersonalizerCollector, collectChannels } from './collect-personalizer.js';
 import { createSupabaseFollowUpStore } from './follow-up-store.js';
 import { hostedConfig, verifyPinnedProject } from '../../sourcing/server/hosted.js';
 import { createSessionGate } from '../../sourcing/server/session-gate.js';
@@ -47,7 +47,7 @@ export async function startGrowthHosted({ env = process.env, log = console.log, 
   const store = services?.store ?? createSupabaseFollowUpStore(sources.supabase ?? createSupabaseClient(loadSupabaseConfigFromEnv(env)));
   const historyScope = createHash('sha256').update(hosted.merchantId).digest('hex');
   const collectOrigins = String(env.GROWTH_COLLECT_ORIGINS ?? 'https://habb.be').split(',').map((s) => s.trim()).filter(Boolean); // the shop origins allowed to send personalizer events
-  const collect = sources.personalizerStore ? createPersonalizerCollector({ store: sources.personalizerStore, allowedOrigins: collectOrigins }) : null;
+  const collect = sources.personalizerStore ? createPersonalizerCollector({ store: sources.personalizerStore, allowedOrigins: collectOrigins, channels: collectChannels(env) }) : null;
   const handler = createHostedGrowth({ gate, merchantId: hosted.merchantId, historyScope, app, store, collect });
   const server = http.createServer(handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, hosted.host, resolve); });

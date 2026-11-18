@@ -23,7 +23,11 @@ export const PZ_STEPS = Object.freeze({
   cart_not_found: ['not_found'],
 });
 /** The ONLY keys an event may carry. Anything else (a file name, a URL, a text, an e-mail...) makes the whole event refused, not trimmed. */
-export const PZ_ALLOWED_KEYS = Object.freeze(['v', 'attempt', 'step', 'status', 'device', 'product', 'n', 'consent']);
+export const PZ_ALLOWED_KEYS = Object.freeze(['v', 'attempt', 'step', 'status', 'device', 'product', 'n', 'consent', 'ch']);
+export const PZ_PROVENANCES = Object.freeze(['test', 'live', 'unknown']);
+// PROVENANCE is decided by the SERVER, never by what the browser says it is. The browser only presents an opaque collection-channel key (`ch`); the server compares it with ITS OWN
+// configuration (collectChannels in server/collect-personalizer.js): the test channel key -> 'test', the live channel key (only when live collection is enabled) -> 'live',
+// anything else or nothing -> 'unknown'. A field named provenance/source/live/test in an event is refused by the strict schema.
 export const PZ_MAX_N = 20;
 export const PZ_RETENTION_DAYS = 90;
 
@@ -42,7 +46,15 @@ export function validatePersonalizerEvent(raw) {
   if (raw.device !== 'mobile' && raw.device !== 'desktop') return { ok: false, reason: 'DEVICE' };
   if (raw.product !== null && raw.product !== undefined && (typeof raw.product !== 'string' || !HANDLE.test(raw.product))) return { ok: false, reason: 'PRODUCT' };
   if (!Number.isInteger(raw.n) || raw.n < 1 || raw.n > PZ_MAX_N) return { ok: false, reason: 'N' };
-  return { ok: true, row: { attempt_id: raw.attempt, step: raw.step, status: raw.status, device: raw.device, product: raw.product ?? null, n: raw.n } };
+  if (raw.ch !== undefined && (typeof raw.ch !== 'string' || !/^[A-Za-z0-9_-]{16,64}$/.test(raw.ch))) return { ok: false, reason: 'CHANNEL' };
+  return { ok: true, row: { attempt_id: raw.attempt, step: raw.step, status: raw.status, device: raw.device, product: raw.product ?? null, n: raw.n }, channel: raw.ch ?? null }; // `channel` is used once to decide the provenance and is NOT stored
+}
+
+/** Rows -> { live, test, unknown } by their STORED (server-assigned) provenance; a row without one counts as unknown. */
+export function splitByProvenance(rows) {
+  const out = { live: [], test: [], unknown: [] };
+  for (const r of Array.isArray(rows) ? rows : []) (out[r.provenance === 'live' ? 'live' : r.provenance === 'test' ? 'test' : 'unknown']).push(r);
+  return out;
 }
 
 const PROBE_STEPS = ['submit_blocked_no_photo', 'photo_chosen', 'send_clicked', 'design_ready', 'cart_submit', 'cart_confirmed'];
