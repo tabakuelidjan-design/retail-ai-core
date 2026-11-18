@@ -86,6 +86,7 @@ const cookieOf = (req, name) => { for (const part of String(req.headers?.cookie 
 export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = null, now = () => Date.now() }) {
   const verifier = sso ? createTicketVerifier({ secret: sso.secret, merchantId: sso.merchantId, audience: ANALYTICS_SSO_AUDIENCE, now, module: 'analytics', requirePerson: sso.requirePerson === true, checkAccess: sso.checkAccess ?? null }) : null;
   const sessions = new Map(); // sid -> expiry (ms)
+  const ssoPeople = new Map(); // sid -> { userId, role } for sessions opened by Nordla single sign-on
   const tokenHash = sha(token);
   const failures = new Map();
   const base = { 'Cache-Control': 'no-store', 'Strict-Transport-Security': 'max-age=31536000', 'X-Robots-Tag': 'noindex, nofollow' };
@@ -100,13 +101,22 @@ export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = nul
       const r = await verifier.verifyAsync(new URL(req.url, 'http://localhost').searchParams.get('t') ?? '');
       if (!r.ok) { f.n += 1; if (f.n >= 5) { f.until = now() + 5 * 60_000; f.n = 0; } failures.set(ip, f); return deny(res, 403, r.code); }
       failures.delete(ip);
-      for (const [k, v] of sessions) if (v < now()) sessions.delete(k);
+      for (const [k, v] of sessions) if (v < now()) { sessions.delete(k); ssoPeople.delete(k); }
       const sid = randomBytes(32).toString('hex'); sessions.set(sid, now() + SSO_SESSION_MS);
+      if (r.claims) ssoPeople.set(sid, { userId: r.claims.userId, role: r.access?.role ?? r.claims.role }); // re-checked on every request below
       res.writeHead(302, { ...base, Location: '/', 'Set-Cookie': `${SSO_COOKIE}=${sid}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${SSO_SESSION_MS / 1000}` }); res.end();
       return false; // answered (redirect)
     }
     const sid = verifier ? cookieOf(req, SSO_COOKIE) : '';
-    if (sid && (sessions.get(sid) ?? 0) > now()) { failures.delete(ip); for (const [k, v] of Object.entries(base)) res.setHeader(k, v); return true; }
+    if (sid && (sessions.get(sid) ?? 0) > now()) {
+      // a session opened by Nordla single sign-on is re-checked on EVERY request (suspended, removed, role changed or entitlement gone = refused now)
+      const p = ssoPeople.get(sid);
+      if (p) {
+        const a = sso?.checkAccess ? await sso.checkAccess({ merchantId: sso.merchantId, userId: p.userId, role: p.role, module: 'analytics' }).catch(() => null) : null;
+        if (!a?.ok) { sessions.delete(sid); ssoPeople.delete(sid); return deny(res, 401, 'SESSION_REVOKED'); }
+      }
+      failures.delete(ip); for (const [k, v] of Object.entries(base)) res.setHeader(k, v); return true;
+    }
     const supplied = basicPassword(req.headers.authorization);
     if (!supplied || !timingSafeEqual(sha(supplied), tokenHash)) {
       if (supplied) { f.n += 1; if (f.n >= 5) { f.until = now() + 5 * 60_000; f.n = 0; } failures.set(ip, f); }

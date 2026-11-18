@@ -8,7 +8,7 @@ const HOST = 'analytics-staging.up.railway.app'; const TOKEN = 't'.repeat(32); c
 let T = Date.parse('2026-11-18T12:00:00Z'); const now = () => T;
 const res = () => { const r = { status: 0, headers: {}, body: '', writeHead(s, h) { r.status = s; Object.assign(r.headers, h); }, setHeader(k, v) { r.headers[k] = v; }, end(b) { r.body = String(b ?? ''); } }; return r; };
 const run = async (guard, { url = '/', cookie, auth } = {}) => { const r = res(); const ok = await guard({ method: 'GET', url, headers: { host: HOST, ...(cookie ? { cookie } : {}), ...(auth ? { authorization: auth } : {}) }, socket: { remoteAddress: '1.2.3.4' } }, r); return { ok, r }; };
-const mk = (sso = { secret: SECRET, merchantId: M }) => createGuard({ allowedHosts: [HOST], token: TOKEN, trustProxyHops: 0, sso, now });
+const mk = (sso = { secret: SECRET, merchantId: M, checkAccess: async () => ({ ok: true, role: 'OWNER' }) }) => createGuard({ allowedHosts: [HOST], token: TOKEN, trustProxyHops: 0, sso, now });
 const P_A = { userId: 'u1', role: 'OWNER', module: 'analytics' };
 const tk = (o = {}) => issueTicket({ secret: SECRET, merchantId: M, audience: ANALYTICS_SSO_AUDIENCE, now, person: P_A, ...o });
 

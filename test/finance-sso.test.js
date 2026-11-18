@@ -45,7 +45,7 @@ test('the lifetime is capped and a secret that is too short is refused on both s
 });
 
 test('the Finance dashboard: /sso opens a session without any token, once; direct access without a session stays refused', async () => {
-  const a = await startApp({ merchantId: M, deps: { sso: { secret: SECRET } } });
+  const a = await startApp({ merchantId: M, deps: { sso: { secret: SECRET, checkAccess: async () => ({ ok: true, role: 'OWNER' }) } } });
   try {
     const go = (t) => fetch(`${a.base}/sso?t=${encodeURIComponent(t)}`, { redirect: 'manual' });
     // direct access, no ticket, no session
@@ -101,7 +101,7 @@ test('buildFinanceSso: only a clean https origin and a 24+ character secret give
 
 const FILE = '6c714261-0e3d-44ae-aced-981beedff16b';
 test('integrated navigation: /sso?open=<file id> lands on that Finance file, a malformed id lands on the dashboard, the session still comes from the ticket alone', async () => {
-  const a = await startApp({ merchantId: M, deps: { sso: { secret: SECRET } } });
+  const a = await startApp({ merchantId: M, deps: { sso: { secret: SECRET, checkAccess: async () => ({ ok: true, role: 'OWNER' }) } } });
   try {
     const go = (t, q) => fetch(`${a.base}/sso?t=${encodeURIComponent(t)}${q}`, { redirect: 'manual' });
     const ok = await go(issueTicket({ secret: SECRET, person: P_F, merchantId: M }), `&open=${FILE.toUpperCase()}`);
@@ -113,7 +113,7 @@ test('integrated navigation: /sso?open=<file id> lands on that Finance file, a m
 
 test('integrated navigation: the Finance session carries the Nordla home address only when it is a clean https origin', async () => {
   for (const [homeUrl, expected] of [['https://nordla.example.app', 'https://nordla.example.app'], [null, undefined]]) {
-    const a = await startApp({ merchantId: M, deps: { sso: { secret: SECRET }, ...(homeUrl ? { homeUrl } : {}) } });
+    const a = await startApp({ merchantId: M, deps: { sso: { secret: SECRET, checkAccess: async () => ({ ok: true, role: 'OWNER' }) }, ...(homeUrl ? { homeUrl } : {}) } });
     try {
       const ok = await fetch(`${a.base}/sso?t=${encodeURIComponent(issueTicket({ secret: SECRET, person: P_F, merchantId: M }))}`, { redirect: 'manual' });
       const s = await (await fetch(`${a.base}/api/session`, { headers: { Cookie: ok.headers.get('set-cookie').split(';')[0] } })).json();
