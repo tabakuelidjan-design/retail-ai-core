@@ -171,3 +171,15 @@ test('VOLUME: 30 invoices archived (PDF + official validation), 3 000 queued mes
   console.log(`  legal volume: 30 invoices issued+archived (PDF + UBL + official validation) in ${(archiveMs / 1000).toFixed(1)} s (${(archiveMs / 30).toFixed(0)} ms each; the official validation of one document (XSD ~0.7 s + Schematron ~0.35 s) is the known bottleneck); 3 000 enqueue attempts + 2 000 inbound registrations in ${regMs.toFixed(0)} ms; observability ${obsMs.toFixed(0)} ms; export preview ${exMs.toFixed(0)} ms with ${reads.length} list reads`);
   assert.ok(archiveMs < 90_000 && obsMs < 3000 && exMs < 5000);
 });
+
+test('ANTI-DUPLICATE HOLD: when the provider cannot prove whether an earlier attempt was accepted (found: null), nothing is resent and nothing is requeued', async () => {
+  const { w, doc } = await sendable(); const q = await w.peppol.queue(doc); w.provider.inject('submit', 'timeout_after_accept');
+  const d = await w.peppol.dispatch(q.message.id); assert.equal(d.unknown, true);
+  // the provider cannot answer for this key (e.g. no idempotency lookup, or the lookup failed): unknown, not "not accepted"
+  const unknownLookup = { ...w.provider, findByIdempotencyKey: async () => ({ found: null }) };
+  const p = createPeppolService({ store: w.store, merchantId: w.merchantId, provider: unknownLookup, legal: w.legal, storage: w.storage, inbox: w.inbox, clock: w.clock, ownEndpoints: ['0208:0000000097'] });
+  const r = await p.recover(q.message.id); assert.deepEqual([r.state, r.recovered, r.reason], ['SUBMITTING', false, 'PROVIDER_CANNOT_PROVE']);
+  const again = await p.dispatch(q.message.id); assert.deepEqual([again.sent, again.state], [false, 'SUBMITTING']);
+  assert.equal(w.provider.calls.submit, 1, 'exactly one submit: the held message is never sent again');
+  assert.ok((await w.store.listEventsForMerchant({ merchantId: w.merchantId, limit: 100 })).some((e) => e.action === 'PEPPOL_OUTCOME_UNKNOWN'));
+});

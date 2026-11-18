@@ -68,7 +68,13 @@ export function createPeppolService({ store, merchantId, provider, legal, storag
       if (!claim.changed) return { state: claim.message.state, sent: false, message: claim.message };
       const m = claim.message; const fail = async (code, to = 'SUBMISSION_FAILED') => { const r = await store.transitionPeppol({ merchantId, id: messageId, from: ['SUBMITTING'], to, patch: { errorCode: SAFE_CODE(code) }, at: clock.now() }); await ev(m.documentId, 'PEPPOL_SUBMISSION_FAILED', { messageId, code: SAFE_CODE(code), attempts: m.attempts }); return { state: r.message.state, sent: false, message: r.message }; };
       // an earlier attempt may have been accepted before we lost the connection: ask the provider by our key BEFORE submitting again
-      if (m.attempts > 1) { const f = await provider.findByIdempotencyKey(m.idempotencyKey).catch(() => ({ found: false })); if (f.found) return markSubmitted(m, f.providerMessageId); }
+      // ANTI-DUPLICATE GUARD: a retry is sent only when the provider can PROVE it did not accept an earlier attempt.
+      // found: true -> accepted; found: false -> never accepted (safe); found: null (unknown, or the lookup failed) -> HOLD for a person.
+      if (m.attempts > 1) {
+        const f = await provider.findByIdempotencyKey(m.idempotencyKey).catch(() => ({ found: null }));
+        if (f.found === true) return markSubmitted(m, f.providerMessageId);
+        if (f.found !== false) { await ev(m.documentId, 'PEPPOL_HELD_UNKNOWN_ACCEPTANCE', { messageId, reason: 'PROVIDER_CANNOT_PROVE' }); return { state: 'SUBMITTING', sent: false, unknown: true, held: true, message: (await store.getPeppolMessage(merchantId, messageId)) }; }
+      }
       const a = (await store.listArtifacts({ merchantId, documentId: m.documentId, kind: 'STRUCTURED_ORIGINAL' }))[0]; if (!a) return fail('STRUCTURED_ORIGINAL_MISSING');
       const bytes = await legal.read(a.id); if (!bytes.verified) return fail('ARTIFACT_INTEGRITY_FAILED');
       if (!m.validation || m.validation.ok !== true) return fail('VALIDATION_REQUIRED'); // an invalid document is never submitted
@@ -86,6 +92,7 @@ export function createPeppolService({ store, merchantId, provider, legal, storag
     async recover(messageId) {
       const m = await store.getPeppolMessage(merchantId, messageId); if (!m || m.state !== 'SUBMITTING') return { state: m?.state ?? null, recovered: false };
       const f = await provider.findByIdempotencyKey(m.idempotencyKey).catch(() => null); if (f === null) return { state: m.state, recovered: false, reason: 'PROVIDER_UNREACHABLE' };
+      if (f.found === null) return { state: m.state, recovered: false, reason: 'PROVIDER_CANNOT_PROVE' }; // unknown acceptance: a person checks at the provider before any requeue
       if (f.found) { const r = await markSubmitted(m, f.providerMessageId); return { state: r.state, recovered: true }; }
       if (nowMs() - Date.parse(m.lastAttemptAt) < leaseMs) return { state: m.state, recovered: false, reason: 'LEASE_NOT_EXPIRED' };
       const r = await store.transitionPeppol({ merchantId, id: messageId, from: ['SUBMITTING'], to: 'QUEUED', at: clock.now() }); await ev(m.documentId, 'PEPPOL_REQUEUED', { messageId, reason: 'NOT_ACCEPTED_BY_PROVIDER' });

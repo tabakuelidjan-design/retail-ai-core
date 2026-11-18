@@ -88,7 +88,7 @@ test('connector boundaries: accounting export, bank reconciliation and customer 
   const a = await startApp(); const c = await a.authed();
   try {
     const list = (await c.get('/api/connectors')).data.connectors;
-    assert.deepEqual(list.map((x) => x.kind), ['accountingExport', 'bankReconciliation', 'customerPortal', 'mailDelivery', 'peppolAccessPoint', 'inbox', 'inbox', 'inbox']);
+    assert.deepEqual(list.map((x) => x.kind), ['accountingExport', 'bankReconciliation', 'customerPortal', 'mailDelivery', 'peppolAccessPoint', 'inbox', 'inbox', 'inbox', 'peppolProvider']);
     assert.ok(list.filter((x) => x.kind !== 'inbox').every((x) => x.configured === false)); assert.equal(connectorStatus().length, 3);
   } finally { await a.close(); }
 });

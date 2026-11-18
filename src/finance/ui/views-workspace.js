@@ -791,7 +791,7 @@ async function workspaceSettingsCards() {
       h('div', { class: 'chips' }, h('span', { class: 'chip mute' }, tt('Sending: {0}', tt(pp.outgoing.configured ? 'Active' : 'NOT CONFIGURED'))), h('span', { class: 'chip mute' }, tt('Receiving: {0}', tt('NOT CONFIGURED')))), save('Save', () => ({ peppol: { topology: t } }))));
   }
   let cn = null; try { cn = (await api('GET', '/api/connectors')).connectors; } catch (e) { /* ignore */ }
-  if (cn) wrap.appendChild(cardOf(tt('Connectors'), tt('Replaceable: nothing is hard-wired to one provider'), h('div', { class: 'connlist' }, cn.map((c) => h('div', { class: 'conn' }, h('span', { class: `dot2 ${c.configured ? 'on' : ''}` }), h('span', { class: 'cl' }, tr(c.label)), h('span', { class: 'chip mute' }, tt(c.configured ? 'Active' : 'NOT CONFIGURED')))))));
+  if (cn) wrap.appendChild(cardOf(tt('Connectors'), tt('Replaceable: nothing is hard-wired to one provider'), h('div', { class: 'connlist' }, cn.map((c) => h('div', { class: 'conn' }, h('span', { class: `dot2 ${c.configured ? 'on' : ''}` }), h('span', { class: 'cl' }, tr(c.label)), h('span', { class: 'chip mute' }, c.kind === 'peppolProvider' ? (c.configured ? 'Prêt' : 'À configurer') : tt(c.configured ? 'Active' : 'NOT CONFIGURED')), ...(c.kind === 'peppolProvider' ? [h('span', { class: 'chip mute' }, `Envoi : ${c.sending}`), h('span', { class: 'chip mute' }, `Réception : ${c.receiving}`), ...(c.environment ? [h('span', { class: 'chip mute' }, c.environment === 'production' ? 'Production' : 'Test')] : [])] : []))))));
   return wrap;
 }
 

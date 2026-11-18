@@ -54,6 +54,7 @@ import { formatCents, fromScaled, percentToBp, toCents } from '../money.js';
 import { money, unitPrice as unitPriceText } from '../pdf.js';
 import { renderDocumentVersioned } from '../pdf-version.js';
 import { createOcrExtractor, withOcrFallback } from '../ocr-scan.js';
+import { recommandConfigStatus } from '../peppol-recommand.js';
 import { buildContacts, contactDetail, contactExportRow, planImport, activityCounts, contactDisplayName, possibleNameDuplicate, roleChangeProblems } from '../contacts.js';
 import { buildPeriodReport, buildPurchaseAnalytics, buildSalesAnalytics } from '../analytics.js';
 import { toCsv } from '../export-csv.js';
@@ -960,10 +961,12 @@ export function createFinanceApp(deps) {
     json(ctx.res, 200, { asOf: today, currency: settings.defaults.currency, foreign: { salesDocuments: foreignSales, purchaseDocuments: inboxCounts.toPayForeign ?? 0 }, actions: actions.map((a) => ({ ...a, amount: a.cents != null ? money(a.cents, settings.defaults.language) : null })) });
   });
 
-  on('GET', '/api/connectors', async (ctx) => json(ctx.res, 200, { connectors: connectorStatus({ accountingExport: deps.accountingExport, bankReconciliation: deps.bankReconciliation, customerPortal: deps.customerPortal, mail: mailer(), accessPoint: accessPoint(), inbox: INBOX_ADAPTERS }) }));
+  on('GET', '/api/connectors', async (ctx) => json(ctx.res, 200, { connectors: connectorStatus({ accountingExport: deps.accountingExport, bankReconciliation: deps.bankReconciliation, customerPortal: deps.customerPortal, mail: mailer(), accessPoint: accessPoint(), inbox: INBOX_ADAPTERS, peppol: peppolCardStatus() }) }));
 
   // ---------- Peppol: provider-neutral states and topology. Nothing is transmitted without a configured Access Point AND the merchant's approval. ----------
   const accessPoint = () => deps.accessPoint ?? NullAccessPointAdapter;
+  // Peppol card (send only). Server-side secrets: names only leave the server, never values.
+  const peppolCardStatus = () => { const st = recommandConfigStatus(process.env); return { name: 'recommand', label: st.environment === 'production' ? 'Production' : 'Test (Playground)', configured: st.configured, environment: st.environment, missing: st.missing }; };
   const apConfigured = () => peppolProvider().name !== 'none';
   const PEPPOL_STATES = OUT_STATES;
   const peppolStateOf = (events) => { const last = [...events].reverse().find((e) => /^PEPPOL_/.test(e.action)); return last ? { status: last.action.replace('PEPPOL_', ''), at: last.at, providerMessageId: last.detail?.providerMessageId ?? null, detail: last.detail?.detail ?? null } : null; };

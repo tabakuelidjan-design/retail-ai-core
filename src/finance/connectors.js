@@ -48,7 +48,7 @@ export function assertAdapter(kind, a) {
 }
 
 /** What the dashboard shows in Settings: every boundary with its state. */
-export function connectorStatus({ accountingExport = NoAccountingExport, bankReconciliation = NoBankReconciliation, customerPortal = NoCustomerPortal, mail, accessPoint, inbox = [] } = {}) {
+export function connectorStatus({ accountingExport = NoAccountingExport, bankReconciliation = NoBankReconciliation, customerPortal = NoCustomerPortal, mail, accessPoint, inbox = [], peppol = null } = {}) {
   return [
     { kind: 'accountingExport', name: accountingExport.name, label: accountingExport.label, configured: !!accountingExport.configured },
     { kind: 'bankReconciliation', name: bankReconciliation.name, label: bankReconciliation.label, configured: !!bankReconciliation.configured },
@@ -56,5 +56,8 @@ export function connectorStatus({ accountingExport = NoAccountingExport, bankRec
     ...(mail ? [{ kind: 'mailDelivery', name: mail.name, label: mail.label, configured: !!mail.canSend }] : []),
     ...(accessPoint ? [{ kind: 'peppolAccessPoint', name: accessPoint.name, label: accessPoint.name === 'none' ? 'Point d\'accès Peppol non configuré' : accessPoint.name, configured: accessPoint.name !== 'none' }] : []),
     ...inbox.map((i) => ({ kind: 'inbox', name: i.name, label: i.label, configured: !!i.configured })),
+    // Facturation électronique · Peppol: one card, two separate statuses. Sending is through the configured provider; receiving stays with CodaBox.
+    ...(peppol ? [{ kind: 'peppolProvider', name: peppol.name, label: `Facturation électronique · Peppol${peppol.name && peppol.name !== 'none' ? ` · ${peppol.label}` : ''}`, configured: !!peppol.configured,
+      environment: peppol.environment ?? null, sending: peppol.configured ? 'Prêt (envoi seul)' : 'À configurer', receiving: 'CodaBox (hors Nordla)', missing: peppol.missing ?? [] }] : []),
   ];
 }
