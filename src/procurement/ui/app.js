@@ -1,6 +1,6 @@
 // Nordla Achats - phone app. Plain ES modules, no build step, no framework, no innerHTML with data (everything is built with textContent: nothing a supplier name
 // contains can run as code). French UI.
-import { initToken, getToken, forgetToken, request, getJson, photoUrl, setStatusListener, HOSTED } from './api.js';
+import { initToken, getToken, forgetToken, request, getJson, photoUrl, setStatusListener, HOSTED, csrf } from './api.js';
 import * as outbox from './outbox.js';
 import { createV1Screens } from './screens-v1.js';
 import * as prefs from './prefs.js';
@@ -34,7 +34,7 @@ const swap = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter((
 const S = { me: null, tab: 'visits', stack: [], online: true, lastError: null, prefs: false, openView: null, skipDefault: false };
 
 function banner(text, kind = '') { const b = $('banner'); b.textContent = text ?? ''; b.hidden = !text; b.className = `banner ${kind}`; if (text && kind !== 'err') setTimeout(() => { if (b.textContent === text) b.hidden = true; }, 6000); }
-function setHead(title, subtitle = '', back = false) { $('title').textContent = title; $('subtitle').textContent = subtitle; $('back').hidden = !back; }
+function setHead(title, subtitle = '', back = false) { $('nordla-home').hidden = !HOSTED; $('title').textContent = title; $('subtitle').textContent = subtitle; $('back').hidden = !back; }
 function go(name, params = {}) { S.stack.push({ name, params }); render(); }
 function back() { S.stack.pop(); render(); }
 function tab(t) { S.tab = t; S.stack = []; render(); }
@@ -258,8 +258,9 @@ async function screenOrders() {
   const cart = load(CART_KEY, []);
   if (cart.length) put(box, cartCard(cart));
   const res = await getJson('/api/purchase-orders'); if (!res.data) return put(box, fail(res));
+  const rcv = await getJson('/api/purchase-orders?status=RECEIVED'); // received orders stay reachable (their goods receipt and their Finance file)
   put(box, stale(res), pendingNote(), h('button', { class: 'btn sec', onclick: () => go('suppliers') }, 'Fournisseurs et offres'));
-  const all = res.data.purchaseOrders;
+  const all = [...res.data.purchaseOrders, ...(rcv.data?.purchaseOrders ?? [])];
   if (!all.length) put(box, empty('Aucun bon de commande en cours. Comparez des offres, ajoutez-les à la sélection, puis créez un brouillon.'));
   for (const [st, title] of PO_GROUPS) { const rows = all.filter((p) => p.status === st); if (!rows.length) continue; put(box, h('h3', {}, `${title} (${rows.length})`), h('ul', { class: 'list' }, rows.map((p) => h('li', {}, h('button', { class: 'tap', onclick: () => go('po', { id: p.id }) }, h('div', { class: 'grow' }, h('div', { class: 'nm' }, `${p.number} · ${p.supplier.name}`), h('div', { class: 'sub' }, `${p.lines.length} produit(s) · livraison prévue ${fmtDate(p.expectedDate)}`)), h('div', { class: 'nm' }, fmtMoney(p.totalMinor, p.currency)))))));
   }
@@ -301,7 +302,26 @@ async function screenPo({ id }) {
     po.schedule.length ? h('div', { class: 'card' }, h('h2', {}, 'Paiements prévus'), h('table', {}, h('tbody', {}, po.schedule.map((s) => h('tr', {}, h('td', {}, s.kind === 'DEPOSIT' ? 'Acompte' : 'Solde'), h('td', { class: 'n' }, fmtMoney(s.amountMinor, po.currency)), h('td', {}, chip(s.status === 'PAID_LINKED' ? 'payé' : 'à prévoir', s.status === 'PAID_LINKED' ? 'g' : ''))))), h('p', { class: 'small muted' }, 'Nordla ne paie rien : les paiements se font dans la comptabilité.'))) : null,
     poActions(po, S.me).map((a) => a.info ? h('div', { class: 'note' }, a.label) : h('button', { class: `btn ${a.primary ? '' : a.danger ? 'danger' : 'sec'}`, onclick: () => act(a) }, a.label)),
     po.status === 'RECEIVED' && S.me?.canApprove ? h('button', { class: 'btn sec', onclick: async () => { const r = await request('POST', `/api/purchase-orders/${id}/finance-handoff`, { key: uid('fin'), body: {} }); if (r.status === 200 || r.status === 201) banner(`${r.json.created ? 'Envoyé à Finance' : 'Déjà dans Finance'} : facture fournisseur à vérifier (réf. ${r.json.financeItem.orderReference}). Il reste à saisir depuis la facture : ${r.json.stillNeededFromTheInvoice.length} champ(s).`, 'ok'); else banner(errText(r), 'err'); } }, 'Préparer la facture fournisseur dans Finance') : null,
+    ['RECEIVED', 'CLOSED'].includes(po.status) && S.me?.canApprove ? h('button', { class: 'btn sec', 'data-open-finance': po.number, onclick: () => openFinanceDossier(po) }, 'Ouvrir le dossier dans Finance') : null,
     h('p', { class: 'small muted' }, 'Aucune commande n’est envoyée au fournisseur par Nordla. « Commandé » signifie qu’une personne habilitée l’a passée.'));
+}
+
+// Opens the Finance supplier-invoice file that ALREADY exists for this order (found by its order number, never created here: a second click, or a second person, opens the same file).
+// The window is opened first, in the click, so the browser does not block it; Finance then signs the person in with a one-time ticket (no second login).
+async function openFinanceDossier(po) {
+  const w = window.open('', '_blank'); if (w) w.opener = null;
+  const stop = (msg) => { if (w) w.close(); banner(msg, 'err'); };
+  const json = (r) => r.json().catch(() => ({}));
+  try {
+    const r = await fetch('/api/core/finance/inbox', { credentials: 'same-origin', cache: 'no-store' });
+    if (r.status === 403) return stop('Le dossier Finance est réservé au propriétaire, à un administrateur ou au comptable.');
+    if (!r.ok) return stop('Finance n’est pas joignable pour le moment : le dossier n’a pas été ouvert.');
+    const item = ((await json(r)).items ?? []).find((i) => i.orderReference === po.number);
+    if (!item) return stop('Aucun dossier Finance pour cette commande : préparez d’abord la facture fournisseur.');
+    const o = await fetch('/api/core/finance/open', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-nordla-csrf': csrf() }, body: JSON.stringify({ dossier: item.id }) });
+    const j = await json(o); if (!o.ok || !j.url) return stop('Le tableau de bord Finance n’a pas pu s’ouvrir.');
+    if (w) w.location.href = j.url; else banner('Le navigateur a bloqué la nouvelle fenêtre : autorisez-la puis recommencez.', 'err');
+  } catch { stop('Connexion perdue : le dossier n’a pas été ouvert.'); }
 }
 
 // One goods receipt (the target of a Notifications alert). Read only.

@@ -43,3 +43,6 @@ td .chip{white-space:nowrap}
 /* Réception (opened from a Notifications alert): the facts wrap instead of overflowing at 375 px */
 .rc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; }
 .rc-grid .big { font-size: 18px; overflow-wrap: anywhere; }
+/* Retour vers l'accueil Nordla (page servie sous /procurement/ seulement) */
+.homelink{font-size:12px;color:inherit;text-decoration:underline;margin-left:auto;margin-right:8px;white-space:nowrap}
+.linkbtn.mv{font-size:12px;padding:2px 0}

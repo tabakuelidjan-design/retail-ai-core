@@ -60,7 +60,7 @@ export const fmtTime = (iso) => { if (regional) { const t = regional.time(iso); 
 
 
 export const PO_STATUS_FR = { DRAFT: 'Brouillon', PENDING_APPROVAL: 'À approuver', APPROVED: 'Approuvé', ORDERED: 'Commandé', CONFIRMED: 'Confirmé', PARTIALLY_RECEIVED: 'Reçu en partie', RECEIVED: 'Reçu', CLOSED: 'Clos', CANCELLED: 'Annulé' };
-export const PO_GROUPS = [['DRAFT', 'Brouillons'], ['PENDING_APPROVAL', 'À approuver'], ['APPROVED', 'Approuvés, à commander'], ['ORDERED', 'Commandés'], ['CONFIRMED', 'Confirmés'], ['PARTIALLY_RECEIVED', 'Reçus en partie']];
+export const PO_GROUPS = [['DRAFT', 'Brouillons'], ['PENDING_APPROVAL', 'À approuver'], ['APPROVED', 'Approuvés, à commander'], ['ORDERED', 'Commandés'], ['CONFIRMED', 'Confirmés'], ['PARTIALLY_RECEIVED', 'Reçus en partie'], ['RECEIVED', 'Reçus']];
 
 /** Plausible EUR value of 1 unit of a currency. A rate outside the range is not refused (rates move) but must be confirmed: a typed-in inverse (0,92 vs 1,09) is the classic mistake. */
 const FX_RANGES = { USD: [0.6, 1.3], CNY: [0.08, 0.2], GBP: [1.0, 1.5], HKD: [0.08, 0.15], JPY: [0.004, 0.009], CHF: [0.8, 1.3] };

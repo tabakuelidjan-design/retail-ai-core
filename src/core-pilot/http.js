@@ -38,7 +38,9 @@ export function presentDecision(v) {
 }
 
 /** The https origin of the hosted Growth screen (GROWTH_PUBLIC_URL), or null: no origin, no link (a missing or malformed value is never turned into a guess). */
-export function growthOrigin(env) { try { const u = new URL(String(env?.GROWTH_PUBLIC_URL ?? '').trim()); return u.protocol === 'https:' && !u.username && !u.password ? u.origin : null; } catch { return null; } }
+export function growthOrigin(env) { return httpsOrigin(env?.GROWTH_PUBLIC_URL); }
+/** Same rule for any module address given by the environment (ANALYTICS_PUBLIC_URL, ...). */
+export function httpsOrigin(value) { try { const u = new URL(String(value ?? '').trim()); return u.protocol === 'https:' && !u.username && !u.password ? u.origin : null; } catch { return null; } }
 
 export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null, procurement = null, branding = null, campaigns = null, creation = null, financeSso = null, merchantIdentity = null, env = process.env }) {
   const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
@@ -58,7 +60,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
     return { modules: [
       row('core', 'Nordla Core', runtime ? 'DISPONIBLE' : 'NON CONFIGURÉ', runtime ? 'Sujets d’achat, décisions humaines, suivi, journal.' : String(configError ?? '')),
       { dashboard: Boolean(finance && financeSso), ...row('finance', 'Finance', finance ? 'LECTURE SEULE' : 'NON RACCORDÉ', finance ? `Factures à payer, échéances, trésorerie, achats — ${finance.source}. Aucun paiement.` : NOT_CONNECTED.FINANCE) },
-      row('analytics', 'Analytics', analytics ? 'LECTURE SEULE' : 'NON RACCORDÉ', analytics ? `Évolution des ventes, produits et canaux — ${analytics.source}.` : NOT_CONNECTED.ANALYTICS),
+      { ...row('analytics', 'Analytics', analytics ? 'LECTURE SEULE' : 'NON RACCORDÉ', analytics ? `Évolution des ventes, produits et canaux — ${analytics.source}.` : NOT_CONNECTED.ANALYTICS), ...(httpsOrigin(env?.ANALYTICS_PUBLIC_URL) ? { analytics_url: httpsOrigin(env.ANALYTICS_PUBLIC_URL) } : {}) },
       row('procurement', 'Stock / Achats', procurement ? 'DISPONIBLE' : 'NON RACCORDÉ', procurement ? 'Commandes d’achat, réceptions, stock : consultation par Parle à Nordla ; commander, approuver et réceptionner passent par l’écran Achats (approbation nommée).' : NOT_CONNECTED.STOCK_SALES),
       row('sourcing', 'China Sourcing', 'DISPONIBLE', 'Dossiers, photos, analyses d’achat ; fonctionne hors ligne.', true),
       row('branding', 'Branding', b.status === 'APPROVED' ? 'DISPONIBLE' : b.status === 'PROPOSED_NOT_APPROVED' ? 'À APPROUVER' : 'NON RACCORDÉ', b.status === 'APPROVED' ? 'Règles de marque approuvées : vérification officielle.' : b.status === 'PROPOSED_NOT_APPROVED' ? 'Proposition de règles de marque en attente de votre approbation : vérification indicative seulement.' : 'Aucune règle de marque.'),
@@ -89,7 +91,8 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
         if (!financeSso) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
         if (!['OWNER', 'ADMIN', 'ACCOUNTANT'].includes(String(actor?.role ?? ''))) { json(res, 403, { error: 'FORBIDDEN', message: 'the Finance dashboard is for the owner, an administrator or the accountant' }); return true; }
         const ticket = issueTicket({ secret: financeSso.secret, merchantId: financeSso.merchantId, ttlSeconds: 60 });
-        json(res, 200, { url: `${financeSso.publicUrl}/sso?t=${ticket}`, expiresInSeconds: 60 }); return true;
+        const ob = await body(req).catch(() => ({})); const dossier = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(ob?.dossier ?? '')) ? `&open=${String(ob.dossier).toLowerCase()}` : ''; // a navigation hint only (the file to land on): it grants nothing, Finance still reads it under the signed-in session
+        json(res, 200, { url: `${financeSso.publicUrl}/sso?t=${ticket}${dossier}`, expiresInSeconds: 60 }); return true;
       }
       if (p === '/api/core/finance/inbox' && m === 'GET') { // read-only list of the Finance supplier-invoice inbox of THIS server's merchant; owner, administrator and accountant only
         if (!finance?.inbox) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
