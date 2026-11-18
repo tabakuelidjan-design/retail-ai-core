@@ -1662,4 +1662,5 @@ window.NORDLA_DICTS.en = Object.assign(window.NORDLA_DICTS.en || {}, {
   "gr.do.pz.step.photo_load_ok": "Loading succeeded",
   "gr.do.pz.step.photo_load_error": "Loading failed",
   "gr.do.pz.outcome.PHOTO_LOAD_FAILED": "photo selected but loading failed",
+  "gr.session.home": "← Nordla home",
 });

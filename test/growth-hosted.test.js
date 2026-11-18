@@ -284,3 +284,11 @@ test('HOS-sign-in-button: the page element helper writes ANY value as an attribu
   const app = await rf(new URL('app.js', dir), 'utf8');
   assert.match(app, /else if \(v != null\) el\.setAttribute\(k, v\)/); // the reason for the rule
 });
+
+test('HOS-nav the session answers /api/growth/home with the clean https Nordla home address (or null), only to a signed-in session of this merchant', async () => {
+  const mk = (homeUrl) => createHostedGrowth({ gate: { handle: async () => false, authorize: async (req) => (req.headers.cookie === 'ok' ? { ok: true, access: { merchantId: 'm1', role: 'OWNER', userId: 'u' } } : { ok: false, status: 401, body: { error: 'AUTH' } }) }, merchantId: 'm1', historyScope: 'h', app: async (req, res) => { res.writeHead(200); res.end('{}'); }, store: createMemoryFollowUpStore(), homeUrl });
+  const call = async (h, cookie) => { let status; let body = ''; await h({ method: 'GET', url: '/api/growth/home', headers: cookie ? { cookie } : {} }, { writeHead: (s) => { status = s; }, end: (b) => { body = String(b ?? ''); }, headersSent: false }); return { status, body: body ? JSON.parse(body) : null }; };
+  assert.equal((await call(mk('https://nordla.example.app'))).status, 401);
+  assert.deepEqual((await call(mk('https://nordla.example.app'), 'ok')).body, { url: 'https://nordla.example.app' });
+  assert.deepEqual((await call(mk(null), 'ok')).body, { url: null });
+});

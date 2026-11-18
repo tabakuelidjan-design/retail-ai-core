@@ -1662,4 +1662,5 @@ window.NORDLA_DICTS.nl = Object.assign(window.NORDLA_DICTS.nl || {}, {
   "gr.do.pz.step.photo_load_ok": "Laden gelukt",
   "gr.do.pz.step.photo_load_error": "Laden mislukt",
   "gr.do.pz.outcome.PHOTO_LOAD_FAILED": "foto geselecteerd maar laden mislukt",
+  "gr.session.home": "← Nordla-startpagina",
 });

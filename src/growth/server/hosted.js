@@ -28,7 +28,7 @@ async function readJson(req) {
  *  app         the Growth app handler (createGrowthApp built for this merchant, with hosted: true)
  *  store       the follow-up store (createSupabaseFollowUpStore / createMemoryFollowUpStore)
  */
-export function createHostedGrowth({ gate, merchantId, historyScope, app, store, collect = null, now = () => new Date() }) {
+export function createHostedGrowth({ gate, merchantId, historyScope, app, store, collect = null, homeUrl = null, now = () => new Date() }) {
   if (!gate || typeof gate.authorize !== 'function' || typeof gate.handle !== 'function') throw new TypeError('a session gate is required');
   if (typeof merchantId !== 'string' || !merchantId) throw new TypeError('the merchant id of this server is required');
   if (typeof historyScope !== 'string' || !historyScope) throw new TypeError('the history scope of this merchant is required');
@@ -65,6 +65,7 @@ export function createHostedGrowth({ gate, merchantId, historyScope, app, store,
       if (!a.ok) return json(res, a.status, a.body);
       const access = a.access;
       if (access.merchantId !== merchantId) return json(res, 403, { error: { code: 'TENANT_MISMATCH' } });
+      if (pathname === '/api/growth/home') return json(res, 200, { url: homeUrl }); // the Nordla home address (https only, or null): the "Accueil Nordla" link of the session bar
       if (pathname === '/api/growth/follow-up') return await followUp(req, res, access);
       return app(req, res); // the Growth app's read-only data routes (it refuses any other method itself)
     } catch {

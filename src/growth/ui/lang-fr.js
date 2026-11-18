@@ -1662,4 +1662,5 @@ window.NORDLA_DICTS.fr = Object.assign(window.NORDLA_DICTS.fr || {}, {
   "gr.do.pz.step.photo_load_ok": "Chargement réussi",
   "gr.do.pz.step.photo_load_error": "Chargement échoué",
   "gr.do.pz.outcome.PHOTO_LOAD_FAILED": "photo sélectionnée mais chargement échoué",
+  "gr.session.home": "← Accueil Nordla",
 });

@@ -10,7 +10,7 @@
 var growthHosted = (() => {
   const CSRF_COOKIES = ['__Host-nordla_growth_csrf'];
   const csrf = () => { for (const part of String(document.cookie).split(';')) { const i = part.indexOf('='); if (i > 0 && CSRF_COOKIES.includes(part.slice(0, i).trim())) return part.slice(i + 1).trim(); } return ''; };
-  const state = { role: null, scope: null, bar: null, message: null, importable: [], done: null, route: null, loginError: '', busy: false };
+  const state = { home: null, role: null, scope: null, bar: null, message: null, importable: [], done: null, route: null, loginError: '', busy: false };
 
   // The texts of the browser-only screens say "this browser": hosted, the follow-up is on the server (per language, applied once at start).
   const SERVER_TEXT = {
@@ -38,6 +38,7 @@ var growthHosted = (() => {
   };
   function renderBar() {
     const bar = barEl(); const kids = [];
+    if (state.home) kids.push(h('p', { class: 'gr-session-home' }, h('a', { class: 'gv-link gr-session-home-link', href: state.home }, t('gr.session.home'))));
     if (state.message) kids.push(h('p', { class: 'gr-session-msg', role: 'alert' }, state.message, ' ', h('button', { type: 'button', class: 'gv-link', on: { click: () => { window.location.reload(); } } }, t('gr.session.reload'))));
     if (state.role && !GROWTH_WRITE_ROLES.includes(state.role)) kids.push(h('p', { class: 'gr-session-msg' }, t('gr.session.readOnly')));
     if (state.importable.length) kids.push(h('p', { class: 'gr-session-msg' }, t('gr.session.importTitle', String(state.importable.length)), ' ', h('button', { type: 'button', class: 'gv-link gr-session-import', on: { click: importLocal } }, t('gr.session.importGo'))));
@@ -140,6 +141,7 @@ var growthHosted = (() => {
     if (!s || s.mode !== 'session') { state.loginError = t('gr.session.network'); return showLogin(); }
     if (!s.authenticated) return showLogin();
     state.role = s.role ?? null;
+    try { const hm = (await api('/api/growth/home')).body; state.home = hm && typeof hm.url === 'string' && /^https:\/\//.test(hm.url) ? hm.url : null; } catch { state.home = null; } // a missing link never blocks the screen
     try { await hydrate(); } catch (e) { if (e.status === 401) return showLogin(); return showBlocked(e.status === 403 ? 'gr.session.denied' : 'gr.session.unavailable', e.status !== 403); } // never open the screen on a follow-up that failed to load: a later save would hide what the server holds
     renderBar(); route();
   }

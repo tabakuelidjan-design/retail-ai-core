@@ -48,7 +48,7 @@ export async function startGrowthHosted({ env = process.env, log = console.log, 
   const historyScope = createHash('sha256').update(hosted.merchantId).digest('hex');
   const collectOrigins = String(env.GROWTH_COLLECT_ORIGINS ?? 'https://habb.be').split(',').map((s) => s.trim()).filter(Boolean); // the shop origins allowed to send personalizer events
   const collect = sources.personalizerStore ? createPersonalizerCollector({ store: sources.personalizerStore, allowedOrigins: collectOrigins, channels: collectChannels(env) }) : null;
-  const handler = createHostedGrowth({ gate, merchantId: hosted.merchantId, historyScope, app, store, collect });
+  const handler = createHostedGrowth({ gate, merchantId: hosted.merchantId, historyScope, app, store, collect, homeUrl: (() => { try { const u = new URL(String(env.NORDLA_HOME_URL ?? '').trim()); return u.protocol === 'https:' && !u.username && !u.password ? u.origin : null; } catch { return null; } })() });
   const server = http.createServer(handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, hosted.host, resolve); });
   log(`Nordla Growth HOSTED for ${hosted.origin}: Core identity sign-in (module growth, merchant ${hosted.merchantId}), follow-up on the server, port ${server.address().port}.`);
