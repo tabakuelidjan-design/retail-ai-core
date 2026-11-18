@@ -37,6 +37,9 @@ export function presentDecision(v) {
   };
 }
 
+/** The https origin of the hosted Growth screen (GROWTH_PUBLIC_URL), or null: no origin, no link (a missing or malformed value is never turned into a guess). */
+export function growthOrigin(env) { try { const u = new URL(String(env?.GROWTH_PUBLIC_URL ?? '').trim()); return u.protocol === 'https:' && !u.username && !u.password ? u.origin : null; } catch { return null; } }
+
 export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null, procurement = null, branding = null, campaigns = null, creation = null, financeSso = null, merchantIdentity = null, env = process.env }) {
   const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
   async function body(req, max = MAX) {
@@ -63,6 +66,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
       creation && creation.status().status === 'LOCAL_AVAILABLE'
         ? row('creative', 'Création', 'LIMITÉ', `Visuel local disponible : votre photo telle quelle + un titre (${creation.status().typography}), PNG et contrôles de fidélité. Génération IA : ${c.status === 'PROVIDER_NOT_CONNECTED' ? 'aucun fournisseur connecté' : 'à vérifier'}.`)
         : row('creative', 'Création', c.status === 'PROVIDER_NOT_CONNECTED' ? 'BLOQUÉ' : 'À VÉRIFIER', c.status === 'PROVIDER_NOT_CONNECTED' ? `Aucun fournisseur de génération connecté (${c.missing.join(', ') || c.error}). Rien n’est produit ni simulé.` : c.note),
+      ...(growthOrigin(env) ? [{ ...row('growth', 'Développement des ventes', 'DISPONIBLE', 'Opportunités, produits, audience, abandons des visiteurs : écran dédié, ouvert dans un nouvel onglet avec la même adresse e-mail Nordla (connexion demandée).'), growth_url: growthOrigin(env) }] : []),
     ].map((m) => (m.key === 'core' ? { ...m, connections_screen: env?.NORDLA_CONNECTIONS_MODULE === '1' } : m.key === 'creative' ? { ...m, creator_screen: env?.NORDLA_CREATOR_MODULE === '1' } : m.key === 'marketing' ? { ...m, gbp_screen: env?.NORDLA_GBP_DRAFTS_MODULE === '1', video_screen: env?.NORDLA_VIDEO_DRAFTS_MODULE === '1' } : m)) }; // the Creator screen exists only where the isolated module is built
   }
 

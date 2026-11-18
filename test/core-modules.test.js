@@ -153,3 +153,9 @@ test('Création without a provider: the owner\'s photo kept pixel-exact + a head
     assert.doesNotMatch(await readFile(join(w.dir, 'core', 'creations', 'creations.jsonl'), 'utf8'), /@nordla-test\.example|base64/, 'no e-mail and no photo bytes in the journal');
   } finally { await w.stop(); await rm(w.dir, { recursive: true, force: true }); }
 });
+
+test('growthOrigin: only a clean https origin gives the Développement des ventes row (GROWTH_PUBLIC_URL), anything else gives none', async () => {
+  const { growthOrigin } = await import('../src/core-pilot/http.js');
+  assert.equal(growthOrigin({ GROWTH_PUBLIC_URL: 'https://growth-staging-staging.up.railway.app/' }), 'https://growth-staging-staging.up.railway.app');
+  for (const bad of [undefined, '', 'http://x.example', 'javascript:alert(1)', 'https://u:p@x.example', 'not a url']) assert.equal(growthOrigin({ GROWTH_PUBLIC_URL: bad }), null, String(bad));
+});

@@ -62,3 +62,17 @@ test('the Google Business drafts link is shown on the Marketing module only when
     if (expected) assert.match(html, /Nordla ne publie rien sur Google/);
   }
 });
+
+test('the Développement des ventes module appears only with a https growth_url, opens in a new tab with noopener, and never invents a link', async () => {
+  const mk = (extra) => async (path) => {
+    if (path === '/api/core/modules') return { modules: ['core', 'sourcing', 'finance', 'analytics', 'branding', 'marketing', 'creative'].map((key) => ({ key, label: key, state: 'LIMITÉ', detail: 'x' })).concat(extra ? [{ key: 'growth', label: 'Développement des ventes', state: 'DISPONIBLE', detail: 'x', ...extra }] : []) };
+    if (path === '/api/core/branding') return { status: 'NOT_CONNECTED' };
+    if (path === '/api/core/campaigns') return { campaigns: [] };
+    return { status: 'NOT_CONNECTED' };
+  };
+  const html = async (extra) => { const { panel } = make(mk(extra)); await panel.load(); return panel.section(); };
+  const ok = await html({ growth_url: 'https://growth.example' });
+  assert.match(ok, /href="https:\/\/growth\.example\/#\/dropoff" target="_blank" rel="noopener"/); assert.match(ok, /href="https:\/\/growth\.example\/#\/opportunities"/);
+  assert.ok(!/data-nx-growth/.test(await html({ growth_url: 'javascript:alert(1)' })), 'a non-https value is never linked');
+  assert.ok(!/data-nx-growth/.test(await html({})), 'no growth_url, no link'); assert.ok(!/data-nx-module="growth"/.test(await html(null)));
+});

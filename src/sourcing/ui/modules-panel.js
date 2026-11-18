@@ -60,6 +60,7 @@ export function createModulesPanel({ S, api, refresh }) {
   const creatorLink = (m) => (m?.creator_screen ? '<p class="small"><a class="btn" href="/creator">Ouvrir le Créateur</a> <span class="muted">— mode TEST : résultats archivés, aucun fournisseur, rien n’est publié.</span></p>' : '');
   const videoLink = (m) => (m?.video_screen ? '<p class="small"><a class="btn" href="/videos">Ajouter une vidéo</a> <span class="muted">— un MP4 de CapCut et ses légendes TikTok et Instagram, en brouillon.</span></p>' : '');
   const settingsBar = (m) => (m?.connections_screen ? '<p class="small" data-nx-settings><a class="btn" href="/settings">Paramètres</a> <a class="btn sec" href="/settings/connections">Connexions</a> <span class="muted">— comptes reliés et leur état réel, en lecture seule.</span></p>' : '');
+  const growthLink = (m) => (m?.growth_url && /^https:\/\//.test(m.growth_url) ? `<p class="small" data-nx-growth><a class="btn" href="${esc(m.growth_url)}/#/dropoff" target="_blank" rel="noopener">Où les visiteurs abandonnent</a> <a class="btn sec" href="${esc(m.growth_url)}/#/opportunities" target="_blank" rel="noopener">Opportunités</a> <span class="muted">— nouvel onglet ; Nordla ne publie, ne modifie et ne dépense rien.</span></p>` : '');
   const gbpLink = (m) => (m?.gbp_screen ? '<p class="small"><a class="btn" href="/gbp">Voir et approuver les publications Google</a> <span class="muted">— deux brouillons ; Nordla ne publie rien sur Google.</span></p>' : '');
   const financeOpenButton = (m) => (m?.dashboard ? ` <button class="btn" data-act="nx-open-finance">Ouvrir le tableau de bord Finance</button>` : '');
   // ---- Parle à Nordla: one input, one answer zone, on the person's own session (the server resolves the merchant). Read-only: Nordla answers, it executes nothing.
@@ -98,7 +99,7 @@ export function createModulesPanel({ S, api, refresh }) {
       ${mod(by.core, `<p class="small muted">Voir « Nordla Core » plus bas (décisions d’achat, suivi).</p>`)}
       ${mod(by.finance, quick('finance') + financeOpenButton(by.finance) + financeInboxCard())}${by.procurement ? mod(by.procurement, '<p class="small"><a href="/procurement/">Ouvrir Stock / Achats</a></p>') : ''}${mod(by.analytics, quick('analytics'))}
       ${mod(by.sourcing, '<p class="small muted">Écran principal de l’application.</p>')}
-      ${mod(by.branding, brandBody)}${mod(by.marketing, `${form}${check}${(st.campaigns ?? []).slice(0, 5).map(campaignCard).join('')}${gbpLink(by.marketing)}${videoLink(by.marketing)}`)}${mod(by.creative, creationBody() + creatorLink(by.creative))}
+      ${mod(by.branding, brandBody)}${mod(by.marketing, `${form}${check}${(st.campaigns ?? []).slice(0, 5).map(campaignCard).join('')}${gbpLink(by.marketing)}${videoLink(by.marketing)}`)}${mod(by.creative, creationBody() + creatorLink(by.creative))}${by.growth ? mod(by.growth, growthLink(by.growth)) : ''}
       `;
   }
   return { section, load, ask: parle };
