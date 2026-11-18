@@ -1625,7 +1625,7 @@ window.NORDLA_DICTS.nl = Object.assign(window.NORDLA_DICTS.nl || {}, {
   "gr.do.pz.col.attempts": "Pogingen",
   "gr.do.pz.col.devices": "Apparaten",
   "gr.do.pz.step.submit_blocked_no_photo": "Weigering “foto ontbreekt” tegengekomen (obstakel)",
-  "gr.do.pz.step.photo_chosen": "Foto toegevoegd",
+  "gr.do.pz.step.photo_chosen": "Foto geselecteerd (laadresultaat ontvangen)",
   "gr.do.pz.step.send_clicked": "Project versturen aangeklikt",
   "gr.do.pz.step.design_ready": "Ontwerp klaar en naar Shopify gestuurd",
   "gr.do.pz.step.cart_submit": "Poging om in het winkelmandje te voegen (cart_submit)",
@@ -1659,4 +1659,7 @@ window.NORDLA_DICTS.nl = Object.assign(window.NORDLA_DICTS.nl || {}, {
   "gr.do.pz.tests.title": "Tests op het conceptthema (uitgesloten van klantcijfers)",
   "gr.do.pz.tests.note": "Gebeurtenissen die de server als “test” classificeert: {0} pogingen, {1} gebeurtenissen. Ze worden nooit bij de klantcijfers opgeteld.",
   "gr.do.pz.unknown": "{0} gebeurtenissen van onbekende herkomst (oud relais of niet-herkend kanaal): uitgesloten van klantcijfers.",
+  "gr.do.pz.step.photo_load_ok": "Laden gelukt",
+  "gr.do.pz.step.photo_load_error": "Laden mislukt",
+  "gr.do.pz.outcome.PHOTO_LOAD_FAILED": "foto geselecteerd maar laden mislukt",
 });

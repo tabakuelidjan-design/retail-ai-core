@@ -1625,7 +1625,7 @@ window.NORDLA_DICTS.en = Object.assign(window.NORDLA_DICTS.en || {}, {
   "gr.do.pz.col.attempts": "Attempts",
   "gr.do.pz.col.devices": "Devices",
   "gr.do.pz.step.submit_blocked_no_photo": "Refusal “photo missing” met (obstacle)",
-  "gr.do.pz.step.photo_chosen": "Photo added",
+  "gr.do.pz.step.photo_chosen": "Photo selected (loading result received)",
   "gr.do.pz.step.send_clicked": "Send project clicked",
   "gr.do.pz.step.design_ready": "Design ready and sent to Shopify",
   "gr.do.pz.step.cart_submit": "Attempt to add to cart (cart_submit)",
@@ -1659,4 +1659,7 @@ window.NORDLA_DICTS.en = Object.assign(window.NORDLA_DICTS.en || {}, {
   "gr.do.pz.tests.title": "Draft-theme tests (excluded from customer figures)",
   "gr.do.pz.tests.note": "Events the server classed “test”: {0} attempts, {1} events. They are never added to the customer figures.",
   "gr.do.pz.unknown": "{0} events of unknown provenance (old relay or unrecognised channel): excluded from customer figures.",
+  "gr.do.pz.step.photo_load_ok": "Loading succeeded",
+  "gr.do.pz.step.photo_load_error": "Loading failed",
+  "gr.do.pz.outcome.PHOTO_LOAD_FAILED": "photo selected but loading failed",
 });

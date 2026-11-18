@@ -1625,7 +1625,7 @@ window.NORDLA_DICTS.fr = Object.assign(window.NORDLA_DICTS.fr || {}, {
   "gr.do.pz.col.attempts": "Tentatives",
   "gr.do.pz.col.devices": "Appareils",
   "gr.do.pz.step.submit_blocked_no_photo": "Refus « photo manquante » rencontré (obstacle)",
-  "gr.do.pz.step.photo_chosen": "Photo ajoutée",
+  "gr.do.pz.step.photo_chosen": "Photo sélectionnée (résultat du chargement reçu)",
   "gr.do.pz.step.send_clicked": "Envoi du projet cliqué",
   "gr.do.pz.step.design_ready": "Création prête et envoyée à Shopify",
   "gr.do.pz.step.cart_submit": "Tentative d’ajout au panier (cart_submit)",
@@ -1659,4 +1659,7 @@ window.NORDLA_DICTS.fr = Object.assign(window.NORDLA_DICTS.fr || {}, {
   "gr.do.pz.tests.title": "Essais sur le thème brouillon (exclus des chiffres clients)",
   "gr.do.pz.tests.note": "Événements classés « test » par le serveur : {0} tentatives, {1} événements. Ils ne sont jamais ajoutés aux chiffres clients.",
   "gr.do.pz.unknown": "{0} événements de provenance inconnue (ancien relais ou canal non reconnu) : exclus des chiffres clients.",
+  "gr.do.pz.step.photo_load_ok": "Chargement réussi",
+  "gr.do.pz.step.photo_load_error": "Chargement échoué",
+  "gr.do.pz.outcome.PHOTO_LOAD_FAILED": "photo sélectionnée mais chargement échoué",
 });

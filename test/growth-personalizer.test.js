@@ -142,7 +142,7 @@ test('PZ-8 the events table reads the SAME summary as the card: photo_chosen -> 
   assert.match(row(/Tentative d’ajout au panier/i), /cart_submit.*1 tentatives/); assert.match(row(/Ajout confirmé par le panier Shopify/i), /cart_confirmed.*1 tentatives/);
   assert.match(row(/Refus « photo manquante »/i), /submit_blocked_no_photo.*2 tentatives/);
   // the same numbers in the card
-  assert.match(t, /Photo ajoutée1mobile 1 · ordinateur 0/); assert.match(t, /Ajout confirmé par le panier Shopify1mobile 1 · ordinateur 0/); assert.match(t, /Tentative d’ajout au panier \(cart_submit\)1mobile 1/);
+  assert.match(t, /Photo sélectionnée \(résultat du chargement reçu\)1mobile 1 · ordinateur 0/); assert.match(t, /Chargement réussi1mobile 1 · ordinateur 0/); assert.match(t, /Chargement échoué0mobile 0 · ordinateur 0/); assert.match(t, /Ajout confirmé par le panier Shopify1mobile 1 · ordinateur 0/); assert.match(t, /Tentative d’ajout au panier \(cart_submit\)1mobile 1/);
   assert.match(t, /Les essais du thème brouillon ne sont jamais comptés ici/); assert.match(t, /dernier événement : refus sans photo \(arrêt non confirmé\)/);
   // three different states, never the same message
   const inactive = text((await growthDom('#/dropoff', { dropoff: await mk(null) })).root); assert.match(inactive, /Collecte inactive/); assert.match(inactive, /collecte inactive/); assert.doesNotMatch(inactive, /Collecte active/);
@@ -195,7 +195,7 @@ test('PZ-11 MIXED SET: a draft-theme event received AFTER a customer event stays
   assert.equal(payload.personalizerTests.attempts, 1); assert.equal(payload.personalizerTests.steps.cart_confirmed.total, 1); assert.deepEqual(payload.personalizerUnknown, { events: 1, attempts: 1 });
   assert.equal(payload.collect.liveEnabled, true); assert.equal(payload.collect.testChannel, T); assert.ok(!JSON.stringify(payload).includes(L), 'the live key never leaves the server');
   const d = await growthDom('#/dropoff', { dropoff: payload }); const t = text(d.root); assert.deepEqual(d.errors, []);
-  assert.match(t, /Photo ajoutée1/); assert.match(t, /Ajout confirmé par le panier Shopify1/); // the card: customers only
+  assert.match(t, /Photo sélectionnée \(résultat du chargement reçu\)1/); assert.match(t, /Ajout confirmé par le panier Shopify1/); // the card: customers only
   const ev1 = (re) => { const out = []; const walk = (n) => { if (n.tagName === 'TR' && /gr-do-pz-ev/.test(n.className)) out.push(text(n)); (n.children || []).forEach(walk); }; walk(d.root); return out.find((r) => re.test(r)) || ''; };
   assert.match(ev1(/cart_confirmed/), /1 tentatives/); assert.match(ev1(/photo_chosen/), /1 tentatives/); assert.doesNotMatch(ev1(/cart_confirmed/), /2 tentatives/); // the table: the same live-only numbers
   assert.match(t, /Essais sur le thème brouillon \(exclus des chiffres clients\)/); assert.match(t, /1 événements de provenance inconnue/);
@@ -228,4 +228,14 @@ test('PZ-14 the provenance migration adds a server-assigned column with default 
   const sql = await readFile(new URL('../supabase/migrations-pending/20261118210000_growth_personalizer_provenance.sql', import.meta.url), 'utf8');
   assert.match(sql, /add column if not exists provenance text not null default 'unknown' check \(provenance in \('test', 'live', 'unknown'\)\)/);
   assert.doesNotMatch(sql.replace(/^--.*$/gm, ''), /\bupdate\b/i, 'no data statement in the migration');
+});
+
+test('PZ-15 photo_chosen carries a RESULT: selected = ok + load_error attempts, loading succeeded = ok only, a failed load is never counted as a loaded photo nor as "photo added, not sent"', () => {
+  const ev = (attempt_id, step, status, device = 'mobile') => ({ attempt_id, step, status, device, product: 'case-a', n: 1, received_at: '2026-11-18T10:00:00.000Z' });
+  const s = summarizePersonalizer([ev('a', 'photo_chosen', 'ok'), ev('b', 'photo_chosen', 'load_error'), ev('c', 'photo_chosen', 'load_error', 'desktop'), ev('c', 'photo_chosen', 'ok', 'desktop'), ev('d', 'submit_blocked_no_photo', 'no_photo'), ev('d', 'photo_chosen', 'load_error')]);
+  assert.equal(s.steps.photo_chosen.total, 4, 'selected: every attempt that received a loading result');
+  assert.deepEqual([s.photoLoad.ok.total, s.photoLoad.ok.mobile, s.photoLoad.ok.desktop], [2, 1, 1]);
+  assert.deepEqual([s.photoLoad.error.total, s.photoLoad.error.mobile, s.photoLoad.error.desktop], [3, 2, 1]);
+  assert.equal(s.outcomes.PHOTO_ADDED_NOT_SENT, 2); assert.equal(s.outcomes.PHOTO_LOAD_FAILED, 2); assert.equal(s.obstacles.thenContinued, 0, 'an obstacle followed only by a failed load did not continue');
+  assert.deepEqual(summarizePersonalizer([]).photoLoad, { ok: { total: 0, mobile: 0, desktop: 0 }, error: { total: 0, mobile: 0, desktop: 0 } });
 });

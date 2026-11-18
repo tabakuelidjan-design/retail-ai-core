@@ -89,16 +89,18 @@ function doProductsCard(d) {
 }
 
 // The personalizer's events fill two steps of this table (same numbers as the card below: both read d.personalizer). cart_submit stays an ATTEMPT, cart_confirmed the CONFIRMED add.
-const DO_PZ_VIA = { photo_upload: 'photo_chosen', personalization_done: 'design_ready' };
+const DO_PZ_VIA = { photo_upload: 'photo_load_ok', personalization_done: 'design_ready' }; // « Photo chargée » = chargement RÉUSSI (photo_chosen reçu avec le résultat ok), jamais une simple sélection
 const DO_PZ_EXTRA = ['submit_blocked_no_photo', 'cart_submit', 'cart_confirmed'];
-const doPzCount = (p, k) => { const v = (p.steps && p.steps[k]) || { total: 0, mobile: 0, desktop: 0 }; return t('gr.do.pz.evCount', num(v.total), t('gr.do.pz.split', num(v.mobile), num(v.desktop))); };
+/** photo_load_ok / photo_load_error are the two RESULTS of the photo_chosen event; every other key is a step. */
+const doPzVal = (p, k) => (k === 'photo_load_ok' ? p.photoLoad && p.photoLoad.ok : k === 'photo_load_error' ? p.photoLoad && p.photoLoad.error : p.steps && p.steps[k]) || { total: 0, mobile: 0, desktop: 0 };
+const doPzCount = (p, k) => { const v = doPzVal(p, k); return t('gr.do.pz.evCount', num(v.total), t('gr.do.pz.split', num(v.mobile), num(v.desktop))); };
 function doEventsCard(d) {
   const p = d.personalizer || null; const ok = p && p.status === 'OK';
   const stKey = p && p.status === 'NO_DATA' && !(d.collect && d.collect.liveEnabled) ? 'NO_LIVE' : (p && p.status);
   const stateNote = () => p && !ok ? h('span', { class: 'gr-muted gr-do-pz-state' }, ` · ${t(`gr.do.pz.evState.${stKey}`)}`) : null;
   const rows = d.events.map((e) => {
     const via = DO_PZ_VIA[e.step];
-    if (via && ok) return h('tr', { class: 'gr-do-pz-ev' }, h('th', { scope: 'row' }, t(`gr.do.step.${e.step}`)), h('td', null, h('code', null, `habb_personalizer › ${via}`)), h('td', null, chip(t('gr.do.measured'), 'gr-good'), ' ', h('span', { class: 'gr-do-pz-evcount' }, doPzCount(p, via))), h('td', { class: 'gr-muted' }, t('gr.do.pz.evVia')));
+    if (via && ok) return h('tr', { class: 'gr-do-pz-ev' }, h('th', { scope: 'row' }, t(`gr.do.step.${e.step}`)), h('td', null, h('code', null, `habb_personalizer › ${via === 'photo_load_ok' ? 'photo_chosen (status ok)' : via}`)), h('td', null, chip(t('gr.do.measured'), 'gr-good'), ' ', h('span', { class: 'gr-do-pz-evcount' }, doPzCount(p, via))), h('td', { class: 'gr-muted' }, t('gr.do.pz.evVia')));
     return h('tr', null, h('th', { scope: 'row' }, t(`gr.do.step.${e.step}`)), h('td', null, h('code', null, e.event)), h('td', null, e.measured ? chip(t('gr.do.measured'), 'gr-good') : chip(t('gr.do.notMeasured'), 'gr-warn'), via ? stateNote() : null), h('td', { class: 'gr-muted' }, e.where));
   });
   if (ok) for (const k of DO_PZ_EXTRA) rows.push(h('tr', { class: 'gr-do-pz-ev' }, h('th', { scope: 'row' }, t(`gr.do.pz.step.${k}`)), h('td', null, h('code', null, `habb_personalizer › ${k}`)), h('td', null, chip(t('gr.do.measured'), 'gr-good'), ' ', h('span', { class: 'gr-do-pz-evcount' }, doPzCount(p, k))), h('td', { class: 'gr-muted' }, t('gr.do.pz.evVia'))));
@@ -108,8 +110,8 @@ function doEventsCard(d) {
     h('p', { class: 'gr-muted' }, t('gr.do.question')));
 }
 
-const DO_PZ_STEPS = ['submit_blocked_no_photo', 'photo_chosen', 'send_clicked', 'design_ready', 'cart_submit', 'cart_confirmed'];
-const DO_PZ_OUTCOMES = ['CONFIRMED', 'SUBMITTED_UNCONFIRMED', 'SUBMITTED_NOT_FOUND', 'EXPORT_FAILED', 'SENT_NOT_SUBMITTED', 'PHOTO_ADDED_NOT_SENT', 'LAST_EVENT_OBSTACLE', 'OTHER'];
+const DO_PZ_STEPS = ['submit_blocked_no_photo', 'photo_chosen', 'photo_load_ok', 'photo_load_error', 'send_clicked', 'design_ready', 'cart_submit', 'cart_confirmed'];
+const DO_PZ_OUTCOMES = ['CONFIRMED', 'SUBMITTED_UNCONFIRMED', 'SUBMITTED_NOT_FOUND', 'EXPORT_FAILED', 'SENT_NOT_SUBMITTED', 'PHOTO_ADDED_NOT_SENT', 'PHOTO_LOAD_FAILED', 'LAST_EVENT_OBSTACLE', 'OTHER'];
 /** The personalizer's own events received from the shop (distinct attempts, never raw events). cart_submit is an ATTEMPT; only cart_confirmed is an add confirmed by Shopify's cart. */
 function doPersonalizerCard(d) {
   const p = d.personalizer;
@@ -119,7 +121,7 @@ function doPersonalizerCard(d) {
   if (p.status === 'INACTIVE') return stateCard('gr.do.pz.inactive');
   if (p.status === 'UNAVAILABLE') return stateCard('gr.do.pz.unavailable');
   if (p.status === 'NO_DATA') return stateCard(d.collect && d.collect.liveEnabled ? 'gr.do.pz.noData' : 'gr.do.pz.noLive');
-  const steps = DO_PZ_STEPS.map((s) => { const v = p.steps[s] || { total: 0, mobile: 0, desktop: 0 }; return h('li', { class: `gr-do-pz-row gr-do-pz-${s}` }, h('span', { class: 'gr-do-pz-label' }, t(`gr.do.pz.step.${s}`)), h('strong', { class: 'gr-do-pz-n' }, num(v.total)), h('span', { class: 'gr-do-pz-dev gr-muted' }, t('gr.do.pz.split', num(v.mobile), num(v.desktop)))); });
+  const steps = DO_PZ_STEPS.map((s) => { const v = doPzVal(p, s); return h('li', { class: `gr-do-pz-row gr-do-pz-${s}` }, h('span', { class: 'gr-do-pz-label' }, t(`gr.do.pz.step.${s}`)), h('strong', { class: 'gr-do-pz-n' }, num(v.total)), h('span', { class: 'gr-do-pz-dev gr-muted' }, t('gr.do.pz.split', num(v.mobile), num(v.desktop)))); });
   const outcomes = DO_PZ_OUTCOMES.filter((k) => (p.outcomes || {})[k] > 0).map((k) => h('li', { class: `gr-do-pz-outcome gr-do-pz-${k}` }, h('strong', null, num(p.outcomes[k])), ' ', t(`gr.do.pz.outcome.${k}`)));
   return h('section', { class: 'ex-card gr-do-card gr-do-wide gr-do-pz' }, cardHead('content', t('gr.do.pz.title')),
     h('p', { class: 'gr-muted' }, t('gr.do.pz.source', num(p.attempts), num(p.events))),
@@ -136,7 +138,7 @@ function doPersonalizerTestsCard(d) {
   const tt = d.personalizerTests; const u = d.personalizerUnknown;
   const hasTests = tt && tt.status === 'OK'; const hasUnknown = u && u.events > 0;
   if (!hasTests && !hasUnknown) return null;
-  const rows = hasTests ? DO_PZ_STEPS.map((s) => h('li', { class: `gr-do-pz-row gr-do-pz-t-${s}` }, h('span', { class: 'gr-do-pz-label' }, t(`gr.do.pz.step.${s}`)), h('strong', { class: 'gr-do-pz-n' }, num((tt.steps[s] || {}).total || 0)))) : [];
+  const rows = hasTests ? DO_PZ_STEPS.map((s) => h('li', { class: `gr-do-pz-row gr-do-pz-t-${s}` }, h('span', { class: 'gr-do-pz-label' }, t(`gr.do.pz.step.${s}`)), h('strong', { class: 'gr-do-pz-n' }, num(doPzVal(tt, s).total || 0)))) : [];
   return h('section', { class: 'ex-card gr-do-card gr-do-wide gr-do-pz gr-do-pz-tests' }, cardHead('content', t('gr.do.pz.tests.title')),
     hasTests ? h('p', { class: 'gr-muted' }, t('gr.do.pz.tests.note', num(tt.attempts), num(tt.events))) : null,
     rows.length ? h('ul', { class: 'gr-do-pz-list' }, ...rows) : null,

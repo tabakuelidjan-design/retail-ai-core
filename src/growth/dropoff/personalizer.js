@@ -66,33 +66,36 @@ const zero = () => ({ total: 0, mobile: 0, desktop: 0 });
  */
 export function summarizePersonalizer(events, { since = null, until = null, product = null } = {}) {
   const rows = (Array.isArray(events) ? events : []).filter((e) => !product || e.product === product);
-  if (rows.length === 0) return { status: 'NO_DATA', since, until, attempts: 0, events: 0, steps: Object.fromEntries(PROBE_STEPS.map((s) => [s, zero()])), outcomes: {}, abandon: { status: 'NOT_OBSERVABLE' } };
+  if (rows.length === 0) return { status: 'NO_DATA', since, until, attempts: 0, events: 0, steps: Object.fromEntries(PROBE_STEPS.map((s) => [s, zero()])), photoLoad: { ok: zero(), error: zero() }, outcomes: {}, abandon: { status: 'NOT_OBSERVABLE' } };
   const byAttempt = new Map();
   for (const e of rows) {
-    if (!byAttempt.has(e.attempt_id)) byAttempt.set(e.attempt_id, { device: e.device, steps: new Set(), photoError: false, order: [] });
+    if (!byAttempt.has(e.attempt_id)) byAttempt.set(e.attempt_id, { device: e.device, steps: new Set(), photoError: false, photoOk: false, order: [] });
     const a = byAttempt.get(e.attempt_id);
-    a.steps.add(e.step); if (e.step === 'photo_chosen' && e.status === 'load_error') a.photoError = true;
+    a.steps.add(e.step); if (e.step === 'photo_chosen' && e.status === 'load_error') a.photoError = true; if (e.step === 'photo_chosen' && e.status === 'ok') a.photoOk = true;
     a.order.push([e.received_at ?? '', e.step]);
   }
   const steps = Object.fromEntries(PROBE_STEPS.map((s) => [s, zero()]));
+  const photoLoad = { ok: zero(), error: zero() }; // photo_chosen is SENT with a RESULT: 'ok' = the image was read and decoded (loading succeeded), 'load_error' = it could not be read. Selected = either.
   const outcomes = {}; const bump = (k) => { outcomes[k] = (outcomes[k] ?? 0) + 1; };
   let obstacleThenContinued = 0;
   for (const a of byAttempt.values()) {
     for (const s of PROBE_STEPS) if (a.steps.has(s)) { steps[s].total++; steps[s][a.device]++; }
+    if (a.photoOk) { photoLoad.ok.total++; photoLoad.ok[a.device]++; } if (a.photoError) { photoLoad.error.total++; photoLoad.error[a.device]++; }
     const has = (s) => a.steps.has(s);
     const last = a.order.sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0)).at(-1)?.[1];
-    if (has('submit_blocked_no_photo') && has('photo_chosen')) obstacleThenContinued++;
+    if (has('submit_blocked_no_photo') && a.photoOk) obstacleThenContinued++;
     if (has('cart_confirmed')) bump('CONFIRMED');
     else if (has('cart_not_found')) bump('SUBMITTED_NOT_FOUND');
     else if (has('cart_submit')) bump('SUBMITTED_UNCONFIRMED');
     else if (has('export_failed')) bump('EXPORT_FAILED');
     else if (has('send_clicked')) bump('SENT_NOT_SUBMITTED');
-    else if (has('photo_chosen')) bump('PHOTO_ADDED_NOT_SENT');
+    else if (a.photoOk) bump('PHOTO_ADDED_NOT_SENT');
+    else if (has('photo_chosen')) bump('PHOTO_LOAD_FAILED');
     else if (last === 'submit_blocked_no_photo') bump('LAST_EVENT_OBSTACLE');
     else bump('OTHER');
   }
   return {
-    status: 'OK', since, until, attempts: byAttempt.size, events: rows.length, steps,
+    status: 'OK', since, until, attempts: byAttempt.size, events: rows.length, steps, photoLoad,
     obstacles: { met: steps.submit_blocked_no_photo.total, thenContinued: obstacleThenContinued },
     outcomes,
     abandon: { status: 'NOT_OBSERVABLE' }, // no session-end signal: a "last event" is not a confirmed abandon
