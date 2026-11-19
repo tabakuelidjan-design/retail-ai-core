@@ -16,8 +16,10 @@ const tk = (o = {}) => issueTicket({ secret: SECRET, merchantId: M, audience: AN
 test('AS-1 a good ticket opens a session (302 to /, HttpOnly Secure SameSite=Strict cookie); the cookie then passes the guard; the same ticket again is refused', async () => {
   const g = mk(); const t = tk();
   const a = await run(g, { url: `/sso?t=${encodeURIComponent(t)}` }); assert.equal(a.ok, false); assert.equal(a.r.status, 302); assert.equal(a.r.headers.Location, '/');
-  const cookie = a.r.headers['Set-Cookie']; assert.match(cookie, /^an_sid=[0-9a-f]{64}; HttpOnly; Secure; SameSite=Strict; Path=\//);
+  const cookie = a.r.headers['Set-Cookie']; assert.match(cookie, /^an_sid=[0-9a-f]{64}; HttpOnly; Secure; SameSite=Lax; Path=\//);
   const b = await run(g, { cookie: cookie.split(';')[0] }); assert.equal(b.ok, true);
+  // full HTTP path: the browser follows the 302 to '/' as a cross-site top-level navigation; the cookie must be sent with it (Lax, not Strict)
+  const landed = await run(g, { url: '/', cookie: cookie.split(';')[0] }); assert.equal(landed.ok, true, 'the landing page accepts the session cookie');
   const again = await run(g, { url: `/sso?t=${encodeURIComponent(t)}` }); assert.equal(again.r.status, 403); assert.equal(JSON.parse(again.r.body).error.code, 'SSO_REPLAYED'); assert.equal(again.r.headers['Set-Cookie'], undefined);
 });
 

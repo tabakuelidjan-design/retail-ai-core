@@ -81,7 +81,7 @@ const cookieOf = (req, name) => { for (const part of String(req.headers?.cookie 
 
 /**
  * sso (optional, hosted): { secret, merchantId } - GET /sso?t=<ticket> issued by the Nordla server for a signed-in person with the right role: a valid, unused, unexpired ticket for THIS merchant opens an
- * 8 h session (HttpOnly, Secure, SameSite=Strict cookie, kept in memory) and lands on the dashboard. The access token keeps working as before; nothing is served without one of the two.
+ * 8 h session (HttpOnly, Secure, SameSite=Lax cookie (Lax: sent on the cross-site redirect from Core), kept in memory) and lands on the dashboard. The access token keeps working as before; nothing is served without one of the two.
  */
 export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = null, now = () => Date.now() }) {
   const verifier = sso ? createTicketVerifier({ secret: sso.secret, merchantId: sso.merchantId, audience: ANALYTICS_SSO_AUDIENCE, now, module: 'analytics', requirePerson: sso.requirePerson === true, checkAccess: sso.checkAccess ?? null }) : null;
@@ -104,7 +104,7 @@ export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = nul
       for (const [k, v] of sessions) if (v < now()) { sessions.delete(k); ssoPeople.delete(k); }
       const sid = randomBytes(32).toString('hex'); sessions.set(sid, now() + SSO_SESSION_MS);
       if (r.claims) ssoPeople.set(sid, { userId: r.claims.userId, role: r.access?.role ?? r.claims.role }); // re-checked on every request below
-      res.writeHead(302, { ...base, Location: '/', 'Set-Cookie': `${SSO_COOKIE}=${sid}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${SSO_SESSION_MS / 1000}` }); res.end();
+      res.writeHead(302, { ...base, Location: '/', 'Set-Cookie': `${SSO_COOKIE}=${sid}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SSO_SESSION_MS / 1000}` }); res.end();
       return false; // answered (redirect)
     }
     const sid = verifier ? cookieOf(req, SSO_COOKIE) : '';
