@@ -152,17 +152,20 @@ export function createBankService({ store, merchantId, adapter = NoBankAdapter, 
         accepted.push({ held, justification: d.justification });
       }
       const toStore = [...kept, ...accepted.map((a) => a.held.row)];
+      // An accepted held movement is traced BEFORE anything is stored. If a trace cannot be written, the request is refused and nothing is stored:
+      // a stored movement without its audit trace cannot happen. (A trace without a stored movement is a recorded, refused attempt: the safe direction.)
+      for (const a of accepted) {
+        const record = { at: clock.now(), action: 'BANK_HELD_LINE_ACCEPTED', operator: actor?.id ?? null, line: a.held.line, reason: a.held.reason, storedId: a.held.storedId, movement: { date: a.held.row.date, amountCents: a.held.row.amountCents, currency: a.held.row.currency, counterpartyName: a.held.row.counterpartyName ?? null }, justification: a.justification.slice(0, 300) };
+        try { await audit(record); } catch { throw new FinanceError('BANK_AUDIT_UNAVAILABLE', 'no accepted movement is stored without its audit trace'); }
+      }
       try { r = await store1(CSV_ACCOUNT, toStore, 'csv'); } catch (e) {
         // The batch is atomic: nothing of this statement was stored. Say so, keep the technical detail out of the answer, and let the merchant retry.
+        for (const a of accepted) { try { await audit({ at: clock.now(), action: 'BANK_HELD_LINE_NOT_STORED', operator: actor?.id ?? null, line: a.held.line }); } catch { /* best effort: the refusal itself is returned below */ } }
         try { await audit({ at: clock.now(), action: 'BANK_CSV_IMPORT_FAILED', rows: rows.length }); } catch { /* auditing must not hide the failure */ }
         throw new FinanceError('BANK_IMPORT_FAILED_NOTHING_SAVED');
       }
       // duplicates = every line already known: by identifier (stored by the batch) or by identity (same movement stored under another format or file).
       const duplicates = known + r.duplicates;
-      // One audit line per accepted row: merchant, operator, the movement, the reason it was held and the justification.
-      for (const a of accepted) {
-        try { await audit({ at: clock.now(), action: 'BANK_HELD_LINE_ACCEPTED', operator: actor?.id ?? null, line: a.held.line, reason: a.held.reason, storedId: a.held.storedId, movement: { date: a.held.row.date, amountCents: a.held.row.amountCents, currency: a.held.row.currency, counterpartyName: a.held.row.counterpartyName ?? null }, justification: a.justification.slice(0, 300) }); } catch { /* the stored movement stays; the audit failure is kept visible to ops */ }
-      }
       const remaining = possible.filter((p) => !accepted.some((a) => a.held === p));
       await audit({ at: clock.now(), action: 'BANK_CSV_IMPORTED', created: r.created, duplicates, held: remaining.length, acceptedLines: accepted.length, rejected: errors.length });
       return { created: r.created, duplicates, rejected: errors, ...(remaining.length ? { possibleDuplicates: heldSummary(remaining) } : {}) };

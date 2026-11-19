@@ -370,3 +370,41 @@ test('MERCHANT ISOLATION: the same statement imported by another merchant is not
     assert.equal((await ca.get('/api/bank/transactions')).data.rows.length, 1, 'A is unchanged');
   } finally { await a.close(); await b.close(); }
 });
+
+test('AUDIT FAILURE: when the acceptance trace cannot be written, the held movement is NOT stored and the request is refused', async () => {
+  const seen = [];
+  const audit = async (e) => { seen.push(e.action); if (e.action === 'BANK_HELD_LINE_ACCEPTED') throw new Error('audit store unavailable'); };
+  const a = await startApp({ bankVaultKey: KEY, audit });
+  try {
+    const c = await a.authed();
+    await c.post('/api/bank/import-csv', { csv: ['Date;Montant;Contrepartie;Communication', '22/09/2026;30,00;Client Exemple SA;'].join('\n') });
+    const xml = doc(entry({ amt: '30.00', cp: 'Client Exemple SA', date: '2026-09-22' }));
+    const r = await c.post('/api/bank/import-csv', { csv: xml, format: 'camt053', acceptHeldLines: [{ line: 1, justification: J }] });
+    assert.ok(r.status >= 400, 'the acceptance is refused when its trace fails');
+    assert.match(JSON.stringify(r.data), /BANK_AUDIT_UNAVAILABLE/);
+    assert.equal((await c.get('/api/bank/transactions')).data.rows.length, 1, 'the held movement was NOT stored: no untraced acceptance');
+    assert.ok(seen.includes('BANK_HELD_LINE_ACCEPTED'), 'the trace was attempted before any storage');
+  } finally { await a.close(); }
+});
+
+test('STORE FAILURE AFTER THE TRACE: the acceptance is traced, the storage fails, nothing is stored, and the failure is traced too (no atomicity is claimed)', async () => {
+  const seen = [];
+  const audit = async (e) => { seen.push(e.action); };
+  const store = createMemoryStore();
+  let failNext = false;
+  const realBatch = store.insertBankTransactionsBatch.bind(store);
+  store.insertBankTransactionsBatch = async (rows) => { if (failNext) { failNext = false; throw new Error('storage unavailable'); } return realBatch(rows); };
+  const a = await startApp({ bankVaultKey: KEY, store, audit });
+  try {
+    const c = await a.authed();
+    await c.post('/api/bank/import-csv', { csv: ['Date;Montant;Contrepartie;Communication', '22/09/2026;30,00;Client Exemple SA;'].join('\n') });
+    failNext = true;
+    const xml = doc(entry({ amt: '30.00', cp: 'Client Exemple SA', date: '2026-09-22' }));
+    const r = await c.post('/api/bank/import-csv', { csv: xml, format: 'camt053', acceptHeldLines: [{ line: 1, justification: J }] });
+    assert.ok(r.status >= 400, JSON.stringify(r.data));
+    assert.match(JSON.stringify(r.data), /BANK_IMPORT_FAILED_NOTHING_SAVED/);
+    assert.equal((await c.get('/api/bank/transactions')).data.rows.length, 1, 'nothing of the failed statement is stored');
+    assert.ok(seen.includes('BANK_HELD_LINE_ACCEPTED'), 'the acceptance was traced before the storage');
+    assert.ok(seen.includes('BANK_HELD_LINE_NOT_STORED'), 'the failed acceptance is traced as not stored');
+  } finally { await a.close(); }
+});
