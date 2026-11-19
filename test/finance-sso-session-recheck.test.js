@@ -2,6 +2,7 @@
 // A suspended or removed person, a changed role or a removed entitlement closes it at once. Direct access without a session stays refused.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { issueTicket } from '../src/finance/sso-ticket.js';
 import { createAccessChecker } from '../src/identity/sso-contract.js';
 import { startApp } from './finance-dashboard-helpers.js';
@@ -12,8 +13,11 @@ const M = 'merchant-test-1';
 const U = '5c2f4d6e-ea34-452d-8107-0197a3eb54da';
 
 function store({ role = 'OWNER', status = 'ACTIVE', removed = null, entitlement = 'ACTIVE' } = {}) {
-  const s = { role, status, removed, entitlement };
-  s.supabase = { select: async (table, q) => {
+  const s = { role, status, removed, entitlement, required: false, compliant: false, policyUnavailable: false };
+  s.supabase = { rpc: async () => {
+    if (s.policyUnavailable) throw new Error('policy unavailable');
+    return { required: s.required, privileged: ['OWNER', 'ADMIN'].includes(s.role), compliant: s.compliant };
+  }, select: async (table, q) => {
     const id = (v) => String(v).replace(/^eq\./, '');
     if (table === 'merchant_members') return [{ merchant_id: M, user_id: U, role: s.role, status: s.status, removed_at: s.removed }].filter((r) => r.user_id === id(q.user_id) && r.merchant_id === id(q.merchant_id));
     return s.entitlement ? [{ merchant_id: M, module_code: 'finance', status: s.entitlement }].filter((r) => r.module_code === id(q.module_code) && r.merchant_id === id(q.merchant_id)) : [];
@@ -33,6 +37,40 @@ const overview = (a, cookie) => fetch(`${a.base}/api/overview`, { headers: cooki
 function appWith(s) {
   return startApp({ merchantId: M, deps: { sso: { secret: SECRET, requirePerson: true, checkAccess: createAccessChecker({ supabase: s.supabase, merchantId: M }) } } });
 }
+
+test('SSO-only Finance refuses the shared token and an old persisted token session, while personal SSO works', async () => {
+  const s = store();
+  const legacySid = 'legacy-synthetic-session';
+  const persistence = { load: () => [[createHash('sha256').update(legacySid).digest('hex'), { csrf: 'legacy', expires: Date.now() + 60000 }]], save: async () => {} };
+  const a = await startApp({ merchantId: M, deps: {
+    ssoOnly: true, sessionPersistence: persistence,
+    sso: { secret: SECRET, requirePerson: true, checkAccess: createAccessChecker({ supabase: s.supabase, merchantId: M }) },
+  } });
+  try {
+    assert.equal((await a.client().login()).status, 403, 'even a correct shared token is refused');
+    assert.equal((await overview(a, 'fin_sid=' + legacySid)).status, 401, 'persisted token sessions are refused');
+    assert.equal((await overview(a, await openedSession(a))).status, 200, 'personal session is accepted');
+  } finally { await a.close(); }
+});
+
+test('SSO-only Finance cannot start without personal SSO verification', async () => {
+  await assert.rejects(startApp({ deps: { ssoOnly: true } }), /SSO-only/);
+});
+
+test('MFA activation and policy outages close existing Finance sessions on the next data request', async () => {
+  const s = store(); const a = await appWith(s);
+  try {
+    const cookie = await openedSession(a);
+    assert.equal((await overview(a, cookie)).status, 200);
+    s.required = true;
+    assert.equal((await overview(a, cookie)).status, 401);
+    s.compliant = true;
+    const protectedCookie = await openedSession(a);
+    assert.equal((await overview(a, protectedCookie)).status, 200);
+    s.policyUnavailable = true;
+    assert.equal((await overview(a, protectedCookie)).status, 401);
+  } finally { await a.close(); }
+});
 
 test('an OWNER with active access keeps the Core session on every request', async () => {
   const s = store(); const a = await appWith(s);

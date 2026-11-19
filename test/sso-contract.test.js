@@ -18,6 +18,7 @@ function fakeDb({ members = [], entitlements = [], fail = false } = {}) {
   const eqOf = (v) => String(v ?? '').replace(/^eq\./, '');
   return {
     calls,
+    rpc: async () => ({ required: false, privileged: true, compliant: false }),
     select: async (table, q) => {
       calls.push({ table, q });
       if (fail) throw new Error('db down');

@@ -16,8 +16,11 @@ const run = async (guard, { url = '/', cookie, auth } = {}) => { const r = res()
 
 // a mutable access store: the test changes it between two requests
 function store({ role = 'OWNER', status = 'ACTIVE', removed = null, entitlement = 'ACTIVE' } = {}) {
-  const s = { role, status, removed, entitlement };
-  s.supabase = { select: async (table, q) => {
+  const s = { role, status, removed, entitlement, required: false, compliant: false, policyUnavailable: false };
+  s.supabase = { rpc: async () => {
+    if (s.policyUnavailable) throw new Error('policy unavailable');
+    return { required: s.required, privileged: ['OWNER', 'ADMIN'].includes(s.role), compliant: s.compliant };
+  }, select: async (table, q) => {
     const id = (v) => String(v).replace(/^eq\./, '');
     if (table === 'merchant_members') return [{ merchant_id: M, user_id: U, role: s.role, status: s.status, removed_at: s.removed }].filter((r) => r.user_id === id(q.user_id) && r.merchant_id === id(q.merchant_id));
     return s.entitlement ? [{ merchant_id: M, module_code: 'analytics', status: s.entitlement }].filter((r) => r.module_code === id(q.module_code) && r.merchant_id === id(q.merchant_id)) : [];
@@ -27,11 +30,35 @@ function store({ role = 'OWNER', status = 'ACTIVE', removed = null, entitlement 
 const mk = (s) => createGuard({ allowedHosts: [HOST], token: TOKEN, trustProxyHops: 0, now, sso: { secret: SECRET, merchantId: M, requirePerson: true, checkAccess: createAccessChecker({ supabase: s.supabase, merchantId: M }) } });
 const tk = (role = 'OWNER') => issueTicket({ secret: SECRET, merchantId: M, audience: ANALYTICS_SSO_AUDIENCE, now, person: { userId: U, role, module: 'analytics' } });
 
+test('SSO-only Analytics refuses a correct shared token and accepts a personal Nordla session', async () => {
+  const s = store();
+  const guard = createGuard({ allowedHosts: [HOST], token: TOKEN, now, ssoOnly: true, sso: {
+    secret: SECRET, merchantId: M, requirePerson: true, checkAccess: createAccessChecker({ supabase: s.supabase, merchantId: M }),
+  } });
+  const basic = 'Basic ' + Buffer.from('x:' + TOKEN).toString('base64');
+  assert.equal((await run(guard, { auth: basic })).r.status, 401);
+  assert.equal((await run(guard, { cookie: await openSession(guard, 'OWNER') })).ok, true);
+  assert.throws(() => createGuard({ allowedHosts: [HOST], token: TOKEN, ssoOnly: true }), /SSO-only/);
+});
+
 async function openSession(g, role) {
   const a = await run(g, { url: `/sso?t=${encodeURIComponent(tk(role))}` });
   assert.equal(a.r.status, 302, 'the Core ticket opens a session');
   return a.r.headers['Set-Cookie'].split(';')[0];
 }
+
+test('MFA activation and policy outages close existing Analytics sessions on the next request', async () => {
+  const s = store(); const g = mk(s);
+  const cookie = await openSession(g, 'OWNER');
+  assert.equal((await run(g, { cookie })).ok, true);
+  s.required = true;
+  assert.equal((await run(g, { cookie })).r.status, 401);
+  s.compliant = true;
+  const protectedCookie = await openSession(g, 'OWNER');
+  assert.equal((await run(g, { cookie: protectedCookie })).ok, true);
+  s.policyUnavailable = true;
+  assert.equal((await run(g, { cookie: protectedCookie })).r.status, 401);
+});
 
 test('a Core ticket opens the session for an OWNER with active access, and the session passes the guard', async () => {
   const s = store(); const g = mk(s);

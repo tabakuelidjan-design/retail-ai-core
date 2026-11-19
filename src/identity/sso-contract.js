@@ -19,11 +19,11 @@
 // 4. Return to Core: each service keeps a link back to the Nordla home (NORDLA_HOME_URL, https only); it carries no ticket.
 // 5. Refusals are named (SSO_*, MEMBER_*, ROLE_CHANGED, MODULE_*) in the journal; the browser sees only a generic 403.
 //
-// Known limit (NOT solved here, see the phase-2 report): Finance's SSO key is the same value as its dashboard token today
-// (src/finance/server/index.js). Until a dedicated key is configured, the dashboard token still opens Finance directly.
+// Shared-token access is a separate legacy path; hosted services can disable it with NORDLA_SSO_ONLY=1.
 
 import { MODULE_CODES } from './modules.js';
 import { decideModuleOpen } from './module-catalog.js';
+import { createMfaRule } from '../settings-security/mfa-rule.js';
 
 export const SSO_CONTRACT = Object.freeze({
   version: 2,
@@ -45,6 +45,8 @@ const ENTITLEMENTS = 'module_entitlements';
 export function createAccessChecker({ supabase, merchantId }) {
   const merchant = String(merchantId ?? '').toLowerCase();
   if (!merchant) throw new TypeError('createAccessChecker: merchantId is required');
+  // No cache here: removing a factor or enabling the rule must affect an already open service session on its next request.
+  const mfaRule = typeof supabase?.rpc === 'function' ? createMfaRule({ supabase, ttlMs: 0 }) : null;
   return async function checkAccess({ merchantId: claimed, userId, role, module }) {
     if (String(claimed ?? '').toLowerCase() !== merchant) return { ok: false, code: 'SSO_WRONG_MERCHANT' };
     if (!SSO_CONTRACT.modules.includes(module) || !MODULE_CODES.includes(module)) return { ok: false, code: 'MODULE_UNKNOWN' };
@@ -61,8 +63,11 @@ export function createAccessChecker({ supabase, merchantId }) {
       if (!e || e.status !== 'ACTIVE' || String(e.merchant_id ?? merchant).toLowerCase() !== merchant) return { ok: false, code: 'MODULE_NOT_ENABLED' };
       const d = decideModuleOpen({ key: module, role, activeCodes: new Set([module]) });
       if (!d.ok) return { ok: false, code: d.code === 'FORBIDDEN' ? 'MODULE_ROLE_FORBIDDEN' : d.code };
+      if (!mfaRule) return { ok: false, code: 'MFA_POLICY_UNAVAILABLE' };
+      if (await mfaRule.blocked({ merchantId: merchant, userId })) return { ok: false, code: 'MFA_REQUIRED_FOR_ROLE' };
       return { ok: true, role };
-    } catch {
+    } catch (error) {
+      if (error?.code === 'MFA_POLICY_UNAVAILABLE') return { ok: false, code: 'MFA_POLICY_UNAVAILABLE' };
       return { ok: false, code: 'SSO_ACCESS_UNAVAILABLE' };
     }
   };

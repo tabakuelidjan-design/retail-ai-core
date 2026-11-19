@@ -12,7 +12,7 @@ const DASHBOARD_TOKEN = 'dashboard-login-token-0123456789-abcdef-not-a-key';
 const P = { userId: U, role: 'OWNER', module: 'finance' };
 
 function activeDb() {
-  return { select: async (table, q) => {
+  return { rpc: async () => ({ required: false, privileged: true, compliant: false }), select: async (table, q) => {
     const id = (v) => String(v).replace(/^eq\./, '');
     if (table === 'merchant_members') return [{ merchant_id: M, user_id: U, role: 'OWNER', status: 'ACTIVE', removed_at: null }].filter((r) => r.user_id === id(q.user_id) && r.merchant_id === id(q.merchant_id));
     return [{ merchant_id: M, module_code: 'finance', status: 'ACTIVE' }].filter((r) => r.module_code === id(q.module_code) && r.merchant_id === id(q.merchant_id));
