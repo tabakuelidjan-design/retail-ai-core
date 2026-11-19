@@ -52,7 +52,7 @@ function session() {
       const landingCookie = cookieHeaderOf(sso.headers.getSetCookie?.() ?? []);
       const landing = await fetch(`${base}/`, { headers: { cookie: landingCookie } });
       const data = await fetch(`${base}${dataPath}`, { headers: { cookie: landingCookie } });
-      return { open: 200, landing: landing.status, data: data.status, requestId: null };
+      return { open: 200, landing: landing.status, data: data.status, requestId: null, cookie: landingCookie };
     },
     async raw(method, path) {
       const res = await fetch(`${CORE}${path}`, { method, redirect: 'manual', headers: { cookie: cookies, origin: CORE } });
@@ -106,6 +106,36 @@ const oopen = await outsider.core('POST', '/api/core/analytics/open', '{}'); add
 // 19 : sans session, aucune donnée et un requestId
 const anon = await fetch(`${CORE}/api/core/status`, { redirect: 'manual' });
 add(19, 'Sans session', 'Lire le statut Core', anon.status, 401);
+
+// 20-24 : révocation après suspension. Demande la clé de service dans NORDLA_RECETTE_SERVICE_KEY (jamais écrite dans un fichier).
+// Sans cette variable, l'étape est sautée et le tableau ne contient que les 19 premiers contrôles.
+const svc = process.env.NORDLA_RECETTE_SERVICE_KEY || '';
+if (svc) {
+  const SUPA = env.SUPABASE_URL || 'https://fvhiammdskpcnfodsnrc.supabase.co';
+  const ACC = env.ACCOUNTANT_ID;
+  const setAccountant = async (status) => {
+    const body = status === 'SUSPENDED' ? { status, suspended_at: new Date().toISOString() } : { status, suspended_at: null };
+    const res = await fetch(`${SUPA}/rest/v1/merchant_members?merchant_id=eq.67646dbb-5e2e-4cd7-aad6-0ab289b068cb&user_id=eq.${ACC}`, {
+      method: 'PATCH', headers: { apikey: svc, authorization: `Bearer ${svc}`, 'content-type': 'application/json', prefer: 'return=representation' }, body: JSON.stringify(body),
+    });
+    return res.status;
+  };
+  try {
+    await setAccountant('ACTIVE');
+    const rev = session();
+    const rl = await rev.login('ACCOUNTANT'); add(20, 'Comptable (révocation)', 'Connexion Core avant suspension', rl.status, 200);
+    const rf = await rev.open('finance', '/api/overview'); add(21, 'Comptable (révocation)', 'Session Finance ouverte avant suspension', `${rf.open} ${rf.landing}/${rf.data}`, '200 200/200');
+    const sus = await setAccountant('SUSPENDED');
+    add(22, 'Comptable (révocation)', 'Suspension appliquée en base', sus, 200);
+    const cs = await rev.core('GET', '/api/core/status'); add(23, 'Comptable (révocation)', 'Core refuse la session après suspension', cs.status, [401, 403]);
+    const fd = await fetch(`${FIN}/api/overview`, { headers: { cookie: rf.cookie ?? '' } }); add(24, 'Comptable (révocation)', 'Finance refuse la session ouverte après suspension', fd.status, [401, 403]);
+    const fo = await rev.open('finance', '/api/overview'); add(25, 'Comptable (révocation)', 'Nouvelle ouverture Finance refusée après suspension', fo.open, [401, 403]);
+  } finally {
+    await setAccountant('ACTIVE');
+  }
+} else {
+  console.log('Révocation non exécutée : NORDLA_RECETTE_SERVICE_KEY absente (19 contrôles seulement).');
+}
 
 const result = evaluate(checks);
 console.log(renderTable(result.rows));
