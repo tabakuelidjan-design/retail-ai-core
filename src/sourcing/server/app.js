@@ -55,7 +55,7 @@ export function backupHealth(st, nowMs, { maxAgeH = 26, firstRunGraceMin = 30 } 
 export const SOURCING_WRITERS = new Set(WRITER_ROLES); // src/identity/permissions.js is the source of these rules
 /** POST routes that only compute or read (no stored change): open to every member. */
 export const READ_ONLY_POSTS = new Set(READ_ONLY_POSTS_LIST);
-export function createSourcingApp({ accessJournal = null, backupStatus = null, token, gate = null, core = null, procurement = null, creator = null, gbp = null, videos = null, connections = null, general = null, security = null, team = null, notifications = null, preferences = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
+export function createSourcingApp({ release = { sha: 'unknown', branch: 'unknown', source: 'none' }, accessJournal = null, backupStatus = null, token, gate = null, core = null, procurement = null, creator = null, gbp = null, videos = null, connections = null, general = null, security = null, team = null, notifications = null, preferences = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
   if (!gate && (!token || String(token).length < 24)) throw new Error('a token of at least 24 characters is required'); // hosted: the session gate (Core identity) replaces the token
   // Host header allow-list (blocks DNS-rebinding on the loopback server). A tunnel's public host name must be added by the owner (SOURCING_ALLOWED_HOSTS).
   // `allowedHosts` may be a live array: the phone launcher adds the tunnel host name once it is known
@@ -183,6 +183,8 @@ export function createSourcingApp({ accessJournal = null, backupStatus = null, t
       // liveness first, for ANY Host: the platform's health probe comes with its own host name (Railway: healthcheck.railway.app) and
       // the answer carries no data. Every other route keeps the Host allow-list.
       if (req.method === 'GET' && String(req.url).split('?')[0] === '/healthz') return json(res, 200, { ok: true });
+      // Phase 4: which code runs (commit and branch only, no data). Compare with the expected release/* commit.
+      if (req.method === 'GET' && String(req.url).split('?')[0] === '/version') return json(res, 200, { service: 'core', ...release }, { 'cache-control': 'no-store' });
       if (!hostOk(req)) return json(res, 421, { error: 'HOST_NOT_ALLOWED' });
       // backup health for an OUTSIDE monitor (no session: a monitor has none). Ages and counts only - no file name, path, key or data.
       if (req.method === 'GET' && String(req.url).split('?')[0] === '/healthz/backup') { const h = backupHealth(backupStatus?.() ?? null, now().getTime()); return json(res, h.ok ? 200 : 503, h, { 'cache-control': 'no-store' }); }

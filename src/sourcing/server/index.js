@@ -31,6 +31,7 @@ import { createCoreRuntime } from '../../core-pilot/runtime.js';
 import { createCoreHttp } from '../../core-pilot/http.js';
 import { activeEntitlementsOf } from '../../identity/entitlements.js';
 import { createAccessJournal } from './access-journal.js';
+import { releaseOf } from './release.js';
 import { parseSsoKey, ssoKeyReuseOf } from '../../identity/sso-keys.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -361,7 +362,7 @@ export async function startSourcingServer({ env = process.env, log = console.log
   const marketingContext = generalService ? () => generalService.contextFor({ tenant: { merchantId: merchantKey }, module: 'marketing' }) : null;
   const videos = await buildVideos({ env, gate, hosted, log, contextOf: marketingContext }); // optional, isolated: null unless NORDLA_VIDEO_DRAFTS_MODULE=1
   const gbp = await buildGbp({ env, gate, hosted, log, contextOf: marketingContext }); // optional, isolated: null unless NORDLA_GBP_DRAFTS_MODULE=1
-  const app = createSourcingApp({ accessJournal: createAccessJournal({ file: join(dir, 'core', 'access-journal.jsonl') }), backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, videos, connections, general, security, team, notifications, preferences, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
+  const app = createSourcingApp({ release: releaseOf(env), accessJournal: createAccessJournal({ file: join(dir, 'core', 'access-journal.jsonl') }), backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, videos, connections, general, security, team, notifications, preferences, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
   const server = http.createServer(app.handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); });
   const addr = server.address();
