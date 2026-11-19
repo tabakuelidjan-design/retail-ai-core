@@ -97,6 +97,7 @@ export function createFinanceApp(deps) {
   const tokenHash = sha(token);
   // Single sign-on from the Nordla server (src/finance/sso-ticket.js): only when the launcher gives a secret; otherwise /sso does not exist.
   const ssoVerifier = deps.sso?.secret ? createTicketVerifier({ secret: deps.sso.secret, merchantId, now: () => (deps.nowMs ?? Date.now)(), module: 'finance', requirePerson: deps.sso.requirePerson === true, checkAccess: deps.sso.checkAccess ?? null }) : null;
+  if (deps.ssoOnly && (!ssoVerifier || deps.sso.requirePerson !== true || typeof deps.sso.checkAccess !== 'function')) throw new Error('SSO-only mode requires personal Nordla sessions with current access checks.');
   const cookieFlags = deps.secureCookie ? '; Secure' : ''; // hosted mode: HTTPS is terminated by the platform
 
   // ---------- plumbing ----------
@@ -345,6 +346,7 @@ export function createFinanceApp(deps) {
   const P = '([A-Za-z0-9_-]{1,64})';
 
   on('POST', '/api/login', async (ctx) => {
+    if (deps.ssoOnly) throw new HttpError(403, 'NORDLA_SESSION_REQUIRED');
     const ip = clientIpOf(ctx.req, deps.trustProxyHops ?? 0);
     const f = failures.get(ip) ?? { n: 0, until: 0 };
     if (f.until > Date.now()) throw new HttpError(429, 'TOO_MANY_ATTEMPTS');
@@ -1457,6 +1459,7 @@ export function createFinanceApp(deps) {
       // A session opened by Nordla single sign-on is re-checked on EVERY request, public routes included: a suspended or removed person,
       // a changed role or a removed entitlement closes it at once (the session is deleted; a protected route then answers 401).
       const openedSid = cookies(req)[COOKIE];
+      if (deps.ssoOnly && openedSid && !sessions.get(openedSid)?.sso) sessions.delete(openedSid);
       if (openedSid && sessions.get(openedSid)?.sso) {
         const sso = sessions.get(openedSid).sso;
         const again = deps.sso?.checkAccess ? await deps.sso.checkAccess({ merchantId, userId: sso.userId, role: sso.role, module: 'finance' }).catch(() => null) : null;

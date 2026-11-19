@@ -155,7 +155,7 @@ test('orphan files: attaching a receipt that cannot be recorded removes only wha
 });
 test('Supabase storage: removal is a DELETE with the service role on the private bucket; an already missing file is fine', async () => {
   const calls = []; let status = 200;
-  const s = createSupabaseAttachmentStore({ url: 'https://project.example.test', serviceKey: 'service-key-synthetic', fetchImpl: async (u, i) => { calls.push({ u, i }); return { ok: status < 300, status }; } });
+  const s = createSupabaseAttachmentStore({ url: 'https://project.example.test', serviceKey: 'service-key-synthetic', merchantId: 'm1', fetchImpl: async (u, i) => { calls.push({ u, i }); return { ok: status < 300, status }; } });
   await s.remove('m1/abc/x y.pdf');
   assert.deepEqual([calls[0].u, calls[0].i.method], ['https://project.example.test/storage/v1/object/finance-inbox/m1/abc/x%20y.pdf', 'DELETE']); assert.match(calls[0].i.headers.Authorization, /^Bearer /);
   status = 404; await s.remove('m1/abc/gone.pdf');

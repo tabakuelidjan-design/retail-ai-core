@@ -142,11 +142,24 @@ test('UBL reader: a credit note is read as CREDIT_NOTE with positive amounts; ga
 });
 test('private storage adapter: private bucket, service-role auth from the server, tenant path, never a public URL', async () => {
   const calls = [];
-  const s = createSupabaseAttachmentStore({ url: 'https://project.example.test', serviceKey: 'service-key-synthetic', fetchImpl: async (u, i) => { calls.push({ u, i }); return { ok: true, status: 200, headers: { get: () => 'application/pdf' }, arrayBuffer: async () => PDF }; } });
+  const s = createSupabaseAttachmentStore({ url: 'https://project.example.test', serviceKey: 'service-key-synthetic', merchantId: 'm1', fetchImpl: async (u, i) => { calls.push({ u, i }); return { ok: true, status: 200, headers: { get: () => 'application/pdf' }, arrayBuffer: async () => PDF }; } });
   await s.put('m1/abc/x y.pdf', PDF, { contentType: 'application/pdf' });
   assert.equal(calls[0].u, 'https://project.example.test/storage/v1/object/finance-inbox/m1/abc/x%20y.pdf'); assert.equal(calls[0].i.headers['x-upsert'], 'false'); assert.match(calls[0].i.headers.Authorization, /^Bearer /);
   assert.equal((await s.get('m1/abc/x y.pdf')).data.subarray(0, 5).toString(), '%PDF-');
   assert.ok(!/public\//.test(calls.map((c) => c.u).join()), 'the public object endpoint is never used');
   const sql = readFileSync(new URL('../supabase/migrations/20260922200000_finance_inbox_purchases.sql', import.meta.url), 'utf8');
   assert.match(sql, /'finance-inbox', 'finance-inbox', false/); assert.match(sql, /set public = false/);
+});
+
+test('private storage refuses another tenant and path tricks before making any network request', async () => {
+  let calls = 0;
+  const opts = { url: 'https://project.example.test', serviceKey: 'service-key-synthetic', fetchImpl: async () => { calls++; throw new Error('network must not be reached'); } };
+  assert.throws(() => createSupabaseAttachmentStore(opts), /ATTACHMENT_TENANT_REQUIRED/);
+  const store = createSupabaseAttachmentStore({ ...opts, merchantId: 'm1' });
+  for (const ref of ['m2/abc/file.pdf', 'm1/../m2/file.pdf', 'm1/./file.pdf', 'm1//file.pdf', 'm1/%2e%2e/file.pdf', 'm1/a\\b/file.pdf', 'm1/a?b', 'm1/a#b', '/m1/file.pdf', null]) {
+    for (const action of [() => store.get(ref), () => store.remove(ref), () => store.put(ref, PDF)]) {
+      await assert.rejects(async () => action(), /ATTACHMENT_TENANT_MISMATCH/, String(ref));
+    }
+  }
+  assert.equal(calls, 0);
 });
