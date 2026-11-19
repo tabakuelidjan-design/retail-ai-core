@@ -4,7 +4,7 @@
 import { esc } from './dom.js';
 import { coreDisabledReason, coreErrorMessage } from './core-journal-errors.js';
 
-const BADGE = { DISPONIBLE: '#1b7f3b', 'LECTURE SEULE': '#1b5e7f', LIMITÉ: '#8a6d00', 'À APPROUVER': '#8a6d00', 'À VÉRIFIER': '#8a6d00', BLOQUÉ: '#a12', 'NON RACCORDÉ': '#666', 'NON CONFIGURÉ': '#666' };
+const BADGE = { DISPONIBLE: '#1b7f3b', 'LECTURE SEULE': '#1b5e7f', 'ACCÈS RÉSERVÉ': '#666', LIMITÉ: '#8a6d00', 'À APPROUVER': '#8a6d00', 'À VÉRIFIER': '#8a6d00', BLOQUÉ: '#a12', 'NON RACCORDÉ': '#666', 'NON CONFIGURÉ': '#666' };
 const QUICK = { finance: [['Factures fournisseurs à payer', 'quelles factures fournisseurs dois-je payer et quelles sont les échéances ?'], ['Trésorerie', 'ma trésorerie'], ['Achats du mois', 'mes achats du mois']], analytics: [['Évolution des ventes', 'comment évoluent mes ventes et pourquoi certaines performances changent-elles ?']] };
 
 export function createModulesPanel({ S, api, refresh, repaintHome = () => {} }) {

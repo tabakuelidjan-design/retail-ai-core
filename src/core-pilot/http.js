@@ -62,15 +62,17 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
   const status = async () => (runtime ? { enabled: true, ...(({ decisions, ...o }) => o)(await runtime.overview()) } : { enabled: false, reason: configError ?? 'CORE_NOT_CONFIGURED' });
 
   /** The seven modules as they REALLY are on this server (what answers, what is limited, what is missing and why). Offline: Sourcing only. */
-  async function modules() {
+  async function modules(actor = null) {
+    const role = actor?.role ?? null; // Phase 6: the state shown for a module is the decision the open route would take for THIS role
+    const openable = (key, active) => decideModuleOpen({ key, role, activeCodes: active }).ok;
     const b = branding ? await branding.status() : { status: 'NOT_CONNECTED' };
     const c = creativeCapability(env);
     const active = await activeModules(); // what this merchant may use: a module without an ACTIVE entitlement is shown as not activated
     const row =(key, label, state, detail, offline = false) => ({ key, label, state, detail, offline });
     return { modules: [
       row('core', 'Nordla Core', runtime ? 'DISPONIBLE' : 'NON CONFIGURÉ', runtime ? 'Sujets d’achat, décisions humaines, suivi, journal.' : String(configError ?? '')),
-      { dashboard: Boolean(finance && financeSso && active.has('finance')), ...row('finance', 'Finance', !active.has('finance') ? 'NON ACTIVÉ' : finance ? 'LECTURE SEULE' : 'NON RACCORDÉ', !active.has('finance') ? 'Module non activé pour ce commerce.' : finance ?`Factures à payer, échéances, trésorerie, achats — ${finance.source}. Aucun paiement.` : NOT_CONNECTED.FINANCE) },
-      { dashboard: Boolean(analytics && analyticsSso && active.has('analytics')), ...row('analytics', 'Analytics', !active.has('analytics') ? 'NON ACTIVÉ' : analytics ? 'LECTURE SEULE' : 'NON RACCORDÉ', !active.has('analytics') ? 'Module non activé pour ce commerce.' : analytics ? `Évolution des ventes, produits et canaux — ${analytics.source}.` : NOT_CONNECTED.ANALYTICS), ...(active.has('analytics') && httpsOrigin(env?.ANALYTICS_PUBLIC_URL) ?{ analytics_url: httpsOrigin(env.ANALYTICS_PUBLIC_URL) } : {}) },
+      { dashboard: Boolean(finance && financeSso && openable('finance', active)), ...row('finance', 'Finance', !active.has('finance') ? 'NON ACTIVÉ' : !openable('finance', active) ? 'ACCÈS RÉSERVÉ' : finance ? 'LECTURE SEULE' : 'NON RACCORDÉ', !active.has('finance') ? 'Module non activé pour ce commerce.' : finance ?`Factures à payer, échéances, trésorerie, achats — ${finance.source}. Aucun paiement.` : NOT_CONNECTED.FINANCE) },
+      { dashboard: Boolean(analytics && analyticsSso && openable('analytics', active)), ...row('analytics', 'Analytics', !active.has('analytics') ? 'NON ACTIVÉ' : !openable('analytics', active) ? 'ACCÈS RÉSERVÉ' : analytics ? 'LECTURE SEULE' : 'NON RACCORDÉ', !active.has('analytics') ? 'Module non activé pour ce commerce.' : analytics ? `Évolution des ventes, produits et canaux — ${analytics.source}.` : NOT_CONNECTED.ANALYTICS), ...(active.has('analytics') && httpsOrigin(env?.ANALYTICS_PUBLIC_URL) ?{ analytics_url: httpsOrigin(env.ANALYTICS_PUBLIC_URL) } : {}) },
       row('procurement', 'Stock / Achats', procurement ? 'DISPONIBLE' : 'NON RACCORDÉ', procurement ? 'Commandes d’achat, réceptions, stock : consultation par Parle à Nordla ; commander, approuver et réceptionner passent par l’écran Achats (approbation nommée).' : NOT_CONNECTED.STOCK_SALES),
       row('sourcing', 'Sourcing', 'DISPONIBLE', 'Dossiers, photos, analyses d’achat ; fonctionne hors ligne.', true),
       row('branding', 'Branding', b.status === 'APPROVED' ? 'DISPONIBLE' : b.status === 'PROPOSED_NOT_APPROVED' ? 'À APPROUVER' : 'NON RACCORDÉ', b.status === 'APPROVED' ? 'Règles de marque approuvées : vérification officielle.' : b.status === 'PROPOSED_NOT_APPROVED' ? 'Proposition de règles de marque en attente de votre approbation : vérification indicative seulement.' : 'Aucune règle de marque.'),
@@ -130,7 +132,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
         if (!FINANCE_INBOX_ROLES.includes(String(actor?.role ?? ''))) { json(res, 403, { error: 'FORBIDDEN', message: 'the Finance inbox is for the owner, an administrator or the accountant' }); return true; }
         json(res, 200, await finance.inbox()); return true;
       }
-      if (p === '/api/core/modules' && m === 'GET') { json(res, 200, await modules()); return true; }
+      if (p === '/api/core/modules' && m === 'GET') { json(res, 200, await modules(actor)); return true; }
       if (p === '/api/core/branding' && m === 'GET') { json(res, 200, branding ? await branding.status() : { status: 'NOT_CONNECTED' }); return true; }
       if (p === '/api/core/branding/check' && m === 'POST') { if (!branding) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } const b = await body(req); json(res, 200, await branding.checkText(String(b.text ?? '').slice(0, 4000))); return true; }
       if (p === '/api/core/branding/approve' && m === 'POST') { if (!branding) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; } json(res, 200, await branding.approve(actor)); return true; }
