@@ -15,6 +15,7 @@ import { issueHandoff, HANDOFF_DESTINATIONS, HANDOFF_MIN_SECRET_LENGTH } from '.
 import { validateConversation } from './field-context.js';
 import { creativeCapability } from './campaign.js';
 import { decideModuleOpen } from '../identity/module-catalog.js';
+import { FINANCE_INBOX_ROLES } from '../identity/permissions.js';
 
 const ID = '([A-Za-z0-9_-]{1,80})';
 const MAX = 64 * 1024;
@@ -126,7 +127,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
       }
       if (p === '/api/core/finance/inbox' && m === 'GET') { // read-only list of the Finance supplier-invoice inbox of THIS server's merchant; owner, administrator and accountant only
         if (!finance?.inbox) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
-        if (!['OWNER', 'ADMIN', 'ACCOUNTANT'].includes(String(actor?.role ?? ''))) { json(res, 403, { error: 'FORBIDDEN', message: 'the Finance inbox is for the owner, an administrator or the accountant' }); return true; }
+        if (!FINANCE_INBOX_ROLES.includes(String(actor?.role ?? ''))) { json(res, 403, { error: 'FORBIDDEN', message: 'the Finance inbox is for the owner, an administrator or the accountant' }); return true; }
         json(res, 200, await finance.inbox()); return true;
       }
       if (p === '/api/core/modules' && m === 'GET') { json(res, 200, await modules()); return true; }

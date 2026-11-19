@@ -13,7 +13,7 @@ import { MODULE_CODES } from './modules.js';
 
 export const MODULE_STATUS = Object.freeze({ AVAILABLE: 'AVAILABLE', DEMO: 'DEMO', PLANNED: 'PLANNED' });
 
-const FINANCE_ROLES = Object.freeze(['OWNER', 'ADMIN', 'ACCOUNTANT']);
+import { FINANCE_ROLES } from './permissions.js';
 
 export const CATALOG = Object.freeze([
   Object.freeze({ key: 'finance', label: 'Finances', status: MODULE_STATUS.AVAILABLE, entitlement: 'finance', openRoles: FINANCE_ROLES }),
