@@ -20,6 +20,7 @@ import { createFileSessionPersistence } from './session-store.js';
 import { latestSyncStatus } from '../../sync/run-log.js';
 import { mergeRetailHistory } from '../retail-history.js';
 import { HostingConfigError, resolveHosting } from './hosting.js';
+import { releaseOf } from '../../identity/release.js';
 
 const AUDIT_LOG = 'data/local/finance/audit.log';
 
@@ -49,7 +50,7 @@ export async function startFinanceServer({ env = process.env, runtimeDeps = {}, 
   const rt = await createRuntime({ env, log, ...runtimeDeps });
   await mkdir('data/local/finance', { recursive: true });
   if (!existsSync(SETTINGS_PATH)) await saveSettings(await loadSettings());
-  const app = createFinanceApp({
+  const app = createFinanceApp({ release: releaseOf(env),
     merchantId: rt.merchant.id, store: rt.store, token, retail: rt.retail, priceSource: createShopifyPriceSource(rt.shopify), salesConnector: rt.shopify,
     // Shopify stock applier gated by the connector state: NOT_CONFIGURED / MISCONFIGURED / UNAVAILABLE block it explicitly.
     stockApplier: { ...createShopifyStockApplier(rt.shopify), state: () => rt.shopify.state({ verify: true }) },

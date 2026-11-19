@@ -1449,6 +1449,8 @@ export function createFinanceApp(deps) {
       if (!(deps.allowedHosts ? deps.allowedHosts.includes(host.toLowerCase()) : LOCAL_HOST.test(host))) throw new HttpError(403, 'HOST_NOT_ALLOWED');
       const url = new URL(req.url, `http://${host}`);
       // Static files (shared Nordla files first, then Finance's own): compressed, validated, versioned - see static-assets.js.
+      // Phase 4: which code runs (commit and branch only, no data), before any session or route check.
+      if (req.method === 'GET' && url.pathname === '/version') return json(res, 200, { service: 'finance', ...(deps.release ?? { sha: 'unknown', branch: 'unknown', source: 'none' }) });
       if (req.method === 'GET' && url.pathname === '/sso') return await handleSso(req, res, url);
       if (req.method === 'GET' && await staticAssets.serve(req, res, url, send)) return;
       if (!url.pathname.startsWith('/api/')) throw new HttpError(404, 'NOT_FOUND');
