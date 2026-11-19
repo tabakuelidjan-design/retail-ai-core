@@ -19,6 +19,7 @@ import { createPersonalizerCollector, collectChannels } from './collect-personal
 import { createSupabaseFollowUpStore } from './follow-up-store.js';
 import { hostedConfig, verifyPinnedProject } from '../../sourcing/server/hosted.js';
 import { createSessionGate } from '../../sourcing/server/session-gate.js';
+import { createMfaRule } from '../../settings-security/mfa-rule.js';
 import { createGrowthSso } from './sso.js';
 import { createHandoffVerifier, openSessionForHandoff, HANDOFF_MIN_SECRET_LENGTH } from '../../identity/handoff.js';
 import { createIdentityService, loadIdentityServiceEnv } from '../../identity/service.js';
@@ -43,7 +44,8 @@ export function buildGrowthSso(env, hosted, services = null) {
 export function buildGrowthGate(env, hosted, services = null) {
   const identity = services?.identity ?? createIdentityService({ merchantId: hosted.merchantId, moduleCode: 'growth', supabase: createSupabaseClient(loadSupabaseConfigFromEnv(env)), ...loadIdentityServiceEnv(env) });
   const security = services?.security ?? createHttpSecurity({ environment: 'hosted', proxy: 'railway', allowedHosts: hosted.allowedHosts, allowedOrigins: [hosted.origin], moduleCode: 'growth', csrfKey: env.NORDLA_CSRF_KEY });
-  return createSessionGate({ identity, security, moduleCode: 'growth' });
+  const mfaRule = services?.mfaRule ?? (services?.identity ? null : createMfaRule({ supabase: createSupabaseClient(loadSupabaseConfigFromEnv(env)), ttlMs: 0 }));
+  return createSessionGate({ identity, security, moduleCode: 'growth', mfaRule });
 }
 
 export async function startGrowthHosted({ env = process.env, log = console.log, port = Number(env.GROWTH_PORT || env.PORT || 8788), services = null, fetchImpl } = {}) {
@@ -59,7 +61,9 @@ export async function startGrowthHosted({ env = process.env, log = console.log, 
   const collectOrigins = String(env.GROWTH_COLLECT_ORIGINS ?? 'https://habb.be').split(',').map((s) => s.trim()).filter(Boolean); // the shop origins allowed to send personalizer events
   const collect = sources.personalizerStore ? createPersonalizerCollector({ store: sources.personalizerStore, allowedOrigins: collectOrigins, channels: collectChannels(env) }) : null;
   const sso = buildGrowthSso(env, hosted, services);
-  const handler = createHostedGrowth({ gate, merchantId: hosted.merchantId, historyScope, app, store, collect, sso, homeUrl: (() => { try { const u = new URL(String(env.NORDLA_HOME_URL ?? '').trim()); return u.protocol === 'https:' && !u.username && !u.password ? u.origin : null; } catch { return null; } })() });
+  const ssoOnly = env.NORDLA_SSO_ONLY === '1';
+  if (ssoOnly && !sso) throw new Error('SSO-only Growth requires a configured Nordla handoff');
+  const handler = createHostedGrowth({ gate, merchantId: hosted.merchantId, historyScope, app, store, collect, sso, ssoOnly, homeUrl: (() => { try { const u = new URL(String(env.NORDLA_HOME_URL ?? '').trim()); return u.protocol === 'https:' && !u.username && !u.password ? u.origin : null; } catch { return null; } })() });
   const server = http.createServer(handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, hosted.host, resolve); });
   log(`Nordla Growth HOSTED for ${hosted.origin}: Core identity sign-in (module growth, merchant ${hosted.merchantId}), follow-up on the server, port ${server.address().port}.`);

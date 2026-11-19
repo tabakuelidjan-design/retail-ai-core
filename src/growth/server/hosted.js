@@ -28,7 +28,7 @@ async function readJson(req) {
  *  app         the Growth app handler (createGrowthApp built for this merchant, with hosted: true)
  *  store       the follow-up store (createSupabaseFollowUpStore / createMemoryFollowUpStore)
  */
-export function createHostedGrowth({ gate, merchantId, historyScope, app, store, collect = null, homeUrl = null, sso = null, now = () => new Date() }) {
+export function createHostedGrowth({ gate, merchantId, historyScope, app, store, collect = null, homeUrl = null, sso = null, ssoOnly = false, now = () => new Date() }) {
   if (!gate || typeof gate.authorize !== 'function' || typeof gate.handle !== 'function') throw new TypeError('a session gate is required');
   if (typeof merchantId !== 'string' || !merchantId) throw new TypeError('the merchant id of this server is required');
   if (typeof historyScope !== 'string' || !historyScope) throw new TypeError('the history scope of this merchant is required');
@@ -57,6 +57,7 @@ export function createHostedGrowth({ gate, merchantId, historyScope, app, store,
   return async function handle(req, res) {
     try {
       const pathname = new URL(req.url, 'http://localhost').pathname;
+      if (ssoOnly && pathname === '/api/auth/login') return json(res, 403, { error: { code: 'NORDLA_SESSION_REQUIRED' } });
       if (pathname === '/healthz') return json(res, 200, { ok: true }); // the platform's health check: no data, no session
       if (collect && pathname === COLLECT_PATH) return await collect(req, res); // PUBLIC (a visitor has no session): the receiver's own origin / schema / rate checks apply
       if (sso && pathname === '/sso') return await sso(req, res, new URL(req.url, 'http://localhost')); // PUBLIC single sign-on from the Nordla server: a signed one-time ticket, answers itself
