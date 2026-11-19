@@ -5,6 +5,7 @@
 
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { reportChildEnv } from './report-env.js';
 
 const ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 
@@ -14,7 +15,8 @@ export const reportRefreshState = { lastAttemptAt: null, lastSuccessAt: null, la
 // The child inherits the server's environment, so it builds the report for the SAME tenant (NORDLA_MERCHANT_ID) the server serves.
 export function runReportOnce({ spawnFn = spawn, cwd = ROOT, log = console.log, env = process.env } = {}) {
   return new Promise((resolve) => {
-    const child = spawnFn(process.execPath, ['src/report/index.js', 'report'], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    // Explicit environment only (see report-env.js): the child no longer inherits the whole environment of this server.
+    const child = spawnFn(process.execPath, ['src/report/index.js', 'report'], { cwd, env: reportChildEnv(env), stdio: ['ignore', 'pipe', 'pipe'] });
     let err = '';
     reportRefreshState.lastAttemptAt = new Date().toISOString();
     child.stderr?.on('data', (d) => { err = (err + d).slice(-2000); });

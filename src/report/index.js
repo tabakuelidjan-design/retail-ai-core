@@ -11,6 +11,7 @@ import { mkdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../supabase/client.js';
+import { closeReportDbPools, createReportDbClients } from '../analytics-premium/server/report-db.js';
 import { mergeConfig } from '../metrics/config.js';
 import { applyProfileToConfig, resolveBusinessProfile } from '../metrics/profile.js';
 import { buildLedger } from '../metrics/ledger.js';
@@ -41,7 +42,10 @@ async function shopifyFor(mode, env, createClient) {
 export async function runReport({ mode, env = process.env, supabase: injectedSupabase, now = new Date(), outDir = 'reports', log = console.log, createClient = null } = {}) {
   if (!MODES.includes(mode)) throw Object.assign(new Error(`Usage: node src/report/index.js <${MODES.join('|')}>`), { code: 'BAD_MODE' });
 
-  const supabase = injectedSupabase ?? createSupabaseClient(loadSupabaseConfigFromEnv(env));
+  // The report child (NORDLA_REPORT_CHILD=1) reads and writes Postgres with its two least-privilege roles and never falls back to a key.
+  const reportDb = await createReportDbClients(env);
+  if (!reportDb && env.NORDLA_REPORT_CHILD === '1') throw Object.assign(new Error('report child: database URLs are missing; no fallback'), { code: 'REPORT_DB_MISSING' });
+  const supabase = reportDb?.read ?? injectedSupabase ?? createSupabaseClient(loadSupabaseConfigFromEnv(env));
   const tenant = await resolveAnalyticsTenant({ env, supabase, log: (l) => log(l), createClient });
   const merchantId = tenant.merchantId;
   // Business Profile: the time zone is mandatory (fail closed, before anything is read or written); the profile's explicit choices configure the metrics.
@@ -60,7 +64,7 @@ export async function runReport({ mode, env = process.env, supabase: injectedSup
 
   if (mode === 'flags' || mode === 'all') {
     const detected = detectQualityFlags(data, ledger, { merchantId, now, config });
-    extras.quality = await syncQualityFlags({ supabase }, { merchantId, detected, now });
+    extras.quality = await syncQualityFlags({ supabase: reportDb?.write ?? supabase }, { merchantId, detected, now });
     log('data quality flags:', JSON.stringify(extras.quality, null, 2));
   }
 
@@ -127,6 +131,8 @@ export async function runReport({ mode, env = process.env, supabase: injectedSup
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try { await runReport({ mode: process.argv[2] }); } catch (err) {
     console.error('report failed:', err?.message ?? err);
+    await closeReportDbPools();
     process.exit(1);
   }
+  await closeReportDbPools();
 }
