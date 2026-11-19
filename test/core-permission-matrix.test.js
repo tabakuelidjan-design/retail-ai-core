@@ -11,7 +11,7 @@ const KNOWN_CORE_ROUTES = [
   ['GET', '/api/core/finance/inbox'], ['POST', '/api/core/finance/open'],
   ['POST', '/api/core/analytics/open'], ['POST', '/api/core/growth/open'],
   ['POST', '/api/core/ask'], ['POST', '/api/safety/check'],
-  ['POST', '/api/core/decisions'], ['POST', '/api/core/unknown-route'],
+  ['POST', '/api/core/decisions'], ['POST', '/api/core/unknown-route'], ['GET', '/api/core/refusals'],
 ];
 
 test('every known Core route is declared in the permission matrix', () => {

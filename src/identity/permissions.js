@@ -28,7 +28,7 @@ export const FINANCE_INBOX_ROLES = Object.freeze(['OWNER', 'ADMIN', 'ACCOUNTANT'
 
 // Route table: one line per Core route, so a new route cannot be added without deciding who may call it.
 // access: 'member' (any role reads), 'writer' (OWNER/ADMIN/COLLABORATOR change), 'read-only-post' (POST issuing no change),
-// 'module-open:<key>' (opens a module dashboard), 'inbox' (Finance inbox). Enforcement stays in the handlers; this table is the record.
+// 'module-open:<key>' (opens a module dashboard), 'inbox' (Finance inbox), 'owner' (owner only). Enforcement stays in the handlers; this table is the record.
 export const ROUTE_RULES = Object.freeze([
   { method: 'GET', path: '/api/core/status', access: 'member' },
   { method: 'GET', path: '/api/core/modules', access: 'member' },
@@ -48,4 +48,5 @@ export const ROUTE_RULES = Object.freeze([
   { method: 'POST', path: '/api/safety/check', access: 'read-only-post' },
   { method: 'POST', path: '/api/core/decisions', access: 'writer' },
   { method: 'POST', path: '/api/core/unknown-route', access: 'writer' },
+  { method: 'GET', path: '/api/core/refusals', access: 'owner' },
 ]);

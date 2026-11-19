@@ -2,6 +2,7 @@
 // alone - cases kept on disk, the Safety Gate cache, PDF text, optional ECB rates and an optional AI provider. Every /api route needs the token.
 import { procurementUserFor } from '../../procurement/server/hosted.js';
 import { WRITER_ROLES, READ_ONLY_POSTS as READ_ONLY_POSTS_LIST } from '../../identity/permissions.js';
+import { randomUUID } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
 import { timingSafeEqual } from 'node:crypto';
 import { join, extname } from 'node:path';
@@ -54,7 +55,7 @@ export function backupHealth(st, nowMs, { maxAgeH = 26, firstRunGraceMin = 30 } 
 export const SOURCING_WRITERS = new Set(WRITER_ROLES); // src/identity/permissions.js is the source of these rules
 /** POST routes that only compute or read (no stored change): open to every member. */
 export const READ_ONLY_POSTS = new Set(READ_ONLY_POSTS_LIST);
-export function createSourcingApp({ backupStatus = null, token, gate = null, core = null, procurement = null, creator = null, gbp = null, videos = null, connections = null, general = null, security = null, team = null, notifications = null, preferences = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
+export function createSourcingApp({ accessJournal = null, backupStatus = null, token, gate = null, core = null, procurement = null, creator = null, gbp = null, videos = null, connections = null, general = null, security = null, team = null, notifications = null, preferences = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
   if (!gate && (!token || String(token).length < 24)) throw new Error('a token of at least 24 characters is required'); // hosted: the session gate (Core identity) replaces the token
   // Host header allow-list (blocks DNS-rebinding on the loopback server). A tunnel's public host name must be added by the owner (SOURCING_ALLOWED_HOSTS).
   // `allowedHosts` may be a live array: the phone launcher adds the tunnel host name once it is known
@@ -80,7 +81,14 @@ export function createSourcingApp({ backupStatus = null, token, gate = null, cor
     let actor = { role: 'OWNER', label: 'local-owner' }; // local PC server: the token holder is the owner of that PC (journaled as LOCAL_TOKEN)
     if (gate) { const a = await gate.authorize(req); if (!a.ok) return json(res, a.status, a.body); actor = { userId: a.access.userId, role: a.access.role }; } // hosted: a Nordla session (and CSRF for a change); who acts comes from the session only
     else if (!sameToken(req.headers['x-sourcing-token'], token)) { failed(ip); return json(res, 401, { error: 'UNAUTHORIZED' }); }
+    req.auditActor = actor; // for the access journal: the role and user id of this request, when a session was checked
     const p = url.pathname; const m = req.method;
+    // Phase 2: the access journal, read by the owner only (refusals explained by requestId). Read-only; never shows secrets.
+    if (p === '/api/core/refusals' && m === 'GET') {
+      if (actor?.role !== 'OWNER') return json(res, 403, { error: 'FORBIDDEN_ROLE', message: 'Réservé au propriétaire.' });
+      const rid = url.searchParams.get('requestId'); const requestId = rid && /^[A-Za-z0-9-]{1,64}$/.test(rid) ? rid : null;
+      return json(res, 200, { entries: accessJournal ? accessJournal.read({ requestId, limit: url.searchParams.get('limit') ?? 50 }) : [] });
+    }
     // ROLES (hosted): a change needs OWNER or ADMIN, decided here from the SESSION's role, not by what the page shows. Reads stay open to every member; Stock / Achats keeps its own role table.
     if (gate && !['GET', 'HEAD'].includes(m) && !p.startsWith('/api/procurement/') && !SOURCING_WRITERS.has(actor.role) && !READ_ONLY_POSTS.has(p)) return json(res, 403, { error: 'FORBIDDEN_ROLE', message: 'Votre rôle permet de consulter, pas de modifier.' });
     if (core && p.startsWith('/api/core/')) return core.handle(req, res, url, actor); // Nordla Core: Subject -> Levers -> Decision -> human -> follow-up, Parle à Nordla (src/core-pilot)
@@ -150,6 +158,27 @@ export function createSourcingApp({ backupStatus = null, token, gate = null, cor
     return json(res, 404, { error: 'NOT_FOUND' });
   }
   const handler = async (req, res) => {
+    // Phase 2: every response gets a requestId (header). On an API refusal (401/403) the body carries it too, and the refusal is journaled.
+    const requestId = randomUUID(); res.setHeader('x-request-id', requestId);
+    const pathOnly = String(req.url ?? '').split('?')[0];
+    const endRaw = res.end.bind(res);
+    res.end = (chunk, ...rest) => {
+      try {
+        const status = res.statusCode;
+        if (pathOnly.startsWith('/api/') && status >= 400 && typeof chunk === 'string') {
+          let parsed = null; try { parsed = JSON.parse(chunk); } catch { parsed = null; }
+          if (parsed && typeof parsed === 'object') {
+            parsed.requestId = requestId;
+            chunk = JSON.stringify(parsed);
+            if (accessJournal && (status === 401 || status === 403)) {
+              const code = typeof parsed.error === 'string' ? parsed.error : (parsed.error?.code ?? 'UNSPECIFIED');
+              accessJournal.record({ requestId, method: req.method, path: pathOnly, status, code, role: req.auditActor?.role ?? null, userId: req.auditActor?.userId ?? null });
+            }
+          }
+        }
+      } catch { /* journaling must never break a response */ }
+      return endRaw(chunk, ...rest);
+    };
     try {
       // liveness first, for ANY Host: the platform's health probe comes with its own host name (Railway: healthcheck.railway.app) and
       // the answer carries no data. Every other route keeps the Host allow-list.
