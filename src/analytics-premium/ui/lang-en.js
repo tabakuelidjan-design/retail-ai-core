@@ -447,6 +447,7 @@ window.NORDLA_DICTS.en = {
   'topbar.syncStale': 'Shopify sync out of date · {0}',
   'topbar.syncUnknown': 'Shopify sync unknown',
   'topbar.noSalesSource': 'No sales source connected',
+  'topbar.testDataNoSource': 'Test data · no sales connector',
   'ask.title': 'Ask Nordla',
   'ask.placeholder': 'Ask a question about your numbers…',
   'ask.send': 'Ask',

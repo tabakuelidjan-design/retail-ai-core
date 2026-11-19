@@ -447,6 +447,7 @@ window.NORDLA_DICTS.nl = {
   'topbar.syncStale': 'Shopify-synchronisatie verouderd · {0}',
   'topbar.syncUnknown': 'Shopify-synchronisatie onbekend',
   'topbar.noSalesSource': 'Geen verkoopbron gekoppeld',
+  'topbar.testDataNoSource': 'Testgegevens · geen verkoopconnector',
   'ask.title': 'Vraag het Nordla',
   'ask.placeholder': 'Stel een vraag over uw cijfers…',
   'ask.send': 'Vragen',

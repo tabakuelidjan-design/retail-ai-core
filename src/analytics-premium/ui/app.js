@@ -181,7 +181,7 @@ async function refreshSyncPill() {
     const card = document.querySelector('[data-health-state]'); if (card) { const hs = NordlaHealth.healthState(s); card.textContent = t(hs.valueKey, hs.since ? fmtAgo(hs.since) : t('common.dash')); card.setAttribute('data-health-state', hs.state); const box = card.closest('.health-card'); if (box) box.className = `health-card health-${hs.tone}`; }
     const dot = el.querySelector('.sync-dot'); const label = el.querySelector('.sync-label');
     let text; let tone = 'ok';
-    if (s && s.reason === 'NO_SALES_SOURCE') { text = t('topbar.noSalesSource'); tone = 'mute'; } // this merchant has no sales connector: neutral, not a failure
+    if (s && s.reason === 'NO_SALES_SOURCE') { text = t('topbar.testDataNoSource'); tone = 'warn'; } // no sales connector: the figures on screen are test data, shown as such
     else if (!s || !s.available) { text = t('topbar.syncUnknown'); tone = 'warn'; }
     else if (s.latestFailed) { text = t('topbar.syncFailed', fmtAgo(s.lastSuccess && s.lastSuccess.finishedAt)); tone = 'bad'; }
     else if (s.stale) { text = t('topbar.syncStale', fmtAgo(s.lastSuccess && s.lastSuccess.finishedAt)); tone = 'warn'; }

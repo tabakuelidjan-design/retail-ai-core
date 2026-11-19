@@ -447,6 +447,7 @@ window.NORDLA_DICTS.fr = {
   'topbar.syncStale': 'Synchronisation Shopify ancienne · {0}',
   'topbar.syncUnknown': 'Synchronisation Shopify inconnue',
   'topbar.noSalesSource': 'Aucune source de ventes connectée',
+  'topbar.testDataNoSource': 'Données de test · aucun connecteur de ventes',
   'ask.title': 'Demander à Nordla',
   'ask.placeholder': 'Posez une question sur vos chiffres…',
   'ask.send': 'Demander',
