@@ -4,12 +4,14 @@ import assert from 'node:assert/strict';
 import { createGuard, ANALYTICS_SSO_AUDIENCE } from '../src/analytics-premium/server/hosting.js';
 import { issueTicket } from '../src/finance/sso-ticket.js';
 
-const HOST = 'analytics-staging.up.railway.app'; const TOKEN = 't'.repeat(32); const SECRET = 'an-sso-secret-0123456789-abcdefghij'; const M = 'merchant-1';
+const HOST = 'analytics-staging.up.railway.app'; const TOKEN = 't'.repeat(32); import { K_ANALYTICS, K_WRONG } from './fixtures/sso-test-keys.js';
+const SECRET = K_ANALYTICS; const M = 'merchant-1';
 let T = Date.parse('2026-11-18T12:00:00Z'); const now = () => T;
 const res = () => { const r = { status: 0, headers: {}, body: '', writeHead(s, h) { r.status = s; Object.assign(r.headers, h); }, setHeader(k, v) { r.headers[k] = v; }, end(b) { r.body = String(b ?? ''); } }; return r; };
 const run = async (guard, { url = '/', cookie, auth } = {}) => { const r = res(); const ok = await guard({ method: 'GET', url, headers: { host: HOST, ...(cookie ? { cookie } : {}), ...(auth ? { authorization: auth } : {}) }, socket: { remoteAddress: '1.2.3.4' } }, r); return { ok, r }; };
-const mk = (sso = { secret: SECRET, merchantId: M }) => createGuard({ allowedHosts: [HOST], token: TOKEN, trustProxyHops: 0, sso, now });
-const tk = (o = {}) => issueTicket({ secret: SECRET, merchantId: M, audience: ANALYTICS_SSO_AUDIENCE, now, ...o });
+const mk = (sso = { secret: SECRET, merchantId: M, checkAccess: async () => ({ ok: true, role: 'OWNER' }) }) => createGuard({ allowedHosts: [HOST], token: TOKEN, trustProxyHops: 0, sso, now });
+const P_A = { userId: 'u1', role: 'OWNER', module: 'analytics' };
+const tk = (o = {}) => issueTicket({ secret: SECRET, merchantId: M, audience: ANALYTICS_SSO_AUDIENCE, now, person: P_A, ...o });
 
 test('AS-1 a good ticket opens a session (302 to /, HttpOnly Secure SameSite=Strict cookie); the cookie then passes the guard; the same ticket again is refused', async () => {
   const g = mk(); const t = tk();
@@ -21,7 +23,7 @@ test('AS-1 a good ticket opens a session (302 to /, HttpOnly Secure SameSite=Str
 
 test('AS-2 refused: no ticket, another merchant, another audience (a Finance ticket), another key, an expired ticket, a forged cookie; the host allow-list still comes first', async () => {
   const g = mk();
-  for (const t of ['', 'garbage', tk({ merchantId: 'other' }), issueTicket({ secret: SECRET, merchantId: M, now }) /* Finance audience */, issueTicket({ secret: 'another-secret-another-secret-123', merchantId: M, audience: ANALYTICS_SSO_AUDIENCE, now })]) {
+  for (const t of ['', 'garbage', tk({ merchantId: 'other' }), issueTicket({ secret: SECRET, merchantId: M, now }) /* Finance audience */, issueTicket({ secret: K_WRONG, merchantId: M, audience: ANALYTICS_SSO_AUDIENCE, now })]) {
     const r = await run(mk(), { url: `/sso?t=${encodeURIComponent(t)}` }); assert.equal(r.ok, false); assert.equal(r.r.status, 403); assert.equal(r.r.headers['Set-Cookie'], undefined);
   }
   const old = tk(); T += 61_000; assert.equal((await run(mk(), { url: `/sso?t=${encodeURIComponent(old)}` })).r.status, 403); T -= 61_000;
@@ -51,12 +53,12 @@ import { buildAnalyticsSso } from '../src/sourcing/server/index.js';
 
 test('AS-6 Nordla side: the Analytics ticket is issued only to owner / administrator / accountant, for the server merchant, with the Analytics audience, and the link carries no secret', async () => {
   const sso = { publicUrl: 'https://analytics.example.app', secret: SECRET, merchantId: M };
-  const core = createCoreHttp({ runtime: null, store: {}, analytics: { source: 'Analytics · test' }, analyticsSso: sso });
+  const core = createCoreHttp({ runtime: null, store: {}, analytics: { source: 'Analytics · test' }, analyticsSso: sso, entitlements: async () => new Set(['analytics']) });
   const call = async (role, c = core) => { const chunks = []; let status = 0; await c.handle({ method: 'POST', url: '/api/core/analytics/open', headers: {}, on() {}, [Symbol.asyncIterator]: async function* () { yield Buffer.from('{}'); } }, { writeHead: (s) => { status = s; }, end: (b) => chunks.push(String(b ?? '')), setHeader() {} }, new URL('http://x/api/core/analytics/open'), { role, userId: 'u1' }); return { status, body: chunks.join('') ? JSON.parse(chunks.join('')) : null }; };
   for (const role of ['VIEWER', 'COLLABORATOR', 'READ_ONLY', undefined]) assert.equal((await call(role)).status, 403, String(role));
   for (const role of ['OWNER', 'ADMIN', 'ACCOUNTANT']) {
     const r = await call(role); assert.equal(r.status, 200, role); const u = new URL(r.body.url); assert.equal(u.origin, 'https://analytics.example.app'); assert.equal(u.pathname, '/sso'); assert.ok(!r.body.url.includes(SECRET));
-    assert.deepEqual(createTicketVerifier({ secret: SECRET, merchantId: M, audience: ANALYTICS_SSO_AUDIENCE }).verify(u.searchParams.get('t')), { ok: true });
+    assert.deepEqual(createTicketVerifier({ secret: SECRET, merchantId: M, audience: ANALYTICS_SSO_AUDIENCE }).verify(u.searchParams.get('t')).ok, true);
     assert.equal(createTicketVerifier({ secret: SECRET, merchantId: M }).verify(new URL((await call(role)).body.url).searchParams.get('t')).ok, false, 'not a Finance ticket');
   }
   assert.equal((await call('OWNER', createCoreHttp({ runtime: null, store: {}, analytics: { source: 's' }, analyticsSso: null }))).status, 503);

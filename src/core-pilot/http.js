@@ -14,6 +14,7 @@ import { issueTicket, ANALYTICS_SSO_AUDIENCE } from '../finance/sso-ticket.js';
 import { issueHandoff, HANDOFF_DESTINATIONS, HANDOFF_MIN_SECRET_LENGTH } from '../identity/handoff.js';
 import { validateConversation } from './field-context.js';
 import { creativeCapability } from './campaign.js';
+import { decideModuleOpen } from '../identity/module-catalog.js';
 
 const ID = '([A-Za-z0-9_-]{1,80})';
 const MAX = 64 * 1024;
@@ -46,8 +47,11 @@ export function httpsOrigin(value) { try { const u = new URL(String(value ?? '')
 /** Growth single sign-on: the https origin (GROWTH_PUBLIC_URL) AND GROWTH_SSO_SECRET (server-side only, 24+ characters, the same on the Growth server). Anything missing: null (the links stay plain links and Growth asks its own sign-in). */
 export function growthSsoConfig(env, merchantId) { const origin = growthOrigin(env); const secret = String(env?.GROWTH_SSO_SECRET ?? ''); return origin && secret.length >= HANDOFF_MIN_SECRET_LENGTH && merchantId ? { origin, secret, merchantId } : null; }
 
-export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null, procurement = null, branding = null, campaigns = null, creation = null, financeSso = null, analyticsSso = null, merchantIdentity = null, merchantId = null, env = process.env }) {
+export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null, procurement = null, branding = null, campaigns = null, creation = null, financeSso = null, analyticsSso = null, merchantIdentity = null, merchantId = null, entitlements = null, env = process.env }) {
   const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
+  // ACTIVE module codes of THIS merchant, read on each call. No reader, or a failed read: nothing is active (default deny).
+  async function activeModules() { if (typeof entitlements !== 'function') return new Set(); try { const s = await entitlements(); return s instanceof Set ? s : new Set(); } catch { return new Set(); } }
+  const refusalOf = (decision) => ({ status: 403, body: { error: decision.code, message: 'Ce module n’est pas ouvert pour votre compte ou votre rôle.' } });
   async function body(req, max = MAX) {
     const chunks = []; let n = 0;
     for await (const c of req) { n += c.length; if (n > max) throw new CoreError('BODY_TOO_LARGE', 'requête trop grande', 413); chunks.push(c); }
@@ -60,11 +64,12 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
   async function modules() {
     const b = branding ? await branding.status() : { status: 'NOT_CONNECTED' };
     const c = creativeCapability(env);
-    const row = (key, label, state, detail, offline = false) => ({ key, label, state, detail, offline });
+    const active = await activeModules(); // what this merchant may use: a module without an ACTIVE entitlement is shown as not activated
+    const row =(key, label, state, detail, offline = false) => ({ key, label, state, detail, offline });
     return { modules: [
       row('core', 'Nordla Core', runtime ? 'DISPONIBLE' : 'NON CONFIGURÉ', runtime ? 'Sujets d’achat, décisions humaines, suivi, journal.' : String(configError ?? '')),
-      { dashboard: Boolean(finance && financeSso), ...row('finance', 'Finance', finance ? 'LECTURE SEULE' : 'NON RACCORDÉ', finance ? `Factures à payer, échéances, trésorerie, achats — ${finance.source}. Aucun paiement.` : NOT_CONNECTED.FINANCE) },
-      { dashboard: Boolean(analytics && analyticsSso), ...row('analytics', 'Analytics', analytics ? 'LECTURE SEULE' : 'NON RACCORDÉ', analytics ? `Évolution des ventes, produits et canaux — ${analytics.source}.` : NOT_CONNECTED.ANALYTICS), ...(httpsOrigin(env?.ANALYTICS_PUBLIC_URL) ? { analytics_url: httpsOrigin(env.ANALYTICS_PUBLIC_URL) } : {}) },
+      { dashboard: Boolean(finance && financeSso && active.has('finance')), ...row('finance', 'Finance', !active.has('finance') ? 'NON ACTIVÉ' : finance ? 'LECTURE SEULE' : 'NON RACCORDÉ', !active.has('finance') ? 'Module non activé pour ce commerce.' : finance ?`Factures à payer, échéances, trésorerie, achats — ${finance.source}. Aucun paiement.` : NOT_CONNECTED.FINANCE) },
+      { dashboard: Boolean(analytics && analyticsSso && active.has('analytics')), ...row('analytics', 'Analytics', !active.has('analytics') ? 'NON ACTIVÉ' : analytics ? 'LECTURE SEULE' : 'NON RACCORDÉ', !active.has('analytics') ? 'Module non activé pour ce commerce.' : analytics ? `Évolution des ventes, produits et canaux — ${analytics.source}.` : NOT_CONNECTED.ANALYTICS), ...(active.has('analytics') && httpsOrigin(env?.ANALYTICS_PUBLIC_URL) ?{ analytics_url: httpsOrigin(env.ANALYTICS_PUBLIC_URL) } : {}) },
       row('procurement', 'Stock / Achats', procurement ? 'DISPONIBLE' : 'NON RACCORDÉ', procurement ? 'Commandes d’achat, réceptions, stock : consultation par Parle à Nordla ; commander, approuver et réceptionner passent par l’écran Achats (approbation nommée).' : NOT_CONNECTED.STOCK_SALES),
       row('sourcing', 'Sourcing', 'DISPONIBLE', 'Dossiers, photos, analyses d’achat ; fonctionne hors ligne.', true),
       row('branding', 'Branding', b.status === 'APPROVED' ? 'DISPONIBLE' : b.status === 'PROPOSED_NOT_APPROVED' ? 'À APPROUVER' : 'NON RACCORDÉ', b.status === 'APPROVED' ? 'Règles de marque approuvées : vérification officielle.' : b.status === 'PROPOSED_NOT_APPROVED' ? 'Proposition de règles de marque en attente de votre approbation : vérification indicative seulement.' : 'Aucune règle de marque.'),
@@ -72,7 +77,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
       creation && creation.status().status === 'LOCAL_AVAILABLE'
         ? row('creative', 'Création', 'LIMITÉ', `Visuel local disponible : votre photo telle quelle + un titre (${creation.status().typography}), PNG et contrôles de fidélité. Génération IA : ${c.status === 'PROVIDER_NOT_CONNECTED' ? 'aucun fournisseur connecté' : 'à vérifier'}.`)
         : row('creative', 'Création', c.status === 'PROVIDER_NOT_CONNECTED' ? 'BLOQUÉ' : 'À VÉRIFIER', c.status === 'PROVIDER_NOT_CONNECTED' ? `Aucun fournisseur de génération connecté (${c.missing.join(', ') || c.error}). Rien n’est produit ni simulé.` : c.note),
-      ...(growthOrigin(env) ? [{ ...row('growth', 'Développement des ventes', 'DISPONIBLE', 'Opportunités, produits, audience, abandons des visiteurs : écran dédié, ouvert dans un nouvel onglet'+(growthSsoConfig(env, merchantId) ? ' avec votre session Nordla (aucune seconde connexion).' : ' avec la même adresse e-mail Nordla (connexion demandée).')), growth_url: growthOrigin(env), growth_sso: Boolean(growthSsoConfig(env, merchantId)) }] : []),
+      ...(growthOrigin(env) ? [{ ...row('growth', 'Développement des ventes', active.has('growth') ? 'DISPONIBLE' : 'NON ACTIVÉ', active.has('growth') ? 'Opportunités, produits, audience, abandons des visiteurs : écran dédié, ouvert dans un nouvel onglet'+(growthSsoConfig(env, merchantId) ? ' avec votre session Nordla (aucune seconde connexion).' : ' avec la même adresse e-mail Nordla (connexion demandée).') : 'Module non activé pour ce commerce.'), growth_url: active.has('growth') ? growthOrigin(env) : null, growth_sso: active.has('growth') && Boolean(growthSsoConfig(env, merchantId)) }] : []),
     ].map((m) => (m.key === 'core' ? { ...m, connections_screen: env?.NORDLA_CONNECTIONS_MODULE === '1' } : m.key === 'creative' ? { ...m, creator_screen: env?.NORDLA_CREATOR_MODULE === '1' } : m.key === 'marketing' ? { ...m, gbp_screen: env?.NORDLA_GBP_DRAFTS_MODULE === '1', video_screen: env?.NORDLA_VIDEO_DRAFTS_MODULE === '1' } : m)) }; // the Creator screen exists only where the isolated module is built
   }
 
@@ -93,21 +98,27 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
       }
       if (p === '/api/core/finance/open' && m === 'POST') { // a one-time ticket to open the Finance dashboard on its own domain with THIS session: no token typed, no secret sent
         if (!financeSso) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
-        if (!['OWNER', 'ADMIN', 'ACCOUNTANT'].includes(String(actor?.role ?? ''))) { json(res, 403, { error: 'FORBIDDEN', message: 'the Finance dashboard is for the owner, an administrator or the accountant' }); return true; }
-        const ticket = issueTicket({ secret: financeSso.secret, merchantId: financeSso.merchantId, ttlSeconds: 60 });
+        const fin = decideModuleOpen({ key: 'finance', role: actor?.role ?? null, activeCodes: await activeModules() });
+        if (!fin.ok) { const r = refusalOf(fin); json(res, r.status, r.body); return true; }
+        if (!actor?.userId) { json(res, 409, { error: 'NOT_AVAILABLE', message: 'single sign-on needs a signed-in Nordla account' }); return true; }
+        const ticket = issueTicket({ secret: financeSso.secret, merchantId: financeSso.merchantId, ttlSeconds: 60, person: { userId: actor.userId, role: actor.role, module: 'finance' } });
         const ob = await body(req).catch(() => ({})); const dossier = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(ob?.dossier ?? '')) ? `&open=${String(ob.dossier).toLowerCase()}` : ''; // a navigation hint only (the file to land on): it grants nothing, Finance still reads it under the signed-in session
         json(res, 200, { url: `${financeSso.publicUrl}/sso?t=${ticket}${dossier}`, expiresInSeconds: 60 }); return true;
       }
       if (p === '/api/core/analytics/open' && m === 'POST') { // a one-time ticket to open the Analytics dashboard on its own domain with THIS Nordla session: no access token typed. Same audience of people as the Finance dashboard.
         if (!analyticsSso) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
-        if (!['OWNER', 'ADMIN', 'ACCOUNTANT'].includes(String(actor?.role ?? ''))) { json(res, 403, { error: 'FORBIDDEN', message: 'the Analytics dashboard is for the owner, an administrator or the accountant' }); return true; }
-        const ticket = issueTicket({ secret: analyticsSso.secret, merchantId: analyticsSso.merchantId, audience: ANALYTICS_SSO_AUDIENCE, ttlSeconds: 60 });
+        const ana = decideModuleOpen({ key: 'analytics', role: actor?.role ?? null, activeCodes: await activeModules() });
+        if (!ana.ok) { const r = refusalOf(ana); json(res, r.status, r.body); return true; }
+        if (!actor?.userId) { json(res, 409, { error: 'NOT_AVAILABLE', message: 'single sign-on needs a signed-in Nordla account' }); return true; }
+        const ticket = issueTicket({ secret: analyticsSso.secret, merchantId: analyticsSso.merchantId, audience: ANALYTICS_SSO_AUDIENCE, ttlSeconds: 60, person: { userId: actor.userId, role: actor.role, module: 'analytics' } });
         json(res, 200, { url: `${analyticsSso.publicUrl}/sso?t=${ticket}`, expiresInSeconds: 60 }); return true;
       }
       if (p === '/api/core/growth/open' && m === 'POST') { // a one-time ticket to open Growth on its own domain with THIS Nordla session (no second sign-in). Any signed-in person may ask: Growth re-checks membership, module and role itself.
         const sso = growthSsoConfig(env, merchantId);
         if (!sso) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
         if (!actor?.userId) { json(res, 409, { error: 'NOT_AVAILABLE', message: 'single sign-on needs a signed-in Nordla account' }); return true; }
+        const gro = decideModuleOpen({ key: 'growth', role: actor?.role ?? null, activeCodes: await activeModules() });
+        if (!gro.ok) { const r = refusalOf(gro); json(res, r.status, r.body); return true; }
         const b = await body(req); const to = b.to === undefined ? 'dropoff' : String(b.to);
         if (!Object.hasOwn(HANDOFF_DESTINATIONS, to)) { json(res, 400, { error: 'INVALID_DESTINATION' }); return true; }
         const ticket = issueHandoff({ secret: sso.secret, merchantId: sso.merchantId, userId: actor.userId, ttlSeconds: 60 });

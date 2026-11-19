@@ -5,8 +5,10 @@ import { startApp } from './finance-dashboard-helpers.js';
 import { createCoreHttp } from '../src/core-pilot/http.js';
 import { buildFinanceSso } from '../src/sourcing/server/index.js';
 
-const SECRET = 'a-shared-server-side-secret-0123456789';
+import { K_FINANCE, K_WRONG } from './fixtures/sso-test-keys.js';
+const SECRET = K_FINANCE;
 const M = 'merchant-test-1';
+const P_F = { userId: 'u1', role: 'OWNER', module: 'finance' };
 const T0 = Date.parse('2026-11-16T12:00:00.000Z');
 const clock = (start = T0) => { let t = start; return { now: () => t, advance: (ms) => { t += ms; } }; };
 
@@ -24,7 +26,7 @@ test('an expired ticket, a ticket of another merchant, a forged or altered one a
   assert.equal(v.verify(old).code, 'SSO_EXPIRED');
   const other = issueTicket({ secret: SECRET, merchantId: 'someone-else', now: c.now });
   assert.equal(v.verify(other).code, 'SSO_WRONG_MERCHANT');
-  const forged = issueTicket({ secret: 'another-secret-another-secret-123', merchantId: M, now: c.now });
+  const forged = issueTicket({ secret: K_WRONG, merchantId: M, now: c.now });
   assert.equal(v.verify(forged).code, 'SSO_BAD_SIGNATURE');
   const good = issueTicket({ secret: SECRET, merchantId: M, now: c.now });
   const [body, sig] = good.split('.');
@@ -44,14 +46,14 @@ test('the lifetime is capped and a secret that is too short is refused on both s
 });
 
 test('the Finance dashboard: /sso opens a session without any token, once; direct access without a session stays refused', async () => {
-  const a = await startApp({ merchantId: M, deps: { sso: { secret: SECRET } } });
+  const a = await startApp({ merchantId: M, deps: { sso: { secret: SECRET, checkAccess: async () => ({ ok: true, role: 'OWNER' }) } } });
   try {
     const go = (t) => fetch(`${a.base}/sso?t=${encodeURIComponent(t)}`, { redirect: 'manual' });
     // direct access, no ticket, no session
     assert.equal((await a.client().raw('GET', '/api/overview')).status, 401);
     assert.equal((await go('')).status, 403);
     // a good ticket: 302 to the dashboard + the usual HttpOnly session cookie
-    const t = issueTicket({ secret: SECRET, merchantId: M });
+    const t = issueTicket({ secret: SECRET, person: P_F, merchantId: M });
     const ok = await go(t);
     assert.equal(ok.status, 302); assert.equal(ok.headers.get('location'), '/');
     const cookie = ok.headers.get('set-cookie'); assert.match(cookie, /^fin_sid=[0-9a-f]{64};.*HttpOnly.*SameSite=Strict/i);
@@ -60,7 +62,7 @@ test('the Finance dashboard: /sso opens a session without any token, once; direc
     // the same ticket again, a ticket for another merchant, and a ticket signed with another key: refused, no cookie
     const again = await go(t); assert.equal(again.status, 403); assert.equal(again.headers.get('set-cookie'), null);
     assert.equal((await go(issueTicket({ secret: SECRET, merchantId: 'other-merchant' }))).status, 403);
-    assert.equal((await go(issueTicket({ secret: 'another-secret-another-secret-123', merchantId: M }))).status, 403);
+    assert.equal((await go(issueTicket({ secret: K_WRONG, person: P_F, merchantId: M }))).status, 403);
     assert.ok(a.audits.some((e) => e.action === 'LOGIN_SSO') && a.audits.some((e) => e.action === 'LOGIN_SSO_REFUSED'));
     // the token login still works as before
     assert.equal((await a.client().login()).status, 200);
@@ -74,7 +76,7 @@ test('without a secret configured, /sso does not exist (404)', async () => {
 
 test('Nordla side: the ticket is issued only to owner / administrator / accountant, from the server merchant, and the link carries no secret', async () => {
   const sso = { publicUrl: 'https://finance.example.app', secret: SECRET, merchantId: M };
-  const core = createCoreHttp({ runtime: null, store: {}, finance: { source: 'Finance · test', inbox: async () => ({}) }, financeSso: sso });
+  const core = createCoreHttp({ runtime: null, store: {}, finance: { source: 'Finance · test', inbox: async () => ({}) }, financeSso: sso, entitlements: async () => new Set(['finance']) });
   const call = async (role) => {
     const chunks = []; let status = 0;
     const res = { writeHead: (s) => { status = s; }, end: (b) => chunks.push(String(b ?? '')), setHeader() {} };
@@ -85,7 +87,7 @@ test('Nordla side: the ticket is issued only to owner / administrator / accounta
   for (const role of ['VIEWER', 'COLLABORATOR']) assert.equal((await call(role)).status, 403);
   const r = await call('OWNER'); assert.equal(r.status, 200);
   const u = new URL(r.body.url); assert.equal(u.origin, 'https://finance.example.app'); assert.equal(u.pathname, '/sso');
-  assert.ok(!r.body.url.includes(SECRET)); assert.deepEqual(createTicketVerifier({ secret: SECRET, merchantId: M }).verify(u.searchParams.get('t')), { ok: true });
+  assert.ok(!r.body.url.includes(SECRET)); assert.deepEqual(createTicketVerifier({ secret: SECRET, merchantId: M }).verify(u.searchParams.get('t')).ok, true);
   const none = createCoreHttp({ runtime: null, store: {}, finance: { source: 's' }, financeSso: null });
   const res2 = { s: 0, writeHead(s) { this.s = s; }, end() {}, setHeader() {} };
   await none.handle({ method: 'POST', url: '/api/core/finance/open', headers: {}, on() {}, [Symbol.asyncIterator]: async function* () {} }, res2, new URL('http://x/api/core/finance/open'), { role: 'OWNER' });
@@ -100,21 +102,21 @@ test('buildFinanceSso: only a clean https origin and a 24+ character secret give
 
 const FILE = '6c714261-0e3d-44ae-aced-981beedff16b';
 test('integrated navigation: /sso?open=<file id> lands on that Finance file, a malformed id lands on the dashboard, the session still comes from the ticket alone', async () => {
-  const a = await startApp({ merchantId: M, deps: { sso: { secret: SECRET } } });
+  const a = await startApp({ merchantId: M, deps: { sso: { secret: SECRET, checkAccess: async () => ({ ok: true, role: 'OWNER' }) } } });
   try {
     const go = (t, q) => fetch(`${a.base}/sso?t=${encodeURIComponent(t)}${q}`, { redirect: 'manual' });
-    const ok = await go(issueTicket({ secret: SECRET, merchantId: M }), `&open=${FILE.toUpperCase()}`);
+    const ok = await go(issueTicket({ secret: SECRET, person: P_F, merchantId: M }), `&open=${FILE.toUpperCase()}`);
     assert.equal(ok.status, 302); assert.equal(ok.headers.get('location'), `/#/purchases?open=${FILE}`);
-    for (const bad of ['&open=../../etc', '&open=<script>', '&open=123', '&open=']) { const r = await go(issueTicket({ secret: SECRET, merchantId: M }), bad); assert.equal(r.status, 302); assert.equal(r.headers.get('location'), '/', bad); }
+    for (const bad of ['&open=../../etc', '&open=<script>', '&open=123', '&open=']) { const r = await go(issueTicket({ secret: SECRET, person: P_F, merchantId: M }), bad); assert.equal(r.status, 302); assert.equal(r.headers.get('location'), '/', bad); }
     assert.equal((await go('forged', `&open=${FILE}`)).status, 403, 'the hint never replaces the ticket');
   } finally { await a.close(); }
 });
 
 test('integrated navigation: the Finance session carries the Nordla home address only when it is a clean https origin', async () => {
   for (const [homeUrl, expected] of [['https://nordla.example.app', 'https://nordla.example.app'], [null, undefined]]) {
-    const a = await startApp({ merchantId: M, deps: { sso: { secret: SECRET }, ...(homeUrl ? { homeUrl } : {}) } });
+    const a = await startApp({ merchantId: M, deps: { sso: { secret: SECRET, checkAccess: async () => ({ ok: true, role: 'OWNER' }) }, ...(homeUrl ? { homeUrl } : {}) } });
     try {
-      const ok = await fetch(`${a.base}/sso?t=${encodeURIComponent(issueTicket({ secret: SECRET, merchantId: M }))}`, { redirect: 'manual' });
+      const ok = await fetch(`${a.base}/sso?t=${encodeURIComponent(issueTicket({ secret: SECRET, person: P_F, merchantId: M }))}`, { redirect: 'manual' });
       const s = await (await fetch(`${a.base}/api/session`, { headers: { Cookie: ok.headers.get('set-cookie').split(';')[0] } })).json();
       assert.equal(s.nordlaHome, expected);
     } finally { await a.close(); }
@@ -123,7 +125,7 @@ test('integrated navigation: the Finance session carries the Nordla home address
 
 test('integrated navigation: Nordla issues the Finance link with the file to open (UUID only) and shows the Analytics address only for a clean https origin', async () => {
   const sso = { publicUrl: 'https://finance.example.app', secret: SECRET, merchantId: M };
-  const mk = (env) => createCoreHttp({ runtime: null, store: {}, finance: { source: 'Finance · test', inbox: async () => ({}) }, financeSso: sso, env });
+  const mk = (env) => createCoreHttp({ runtime: null, store: {}, finance: { source: 'Finance · test', inbox: async () => ({}) }, financeSso: sso, entitlements: async () => new Set(['finance', 'analytics']), env });
   const call = async (core, bodyText) => {
     const chunks = []; let status = 0; const res = { writeHead: (s) => { status = s; }, end: (b) => chunks.push(String(b ?? '')), setHeader() {} };
     await core.handle({ method: 'POST', url: '/api/core/finance/open', headers: {}, on() {}, [Symbol.asyncIterator]: async function* () { yield Buffer.from(bodyText); } }, res, new URL('http://x/api/core/finance/open'), { role: 'OWNER', userId: 'u1' });

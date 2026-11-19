@@ -17,7 +17,7 @@ const call = async (core, actor, body = {}) => {
 };
 
 test('the ticket is issued for the signed-in person of THIS merchant, to any role (read-only included), for an allow-listed destination, and carries no role or secret', async () => {
-  const core = createCoreHttp({ runtime: null, store: {}, merchantId: M, env: ENV });
+  const core = createCoreHttp({ runtime: null, store: {}, merchantId: M, entitlements: async () => new Set(['growth']), env: ENV });
   for (const role of ['OWNER', 'VIEWER', 'COLLABORATOR']) {
     const r = await call(core, { role, userId: U }, { to: 'opportunities' }); assert.equal(r.status, 200, role);
     const u = new URL(r.body.url); assert.equal(u.origin, 'https://growth.example.app'); assert.equal(u.pathname, '/sso'); assert.equal(u.searchParams.get('to'), 'opportunities');
@@ -30,16 +30,16 @@ test('the ticket is issued for the signed-in person of THIS merchant, to any rol
 
 test('refusals: no secret or no https address (503), no Nordla account behind the call (409), a free destination (400); nothing is issued', async () => {
   for (const env of [{ GROWTH_PUBLIC_URL: 'https://growth.example.app' }, { GROWTH_SSO_SECRET: SECRET }, { ...ENV, GROWTH_SSO_SECRET: 'short' }, { ...ENV, GROWTH_PUBLIC_URL: 'http://growth.example.app' }]) {
-    assert.equal((await call(createCoreHttp({ runtime: null, store: {}, merchantId: M, env }), { role: 'OWNER', userId: U })).status, 503, JSON.stringify(env));
+    assert.equal((await call(createCoreHttp({ runtime: null, store: {}, merchantId: M, entitlements: async () => new Set(['growth']), env }), { role: 'OWNER', userId: U })).status, 503, JSON.stringify(env));
   }
-  const core = createCoreHttp({ runtime: null, store: {}, merchantId: M, env: ENV });
+  const core = createCoreHttp({ runtime: null, store: {}, merchantId: M, entitlements: async () => new Set(['growth']), env: ENV });
   assert.equal((await call(core, { role: 'OWNER' })).status, 409);
   for (const to of ['https://evil.example', '../x', 'finance', '__proto__']) assert.equal((await call(core, { role: 'OWNER', userId: U }, { to })).status, 400, to);
   assert.equal(growthSsoConfig(ENV, null), null);
 });
 
 test('the modules list tells the screen whether single sign-on is on (growth_sso) and says so honestly in the detail', async () => {
-  const mods = async (env) => { const chunks = []; const res = { writeHead() {}, end: (b) => chunks.push(String(b)), setHeader() {} }; await createCoreHttp({ runtime: null, store: {}, merchantId: M, env }).handle({ method: 'GET', url: '/api/core/modules', headers: {}, on() {} }, res, new URL('http://x/api/core/modules'), { role: 'VIEWER', userId: U }); return JSON.parse(chunks.join('')).modules.find((m) => m.key === 'growth'); };
+  const mods = async (env) => { const chunks = []; const res = { writeHead() {}, end: (b) => chunks.push(String(b)), setHeader() {} }; await createCoreHttp({ runtime: null, store: {}, merchantId: M, entitlements: async () => new Set(['growth']), env }).handle({ method: 'GET', url: '/api/core/modules', headers: {}, on() {} }, res, new URL('http://x/api/core/modules'), { role: 'VIEWER', userId: U }); return JSON.parse(chunks.join('')).modules.find((m) => m.key === 'growth'); };
   const on = await mods(ENV); assert.equal(on.growth_sso, true); assert.match(on.detail, /aucune seconde connexion/);
   const off = await mods({ GROWTH_PUBLIC_URL: 'https://growth.example.app' }); assert.equal(off.growth_sso, false); assert.match(off.detail, /connexion demandée/);
 });
@@ -67,6 +67,6 @@ test('the ticket cannot be replayed, expired, forged, retargeted to another merc
 
 test('the module is shown as « Sourcing » in the modules list (menu, card and title come from it) while its key stays « sourcing »', async () => {
   const chunks = []; const res = { writeHead() {}, end: (b) => chunks.push(String(b)), setHeader() {} };
-  await createCoreHttp({ runtime: null, store: {}, merchantId: M, env: ENV }).handle({ method: 'GET', url: '/api/core/modules', headers: {}, on() {} }, res, new URL('http://x/api/core/modules'), { role: 'OWNER', userId: U });
+  await createCoreHttp({ runtime: null, store: {}, merchantId: M, entitlements: async () => new Set(['growth']), env: ENV }).handle({ method: 'GET', url: '/api/core/modules', headers: {}, on() {} }, res, new URL('http://x/api/core/modules'), { role: 'OWNER', userId: U });
   const row = JSON.parse(chunks.join('')).modules.find((m) => m.key === 'sourcing'); assert.equal(row.label, 'Sourcing'); assert.equal(row.offline, true);
 });

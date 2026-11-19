@@ -29,6 +29,8 @@ import { createFileJournal } from '../../core-pilot/journal.js';
 import { checkJournalDeployment } from '../../core-pilot/deployment-guard.js';
 import { createCoreRuntime } from '../../core-pilot/runtime.js';
 import { createCoreHttp } from '../../core-pilot/http.js';
+import { activeEntitlementsOf } from '../../identity/entitlements.js';
+import { parseSsoKey, ssoKeyReuseOf } from '../../identity/sso-keys.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const DATA_DIR = 'data/local/sourcing';
@@ -261,7 +263,7 @@ export async function buildGbp({ env, gate, hosted, log = console.log, contextOf
 
 /** Nordla Core on this server: the merchant's core-decision.json + the decision journal in the data directory. Any problem (no config,
  *  a journal that does not verify) disables the Core with its reason and leaves China Sourcing working; the journal is never touched. */
-export async function buildCore({ env, dir, merchantId, store, safety, log = () => {}, readers: injected = null, procurement = null, merchantIdentity = null, root = join(HERE, '..', '..', '..') }) {
+export async function buildCore({ env, dir, merchantId, store, safety, log = () => {}, readers: injected = null, entitlements: entitlementsInjected = null, procurement = null, merchantIdentity = null, root = join(HERE, '..', '..', '..') }) {
   const { config, error } = await loadCoreConfig(env, root);
   if (!config) return { core: createCoreHttp({ runtime: null, configError: `CORE_NOT_CONFIGURED: ${error}`, store }), status: `Nordla Core OFF (${error})` };
   // the journal's guarantees need a volume on Railway (durability) and one service (one writer): refuse to record decisions where they would be lost
@@ -278,8 +280,13 @@ export async function buildCore({ env, dir, merchantId, store, safety, log = () 
   const campaigns = createCampaignService({ merchantId, branding, analytics: readers.analytics, file: join(dir, 'core', 'campaigns.jsonl'), env });
   let creation = null; // local visual (owner's photo + headline), only when the merchant's typography is configured; no provider, no network
   try { const { createCreationService, loadCreationConfig } = await import('../../core-pilot/creation.js'); const cfg = await loadCreationConfig(env, root); if (cfg) creation = createCreationService({ merchantId, config: cfg, branding, dir: join(dir, 'core', 'creations') }); } catch (e) { log(`Création (local visual): NOT connected (${e.message}).`); }
-  const financeSso = buildFinanceSso(env, merchantId); const analyticsSso = buildAnalyticsSso(env, merchantId);
-  return { core: createCoreHttp({ runtime, store, externals, ...readers, branding, campaigns, creation, financeSso, analyticsSso, merchantIdentity, merchantId, env }), status: `Nordla Core ON for merchant ${merchantId} (owner rules: ${config.ownerRules.length || 'none configured'}); Finance ${readers.finance ? 'read-only' : 'not connected'}; Analytics ${readers.analytics ? 'read-only' : 'not connected'}` };
+  let financeSso = buildFinanceSso(env, merchantId); let analyticsSso = buildAnalyticsSso(env, merchantId);
+  // one key per module: the same value for Finance and Analyses is refused on both (no ticket can be replayed across audiences)
+  if (financeSso && analyticsSso && ssoKeyReuseOf(financeSso.secret, { otherKeys: [analyticsSso.secret] })) { financeSso = null; analyticsSso = null; log('Nordla SSO: FINANCE_SSO_SECRET and ANALYTICS_SSO_SECRET must be different keys: both single sign-on links are OFF.'); }
+  // ACTIVE modules of THIS merchant, read on each call (default deny). No Supabase configuration (local PC) = no entitlement reader = nothing opens.
+  let entitlements = entitlementsInjected; // injected: tests only
+  if (!entitlements) { try { const client = await import('../../supabase/client.js'); const supabase = client.createSupabaseClient(client.loadSupabaseConfigFromEnv(env)); entitlements = () => activeEntitlementsOf({ supabase, merchantId }); } catch { entitlements = null; } }
+  return { core: createCoreHttp({ runtime, store, externals, ...readers, branding, campaigns, creation, financeSso, analyticsSso, merchantIdentity, merchantId, entitlements, env }), status: `Nordla Core ON for merchant ${merchantId} (owner rules: ${config.ownerRules.length || 'none configured'}); Finance ${readers.finance ? 'read-only' : 'not connected'}; Analytics ${readers.analytics ? 'read-only' : 'not connected'}` };
 }
 
 /** Read-only Finance and Analytics for the Core, on the SAME Supabase project and merchant as the sign-in (hosted mode only). Finance needs
@@ -289,7 +296,7 @@ export async function buildCore({ env, dir, merchantId, store, safety, log = () 
 export function buildFinanceSso(env, merchantId) {
   try {
     const u = new URL(String(env.FINANCE_PUBLIC_URL ?? '').trim()); const secret = String(env.FINANCE_SSO_SECRET ?? '');
-    if (u.protocol !== 'https:' || u.pathname !== '/' || u.search || u.hash || u.username || u.password || secret.length < 24) return null;
+    if (u.protocol !== 'https:' || u.pathname !== '/' || u.search || u.hash || u.username || u.password || !parseSsoKey(secret).ok) return null; // canonical base64url, 32 random bytes
     return { publicUrl: u.origin, secret, merchantId };
   } catch { return null; }
 }
@@ -298,7 +305,7 @@ export function buildFinanceSso(env, merchantId) {
 export function buildAnalyticsSso(env, merchantId) {
   try {
     const u = new URL(String(env.ANALYTICS_PUBLIC_URL ?? '').trim()); const secret = String(env.ANALYTICS_SSO_SECRET ?? '');
-    if (u.protocol !== 'https:' || u.pathname !== '/' || u.search || u.hash || u.username || u.password || secret.length < 24) return null;
+    if (u.protocol !== 'https:' || u.pathname !== '/' || u.search || u.hash || u.username || u.password || !parseSsoKey(secret).ok) return null; // canonical base64url, 32 random bytes
     return { publicUrl: u.origin, secret, merchantId };
   } catch { return null; }
 }
@@ -340,7 +347,7 @@ export async function startSourcingServer({ env = process.env, log = console.log
   const procurementEvents = { sink: null }; // Stock / Achats audit outlet -> Notifications (set below when that module is on; null = nobody listens)
   const proc = await buildHostedProcurement({ dir, merchantId: merchantKey, env, log, financeHandoff, audit: async (e) => { await procurementEvents.sink?.(e); } }); // Stock / Achats on the same sign-in and volume; if it cannot open, Nordla runs without it
   const generalService = hosted ? await buildGeneralService({ env, log }) : null; // the common Général service (null unless NORDLA_GENERAL_MODULE=1): modules READ it, none rewrites it
-  const core = await buildCore({ env, dir, merchantId: merchantKey, store, safety, log, readers: services?.readers ?? null, procurement: proc.assistant, merchantIdentity: generalService ? async () => { const t = { merchantId: merchantKey }; const name = (await generalService.contextFor({ tenant: t, module: 'core' })).profile.name; let context = null; try { const c = await generalService.contextFor({ tenant: t, module: 'sourcing' }); context = { activity: c.activity?.main ?? null, complementary: c.activity?.complementary ?? [], sellingModes: c.selling_modes?.modes ?? [], constraints: c.objectives?.constraints ?? null, places: (c.places ?? []).map((p) => ({ name: p.name, functions: p.functions, city: p.city })) }; } catch { context = null; } return { name, context }; } : null });
+  const core = await buildCore({ env, dir, merchantId: merchantKey, store, safety, log, readers: services?.readers ?? null, entitlements: services?.entitlements ?? null, procurement: proc.assistant, merchantIdentity: generalService ? async () => { const t = { merchantId: merchantKey }; const name = (await generalService.contextFor({ tenant: t, module: 'core' })).profile.name; let context = null; try { const c = await generalService.contextFor({ tenant: t, module: 'sourcing' }); context = { activity: c.activity?.main ?? null, complementary: c.activity?.complementary ?? [], sellingModes: c.selling_modes?.modes ?? [], constraints: c.objectives?.constraints ?? null, places: (c.places ?? []).map((p) => ({ name: p.name, functions: p.functions, city: p.city })) }; } catch { context = null; } return { name, context }; } : null });
   let backups = null;
   const creator = await buildCreator({ env, gate, hosted, log }); // optional, isolated: null unless NORDLA_CREATOR_MODULE=1
   const preferencesService = hosted ? await buildPreferencesService({ env, log, generalService }) : null; // the person's saved language also reaches the Paramètres hub (below)
