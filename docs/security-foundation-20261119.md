@@ -64,10 +64,14 @@ No multi-merchant launch approval is implied by this foundation.
 
 Deploy only from service release branches and preserve their latest changes. Finance receives only its security patch, not the Core tree.
 
-- Core base: 7deb8822.
-- Finance base: 6428e1a0.
-- Analytics base: 0e333a10 (preserve SameSite=Lax).
+- Core base: f879e21f.
+- Finance base: b1253994.
+- Analytics base: a361315e (preserve SameSite=Lax).
 - Keep production untouched.
 - Set NORDLA_SSO_ONLY=1 only on Finance and Analytics after validating personal SSO configuration.
 - Code rollback: redeploy the recorded base SHA; the restrictive SQL migration can remain.
 - SQL rollback is supplied separately and refuses to remove guards if permissive policies have since been added.
+
+## Integration after latest Claude releases
+
+Core: 340 tests, 339 passed, one skipped. Finance: 61 passed. Analytics: 239 passed. Zero failures. Latest permission matrix, version endpoints and test-data labels are preserved. These are targeted integration suites, not a claim that the entire repository suite passed.
