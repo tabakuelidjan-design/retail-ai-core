@@ -13,6 +13,8 @@ import { readFileSync } from 'node:fs';
 import { rename, writeFile } from 'node:fs/promises';
 
 const keyOf = (sid) => createHash('sha256').update(String(sid ?? '')).digest('hex');
+// The Nordla person of a session opened by single sign-on (kept so the session is re-checked on each request); absent for token sessions.
+const sso0 = (sso) => (sso && typeof sso.userId === 'string' && typeof sso.role === 'string' ? { sso: { userId: sso.userId, role: sso.role } } : {});
 
 /**
  * @param {{ persistence?: { load: () => Array<[string, {csrf: string, expires: number}]>, save: (entries) => Promise<void> } | null, now?: () => number }} [o]
@@ -22,7 +24,7 @@ export function createSessionStore({ persistence = null, now = () => Date.now() 
   if (persistence) {
     let entries = [];
     try { entries = persistence.load() ?? []; } catch (e) { console.error('finance sessions: could not read the session file, starting empty:', e?.message); }
-    for (const [k, v] of entries) if (typeof k === 'string' && v && typeof v.csrf === 'string' && Number(v.expires) > now()) map.set(k, { csrf: v.csrf, expires: Number(v.expires) });
+    for (const [k, v] of entries) if (typeof k === 'string' && v && typeof v.csrf === 'string' && Number(v.expires) > now()) map.set(k, { csrf: v.csrf, expires: Number(v.expires), ...(sso0(v.sso)) });
   }
   let writing = Promise.resolve();
   const persist = () => {
@@ -33,7 +35,7 @@ export function createSessionStore({ persistence = null, now = () => Date.now() 
   return {
     get: (sid) => map.get(keyOf(sid)),
     has: (sid) => map.has(keyOf(sid)),
-    set(sid, value) { map.set(keyOf(sid), { csrf: value.csrf, expires: value.expires }); persist(); return this; },
+    set(sid, value) { map.set(keyOf(sid), { csrf: value.csrf, expires: value.expires, ...sso0(value.sso) }); persist(); return this; },
     delete(sid) { const had = map.delete(keyOf(sid)); if (had) persist(); return had; },
     /** Resolves when pending writes are on disk (tests, graceful shutdown). */
     flush: () => writing,

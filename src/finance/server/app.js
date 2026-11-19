@@ -96,7 +96,7 @@ export function createFinanceApp(deps) {
   const packCache = new Map();
   const tokenHash = sha(token);
   // Single sign-on from the Nordla server (src/finance/sso-ticket.js): only when the launcher gives a secret; otherwise /sso does not exist.
-  const ssoVerifier = deps.sso?.secret ? createTicketVerifier({ secret: deps.sso.secret, merchantId, now: () => (deps.nowMs ?? Date.now)() }) : null;
+  const ssoVerifier = deps.sso?.secret ? createTicketVerifier({ secret: deps.sso.secret, merchantId, now: () => (deps.nowMs ?? Date.now)(), module: 'finance', requirePerson: deps.sso.requirePerson === true, checkAccess: deps.sso.checkAccess ?? null }) : null;
   const cookieFlags = deps.secureCookie ? '; Secure' : ''; // hosted mode: HTTPS is terminated by the platform
 
   // ---------- plumbing ----------
@@ -1428,7 +1428,7 @@ export function createFinanceApp(deps) {
     const ip = clientIpOf(req, deps.trustProxyHops ?? 0);
     const f = failures.get(ip) ?? { n: 0, until: 0 };
     if (f.until > Date.now()) throw new HttpError(429, 'TOO_MANY_ATTEMPTS');
-    const r = ssoVerifier.verify(url.searchParams.get('t') ?? '');
+    const r = await ssoVerifier.verifyAsync(url.searchParams.get('t') ?? '');
     if (!r.ok) {
       f.n += 1; if (f.n >= 5) { f.until = Date.now() + 5 * 60_000; f.n = 0; } failures.set(ip, f);
       await audit({ at: clock.now(), action: 'LOGIN_SSO_REFUSED', code: r.code });
@@ -1436,7 +1436,7 @@ export function createFinanceApp(deps) {
     }
     failures.delete(ip);
     const sid = randomBytes(32).toString('hex');
-    sessions.set(sid, { csrf: randomBytes(24).toString('hex'), expires: Date.now() + SESSION_MS });
+    sessions.set(sid, { csrf: randomBytes(24).toString('hex'), expires: Date.now() + SESSION_MS, ...(r.claims ? { sso: { userId: r.claims.userId, role: r.access?.role ?? r.claims.role } } : {}) });
     await audit({ at: clock.now(), action: 'LOGIN_SSO' });
     const openId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(url.searchParams.get('open') ?? '') ? url.searchParams.get('open').toLowerCase() : null; // a landing hint (which supplier-invoice file to show): it is not a credential, the page reads it under the session
     send(res, 302, '', { Location: openId ? `/#/purchases?open=${openId}` : '/', 'Cache-Control': 'no-store', 'Set-Cookie': `${COOKIE}=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${cookieFlags}` });
@@ -1452,6 +1452,14 @@ export function createFinanceApp(deps) {
       if (req.method === 'GET' && url.pathname === '/sso') return await handleSso(req, res, url);
       if (req.method === 'GET' && await staticAssets.serve(req, res, url, send)) return;
       if (!url.pathname.startsWith('/api/')) throw new HttpError(404, 'NOT_FOUND');
+      // A session opened by Nordla single sign-on is re-checked on EVERY request, public routes included: a suspended or removed person,
+      // a changed role or a removed entitlement closes it at once (the session is deleted; a protected route then answers 401).
+      const openedSid = cookies(req)[COOKIE];
+      if (openedSid && sessions.get(openedSid)?.sso) {
+        const sso = sessions.get(openedSid).sso;
+        const again = deps.sso?.checkAccess ? await deps.sso.checkAccess({ merchantId, userId: sso.userId, role: sso.role, module: 'finance' }).catch(() => null) : null;
+        if (!again?.ok) sessions.delete(openedSid);
+      }
       const route = routes.map((r) => ({ r, m: r.method === req.method ? r.re.exec(url.pathname) : null })).find((x) => x.m);
       if (!route) throw new HttpError(url.pathname === '/api/session' ? 405 : 404, 'NOT_FOUND');
       const mutating = req.method !== 'GET' && req.method !== 'HEAD';
