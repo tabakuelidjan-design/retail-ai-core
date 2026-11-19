@@ -51,7 +51,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
   const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
   // ACTIVE module codes of THIS merchant, read on each call. No reader, or a failed read: nothing is active (default deny).
   async function activeModules() { if (typeof entitlements !== 'function') return new Set(); try { const s = await entitlements(); return s instanceof Set ? s : new Set(); } catch { return new Set(); } }
-  const refusalOf = (decision) => ({ status: 403, body: { error: decision.code, message: 'Ce module n’est pas ouvert pour votre compte ou votre rôle.' } });
+  const refusalOf = (decision, module, role) => { console.warn(`[core] open refused: module=${module} role=${role ?? 'none'} code=${decision.code}`); return { status: 403, body: { error: decision.code, message: 'Ce module n’est pas ouvert pour votre compte ou votre rôle.' } }; };
   async function body(req, max = MAX) {
     const chunks = []; let n = 0;
     for await (const c of req) { n += c.length; if (n > max) throw new CoreError('BODY_TOO_LARGE', 'requête trop grande', 413); chunks.push(c); }
@@ -99,7 +99,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
       if (p === '/api/core/finance/open' && m === 'POST') { // a one-time ticket to open the Finance dashboard on its own domain with THIS session: no token typed, no secret sent
         if (!financeSso) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
         const fin = decideModuleOpen({ key: 'finance', role: actor?.role ?? null, activeCodes: await activeModules() });
-        if (!fin.ok) { const r = refusalOf(fin); json(res, r.status, r.body); return true; }
+        if (!fin.ok) { const r = refusalOf(fin, 'finance', actor?.role);json(res, r.status, r.body); return true; }
         if (!actor?.userId) { json(res, 409, { error: 'NOT_AVAILABLE', message: 'single sign-on needs a signed-in Nordla account' }); return true; }
         const ticket = issueTicket({ secret: financeSso.secret, merchantId: financeSso.merchantId, ttlSeconds: 60, person: { userId: actor.userId, role: actor.role, module: 'finance' } });
         const ob = await body(req).catch(() => ({})); const dossier = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(ob?.dossier ?? '')) ? `&open=${String(ob.dossier).toLowerCase()}` : ''; // a navigation hint only (the file to land on): it grants nothing, Finance still reads it under the signed-in session
@@ -108,7 +108,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
       if (p === '/api/core/analytics/open' && m === 'POST') { // a one-time ticket to open the Analytics dashboard on its own domain with THIS Nordla session: no access token typed. Same audience of people as the Finance dashboard.
         if (!analyticsSso) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
         const ana = decideModuleOpen({ key: 'analytics', role: actor?.role ?? null, activeCodes: await activeModules() });
-        if (!ana.ok) { const r = refusalOf(ana); json(res, r.status, r.body); return true; }
+        if (!ana.ok) { const r = refusalOf(ana, 'analytics', actor?.role);json(res, r.status, r.body); return true; }
         if (!actor?.userId) { json(res, 409, { error: 'NOT_AVAILABLE', message: 'single sign-on needs a signed-in Nordla account' }); return true; }
         const ticket = issueTicket({ secret: analyticsSso.secret, merchantId: analyticsSso.merchantId, audience: ANALYTICS_SSO_AUDIENCE, ttlSeconds: 60, person: { userId: actor.userId, role: actor.role, module: 'analytics' } });
         json(res, 200, { url: `${analyticsSso.publicUrl}/sso?t=${ticket}`, expiresInSeconds: 60 }); return true;
@@ -118,7 +118,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
         if (!sso) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
         if (!actor?.userId) { json(res, 409, { error: 'NOT_AVAILABLE', message: 'single sign-on needs a signed-in Nordla account' }); return true; }
         const gro = decideModuleOpen({ key: 'growth', role: actor?.role ?? null, activeCodes: await activeModules() });
-        if (!gro.ok) { const r = refusalOf(gro); json(res, r.status, r.body); return true; }
+        if (!gro.ok) { const r = refusalOf(gro, 'growth', actor?.role);json(res, r.status, r.body); return true; }
         const b = await body(req); const to = b.to === undefined ? 'dropoff' : String(b.to);
         if (!Object.hasOwn(HANDOFF_DESTINATIONS, to)) { json(res, 400, { error: 'INVALID_DESTINATION' }); return true; }
         const ticket = issueHandoff({ secret: sso.secret, merchantId: sso.merchantId, userId: actor.userId, ttlSeconds: 60 });
