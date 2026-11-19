@@ -18,6 +18,7 @@ import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/
 import { createAccessChecker } from '../../identity/sso-contract.js';
 import { parseSsoKey, ssoKeyReuseOf } from '../../identity/sso-keys.js';
 import { latestSyncStatus } from '../../sync/run-log.js';
+import { releaseOf } from '../../identity/release.js';
 
 const REPORTS_DIR = new URL('../../../reports/', import.meta.url);
 
@@ -47,7 +48,7 @@ export async function startAnalyticsServer({ env = process.env, supabase: inject
   const { status: providerStatus, provider } = loadAssistantProvider(env);
   const ask = createAssistant({ reportsDir, provider, providerStatus });
   let refresher = null;
-  const handler = createAnalyticsPremiumApp({ reportsDir, guard, syncStatus, reportStatus: () => ({ ...reportRefreshState }), ask, onDatasetMissing: () => { if (refresher) refresher.tick(); } });
+  const handler = createAnalyticsPremiumApp({ release: releaseOf(env), reportsDir, guard, syncStatus, reportStatus: () => ({ ...reportRefreshState }), ask, onDatasetMissing: () => { if (refresher) refresher.tick(); } });
   const server = http.createServer(handler);
   await new Promise((resolve) => server.listen(hosting.port, hosting.host, resolve));
   if (hosting.hosted) log(`Analytics Premium (hosted): listening on ${hosting.host}:${hosting.port}, serving ${hosting.allowedHosts.join(', ')} only, access token required.`);
