@@ -118,6 +118,11 @@ if (svc) {
     const res = await fetch(`${SUPA}/rest/v1/merchant_members?merchant_id=eq.67646dbb-5e2e-4cd7-aad6-0ab289b068cb&user_id=eq.${ACC}`, {
       method: 'PATCH', headers: { apikey: svc, authorization: `Bearer ${svc}`, 'content-type': 'application/json', prefer: 'return=representation' }, body: JSON.stringify(body),
     });
+    if (res.status !== 200) {
+      // Diagnostic only: the HTTP status and the database's message (never the key, never a password).
+      const msg = (await res.text()).replace(/[A-Za-z0-9_.-]{40,}/g, '<masqué>').slice(0, 200);
+      console.error(`PATCH membre (${status}) : HTTP ${res.status} - ${msg}`);
+    }
     return res.status;
   };
   try {
