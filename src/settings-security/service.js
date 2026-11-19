@@ -233,7 +233,7 @@ export function createSecurityService({ supabase, adminAuth = null, verifier = n
     need(me);
     const ruleReady = Boolean(features.mfa && mfaRule && context?.merchantId);
     let enabled = false; let missing = null;
-    if (ruleReady) { try { enabled = await mfaRule.enabled(context.merchantId); } catch { enabled = false; } if (MANAGER_ROLES.includes(me.role)) missing = await mfaRule.noncompliant(context.merchantId); }
+    if (ruleReady) { try { enabled = await mfaRule.enabled(context.merchantId); } catch { throw new SecurityError('UNAVAILABLE', 'Les règles de sécurité sont temporairement indisponibles.'); } if (MANAGER_ROLES.includes(me.role)) missing = await mfaRule.noncompliant(context.merchantId); }
     return { scope: 'TEAM', canManage: MANAGER_ROLES.includes(me.role),
       applied: [
         { id: 'session_lifetime', label: 'Durée maximale d’une session', value: `${rules.absoluteHours} h`, editable: false },

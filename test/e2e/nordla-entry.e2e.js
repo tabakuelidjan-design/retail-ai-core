@@ -51,7 +51,7 @@ const security = createHttpSecurity({ environment: 'hosted', proxy: 'railway', a
 const env = { SOURCING_HOSTED: '1', NORDLA_MERCHANT_ID: M, SOURCING_PUBLIC_ORIGIN: `https://${HOST}`, SUPABASE_URL: 'https://ref.supabase.example', SUPABASE_SERVICE_ROLE_KEY: 'x', SUPABASE_ANON_KEY: 'anon-test', NORDLA_IDENTITY_RATE_LIMIT_KEY: rlKey, NORDLA_CSRF_KEY: csrfKey, SOURCING_MERCHANT_ID: 'habb', SOURCING_HOST: '127.0.0.1', SOURCING_DATA_DIR: join(tmp, 'data') };
 const fw = accWorld({ merchantId: M });
 const inv = await fw.supplier(121000, { dueDate: '2026-09-28', supplierName: 'Yiwu Greenline', invoiceNumber: 'YG-1' }); await fw.supplier(48400, { dueDate: '2026-10-08', supplierName: 'Dongguan Pioneer', invoiceNumber: 'DP-7' }); await fw.paySupplier(21000, [[inv.id, 21000]]);
-const readers = { finance: createFinanceReader({ store: fw.st, merchantId: M, timeZone: 'Europe/Brussels', now: () => '2026-10-03T10:00:00.000Z', source: 'Finance · données de test isolées' }), analytics: createAnalyticsReader({ reportsDir: await writeDataset(), now: () => AN_NOW, source: 'Analytics · données de test isolées' }) };
+const readers = { finance: createFinanceReader({ store: fw.st, merchantId: M, timeZone: 'Europe/Brussels', now: () => '2026-10-03T10:00:00.000Z', source: 'Finance · données de test isolées' }), analytics: createAnalyticsReader({ merchantId: M, reportsDir: await writeDataset({ merchantId: M }), now: () => AN_NOW, source: 'Analytics · données de test isolées' }) };
 const srv = await startSourcingServer({ env, log: () => {}, port: 0, services: { identity, security, readers }, fetchImpl: async () => { throw new Error('no network'); }, ecb: async () => ({}) });
 
 // ---- the "Railway" proxy: TLS, then the headers the hosted security layer trusts

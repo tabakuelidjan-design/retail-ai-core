@@ -83,7 +83,8 @@ const cookieOf = (req, name) => { for (const part of String(req.headers?.cookie 
  * sso (optional, hosted): { secret, merchantId } - GET /sso?t=<ticket> issued by the Nordla server for a signed-in person with the right role: a valid, unused, unexpired ticket for THIS merchant opens an
  * 8 h session (HttpOnly, Secure, SameSite=Strict cookie, kept in memory) and lands on the dashboard. The access token keeps working as before; nothing is served without one of the two.
  */
-export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = null, now = () => Date.now() }) {
+export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = null, ssoOnly = false, now = () => Date.now() }) {
+  if (ssoOnly && (!sso?.secret || sso.requirePerson !== true || typeof sso.checkAccess !== 'function')) throw new HostingConfigError('SSO-only mode requires personal Nordla sessions with current access checks.');
   const verifier = sso ? createTicketVerifier({ secret: sso.secret, merchantId: sso.merchantId, audience: ANALYTICS_SSO_AUDIENCE, now, module: 'analytics', requirePerson: sso.requirePerson === true, checkAccess: sso.checkAccess ?? null }) : null;
   const sessions = new Map(); // sid -> expiry (ms)
   const ssoPeople = new Map(); // sid -> { userId, role } for sessions opened by Nordla single sign-on
@@ -117,6 +118,7 @@ export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = nul
       }
       failures.delete(ip); for (const [k, v] of Object.entries(base)) res.setHeader(k, v); return true;
     }
+    if (ssoOnly) return deny(res, 401, 'NORDLA_SESSION_REQUIRED');
     const supplied = basicPassword(req.headers.authorization);
     if (!supplied || !timingSafeEqual(sha(supplied), tokenHash)) {
       if (supplied) { f.n += 1; if (f.n >= 5) { f.until = now() + 5 * 60_000; f.n = 0; } failures.set(ip, f); }

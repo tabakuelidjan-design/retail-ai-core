@@ -10,6 +10,7 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import { FinanceError } from './document.js';
+import { createSecurityMonitor } from '../security/monitor.js';
 import { eurOfSupplier } from './currency.js';
 import { CAPTURE_MAX_BYTES, CAPTURE_ORIGINS, expenseValidationErrors, imageToPdf, isCapturedExpense, normalizeCaptureMeta } from './expense-capture.js';
 import { DOCUMENT_TYPES, checkPurchaseDocument, documentTypeOf, purchaseModelOf, readUblDocument } from './purchase-document.js';
@@ -80,10 +81,20 @@ export function createMemoryAttachmentStore() {
   };
 }
 /** Supabase Storage, PRIVATE bucket, service-role access from the server only: there is never a public or signed URL handed to the browser. */
-export function createSupabaseAttachmentStore({ url, serviceKey, bucket = 'finance-inbox', fetchImpl = fetch }) {
+export function createSupabaseAttachmentStore({ url, serviceKey, merchantId, bucket = 'finance-inbox', fetchImpl = fetch }) {
+  if (typeof merchantId !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(merchantId)) throw new FinanceError('ATTACHMENT_TENANT_REQUIRED');
   const base = `${url.replace(/\/$/, '')}/storage/v1/object/${bucket}`;
   const auth = { Authorization: `Bearer ${serviceKey}`, apikey: serviceKey };
-  const enc = (ref) => ref.split('/').map(encodeURIComponent).join('/');
+  const report = createSecurityMonitor({ module: 'finance' });
+  // An ownership error in a stored reference must not turn the service key into a cross-merchant download/delete.
+  const enc = (ref) => {
+    const parts = typeof ref === 'string' ? ref.split('/') : [];
+    if (parts.length < 2 || parts[0] !== merchantId || parts.some((part) => !part || part === '.' || part === '..' || /[\\%?#\u0000-\u001f\u007f]/.test(part))) {
+      report('ATTACHMENT_TENANT_MISMATCH');
+      throw new FinanceError('ATTACHMENT_TENANT_MISMATCH');
+    }
+    return parts.map(encodeURIComponent).join('/');
+  };
   return {
     name: 'supabase-storage',
     async put(ref, data, meta) {

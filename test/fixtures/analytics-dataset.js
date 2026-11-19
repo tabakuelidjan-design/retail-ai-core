@@ -10,7 +10,7 @@ export const NOW = new Date('2026-09-26T10:00:00Z');
 const localDay = (iso) => new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
 const r2 = (x) => Math.round((x + Number.EPSILON) * 100) / 100;
 
-export async function writeDataset({ dirty = false } = {}) {
+export async function writeDataset({ dirty = false, merchantId = '11111111-1111-4111-8111-111111111111' } = {}) {
   const d = makeData();
   d.orders = []; d.orderLines = []; d.refunds = []; d.refundLines = [];
   const uuid = { p1: '11111111-1111-4111-8111-111111111111', p2: '22222222-2222-4222-8222-222222222222', p3: '33333333-3333-4333-8333-333333333333', p4: '44444444-4444-4444-8444-444444444444' };
@@ -28,6 +28,6 @@ export async function writeDataset({ dirty = false } = {}) {
   d.refundLines.push({ id: 'rfl1', refund_id: 'rf1', order_line_id: 'l-g10', quantity: 1, amount: 10, tax_amount: 1.74 });
   d.firstOrderAt = '2026-06-12T12:00:00Z';
   const dir = await mkdtemp(path.join(tmpdir(), 'ai-'));
-  await writeFile(path.join(dir, 'dataset.json'), JSON.stringify({ version: 1, generated_at: '2026-09-26T09:00:00.000Z', time_zone: TZ, currency: 'EUR', data: d }));
+  await writeFile(path.join(dir, 'dataset.json'), JSON.stringify({ version: 1, tenant: { merchant_id: merchantId }, generated_at: '2026-09-26T09:00:00.000Z', time_zone: TZ, currency: 'EUR', data: d }));
   return dir;
 }

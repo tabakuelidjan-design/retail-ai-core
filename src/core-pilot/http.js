@@ -96,7 +96,9 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
       if (p === '/api/core/ask' && m === 'POST') {
         const b = await body(req);
         const conversation = 'conversation' in b ? validateConversation(b.conversation) : undefined; // opt-in; client state is rebuilt, never trusted
-        json(res, 200, await askNordla({ text: String(b.text ?? '').slice(0, 1000), caseId: typeof b.caseId === 'string' ? b.caseId : null }, { runtime, getCase: (id) => store.get(id), externals: await externals(), actor, finance, analytics, procurement, conversation }));
+        const active = await activeModules();
+        const readAccess = Object.fromEntries(['finance', 'analytics'].map((key) => [key, decideModuleOpen({ key, role: actor?.role ?? null, activeCodes: active })]));
+        json(res, 200, await askNordla({ text: String(b.text ?? '').slice(0, 1000), caseId: typeof b.caseId === 'string' ? b.caseId : null }, { runtime, getCase: (id) => store.get(id), externals: await externals(), actor, finance, analytics, procurement, conversation, readAccess }));
         return true;
       }
       if (p === '/api/core/finance/open' && m === 'POST') { // a one-time ticket to open the Finance dashboard on its own domain with THIS session: no token typed, no secret sent
@@ -130,6 +132,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
       if (p === '/api/core/finance/inbox' && m === 'GET') { // read-only list of the Finance supplier-invoice inbox of THIS server's merchant; owner, administrator and accountant only
         if (!finance?.inbox) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
         if (!FINANCE_INBOX_ROLES.includes(String(actor?.role ?? ''))) { json(res, 403, { error: 'FORBIDDEN', message: 'the Finance inbox is for the owner, an administrator or the accountant' }); return true; }
+        if (!(await activeModules()).has('finance')) { const denied = refusalOf({ code: 'MODULE_NOT_ENABLED' }); json(res, denied.status, denied.body); return true; }
         json(res, 200, await finance.inbox()); return true;
       }
       if (p === '/api/core/modules' && m === 'GET') { json(res, 200, await modules(actor)); return true; }

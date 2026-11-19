@@ -4,12 +4,17 @@
 // as a fact: what Analytics does not hold (traffic, advertising spend, ...) is listed as unknown, and any explanation is a hypothesis.
 import { createToolLayer } from '../analytics-premium/server/tools/index.js';
 import { KNOWN_GAPS } from '../analytics-premium/server/ai/contract.js';
+import { bindReportsTenant, reportsTenantOf } from '../analytics-premium/server/tenant.js';
 
 /**
  * @param {{ reportsDir: string, now?: () => Date, source: string, staleAfterMinutes?: number }} o
  *   reportsDir = an Analytics reports directory (dataset.json written by Analytics' own report run, stamped with the merchant)
  */
-export function createAnalyticsReader({ reportsDir, now = () => new Date(), source, staleAfterMinutes = 180 }) {
+export function createAnalyticsReader({ reportsDir, merchantId, now = () => new Date(), source, staleAfterMinutes = 180 }) {
+  if (typeof merchantId !== 'string' || !merchantId.trim()) throw new TypeError('Analytics reader requires its merchantId');
+  const bound = reportsTenantOf(reportsDir);
+  if (bound !== null && bound !== merchantId) throw new Error('ANALYTICS_REPORT_TENANT_MISMATCH');
+  bindReportsTenant(reportsDir, merchantId);
   const tools = createToolLayer({ reportsDir, now, staleAfterMinutes });
   const period = (p) => ({ period: p });
 

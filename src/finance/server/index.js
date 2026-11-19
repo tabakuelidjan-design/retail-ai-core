@@ -53,7 +53,7 @@ export async function startFinanceServer({ env = process.env, runtimeDeps = {}, 
     merchantId: rt.merchant.id, store: rt.store, token, retail: rt.retail, priceSource: createShopifyPriceSource(rt.shopify), salesConnector: rt.shopify,
     // Shopify stock applier gated by the connector state: NOT_CONFIGURED / MISCONFIGURED / UNAVAILABLE block it explicitly.
     stockApplier: { ...createShopifyStockApplier(rt.shopify), state: () => rt.shopify.state({ verify: true }) },
-    attachmentStore: createSupabaseAttachmentStore({ url: env.SUPABASE_URL, serviceKey: env.SUPABASE_SERVICE_ROLE_KEY }), retailConfig: rt.retailConfig, timeZone: rt.timeZone, retailHistory: async () => { let at = null; try { at = (await latestSyncStatus(rt.supabase, rt.merchant.id))?.lastSuccess?.finishedAt ?? null; } catch { at = null; } return mergeRetailHistory(await rt.retailHistory(), at); },
+    attachmentStore: createSupabaseAttachmentStore({ url: env.SUPABASE_URL, serviceKey: env.SUPABASE_SERVICE_ROLE_KEY, merchantId: rt.merchant.id }), retailConfig: rt.retailConfig, timeZone: rt.timeZone, retailHistory: async () => { let at = null; try { at = (await latestSyncStatus(rt.supabase, rt.merchant.id))?.lastSuccess?.finishedAt ?? null; } catch { at = null; } return mergeRetailHistory(await rt.retailHistory(), at); },
     // No sales-source connector at all -> an honest "no source" instead of an unknown sync.
     syncStatus: async () => {
       const source = await rt.salesSource();
@@ -62,6 +62,7 @@ export async function startFinanceServer({ env = process.env, runtimeDeps = {}, 
       return latestSyncStatus(rt.supabase, rt.merchant.id, { staleAfterMinutes: Number(env.SYNC_STALE_AFTER_MINUTES || 60) });
     },
     allowedHosts: hosting.allowedHosts ?? undefined, secureCookie: hosting.secureCookie, trustProxyHops: hosting.trustProxyHops,
+    ssoOnly: hosting.hosted && env.NORDLA_SSO_ONLY === '1',
     homeUrl: (() => { try { const u = new URL(String(env.NORDLA_HOME_URL ?? '').trim()); return u.protocol === 'https:' && !u.username && !u.password ? u.origin : null; } catch { return null; } })(), // "Retour à Nordla": the Nordla home address (https only); none = no link
     sso: financeSsoOptions({ hosted: hosting.hosted, enabled: env.FINANCE_SSO_ENABLED === '1', env, dashboardToken: token, supabase: rt.supabase, merchantId: rt.merchant.id }), // /sso: Nordla single sign-on, hosted and explicitly enabled only
     settings: {

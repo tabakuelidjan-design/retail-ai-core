@@ -53,8 +53,12 @@ export function createSessionGate({ identity, security, features = {}, mfaRule =
   /** Every other /api route: a valid session; for a change also the same-origin and CSRF checks. */
   async function authorize(req) {
     const r = await authorizeBase(req);
+    try {
     if (r.ok && mfaRule && !String(req.url ?? '').split('?')[0].match(MFA_EXEMPT) && await mfaRule.blocked(r.access)) {
       return { ok: false, status: 403, body: { error: { code: 'MFA_REQUIRED_FOR_ROLE', message: 'Votre rôle exige la double authentification. Activez-la dans Paramètres › Sécurité pour retrouver l’accès.' } } };
+    }
+    } catch {
+      return { ok: false, status: 503, body: { error: { code: 'MFA_POLICY_UNAVAILABLE', message: 'La verification de securite est temporairement indisponible. Reessayez plus tard.' } } };
     }
     return r;
   }

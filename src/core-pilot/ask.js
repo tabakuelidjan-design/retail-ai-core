@@ -36,10 +36,12 @@ const decisionSource = (v) => ({ kind: 'core_journal', ref: v.entry.id, case: v.
  * @param {{ text: string, caseId?: string|null }} q
  * @param {{ runtime: object|null, getCase: (id)=>Promise<object|null>, externals?: object, actor: object, now?: Date }} ctx
  */
-export async function askNordla({ text, caseId = null }, { runtime, getCase, externals = {}, actor, now = new Date(), finance = null, analytics = null, procurement = null, conversation }) {
+export async function askNordla({ text, caseId = null }, { runtime, getCase, externals = {}, actor, now = new Date(), finance = null, analytics = null, procurement = null, conversation, readAccess = null }) {
   const t = norm(text);
   if (!t) return { status: 'ASK', answer: 'Posez votre question par écrit.', sources: [], limits: [] };
   const limits = [];
+  const deniedRead = (key) => readAccess !== null && readAccess[key]?.ok !== true
+    ? { status: 'FORBIDDEN', module: key, answer: 'Votre compte ne permet pas de consulter les données de ce module.', sources: [], limits: [] } : null;
 
   // ---- an order to ACT is refused out loud: Nordla answers, it never orders, pays, sends, approves, records or erases anything
   if (isActionRequest(text)) return { status: 'ACTION_REFUSED', answer: refusalText(norm(text)), sources: [], limits };
@@ -94,13 +96,14 @@ ${out.answer}`; }
   }
   // ---- Finance (read-only reader over Finance's own engines) and Analytics (its Tool Layer); without a reader: said NOT connected
   const notConnected = (mod) => ({ status: 'MODULE_NOT_CONNECTED', module: mod, answer: NOT_CONNECTED[mod], sources: [], limits: [NOT_CONNECTED[mod]] });
-  if (/(factur|invoice)/.test(t) && /(fournisseur|supplier)/.test(t) && /(pay|regl|echean|due|doi|ouvert|reste)/.test(t) || /(echeanc|a payer|payables)/.test(t)) return finance ? payablesAnswer(await finance.payables()) : notConnected(M.FINANCE);
-  if (/(tresorerie|liquidit|solde bancaire|position de caisse|\bcash\b)/.test(t)) return finance ? treasuryAnswer(await finance.treasury()) : notConnected(M.FINANCE);
+  if (/(factur|invoice)/.test(t) && /(fournisseur|supplier)/.test(t) && /(pay|regl|echean|due|doi|ouvert|reste)/.test(t) || /(echeanc|a payer|payables)/.test(t)) return deniedRead('finance') ?? (finance ? payablesAnswer(await finance.payables()) : notConnected(M.FINANCE));
+  if (/(tresorerie|liquidit|solde bancaire|position de caisse|\bcash\b)/.test(t)) return deniedRead('finance') ?? (finance ? treasuryAnswer(await finance.treasury()) : notConnected(M.FINANCE));
   if (/(depense|achats? (du|de ce|ce) mois|combien.*(achete|depense))/.test(t)) {
+    if (deniedRead('finance')) return deniedRead('finance');
     if (!finance) return notConnected(M.FINANCE);
     const today = finance.today(); return purchasesAnswer(await finance.purchases({ from: `${today.slice(0, 8)}01`, to: today }));
   }
-  if (/(vente|ventes|chiffre d.affaires|\bca\b|sales|performance)/.test(t) && !/(prix de vente|selling price)/.test(t)) return analytics ? salesAnswer(await analytics.salesEvolution()) : notConnected(M.ANALYTICS);
+  if (/(vente|ventes|chiffre d.affaires|\bca\b|sales|performance)/.test(t) && !/(prix de vente|selling price)/.test(t)) return deniedRead('analytics') ?? (analytics ? salesAnswer(await analytics.salesEvolution()) : notConnected(M.ANALYTICS));
 
   if (/(dois.?je|faut.?il|devrais.?je|peut.?on|should i).*(achet|command|buy|order)|(analys).*(dossier|produit|achat)/.test(t)) {
     if (!runtime) return notConfigured();

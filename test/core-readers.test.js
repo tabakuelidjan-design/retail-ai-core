@@ -56,19 +56,19 @@ test('Finance -> Core: another merchant\'s reader sees none of these invoices; n
 
 test('Analytics -> Core: sales of a period vs the previous one, movers as FACTS, causes never asserted; stale data flagged', async () => {
   const dir = await writeDataset();
-  const reader = createAnalyticsReader({ reportsDir: dir, now: () => AN_NOW, source: 'Analytics · synthétique' });
+  const reader = createAnalyticsReader({ merchantId: '11111111-1111-4111-8111-111111111111', reportsDir: dir, now: () => AN_NOW, source: 'Analytics · synthétique' });
   const a = await askNordla({ text: 'Nordla, comment évoluent mes ventes et pourquoi certaines performances changent-elles ?' }, { analytics: reader, runtime: null, getCase: async () => null });
   assert.equal(a.status, 'ANSWERED');
   assert.match(a.answer, /Ventes du 27\/08\/2026 au 25\/09\/2026 \(30 j\)/); assert.match(a.answer, /Chiffre d’affaires net HT : 489,25 € \(\+1,7 % vs 480,98 €\)/);
   assert.match(a.answer, /pas la cause/); assert.match(a.answer, /hypothèse/); assert.doesNotMatch(a.answer, /parce que|à cause de|because/i);
   assert.equal(a.sources[0].kind, 'analytics'); assert.deepEqual(a.sources[0].period, { from: '2026-08-27', to: '2026-09-25' });
-  const stale = createAnalyticsReader({ reportsDir: dir, now: () => new Date(AN_NOW.getTime() + 2 * 86_400_000), source: 'x' });
+  const stale = createAnalyticsReader({ merchantId: '11111111-1111-4111-8111-111111111111', reportsDir: dir, now: () => new Date(AN_NOW.getTime() + 2 * 86_400_000), source: 'x' });
   const s = await askNordla({ text: 'comment évoluent mes ventes ?' }, { analytics: stale, runtime: null, getCase: async () => null });
   assert.ok(s.limits.some((l) => /Données ANCIENNES/.test(l)), 'a stale period is never presented as current');
 });
 
 test('Analytics -> Core: no data = said so, with no figure; no reader = NOT connected', async () => {
-  const empty = createAnalyticsReader({ reportsDir: await mkdtemp(join(tmpdir(), 'no-reports-')), now: () => AN_NOW, source: 'x' });
+  const empty = createAnalyticsReader({ merchantId: '11111111-1111-4111-8111-111111111111', reportsDir: await mkdtemp(join(tmpdir(), 'no-reports-')), now: () => AN_NOW, source: 'x' });
   const a = await askNordla({ text: 'comment évoluent mes ventes ?' }, { analytics: empty, runtime: null, getCase: async () => null });
   assert.equal(a.status, 'DATA_UNAVAILABLE'); assert.doesNotMatch(a.answer, /\d/);
   for (const q of ['comment évoluent mes ventes ?', 'quelles factures fournisseurs dois-je payer ?', 'ma trésorerie']) {

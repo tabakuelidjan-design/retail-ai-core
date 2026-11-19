@@ -48,11 +48,37 @@ test('V3-3 effect on an ALREADY OPEN session and on role changes: switching the 
   db.required = false; assert.equal((await gate.authorize(as(U.adm, '/api/general'))).ok, true, 'rule off');
 });
 
-test('V3-4 the answer is cached for a few seconds only, can be forgotten, and a database failure never blocks anyone (fail open on this extra rule only)', async () => {
+test('V3-4 cached answers expire and database failures cannot disable the MFA rule', async () => {
   const db = fakeDb(); db.required = true; let t = 0; const rule = createMfaRule({ supabase: db.supabase, ttlMs: 8000, now: () => t });
   assert.equal(await rule.blocked({ merchantId: M, userId: U.own }), true); await rule.blocked({ merchantId: M, userId: U.own }); assert.equal(db.calls, 1, 'cached');
   db.factors.add(U.own); rule.forget(M, U.own); assert.equal(await rule.blocked({ merchantId: M, userId: U.own }), false, 'forgotten after a factor change'); t = 9000; db.factors.delete(U.own);
-  assert.equal(await rule.blocked({ merchantId: M, userId: U.own }), true, 'expired cache re-read'); db.failing = true; t = 20000; assert.equal(await rule.blocked({ merchantId: M, userId: U.own }), false, 'db down: not blocked');
+  assert.equal(await rule.blocked({ merchantId: M, userId: U.own }), true, 'expired cache re-read'); db.failing = true; t = 20000;
+  await assert.rejects(rule.blocked({ merchantId: M, userId: U.own }), { code: 'MFA_POLICY_UNAVAILABLE' });
+});
+
+test('MFA policy outage closes business routes but keeps enrolment and authentication reachable', async () => {
+  const db = fakeDb(); db.failing = true;
+  const gate = gateFor(db, createMfaRule({ supabase: db.supabase, ttlMs: 0 }));
+  for (const path of ['/api/general', '/api/core/finance/open', '/api/core/analytics/open', '/api/core/ask']) {
+    const result = await gate.authorize(as(U.own, path));
+    assert.equal(result.status, 503, path);
+    assert.equal(result.body.error.code, 'MFA_POLICY_UNAVAILABLE');
+  }
+  for (const path of ['/api/security/mfa/enroll', '/api/auth/session']) {
+    assert.equal((await gate.authorize(as(U.own, path))).ok, true, path);
+  }
+});
+
+test('incomplete, null and incorrectly typed MFA policy answers are refused', async () => {
+  for (const value of [null, {}, { required: false }, { required: false, privileged: false }, { required: false, privileged: false, compliant: 'true' }]) {
+    const rule = createMfaRule({ supabase: { rpc: async () => value }, ttlMs: 0 });
+    await assert.rejects(rule.blocked({ merchantId: M, userId: U.own }), { code: 'MFA_POLICY_UNAVAILABLE' });
+  }
+});
+
+test('the rules screen cannot report MFA disabled when its database read fails', async () => {
+  const rule = createMfaRule({ supabase: { rpc: async () => null, select: async () => { throw new Error('read failed'); } } });
+  await assert.rejects(rule.enabled(M), { code: 'MFA_POLICY_UNAVAILABLE' });
 });
 
 test('V3-5 changing the rule: OWNER only, never without own second factor (no lock-out), listed non-compliant members, a viewer/admin refused', async () => {

@@ -59,7 +59,10 @@ export function buildHostedGate(env, hosted, services = null) {
     identity = createIdentityService({ merchantId: hosted.merchantId, moduleCode: 'sourcing', supabase, ...loadIdentityServiceEnv(env), recoveryCheck });
   }
   const security = services?.security ?? createHttpSecurity({ environment: 'hosted', proxy: 'railway', allowedHosts: hosted.allowedHosts, allowedOrigins: [hosted.origin], moduleCode: 'sourcing', csrfKey: env.NORDLA_CSRF_KEY, rateLimitKey: env.NORDLA_IDENTITY_RATE_LIMIT_KEY });
-  let mfaRule = null; if (String(env.NORDLA_SECURITY_MODULE ?? '') === '1' && String(env.NORDLA_MFA_MODULE ?? '') === '1' && !services?.identity) { try { mfaRule = createMfaRule({ supabase: createSupabaseClient(loadSupabaseConfigFromEnv(env)) }); } catch { mfaRule = null; } }
+  let mfaRule = services?.mfaRule ?? null;
+  if (!services?.identity) {
+    mfaRule = createMfaRule({ supabase: createSupabaseClient(loadSupabaseConfigFromEnv(env)), ttlMs: 0 });
+  }
   return createSessionGate({ identity, security, mfaRule, features: { recovery: String(env.NORDLA_SECURITY_MODULE ?? '') === '1' && String(env.NORDLA_RECOVERY_MODULE ?? '') === '1' } });
 }
 
@@ -325,7 +328,7 @@ export async function buildReaders({ env, dir, merchantId, log = () => {}, sched
     const { createAnalyticsReader } = await import('../../core-pilot/analytics-reader.js');
     const reportsDir = String(env.ANALYTICS_REPORTS_DIR ?? '').trim() || join(dir, '..', 'analytics-reports');
     await mkdir(reportsDir, { recursive: true });
-    analytics = createAnalyticsReader({ reportsDir, source: `Analytics · ${label}` });
+    analytics = createAnalyticsReader({ reportsDir, merchantId, source: `Analytics · ${label}` });
     const refresh = async () => { try { const { runReport } = await import('../../report/index.js'); await runReport({ mode: 'report', env, supabase, outDir: reportsDir, log: () => {} }); log('Analytics reports refreshed for the Core.'); } catch (e) { log(`Analytics refresh FAILED (${e.code ?? 'ERROR'}): ${e.message} - answers say the data is unavailable or stale.`); } };
     if (schedule) { const first = setTimeout(refresh, 5_000); const every = setInterval(refresh, Math.max(1, Number(env.ANALYTICS_REFRESH_HOURS) || 3) * 3600_000); first.unref?.(); every.unref?.(); }
   } else log('Finance / Analytics for the Core: NOT connected (MERCHANT_TIMEZONE not set: no silent UTC).');

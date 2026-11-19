@@ -36,7 +36,7 @@ async function world() {
   // isolated synthetic Finance + Analytics (never real data)
   const fw = accWorld({ merchantId: M });
   const a = await fw.supplier(121000, { dueDate: '2026-09-28', supplierName: 'Yiwu Greenline', invoiceNumber: 'YG-1' }); await fw.supplier(48400, { dueDate: '2026-10-08', supplierName: 'Dongguan Pioneer', invoiceNumber: 'DP-7' }); await fw.paySupplier(21000, [[a.id, 21000]]);
-  const readers = { finance: createFinanceReader({ store: fw.st, merchantId: M, timeZone: 'Europe/Brussels', now: () => '2026-10-03T10:00:00.000Z', source: 'Finance · données de test isolées' }), analytics: createAnalyticsReader({ reportsDir: await writeDataset(), now: () => AN_NOW, source: 'Analytics · données de test isolées' }) };
+  const readers = { finance: createFinanceReader({ store: fw.st, merchantId: M, timeZone: 'Europe/Brussels', now: () => '2026-10-03T10:00:00.000Z', source: 'Finance · données de test isolées' }), analytics: createAnalyticsReader({ merchantId: M, reportsDir: await writeDataset({ merchantId: M }), now: () => AN_NOW, source: 'Analytics · données de test isolées' }) };
   const dir = await mkdtemp(join(tmpdir(), 'nordla-modules-'));
   const services = () => ({ readers, entitlements: async () => new Set(['finance', 'analytics']), identity: createIdentityService({ merchantId: M, moduleCode: 'sourcing', supabase: db.supabase, auth: { baseUrl: ENV.SUPABASE_URL, anonKey: ENV.SUPABASE_ANON_KEY }, sessions: loadIdentityConfig({}), rateLimits: loadRateLimitConfig({}), rateLimitKey: ENV.NORDLA_IDENTITY_RATE_LIMIT_KEY, fetchImpl: auth.fetchImpl }), security: createHttpSecurity({ environment: 'hosted', proxy: 'railway', allowedHosts: [HOST], allowedOrigins: [ORIGIN], moduleCode: 'sourcing', csrfKey: ENV.NORDLA_CSRF_KEY, rateLimitKey: ENV.NORDLA_IDENTITY_RATE_LIMIT_KEY, loginTiming: { minMs: 200, jitterMs: 0 } }) });
   const w = { dir, srv: null };
@@ -70,9 +70,9 @@ test('Nordla single entry: 7 modules with their REAL state, Finance / Analytics 
     assert.match(mods.find((m) => m.key === 'creative').detail, /Génération IA : aucun fournisseur connecté/, 'AI generation stays said as not connected');
     assert.deepEqual(mods.filter((m) => m.offline).map((m) => m.key), ['sourcing'], 'only Sourcing is said to work offline');
     // Finance and Analytics through Parle à Nordla, with sources
-    const fin = (await w.call('POST', '/api/core/ask', { who: buyer, body: { text: 'quelles factures fournisseurs dois-je payer et quelles sont les échéances ?' } })).body;
+    const fin = (await w.call('POST', '/api/core/ask', { who: owner, body: { text: 'quelles factures fournisseurs dois-je payer et quelles sont les échéances ?' } })).body;
     assert.match(fin.answer, /EN RETARD de 5 j — Yiwu Greenline/); assert.equal(fin.sources[0].source, 'Finance · données de test isolées');
-    const sales = (await w.call('POST', '/api/core/ask', { who: buyer, body: { text: 'comment évoluent mes ventes ?' } })).body;
+    const sales = (await w.call('POST', '/api/core/ask', { who: owner, body: { text: 'comment évoluent mes ventes ?' } })).body;
     assert.match(sales.answer, /Chiffre d’affaires net HT : 489,25 €/); assert.equal(sales.sources[0].kind, 'analytics');
     // Branding: proposal, preview (not official), collaborator cannot approve, owner approves -> official verdicts
     assert.equal((await w.call('GET', '/api/core/branding', { who: buyer })).body.status, 'PROPOSED_NOT_APPROVED');
