@@ -32,7 +32,7 @@ The optional PostgreSQL/PGlite drill runs the actual migration, replays it, then
 - Core assistant Finance/Analytics reads use the same role and entitlement decisions as opening these modules. A forbidden reader is never called.
 - Core's Analytics reader requires its merchant, rejects a directory already bound to another merchant, and refuses foreign or unstamped report files.
 
-Growth's separate identity path has not been changed by this patch. Its MFA-policy enforcement still needs verification.
+Growth now checks the shared MFA policy for business requests; NORDLA_SSO_ONLY=1 disables its direct password entry so it cannot bypass Core. Historical sessions and fresh MFA assurance still require acceptance after personal activation.
 
 ## Validation
 
@@ -75,3 +75,12 @@ Deploy only from service release branches and preserve their latest changes. Fin
 ## Integration after latest Claude releases
 
 Core: 340 tests, 339 passed, one skipped. Finance: 61 passed. Analytics: 239 passed. Zero failures. Latest permission matrix, version endpoints and test-data labels are preserved. These are targeted integration suites, not a claim that the entire repository suite passed.
+
+## Closure wave — 19 November, 20:00 UTC
+
+- Updated follow-redirects from 1.16.1 to 1.16.3 on Core, Finance, Analytics and Growth. GHSA-mrwp-f3q8-3g9p affects custom sensitiveHeaders in a cross-realm case; no Nordla exploitation was demonstrated. npm audit --omit=dev reports zero known vulnerabilities for all four installed locks. This is not a penetration-test certificate.
+- Final selected suites: Core 230/230; Finance 86/86; Analytics 215/215; Growth 361 passed, one skipped (362 tests, 49 files; long growth-browser suite excluded). Recovery tests separately rerun after the final path hardening: 6/6. Counts overlap; do not add them into a claimed unique total.
+- Nine anonymous business API probes on deployed staging return 401. Five direct anonymous Supabase table probes return zero rows or a refusal. A known existing object in each private bucket is refused without credentials. These are samples, not exhaustive endpoint coverage.
+- Native PostgreSQL database+original-file drill: 50 migrations, four fictitious merchants, four issued invoices, four PDFs; ACLs and RLS survive restoration. Managed Supabase schemas were stubbed; no hosted full restore proved. See security-recovery.md.
+- A fresh staging read found three active privileged members, one compliant with factor enrollment, mandatory MFA OFF. No owner was impersonated or locked out. Enrolled-factor status is not proof that every existing session performed MFA; retire pre-enforcement sessions and complete session-assurance acceptance before calling this enforced MFA.
+- Current business servers still have service_role access. Database-enforced server isolation and an independent ransomware-resistant backup remain release gates. No real multi-company use is approved.
