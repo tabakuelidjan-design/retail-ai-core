@@ -10,7 +10,9 @@
 // Two different RELIABLE references are two movements, whatever they look like.
 // A HELD row never enters reconciliation: it is not in the store, so it cannot be suggested or confirmed.
 
-const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+// Explicit rule, identical in SQL (fin_bank_norm, migration 20261119100000): decompose, drop combining marks, every other non-ASCII character becomes a space
+// (no Unicode case folding: 'ß', ligatures, 'Ø', dotless i are NOT expanded), ASCII upper case, runs of non [A-Z0-9] become one space, trimmed.
+const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^ -~]/g, ' ').toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
 
 export const movementKey = (t) => [String(t.date ?? ''), Number(t.amountCents), String(t.currency ?? 'EUR').toUpperCase(), norm(t.reference), norm(t.counterpartyName)].join('|');
 
