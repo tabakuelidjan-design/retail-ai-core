@@ -63,7 +63,10 @@ async function createEmpty(admin, name, template) {
 export async function ensureTemplate() {
   const TEMPLATE = templateName(); const admin = await adminClient();
   try {
-    const exists = (await admin.query('select 1 from pg_database where datname=$1', [TEMPLATE])).rowCount;
+    // a template left half-built by an earlier failed replay is dropped and rebuilt, never reused
+    const found = (await admin.query('select datistemplate from pg_database where datname=$1', [TEMPLATE])).rows[0];
+    if (found && !found.datistemplate) await admin.query(`drop database if exists ${TEMPLATE} with (force)`);
+    const exists = found?.datistemplate ? 1 : 0;
     if (!exists) {
       await createEmpty(admin, TEMPLATE);
       const c = await clientFor(TEMPLATE);

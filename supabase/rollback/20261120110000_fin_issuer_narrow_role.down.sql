@@ -20,12 +20,14 @@ revoke usage on schema public from nordla_fin_issuer_pilot;
 revoke usage on schema nordla_runtime from nordla_fin_issuer_pilot;
 
 revoke execute on function nordla_runtime.fin_pilot_bound_merchant(), nordla_runtime.fin_pilot_assert(uuid) from nordla_fin_issuer_pilot;
+drop function if exists nordla_runtime.fin_pilot_role_audit();
 drop function if exists nordla_runtime.fin_pilot_assert(uuid);
 drop function if exists nordla_runtime.fin_pilot_bound_merchant();
 drop trigger if exists fin_pilot_binding_guard_trg on nordla_runtime.fin_pilot_principals;
 drop function if exists nordla_runtime.fin_pilot_binding_guard();
 drop table if exists nordla_runtime.fin_pilot_principals;
 drop schema if exists nordla_runtime;
+grant execute on function extensions.digest(text, text) to public; -- restore the platform default (PUBLIC EXECUTE) removed by the migration
 
 -- Role drop: the role is cluster-wide. DROP ROLE fails while any database in the cluster still holds its grants
 -- (for example a template database). Run this statement only after the same rollback has been applied to every database

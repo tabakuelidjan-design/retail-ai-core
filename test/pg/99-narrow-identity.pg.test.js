@@ -1,11 +1,22 @@
 // PILOT v2 identity tests on real LOGIN roles: binding, mismatch, privileged or unbound logins, binding immutability.
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import pg from 'pg';
 import { freshDatabase, seedMerchants, insertDraft, adminClient, MERCHANT_A, MERCHANT_B } from './lib/db.js';
 import { createNarrowIssuePath } from '../../src/finance/runtime/narrow-issue-path.js';
 import { setupLogins, poolFor, LOGIN_A, LOGIN_B, PW } from './lib/pilot.js';
 import { testUrl } from './lib/safety.js';
+
+// Cluster-wide probe roles are removed at the end of this file: a leftover privileged member of the pilot role would make
+// every later migration (and the template) fail closed, which is the intended behaviour of the audit.
+after(async () => {
+  const a = await adminClient();
+  try {
+    for (const r of ['nordla_fin_probe_member', 'nordla_fin_probe_bypass', 'nordla_fin_unbound_login', 'nordla_fin_probe_nonmember']) {
+      await a.query(`do $$ begin if exists (select 1 from pg_roles where rolname='${r}') then execute 'drop role ${r}'; end if; end $$`);
+    }
+  } finally { await a.end(); }
+});
 
 const msgOf = async (fn) => { try { await fn(); return null; } catch (e) { return e.message; } };
 

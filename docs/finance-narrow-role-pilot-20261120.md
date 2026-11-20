@@ -85,3 +85,38 @@ Conséquence : une approbation complète (`decide APPROVE`) passe encore par `se
 3. Login de test dédié, créé par un opérateur, lié à un marchand fictif.
 4. Migration appliquée seulement après accord explicite, puis relecture des droits et des conseils Supabase.
 5. Recette : émission nominale, refus sans liaison, refus de changement de contexte, refus d'un login privilégié, rollback vérifié.
+
+## Audit du rôle `nordla_fin_issuer_pilot` (v3)
+
+Fonction `nordla_runtime.fin_pilot_role_audit()` (SECURITY DEFINER, exécutable par `postgres` seulement). Elle contrôle :
+- **privilèges réels** (aclexplode) : exactement l'ensemble attendu (3 fonctions, 3 schémas, 5 droits de tables fin_*), y compris les droits accordés à `PUBLIC` sur les schémas `public` et `nordla_runtime` (le `EXECUTE` de `PUBLIC` sur `extensions.digest` est retiré par la migration) ;
+- **attributs** : ni superuser, ni BYPASSRLS, ni CREATEROLE, ni CREATEDB, ni REPLICATION, ni LOGIN, ni INHERIT ;
+- **appartenances** : le rôle n'est membre d'aucun autre rôle (donc aucun `SET ROLE` vers une puissance supérieure) et personne ne peut le redonner (pas d'ADMIN OPTION) ;
+- **membres** : chaque membre est non privilégié et n'appartient à aucun autre rôle ;
+- **propriété** : le rôle ne possède aucune table, fonction ni schéma ; les tables `fin_*` ne lui appartiennent pas.
+
+La migration **échoue fermée** à la fin si un contrôle échoue (`FIN_PILOT_ROLE_UNSAFE`), y compris quand le rôle existait déjà avec des attributs trop puissants. Tests : `test/pg/100-narrow-role-audit.pg.test.js` (6/6 : base saine, BYPASSRLS, privilège supplémentaire sur une table bancaire et sur PUBLIC, appartenance à service_role, membre privilégié, propriété, ADMIN OPTION, rôle préexistant trop puissant).
+
+## Test de la fonction de comparaison (base 361c06f5)
+
+Les deux tests `finance-pack` en échec (`ISOLATION: only company.js may touch the network…` et `the generic finance core contains no merchant name…`) échouent **à l'identique sur la base `361c06f5`** (même commande, même `package-lock.json` identique, même `node_modules` contenant `pdfkit`). Ils sont donc **préexistants** : la base contient déjà `peppol-recommand.js` dans la liste des fichiers réseau et `payment-channel.js` qui nomme un fournisseur. Le pilote ne modifie aucun de ces fichiers.
+
+## Raccordement réel préparé (pas encore branché)
+
+- Dépendance : `pg@8.16.3` (version exacte, ajoutée au `package.json` de la branche pilote).
+- `src/finance/runtime/pg-connection.js` :
+  - refuse les logins administratifs ou de plateforme (postgres, supabase_admin, service_role, authenticator, anon, authenticated, dashboard_user) et tout login hors préfixe `nordla_fin_pilot_` ;
+  - TLS vérifié obligatoire hors loopback (`rejectUnauthorized: true`, CA fournie par l'entrypoint, `sslmode` refusé sauf `verify-full`) ;
+  - texte clair accepté seulement en loopback avec un drapeau de test explicite ;
+  - pool borné (max, timeouts de connexion et d'inactivité, `statement_timeout`) ;
+  - `verifyPilotConnection` exécute la vérification d'identité au démarrage et renvoie `session_user` ; en cas d'échec, il lève une erreur, sans repli.
+- `test/pg/101-pilot-connection.pg.test.js` : 5/5 verts (refus des logins, refus sans CA ou en `sslmode` non vérifié, loopback sans drapeau, options TLS du pool, identité A acceptée, B refusée, login non lié refusé).
+
+## Recette staging : bloquée (accès manquant)
+
+- Réseau : le pooler Supabase `aws-0-eu-west-1.pooler.supabase.com` (5432 session et 6543 transaction) **répond**. L'hôte direct `db.fvhiammdskpcnfodsnrc.supabase.co` n'est pas résolu depuis ce poste.
+- TLS : la connexion échoue avec `SELF_SIGNED_CERT_IN_CHAIN` : le certificat de la chaîne n'est pas dans le magasin de confiance Node. **Il faut l'autorité de certification Supabase officielle (PEM)** pour une vérification réelle. La récupérer exige un téléchargement que je n'ai pas le droit de faire sans ton accord ; je ne contourne pas la vérification (`rejectUnauthorized: false` est interdit ici).
+- Identifiants : aucun login de test n'a été créé sur staging. Le rôle MCP peut créer des rôles (CREATEROLE, vérifié), mais un login de test ne sert à rien sans le CA pour vérifier la connexion réelle ; je ne l'ai donc pas fait.
+- Conséquence : `session_user` **via le pooler** (mode transaction 6543 et session 5432) n'a pas été démontré. Ce point reste ouvert.
+
+Étapes restantes une fois le CA disponible : créer un login de test lié à une entreprise fictive, appliquer la migration v3 sur staging après accord explicite, vérifier `verifyPilotConnection` en session (5432) et en transaction (6543), puis la recette nominale et les refus.

@@ -129,4 +129,78 @@ drop policy if exists nordla_fin_pilot_events on public.fin_events;
 create policy nordla_fin_pilot_events on public.fin_events as permissive for insert to nordla_fin_issuer_pilot
   with check (merchant_id = nordla_runtime.fin_pilot_bound_merchant());
 
+-- Role audit (v3): what the pilot role can actually do. Exact expected privileges, attributes, memberships, ownership.
+-- Runs at the end of this migration (a pre-existing or altered role makes the migration fail) and is re-run by the tests.
+revoke execute on function extensions.digest(text, text) from public; -- PUBLIC EXECUTE would reach the pilot too; explicit grants keep the other roles working
+
+create or replace function nordla_runtime.fin_pilot_role_audit()
+returns table (check_name text, ok boolean, detail text)
+language plpgsql stable security definer set search_path = '' as $$
+declare
+  pilot oid := (select oid from pg_roles where rolname = 'nordla_fin_issuer_pilot');
+  expected text[] := array[
+    'f:extensions.digest:EXECUTE', 'f:nordla_runtime.fin_pilot_assert:EXECUTE', 'f:nordla_runtime.fin_pilot_bound_merchant:EXECUTE',
+    'f:public.fin_issue_document:EXECUTE', 'f:public.fin_next_number:EXECUTE',
+    'n:extensions:USAGE', 'n:nordla_runtime:USAGE', 'n:public:USAGE',
+    'r:public.fin_documents:SELECT', 'r:public.fin_documents:UPDATE',
+    'r:public.fin_events:INSERT',
+    'r:public.fin_number_sequences:INSERT', 'r:public.fin_number_sequences:SELECT', 'r:public.fin_number_sequences:UPDATE'];
+  actual text[];
+  attrs record;
+  bad_members text;
+begin
+  -- every privilege granted to the pilot role, or to PUBLIC on objects (namespaces: the pilot only, PUBLIC USAGE on public is platform default)
+  select coalesce(array_agg(x order by x), '{}') into actual from (
+    select 'r:' || n.nspname || '.' || c.relname || ':' || a.privilege_type as x from pg_class c join pg_namespace n on n.oid = c.relnamespace, lateral aclexplode(c.relacl) a
+      where n.nspname in ('public','extensions','nordla_runtime') and c.relkind in ('r','p','v','m','f','S')
+        and (a.grantee = pilot or (a.grantee = 0 and n.nspname in ('public','nordla_runtime')))
+    union all
+    select 'f:' || n.nspname || '.' || p.proname || ':' || a.privilege_type from pg_proc p join pg_namespace n on n.oid = p.pronamespace, lateral aclexplode(p.proacl) a
+      where n.nspname in ('public','extensions','nordla_runtime') and p.prorettype <> 'trigger'::regtype
+      and (a.grantee = pilot or (a.grantee = 0 and n.nspname in ('public','nordla_runtime')))
+    union all
+    select 'n:' || n.nspname || ':' || a.privilege_type from pg_namespace n, lateral aclexplode(n.nspacl) a where a.grantee = pilot
+  ) s;
+  check_name := 'privileges are exactly the expected set'; ok := actual = (select array_agg(x order by x) from unnest(expected) x); detail := array_to_string(actual, ', '); return next;
+
+  select rolsuper, rolbypassrls, rolcreaterole, rolcreatedb, rolreplication, rolcanlogin, rolinherit into attrs from pg_roles where oid = pilot;
+  check_name := 'no privileged attribute (super, bypassrls, createrole, createdb, replication, login, inherit)';
+  ok := not (attrs.rolsuper or attrs.rolbypassrls or attrs.rolcreaterole or attrs.rolcreatedb or attrs.rolreplication or attrs.rolcanlogin or attrs.rolinherit);
+  detail := format('super=%s bypassrls=%s createrole=%s createdb=%s replication=%s login=%s inherit=%s', attrs.rolsuper, attrs.rolbypassrls, attrs.rolcreaterole, attrs.rolcreatedb, attrs.rolreplication, attrs.rolcanlogin, attrs.rolinherit);
+  return next;
+
+  check_name := 'pilot is a member of no role (no indirect power, no SET ROLE target)';
+  ok := not exists (select 1 from pg_auth_members where member = pilot);
+  detail := coalesce((select string_agg(r.rolname, ',') from pg_auth_members m join pg_roles r on r.oid = m.roleid where m.member = pilot), 'none');
+  return next;
+
+  check_name := 'nobody can grant the pilot role onward (no ADMIN OPTION)';
+  ok := not exists (select 1 from pg_auth_members where roleid = pilot and admin_option);
+  detail := 'checked'; return next;
+
+  select string_agg(r.rolname, ',') into bad_members from pg_auth_members m join pg_roles r on r.oid = m.member
+    where m.roleid = pilot and (r.rolsuper or r.rolbypassrls or r.rolcreaterole or r.rolcreatedb or r.rolreplication
+      or exists (select 1 from pg_auth_members m2 where m2.member = m.member and m2.roleid <> pilot));
+  check_name := 'every member of the pilot role is unprivileged and in no other role';
+  ok := bad_members is null;
+  detail := coalesce(bad_members, 'members checked'); return next;
+
+  check_name := 'the pilot role owns no object';
+  ok := not exists (select 1 from pg_class where relowner = pilot) and not exists (select 1 from pg_proc where proowner = pilot)
+     and not exists (select 1 from pg_namespace where nspowner = pilot);
+  detail := 'checked'; return next;
+
+  check_name := 'the protected finance tables are owned by the platform owner, not the pilot';
+  ok := not exists (select 1 from pg_class c where c.relname like 'fin_%' and c.relowner = pilot);
+  detail := 'checked'; return next;
+end $$;
+revoke all on function nordla_runtime.fin_pilot_role_audit() from public, anon, authenticated, service_role;
+
+do $$
+declare bad text;
+begin
+  select string_agg(check_name || ': ' || detail, ' | ') into bad from nordla_runtime.fin_pilot_role_audit() where not ok;
+  if bad is not null then raise exception 'FIN_PILOT_ROLE_UNSAFE: %', bad; end if;
+end $$;
+
 commit;
