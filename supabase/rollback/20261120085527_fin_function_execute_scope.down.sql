@@ -1,4 +1,4 @@
--- Rollback of 20261120100000_fin_function_execute_scope.sql: restores the previous EXECUTE grants
+-- Rollback of 20261120085527_fin_function_execute_scope.sql: restores the previous EXECUTE grants
 -- (PUBLIC, anon and authenticated) on the three functions. Use only to recover an integration that
 -- calls these functions with a user key; the Finance server does not need it.
 begin;

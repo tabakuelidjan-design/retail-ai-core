@@ -1,4 +1,4 @@
--- Rollback of 20261120090000_fin_function_search_path.sql.
+-- Rollback of 20261120083356_fin_function_search_path.sql.
 -- Restores the previous state (no pinned search_path) only for public.fin_* functions that carry the exact
 -- pin set by that migration. Functions with any other configuration are left untouched.
 begin;

@@ -1,5 +1,5 @@
 // Security hardening 2026-11-20 on a real PostgreSQL 17:
-//  (1) every public.fin_* function carries the pinned search_path of migration 20261120090000 and nothing else changes;
+//  (1) every public.fin_* function carries the pinned search_path of migration 20261120083356 and nothing else changes;
 //  (2) the rollback restores the previous state exactly for those functions;
 //  (3) nordla_is_active_member(uuid) (Core migration 20261119150000, copied verbatim into a fixture) decides membership
 //      only for auth.uid(), ACTIVE status and removed_at null, refuses other merchants, and grants EXECUTE to authenticated only.
@@ -11,8 +11,8 @@ import { freshDatabase, MERCHANT_A, MERCHANT_B } from './lib/db.js';
 
 const PIN = 'search_path=public, extensions, pg_temp';
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
-const UP = readFileSync(`${ROOT}supabase/migrations/20261120090000_fin_function_search_path.sql`, 'utf8');
-const DOWN = readFileSync(`${ROOT}supabase/rollback/20261120090000_fin_function_search_path.down.sql`, 'utf8');
+const UP = readFileSync(`${ROOT}supabase/migrations/20261120083356_fin_function_search_path.sql`, 'utf8');
+const DOWN = readFileSync(`${ROOT}supabase/rollback/20261120083356_fin_function_search_path.down.sql`, 'utf8');
 
 const finState = (c) => c.query(`select p.proname, p.proconfig::text as cfg from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where n.nspname='public' and p.proname like 'fin\\_%' order by p.proname, p.oid`);
@@ -109,14 +109,14 @@ test('nordla_is_active_member: ACTIVE, not removed, same merchant only; authenti
   } finally { await c.end(); await db.drop(); }
 });
 
-// ---------- EXECUTE scope of the non-trigger fin_* functions (migration 20261120100000) ----------
+// ---------- EXECUTE scope of the non-trigger fin_* functions (migration 20261120085527) ----------
 const EXEC_SCOPED = [
   'public.fin_issue_document(uuid, uuid, integer, text, text, integer, text, integer, text, text, timestamptz, jsonb)',
   'public.fin_next_number(uuid, text, integer)',
   'public.fin_payable_cents(public.fin_documents)',
 ];
-const EXEC_UP = readFileSync(`${ROOT}supabase/migrations/20261120100000_fin_function_execute_scope.sql`, 'utf8');
-const EXEC_DOWN = readFileSync(`${ROOT}supabase/rollback/20261120100000_fin_function_execute_scope.down.sql`, 'utf8');
+const EXEC_UP = readFileSync(`${ROOT}supabase/migrations/20261120085527_fin_function_execute_scope.sql`, 'utf8');
+const EXEC_DOWN = readFileSync(`${ROOT}supabase/rollback/20261120085527_fin_function_execute_scope.down.sql`, 'utf8');
 const execState = async (c) => (await c.query(`select f as sig, has_function_privilege('anon', f, 'EXECUTE') as anon_x, has_function_privilege('authenticated', f, 'EXECUTE') as auth_x, has_function_privilege('service_role', f, 'EXECUTE') as svc_x from unnest($1::regprocedure[]) f`, [EXEC_SCOPED])).rows;
 
 test('anon and authenticated lose EXECUTE on the three exposed fin_* functions; service_role keeps it; rollback restores', async () => {

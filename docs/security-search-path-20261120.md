@@ -6,10 +6,10 @@ Projet staging : `nordla-finance-staging` (fvhiammdskpcnfodsnrc). Production : a
 
 | Migration | Fichier | Effet |
 |---|---|---|
-| `20261120090000_fin_function_search_path` | `supabase/migrations/20261120090000_fin_function_search_path.sql` | Fixe `search_path = public, extensions, pg_temp` sur les 33 fonctions `public.fin_*` (SECURITY INVOKER). Aucun corps, propriétaire, grant ni politique modifié. |
-| `20261120100000_fin_function_execute_scope` | `supabase/migrations/20261120100000_fin_function_execute_scope.sql` | Retire EXECUTE à `PUBLIC`, `anon`, `authenticated` sur `fin_issue_document`, `fin_next_number`, `fin_payable_cents`. `service_role` conserve EXECUTE. |
+| `20261120083356_fin_function_search_path` | `supabase/migrations/20261120083356_fin_function_search_path.sql` | Fixe `search_path = public, extensions, pg_temp` sur les 33 fonctions `public.fin_*` (SECURITY INVOKER). Aucun corps, propriétaire, grant ni politique modifié. |
+| `20261120085527_fin_function_execute_scope` | `supabase/migrations/20261120085527_fin_function_execute_scope.sql` | Retire EXECUTE à `PUBLIC`, `anon`, `authenticated` sur `fin_issue_document`, `fin_next_number`, `fin_payable_cents`. `service_role` conserve EXECUTE. |
 
-Rollbacks : `supabase/rollback/20261120090000_fin_function_search_path.down.sql` et `supabase/rollback/20261120100000_fin_function_execute_scope.down.sql`.
+Rollbacks : `supabase/rollback/20261120083356_fin_function_search_path.down.sql` et `supabase/rollback/20261120085527_fin_function_execute_scope.down.sql`.
 
 Tests : `test/pg/96-security-search-path.pg.test.js` (5 tests, vert sur PostgreSQL 17 local). Suites `30-p0-regression`, `50-essential-payments`, `70-bank` : 77 tests verts après la première migration.
 
@@ -32,8 +32,8 @@ Tests locaux : membre ACTIVE non retiré → vrai ; SUSPENDED → faux ; retiré
 
 Le texte SQL envoyé à `apply_migration` est celui des fichiers ci-dessus. Empreintes SHA-256 des fichiers versionnés :
 
-- `20261120090000_fin_function_search_path.sql` : `dec9f4320b354436f2c571ce2cd716b77da68770656bbb11a82306e3634eb6c4`
-- `20261120100000_fin_function_execute_scope.sql` : `078b94c0aa9c33c041525850d737616ec62df8d544c2a1ad1f4fa149e6016de7`
+- `20261120083356_fin_function_search_path.sql` : `8fd804713f1d3c73c45671f6311bd39eef56c2da667ba534d52aec1a3127ff87`
+- `20261120085527_fin_function_execute_scope.sql` : `7eca96ea8461fb1d68a4b5e95d6ee726a3268f30a5dfa0203ecfa6fd231ec537`
 
 La preuve côté base est le résultat catalogue (33/33 fonctions épinglées, EXECUTE retiré sur les trois fonctions) ; l'outil ne renvoie pas le texte stocké des migrations.
 

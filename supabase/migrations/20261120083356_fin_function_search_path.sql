@@ -3,7 +3,7 @@
 -- object names. The path is pinned to the same resolution order Supabase already gives these roles
 -- (public, extensions, then pg_temp), so every existing unqualified reference resolves exactly as before.
 -- Behaviour is unchanged: no body, grant, owner, trigger or RLS policy is modified.
--- Rollback: supabase/rollback/20261120090000_fin_function_search_path.down.sql
+-- Rollback: supabase/rollback/20261120083356_fin_function_search_path.down.sql
 begin;
 
 do $$
