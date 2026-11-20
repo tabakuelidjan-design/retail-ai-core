@@ -59,6 +59,11 @@ const mount = (parent, node) => { if (node) parent.appendChild(node); return par
 const clear = (el) => { while (el.firstChild) el.removeChild(el.firstChild); return el; };
 const show = (...nodes) => { clear(app); nodes.forEach((n) => app.appendChild(n)); };
 
+// Navigation race guard: a view whose data arrives after a newer view has started must not render over it.
+// Each call to begin() returns a token; only the most recent token is still current.
+const createLatestGuard = () => { let current = 0; return { begin: () => ++current, isCurrent: (token) => token === current }; };
+const docView = createLatestGuard();
+
 // ---------- text helpers ----------
 const TXT = {
   REQUIRED: 'Required', QUANTITY_INVALID: 'Enter a quantity (up to 3 decimals)', UNIT_PRICE_INVALID: 'Enter a unit price (up to 4 decimals)', VAT_RATE_INVALID: 'Choose a VAT rate', DISCOUNT_INVALID: 'Invalid discount',
@@ -1017,11 +1022,13 @@ function linesTable(d) {
   return h('table', null, h('tr', null, ['#', 'Description', 'Qty', 'Unit price', 'Discount', 'VAT', 'Net'].map((x, i) => h('th', { class: i >= 2 ? 'num' : '' }, x))), d.doc.lines.map((l, i) => h('tr', null, h('td', null, l.position), h('td', null, l.description), h('td', { class: 'num' }, t.lines[i].quantity), h('td', { class: 'num' }, t.lines[i].unitPrice), h('td', { class: 'num' }, t.lines[i].discount), h('td', { class: 'num' }, t.lines[i].vatRate), h('td', { class: 'num' }, t.lines[i].net))));
 }
 async function viewDoc(id) {
+  const token = docView.begin();
   const main = layout(null);
   const box = h('div'); main.appendChild(box);
   const reload = () => viewDoc(id);
   let d;
-  try { d = await api('GET', `/api/documents/${id}`); } catch (e) { return fail(e, box); }
+  try { d = await api('GET', `/api/documents/${id}`); } catch (e) { if (docView.isCurrent(token)) fail(e, box); return; }
+  if (!docView.isCurrent(token)) return; // a newer document view started while this answer was in flight
   const cur = d.currency;
   const has = (a) => d.actions.includes(a);
   const call = (path, body, msg) => async () => { try { await api('POST', `/api/documents/${id}/${path}`, body || {}); toast(msg, 'ok'); reload(); } catch (e) { fail(e); if (e.fields || e.code.startsWith('NOT_READY')) reload(); } };
@@ -1065,6 +1072,7 @@ async function viewDoc(id) {
   box.appendChild(top);
   // Issued before archiving existed: say clearly that the download is a regenerated copy, never the original.
   if (locked) api('GET', `/api/documents/${id}/compliance`).then((c) => {
+    if (!docView.isCurrent(token)) return;
     const a = document.getElementById('doc-download-pdf');
     if (a && !c?.pdf) { a.href = `/api/documents/${id}/pdf?download=1`; a.textContent = 'Download regenerated copy'; a.title = tt('No archived original exists for this document: this PDF is regenerated, not the original issued file.'); }
   }).catch(() => {});
