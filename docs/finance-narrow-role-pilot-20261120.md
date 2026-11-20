@@ -158,3 +158,17 @@ Le brouillon de test `0b0aeb60-3083-4a50-9ec5-43141bbbea1a` (client fictif incom
 - **Reprise sur le document existant** (`INV-2026-0003`, route `POST /api/documents/<id>/archive`, appelée avec le jeton CSRF de la session, non affiché) : réponse `duplicate: true`, même artefact `abf20643-…`, même SHA-256. En base après l'appel : toujours 2 artefacts (1 PDF d'origine, 1 XML) ; aucun événement ajouté. Pas de réémission, pas de nouvel original, pas d'écrasement.
 - **Brouillons de la recette** : `0b0aeb60-…` et `1f5c4326-…` sont `CANCELLED` (vérifié en base), sans numéro, sans verrouillage, sans artefact. Les documents émis `INV-2026-0002` et `INV-2026-0003` sont inchangés.
 - **Sauvegarde** : six tables Finance et huit fichiers sauvegardés et restaurés dans une base locale jetable. Données HABB non couvertes par cette sauvegarde : voir le runbook §3.
+
+## 13. Clôture du lot Finance (2026-11-20)
+
+**Vérifié** : rôles limités (émission, lecture, archive) déployés sur staging ; audits pilote à zéro écart en base staging et en base restaurée ; approbation d'une facture fictive et archive PDF + XML par le rôle d'archive (`writtenByRole`) ; téléchargement de l'original (octets = archive) ; reprise sans réémission ni nouvelle archive ; brouillons de recette annulés ; restauration isolée des six tables Finance et des huit fichiers.
+
+**Corrigé ce jour** : défaut d'affichage de la fiche (une vue ancienne pouvait s'afficher après une navigation) — garde de vue la plus récente, test de course `test/finance-document-view-race.test.js` (3/3).
+
+**Limites distinctes, non corrigées** :
+1. **Panne entre stockage et insertion** : le PDF est écrit en stockage puis son ligne en base ; une panne entre les deux laisse le document émis **sans original**. La reprise ne crée qu'une copie régénérée. Caractérisé en environnement isolé (`test/finance-archive-storage-gap.test.js`). **Défaut de récupération à trancher par le propriétaire** (créer un original tardif depuis le snapshot, ou traiter comme incident).
+2. **Trace de rôle** : vérifiée sur deux archives réelles de staging, pas sur toutes les archives antérieures (qui ne portent pas la trace).
+3. **Sauvegarde** : six tables Finance et huit fichiers ; le périmètre HABB complet (volumes, autres buckets, Shopify) reste hors sauvegarde — voir le runbook §7–8.
+4. **Pré-requis humain** : accès SSH pour inventaire des volumes (voir runbook §8).
+
+**Verdict Finance** : le lot Finance est utilisable sur le staging de test pour l'approbation, l'archivage et le téléchargement de l'original. Il n'est pas prêt pour des données HABB réelles tant que les points 1 et 3 ne sont pas tranchés.
