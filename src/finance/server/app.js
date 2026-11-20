@@ -606,7 +606,12 @@ export function createFinanceApp(deps) {
     const v = await svc.view(idParam(ctx.m[1]));
     const original = v.doc.type === 'credit_note' && v.doc.relatedDocumentId ? (await svc.get(v.doc.relatedDocumentId).catch(() => null))?.number : null;
     let buf = null; let archived = null;
-    if (v.doc.lockedAt) { const o = await legalServices(settings).legal.originalPdf(v.doc.id).catch(() => null); if (o?.verified) { buf = o.data; archived = o.artifact.classification; } }
+    // An issued document with an archived original is served from that original, or refused: an integrity failure is never hidden by a silent re-render.
+    // Only a document with NO archived original (issued before archiving existed) gets a regenerated copy, labelled as such in the headers.
+    if (v.doc.lockedAt) {
+      const o = await legalServices(settings).legal.originalPdf(v.doc.id).catch((e) => { if (e?.code === 'ARTIFACT_NOT_FOUND') return null; throw e; });
+      if (o) { if (!o.verified) throw new HttpError(409, 'ARTIFACT_INTEGRITY_FAILED', { problem: o.problem }); buf = o.data; archived = o.artifact.classification; }
+    }
     let rendererVersion = 'ARCHIVED';
     if (!buf) { const r = await renderDocumentVersioned(v.doc, { settlement: v.settlement ?? null, originalNumber: original, branding: settings.branding }); buf = r.buffer; rendererVersion = r.rendererVersion; }
     const name = safeName(`${v.doc.type}_${v.doc.number ?? 'draft'}`);

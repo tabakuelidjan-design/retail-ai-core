@@ -1057,9 +1057,15 @@ async function viewDoc(id) {
       has('credit_note') ? h('button', { on: { click: () => creditModal(d) } }, 'Create credit note') : null,
       has('refund') ? h('button', { class: 'primary', on: { click: () => refundModal(d, reload) } }, 'Record a refund') : null,
       has('cancel') ? h('button', { class: 'danger', on: { click: () => confirmModal('Cancel draft', 'This draft will be cancelled. No number is used.', 'Cancel draft', call('cancel', {}, 'Draft cancelled')) } }, 'Cancel draft') : null,
-      h('a', { class: 'btn', href: `/api/documents/${id}/pdf?download=1` }, 'Download PDF'),
+      // An issued document downloads its ARCHIVED original (byte-exact, hash-checked by the server). A draft or quote keeps the preview.
+      h('a', { class: 'btn', id: 'doc-download-pdf', href: d.lockedAt ? `/api/documents/${id}/original-pdf` : `/api/documents/${id}/pdf?download=1` }, d.lockedAt ? 'Download archived original' : 'Download PDF'),
       has('ubl') ? h('a', { class: 'btn', href: `/api/documents/${id}/ubl` }, 'Peppol/UBL file') : null));
   box.appendChild(top);
+  // Issued before archiving existed: say clearly that the download is a regenerated copy, never the original.
+  if (d.lockedAt) api('GET', `/api/documents/${id}/compliance`).then((c) => {
+    const a = document.getElementById('doc-download-pdf');
+    if (a && !c?.pdf) { a.href = `/api/documents/${id}/pdf?download=1`; a.textContent = 'Download regenerated copy'; a.title = 'No archived original exists for this document: this PDF is regenerated, not the original issued file.'; }
+  }).catch(() => {});
   const FLOW = isQ ? [['DRAFT', 'Draft'], ['SENT', 'Sent'], ['ACCEPTED', 'Accepted'], ['CONVERTED', 'Converted']] : [['DRAFT', 'Draft'], ['READY_FOR_APPROVAL', 'Ready'], ['ISSUED', 'Issued'], ['SENT', 'Sent'], ['PAID', 'Paid']];
   const flowKey = { OVERDUE: 'SENT', PARTIALLY_PAID: 'SENT', CREDITED: 'PAID', REJECTED: 'DRAFT', CANCELLED: 'DRAFT' }[d.effectiveStatus] || d.effectiveStatus;
   const curIdx = Math.max(0, FLOW.findIndex(([v]) => v === flowKey));

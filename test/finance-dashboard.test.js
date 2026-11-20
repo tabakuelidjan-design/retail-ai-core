@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { createMemoryStore } from '../src/finance/memory-store.js';
+import { createMemoryAttachmentStore } from '../src/finance/inbox.js';
 import { computeTotals, createDraft, normalizeLine } from '../src/finance/document.js';
 import { createViesProvider, ManualProvider } from '../src/finance/company.js';
 import { unzip } from '../src/finance/xlsx.js';
@@ -572,3 +573,36 @@ test('END TO END (synthetic): company -> quote -> accept -> convert -> approve -
   assert.equal((await c.get('/api/receivables')).data.unpaid.count, 0);
   assert.equal((await c.post(`/api/documents/${invoice.id}/payments`, { amount: '1.00', paidOn: '2026-09-29' })).status, 409); // nothing left to pay
 }));
+
+// ---------- ARCHIVED ORIGINAL: exact bytes, and an integrity failure is refused, never silently re-rendered ----------
+test('issued invoice: the download is the archived original (exact bytes, hash header); a tampered archive is refused with 409', async () => {
+  const store = createMemoryStore();
+  const attachments = createMemoryAttachmentStore();
+  const a = await startApp({ store, deps: { attachmentStore: attachments } });
+  try {
+    const c = await a.authed();
+    const d = await create(c);
+    await c.post(`/api/documents/${d.id}/submit`, {});
+    const issued = (await c.post(`/api/documents/${d.id}/approve`, {})).data;
+    assert.equal(issued.status, 'ISSUED');
+    const [pdf] = await store.listArtifacts({ merchantId: 'merchant-test-1', documentId: d.id, kind: 'PDF_ORIGINAL' });
+    assert.ok(pdf, 'the original PDF is archived at issue');
+    const original = await c.get(`/api/documents/${d.id}/original-pdf`);
+    assert.equal(original.status, 200);
+    assert.equal(original.headers.get('x-nordla-sha256'), pdf.sha256);
+    const { createHash } = await import('node:crypto');
+    assert.equal(createHash('sha256').update(original.data).digest('hex'), pdf.sha256, 'the bytes received are the archived bytes');
+    assert.equal(original.data.length, pdf.sizeBytes);
+    const preview = await c.get(`/api/documents/${d.id}/pdf`);
+    assert.equal(preview.headers.get('x-nordla-artifact'), 'ORIGINAL', 'the generic PDF route serves the archived original too');
+    // tamper with the stored object (same key, other bytes): the archive is no longer what was issued
+    await attachments.remove(pdf.storageRef);
+    await attachments.put(pdf.storageRef, Buffer.from('%PDF-1.4 tampered'));
+    const refused = await c.get(`/api/documents/${d.id}/original-pdf`);
+    assert.equal(refused.status, 409, 'an integrity failure is refused');
+    assert.equal(refused.data.code ?? refused.data.error?.code, 'ARTIFACT_INTEGRITY_FAILED');
+    const silent = await c.get(`/api/documents/${d.id}/pdf`);
+    assert.equal(silent.status, 409, 'the generic route does not hide the failure by re-rendering');
+    assert.equal(silent.headers.get('x-nordla-artifact'), null, 'no regenerated copy is served');
+  } finally { await a.close(); }
+});
