@@ -1,81 +1,121 @@
-# Pilote Finance : approbation d'une facture sur rôles PostgreSQL limités
+# Pilote Finance : approbation et archivage d'une facture sur rôles PostgreSQL limités
 
 ## 1. État actuel (2026-11-20, unique et à jour)
 
-- **Branche** : `pilot/finance-narrow-role-20261120`. Dernier commit de ce lot : `57580f27` (précédent : `1c515786`). Base : `release/finance-staging` @ `361c06f5`, inchangée. Rien n'est fusionné dans une branche release, rien n'est déployé.
-- **Périmètre couvert par les rôles limités** : tout ce qui se passe avant l'émission dans `service.decide(APPROVE)` :
-  - lecture de la facture (`getDocument`) : rôle d'émission ;
-  - vérification de liaison (`listDocuments` des factures du marchand) : rôle de lecture ;
-  - chargement du ledger (`loadRetail` → `loadDataset`, mêmes tables, même calcul) : rôle de lecture ;
-  - émission (`issueDocument` → `fin_issue_document`) : rôle d'émission.
-- **Hors lot** (volontairement) : hooks après émission (archive légale, stock), `resettle` des avoirs, paiements, rapprochement, Peppol, réglages, sociétés.
-- **Mode** : désactivé par défaut. `FINANCE_RUNTIME_DB=narrow-pilot` active le mode au démarrage de `createRuntime` (serveur et CLI). Toute erreur d'identité, de TLS ou de configuration arrête le démarrage. Toute erreur de connexion pendant une opération la refuse. Aucun repli vers `service_role`.
-- **Staging** (projet d'essai `fvhiammdskpcnfodsnrc`, entreprises fictives A et B uniquement) : migrations v4 et v5 appliquées (§4). Aucun marchand réel, aucune donnée réelle, le marchand partagé du staging n'a pas été modifié.
+- **Branche pilote** : `pilot/finance-narrow-role-20261120`, commit `d76bda7d` (audit complet + rôle d'archive). Base : `361c06f5`.
+- **Intégration** : `release/finance-staging` avance à `d76bda7d` (fast-forward ; la release n'avait aucun commit absent du pilote). Poussée sur `origin`.
+- **Déploiement Railway (staging)** : projet `261a1971-…`, environnement `staging`, service `finance-staging` (`b9494727-…`). Déploiement `a67673e4-d72e-489f-b6c8-f82ddbfd9e87` : commit `d76bda7d`, statut SUCCESS. URL `https://finance-staging-staging.up.railway.app` répond HTTP 200.
+- **Mode limité : désactivé sur staging.** `FINANCE_RUNTIME_DB`, `FINANCE_PILOT_DATABASE_URL`, `FINANCE_PILOT_CA_FILE` ne sont pas définis. Le serveur tourne en mode `service`.
+- **Marchand configuré** : `NORDLA_MERCHANT_ID = 67646dbb-5e2e-4cd7-aad6-0ab289b068cb`, nom « HABB (test staging) », source `nordla-staging` / `habb-test`, créé le 2026-10-15. Vérifié comme marchand de test ; non modifié.
+- **Périmètre couvert par les rôles limités (si le mode est activé)** : lecture de la facture, liaison, ledger, émission (`service.decide(APPROVE)`), et l'archivage en base (artefacts, versions du vendeur, événements). Les octets PDF/XML restent dans le stockage existant.
+- **Hors lot** : stock, avoirs (`resettle`), paiements, rapprochement, Peppol, réglages, sociétés, banque.
+- **Aucun repli vers `service_role`** : toute erreur d'identité, de TLS, de configuration ou de connexion arrête le démarrage ou refuse l'opération.
 
 ## 2. Preuves LOCALES (PostgreSQL 17 jetable, deux marchands synthétiques, vrais logins)
 
+Exécution en série (`node --test --test-concurrency=1`), commit `d76bda7d` :
+
 | Suite | Tests | Résultat |
 |---|---|---|
-| `test/pg/98` parcours fonctionnel (émission, croisements, SET/RESET ROLE, pool, politique permissive, panne, rollback) | 8 | vert |
-| `test/pg/99` identités (non liée, désactivée, privilégiée, non membre, liaison immuable) | 4 | vert |
+| `test/pg/98` parcours fonctionnel, rollback jusqu'à v7 | 8 | vert |
+| `test/pg/99` identités | 4 | vert |
 | `test/pg/100` audit exact du rôle d'émission | 6 | vert |
-| `test/pg/101` connexion (TLS, paramètres SSL refusés, identité au démarrage) | 6 | vert |
-| `test/pg/102` matrice EXECUTE rôles × fonctions `extensions` (avant / après / rollback) | 1 | vert |
-| `test/pg/103` PUBLIC SELECT sur une relation `extensions` | 1 | vert |
-| `test/pg/104` démarrage `createRuntime` en mode limité, panne, mode service | 4 | vert |
-| `test/pg/105` `service.decide(APPROVE)` : nominal, données étrangères, absence de liaison, panne | 4 | vert |
-| `test/pg/106` audit du rôle de lecture ; le rôle d'émission ne gagne rien | 2 | vert |
+| `test/pg/101` connexion (TLS, paramètres SSL refusés) | 6 | vert |
+| `test/pg/102` matrice EXECUTE × `extensions` | 1 | vert |
+| `test/pg/103` PUBLIC SELECT sur `extensions` | 1 | vert |
+| `test/pg/104` démarrage `createRuntime` en mode limité | 4 | vert |
+| `test/pg/105` `service.decide(APPROVE)` : nominal, étranger, sans liaison, panne | 4 | vert |
+| `test/pg/106` audit du rôle de lecture | 2 | vert |
+| `test/pg/107` détection de chaque droit excessif (audits lecture et émission) | 11 | vert |
+| `test/pg/108` archive : isolation, refus, doublon, reprise après panne, intégrité à la lecture | 6 | vert |
 | `test/finance-narrow-config.test.js` configuration de démarrage | 4 | vert |
 
-Total : 40 tests locaux verts. Les quatre suites `finance-pack` en échec ne sont pas liées au pilote (échec identique sur `361c06f5`).
+Total : **57 tests locaux verts**. Les suites `finance-pack` en échec signalées auparavant ne concernent pas le pilote.
 
-## 3. Preuves STAGING (fictif uniquement, pooleur `aws-1-eu-west-1`, TLS strict avec le CA officiel)
+Limites des tests 108 : l'isolation et les refus sont vérifiés au niveau de l'adaptateur et de la base avec de vrais logins. La reprise après panne est testée au niveau de l'écriture en base ; le scénario « octets écrits dans le stockage, puis panne avant l'insertion » n'est pas rejoué de bout en bout, faute d'un faux stockage complet dans `createLegalArtifacts`.
 
-Exécuté avec `createRuntime` et `service.decide` (le service Finance réel), login de test lié à l'entreprise fictive A, client Supabase de substitution (la clé de service n'est pas disponible sur ce poste) :
+## 3. Preuves STAGING
 
-- Démarrage : `session_user` vérifié, liaison à A, TLS vérifié, rôles d'émission et de lecture vérifiés.
-- **Approbation nominale** : facture fictive A approuvée → `ISSUED`, numéro `INV-2026-0003`.
-- **Appels reçus par le client de substitution pendant l'approbation : aucun** (lecture de la facture, liaison, ledger et émission passent par les rôles limités).
-- Données étrangères : approbation de la facture fictive de B par le runtime de A → `DOCUMENT_NOT_FOUND`.
-- Réapprobation de la facture déjà émise → `INVALID_TRANSITION` (règle métier).
-- Démarrage avec le marchand B alors que le login est lié à A → refus (`FIN_PILOT_MERCHANT_MISMATCH`).
-- Panne de connexion après démarrage → approbation refusée (`NARROW_CONNECTION_FAILED`), rien émis.
-- Panne au démarrage (mauvais port) → démarrage refusé.
-- Limite : les cas « absence de liaison » et « données étrangères liées à une commande » ont été exécutés localement (test 105), pas sur staging, parce que la clé de service n'est pas disponible pour créer les commandes fictives ; et le brouillon fictif de B a été inséré avec une version de corps dont les totaux par ligne ont été simplifiés (les totaux de documents sont corrects).
-- Nettoyage : login supprimé, liaison désactivée, brouillon fictif de B supprimé. Restent sur staging : les entreprises fictives A et B, trois factures fictives émises pour A (`FACT-2026-0001`, `FACT-2026-0002`, `INV-2026-0003`, immuables par conception), les migrations v4 et v5.
+### 3.1 Base de données (projet `fvhiammdskpcnfodsnrc`)
 
-## 4. Migrations sur staging
+- Migrations appliquées : v4 `fin_issuer_narrow_role` et v5 `fin_reader_narrow_role` (antérieures), **v6 `fin_pilot_audit_hardening`** et **v7 `fin_archive_narrow_role`** (appliquées le 2026-11-20 depuis `d76bda7d`).
+- Contrôle après application : `fin_pilot_reader_audit()`, `fin_pilot_transfer_audit()` et `fin_pilot_archive_audit()` ne renvoient aucune ligne en échec.
+- Données : aucune donnée réelle, aucune donnée du marchand de test modifiée par les migrations (DDL uniquement).
 
-- v4 `20261120110000_fin_issuer_narrow_role.sql` (commit `f9c7c48e`).
-- v5 `20261120120000_fin_reader_narrow_role.sql` (commit `57580f27`) : rôle de lecture, politiques par entreprise, audit exact (échec fermé), redéfinition de l'entrée d'identité `fin_pilot_assert` (même sens, accepte aussi le rôle de lecture).
-- Rollbacks : `supabase/rollback/20261120110000_…down.sql` et `20261120120000_…down.sql`.
+### 3.2 Serveur (Railway)
 
-## 5. Accès administratifs encore utilisés dans l'approbation (`service_role`)
+- Déploiement SUCCESS (voir §1). Le code déployé est celui de `d76bda7d`.
+- Mode limité non activé : **le serveur ne passe pas encore par les rôles limités sur staging**.
 
-Liste exacte, d'après le code (`src/finance/service.js` et `src/finance/server/app.js`) :
+### 3.3 Staging exécuté avec les rôles limités (historique, lot précédent)
 
-| Moment | Accès | Où dans le code | Statut |
-|---|---|---|---|
-| Démarrage | `merchants` (résolution du tenant) | `src/tenant/index.js`, `runtime.js` | `service_role` (client Supabase conservé pour le reste du serveur) |
-| Démarrage | connecteurs du marchand | `runtime.js` (`createConnectorRepository`) | `service_role` |
-| Après émission | archive légale (`hooks.onIssued` → `legalServices.archiveIssued`) | `server/app.js` | `service_role`, s'exécute à chaque approbation |
-| Après émission | stock (`hooks.afterIssue`), uniquement si le mode stock n'est pas `off` | `server/app.js` | `service_role` |
-| Avoirs seulement | `restockDecisionNeeded`, `resettle` (paiements d'avoir) | `service.js`, `server/app.js` | `service_role` |
-| Échec d'un hook | journal `appendEvent` | `service.js` | `service_role` |
+Mêmes entreprises fictives A et B, login de test lié à A, client de substitution (clé de service absente du PC) :
 
-Avant l'émission : **aucun** accès administratif dans le cas d'une facture standalone, lecture comprise.
+- Approbation nominale d'une facture fictive A → `ISSUED`, `INV-2026-0003`.
+- Aucun appel au client de substitution pendant l'approbation.
+- Facture fictive de B approuvée par le runtime de A → `DOCUMENT_NOT_FOUND`.
+- Démarrage avec le marchand B alors que le login est lié à A → refus.
+- Panne de connexion → approbation refusée, rien émis.
 
-## 6. Plateforme : six fonctions de `extensions` (lecture seule sur staging)
+Ces preuves valent pour les migrations v4/v5 seulement ; elles ne couvrent ni l'archive ni le serveur complet.
 
-Toutes sont `returns event_trigger`, `SECURITY INVOKER`, `search_path=""`, propriété `supabase_admin`. Elles s'exécutent comme déclencheurs d'événements. PostgreSQL refuse leur appel direct (`0A000`). Elles restent des exceptions explicites de l'audit.
+### 3.4 Ce qui n'est PAS prouvé
 
-## 7. Risques de déploiement (non traités ici)
+- Le serveur complet avec ses vrais hooks (archive légale, stock) sur staging : **non fait**, le mode limité n'est pas activé.
+- Recette Core : **non faite**.
+- Refus entre entreprises sur le serveur déployé, reprise après panne sur le serveur déployé : **non faits**.
+- Sauvegarde/restauration base et fichiers : **non faite**.
 
-1. La clé de service reste chargée par le serveur tant que les accès du §5 existent : elle reste donc disponible au processus, même si le chemin d'approbation avant émission ne l'utilise plus.
-2. `service_role` garde BYPASSRLS : tant que les accès du §5 existent, la protection reste contournable par ces chemins.
-3. Configuration hors dépôt : `FINANCE_PILOT_DATABASE_URL` (login du pooleur), `FINANCE_PILOT_CA_FILE` (PEM officiel), `FINANCE_PILOT_SERVER_NAME` si besoin.
-4. Rollback : `DROP ROLE` est cluster-wide ; la suppression des rôles suit sur toutes les bases.
+## 4. Migrations
 
-## 8. Prochaine portion à sécuriser
+- v4 `20261120110000_fin_issuer_narrow_role.sql` (commit `f9c7c48e`), rollback `…down.sql`.
+- v5 `20261120120000_fin_reader_narrow_role.sql` (commit `57580f27`), rollback `…down.sql`.
+- v6 `20261120130000_fin_pilot_audit_hardening.sql` (commit `d76bda7d`), rollback `…down.sql` (restaure le corps d'audit v5).
+- v7 `20261120140000_fin_archive_narrow_role.sql` (commit `d76bda7d`), rollback `…down.sql` (retire les politiques, les droits et le rôle ; ne supprime aucune ligne).
 
-Hooks après émission : archive légale (le plus critique : il écrit en base et dans le stockage) puis stock. Puis les avoirs (`resettle`). Ensuite seulement les autres chemins (paiements, rapprochement).
+## 5. Comptes privilégiés et accès administratifs
+
+### 5.1 Comptes privilégiés de la base staging (lecture seule, vérifiée)
+
+| Rôle | Privilèges | Remarque |
+|---|---|---|
+| `postgres` | BYPASSRLS, CREATEROLE, CREATEDB, LOGIN ; **membre des trois rôles pilote** | propriétaire plateforme, exemption explicite des audits |
+| `supabase_admin` | SUPERUSER, BYPASSRLS | plateforme Supabase, non utilisé par le projet |
+| `service_role` | BYPASSRLS, sans LOGIN | clé de service du serveur Railway |
+| `supabase_etl_admin` | BYPASSRLS, lecture de toutes les données | rôle plateforme ; à vérifier : utilisé ou non |
+| `supabase_read_only_user` | BYPASSRLS, lecture de toutes les données | rôle plateforme ; à vérifier : utilisé ou non |
+| `anon`, `authenticated` | aucun | |
+| rôles pilote | NOLOGIN, NOBYPASSRLS | aucun privilège d'attribut |
+
+### 5.2 Accès administratifs encore utilisés par le serveur (`service_role`)
+
+| Moment | Accès | Statut |
+|---|---|---|
+| Démarrage | résolution du marchand (`merchants`), connecteurs | `service_role` |
+| Stockage des PDF / XML (archive) | API Storage (bucket `finance-inbox`), clé de service | `service_role`, **non changé** (décision : stockage existant conservé) |
+| Après émission | hooks stock (`afterIssue`), avoirs (`resettle`, `restockDecisionNeeded`) | `service_role` |
+| Échec de hook | journal | `service_role` |
+
+Risque concret pour ce périmètre : tant que la clé de service est chargée par le serveur, un défaut de code dans un chemin `service_role` peut lire ou écrire tous les marchands. Le mode limité réduit la base de données, pas le stockage.
+
+## 6. Plateforme : six fonctions de `extensions`
+
+`returns event_trigger`, `SECURITY INVOKER`, `search_path=""`, propriété `supabase_admin`. Elles ne peuvent pas être appelées directement (`0A000`). Exceptions explicites de l'audit.
+
+## 7. Obstacles avant activation du mode limité sur staging
+
+1. **Login PostgreSQL pilote** : à créer par le propriétaire (voir §8). Le mot de passe doit être généré et stocké hors chat et hors dépôt.
+2. **Variables Railway** à définir : `FINANCE_RUNTIME_DB=narrow-pilot`, `FINANCE_PILOT_DATABASE_URL` (pooleur, login `<login>.fvhiammdskpcnfodsnrc`), `FINANCE_PILOT_CA_FILE` (chemin d'un PEM présent dans le conteneur ; le CA est public mais le code exige un fichier).
+3. **Principal lié** : `nordla_runtime.fin_pilot_principals` doit lier le login au marchand de test `67646dbb-…`.
+4. Sauvegarde/restauration base et fichiers : non faite.
+
+## 8. Actions humaines nécessaires
+
+1. Créer, dans l'éditeur SQL Supabase de `fvhiammdskpcnfodsnrc`, le login pilote avec un mot de passe généré par vous, grant des rôles `nordla_fin_issuer_pilot`, `nordla_fin_reader_pilot`, `nordla_fin_archive_pilot`, puis la ligne dans `nordla_runtime.fin_pilot_principals` pour `67646dbb-5e2e-4cd7-aad6-0ab289b068cb`.
+2. Fournir l'URL de connexion pilote à Railway sans la coller dans le chat (`railway variable set … --stdin`).
+3. Vérifier la double authentification du propriétaire sur votre appareil (non testable ici).
+4. Confirmer si `supabase_etl_admin` et `supabase_read_only_user` sont utilisés ; sinon, les désactiver côté plateforme.
+
+## 9. Prochaine portion
+
+Une fois le login créé : activer le mode limité sur le service staging, rejouer le parcours complet depuis Core, tester refus entre entreprises et reprise après panne sur le serveur déployé, puis sauvegarde/restauration.
