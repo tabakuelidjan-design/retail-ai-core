@@ -1044,6 +1044,8 @@ async function viewDoc(id) {
       h('div', { class: 'actions' }, badge(d.effectiveStatus), h('span', { class: 'muted' }, d.customer), d.revenueBasis ? h('span', { class: `tag ${d.revenueBasis === 'linked_source_order' ? 'linked' : 'standalone'}` }, h('span', { class: 'dot-i' }), d.revenueBasis === 'linked_source_order' ? 'linked - no extra revenue' : 'standalone - additive') : null)),
     h('div', { class: 'dh-figures' }, heroFigs.map(([label, value, tone]) => h('div', { class: 'dh-fig' }, h('div', { class: 'headline-label' }, label), h('div', { class: `headline-figure ${tone || ''}` }, value)))));
   box.appendChild(dochero);
+  // the detail response keeps the lock timestamp under doc (top level for older responses)
+  const locked = !!(d.lockedAt || d.doc?.lockedAt);
   const top = h('div', { class: 'topbar' },
     h('div', { class: 'actions' },
       has('edit') ? h('a', { class: 'btn', href: `#/doc/${id}/edit` }, 'Edit draft') : null,
@@ -1058,13 +1060,13 @@ async function viewDoc(id) {
       has('refund') ? h('button', { class: 'primary', on: { click: () => refundModal(d, reload) } }, 'Record a refund') : null,
       has('cancel') ? h('button', { class: 'danger', on: { click: () => confirmModal('Cancel draft', 'This draft will be cancelled. No number is used.', 'Cancel draft', call('cancel', {}, 'Draft cancelled')) } }, 'Cancel draft') : null,
       // An issued document downloads its ARCHIVED original (byte-exact, hash-checked by the server). A draft or quote keeps the preview.
-      h('a', { class: 'btn', id: 'doc-download-pdf', href: d.lockedAt ? `/api/documents/${id}/original-pdf` : `/api/documents/${id}/pdf?download=1` }, d.lockedAt ? 'Download archived original' : 'Download PDF'),
+      h('a', { class: 'btn', id: 'doc-download-pdf', href: locked ? `/api/documents/${id}/original-pdf` : `/api/documents/${id}/pdf?download=1` }, locked ? 'Download archived original' : 'Download PDF'),
       has('ubl') ? h('a', { class: 'btn', href: `/api/documents/${id}/ubl` }, 'Peppol/UBL file') : null));
   box.appendChild(top);
   // Issued before archiving existed: say clearly that the download is a regenerated copy, never the original.
-  if (d.lockedAt) api('GET', `/api/documents/${id}/compliance`).then((c) => {
+  if (locked) api('GET', `/api/documents/${id}/compliance`).then((c) => {
     const a = document.getElementById('doc-download-pdf');
-    if (a && !c?.pdf) { a.href = `/api/documents/${id}/pdf?download=1`; a.textContent = 'Download regenerated copy'; a.title = 'No archived original exists for this document: this PDF is regenerated, not the original issued file.'; }
+    if (a && !c?.pdf) { a.href = `/api/documents/${id}/pdf?download=1`; a.textContent = 'Download regenerated copy'; a.title = tt('No archived original exists for this document: this PDF is regenerated, not the original issued file.'); }
   }).catch(() => {});
   const FLOW = isQ ? [['DRAFT', 'Draft'], ['SENT', 'Sent'], ['ACCEPTED', 'Accepted'], ['CONVERTED', 'Converted']] : [['DRAFT', 'Draft'], ['READY_FOR_APPROVAL', 'Ready'], ['ISSUED', 'Issued'], ['SENT', 'Sent'], ['PAID', 'Paid']];
   const flowKey = { OVERDUE: 'SENT', PARTIALLY_PAID: 'SENT', CREDITED: 'PAID', REJECTED: 'DRAFT', CANCELLED: 'DRAFT' }[d.effectiveStatus] || d.effectiveStatus;
