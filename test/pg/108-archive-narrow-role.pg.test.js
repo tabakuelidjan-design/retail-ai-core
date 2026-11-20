@@ -52,6 +52,8 @@ test('own company: the original is archived once; the same bytes are a duplicate
     const first = await archive.archiveArtifact(pdfRow(s.docA));
     assert.equal(first.duplicate, false);
     assert.equal(first.artifact.merchantId, MERCHANT_A);
+    assert.equal(first.artifact.provenance.writtenByRole, 'nordla_fin_archive_pilot', 'the effective role is recorded with the row');
+    assert.equal(first.artifact.provenance.source, 'issue', 'the caller provenance is kept');
     const again = await archive.archiveArtifact(pdfRow(s.docA));
     assert.equal(again.duplicate, true, 'the identical retry is a duplicate');
     assert.equal(again.artifact.id, first.artifact.id);

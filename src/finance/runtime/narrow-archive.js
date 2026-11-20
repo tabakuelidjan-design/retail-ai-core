@@ -37,7 +37,8 @@ export function createNarrowArchive({ transaction, merchantId }) {
       const params = [merchantId, a.kind, a.classification, a.documentId ?? null, a.supplierInvoiceId ?? null, a.peppolMessageId ?? null, a.parentArtifactId ?? null,
         a.storageRef, a.sha256, a.sizeBytes, a.mediaType, a.fileName ?? null, a.paymentReference ?? null, a.retentionClass, json(a.provenance ?? {})];
       const cols = 'merchant_id, kind, classification, document_id, supplier_invoice_id, peppol_message_id, parent_artifact_id, storage_ref, sha256, size_bytes, media_type, file_name, payment_reference, retention_class, provenance';
-      const vals = '$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15::jsonb';
+      // the effective database role is recorded in the same transaction (trace of who wrote the row; no secret, no client content)
+      const vals = "$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,($15::jsonb || jsonb_build_object('writtenByRole', current_user::text))";
       const sql = a.createdAt
         ? `insert into public.fin_artifacts (${cols}, created_at) values (${vals}, $16) returning *`
         : `insert into public.fin_artifacts (${cols}) values (${vals}) returning *`;
