@@ -1,0 +1,37 @@
+{
+  "ok": true,
+  "engine": "PostgreSQL 17 native TCP",
+  "migrations": 54,
+  "merchants": 4,
+  "documents": 5,
+  "originalFiles": 4,
+  "checks": [
+    "50 pinned Nordla migrations replayed",
+    "four merchants, four numbered locked invoices, four originals",
+    "native service_role: root MFA proof, Growth parent binding and cascade revocation",
+    {
+      "principals": 7,
+      "checks": [
+        "real LOGIN principals: unfiltered merchant reads stay separate",
+        "missing context, forged other-merchant context, privilege escalation and rebinding refused",
+        "Finance reads/writes its merchant only; Core business role cannot write",
+        "Finance foreign-key references cannot link a document to another merchant",
+        "actual SECURITY INVOKER invoice issuance succeeds without service_role",
+        "report reader and flag writer remain separate; cross-merchant flags refused",
+        "identity checks expose no session secret and reject foreign MFA context",
+        "disabling a principal closes existing pooled access on next request"
+      ]
+    },
+    "database and originals encrypted together",
+    "numbers, VAT, totals and document hashes survive pg_dump/pg_restore",
+    "RLS policies survive unchanged",
+    "privileged-function ACLs survive unchanged",
+    "all original PDF bytes survive unchanged",
+    "live source and other merchants remain untouched",
+    "populated restore target is refused"
+  ],
+  "dumpSha256": "8ef904d97b18180932ac0cd3b49327e565d85df9ca962033f7f01c72fe1b86d3",
+  "seconds": 45,
+  "remoteAccess": false,
+  "supabaseManagedSchemas": "minimal local stubs, not full hosted Supabase restoration"
+}
