@@ -56,3 +56,33 @@ Ces mécanismes ne sont pas en place. Les mettre en place demande un accès admi
 ## 6. Reste à faire pour une sauvegarde complète
 
 Sans accès administrateur PostgreSQL ni outil de sauvegarde côté plateforme, la sauvegarde complète ne peut pas être réalisée. C'est l'obstacle principal à lever par le propriétaire.
+
+## 7. Inventaire du périmètre HABB (état au 2026-11-20, mise à jour)
+
+**Services staging (projet Railway `app.nordla.app`, environnement staging)** : tous les services Nordla partagent le même projet Supabase de staging (`fvhiammdskpcnfodsnrc`) pour la base et le stockage. Une sauvegarde de la base couvre donc les lignes de tous les services ; elle ne couvre pas les volumes.
+
+| Service | Volume | Contenu | Sauvegardé |
+|---|---|---|---|
+| finance-staging | `finance-staging-volume` → `/app/data` (87 Mo) | réglages, logo, données locales | **non** (contenu non listé : accès SSH refusé) |
+| sourcing-staging | `sourcing-staging-data` → `/app/data` (50 Mo) | données Sourcing | **non** |
+| analytics-staging | `analytics-staging-volume` → `/app/reports` (139 Mo) | rapports | **non** |
+| growth-staging, growth-staging Copy, core-staging, shopify-stub-staging | aucun volume | base uniquement | base : oui (même projet) |
+
+**Source de vérité commerciale HABB** : la boutique Shopify (`habb.be`), non présente dans ce staging (stub). Commandes, produits, clients et stocks réels vivent là ; aucune sauvegarde de Shopify n'a été faite. Hors de ce poste et de ce staging.
+
+**Données réelles ou test** : le marchand `67646dbb-…` est de test (« HABB (test staging) »). Aucune donnée réelle HABB n'a été lue ou modifiée. Le projet de production n'existe pas encore (« new prod Supabase chosen », non créé).
+
+**Stockage Supabase** : seul le bucket `finance-inbox` est connu et sauvegardé (8 objets). Les autres buckets éventuels ne sont pas listés.
+
+## 8. Obstacle réel et unique intervention humaine
+
+Pour inventorier et sauvegarder les volumes et les autres buckets, il faut un accès SSH au conteneur, ou un export fourni par le propriétaire. La création de clé SSH a été refusée par le contrôle de sécurité de l'environnement (la demande dépasse l'autorisation donnée pour la seule recette) ; rien n'a été enregistré ni contourné.
+
+Intervention unique demandée au propriétaire : enregistrer une clé SSH dédiée au projet Railway (`railway.com/account/ssh-keys`), ou autoriser explicitement la création temporaire de cette clé, puis le signaler. Aucun secret ne doit transiter par le chat : la clé privée reste sur le poste.
+
+## 9. Sauvegardes régulières : décision propriétaire (aucune dépense engagée)
+
+- Copie indépendante : un second emplacement hors de Railway et de Supabase (ex. stockage objet d'un fournisseur déjà utilisé par HABB, à choisir).
+- Exécution régulière : quotidienne pour la base et les volumes, hebdomadaire pour le test de restauration.
+- Détection des échecs : notification au propriétaire en cas d'échec ou de hachage non concordant.
+- Coût : tout service payant nécessite une décision explicite du propriétaire ; rien n'a été souscrit.
