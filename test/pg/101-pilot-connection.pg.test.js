@@ -11,6 +11,23 @@ const CA = '-----BEGIN CERTIFICATE-----\nTEST-ONLY-NOT-A-REAL-CERT\n-----END CER
 const remote = (login, extra = '') => `postgres://${login}:${PW}@db.example-pilot.invalid:5432/postgres${extra}`;
 const refuses = (fn, code) => assert.throws(fn, (e) => e instanceof PilotConnectionError && e.code === code, `expected ${code}`);
 
+test('TLS parameters of the URL cannot replace or extend the enforced verification', () => {
+  for (const p of ['sslcert=/tmp/c.pem', 'sslkey=/tmp/k.pem', 'sslrootcert=system', 'sslrootcert=/tmp/other-ca.pem', 'sslmode=require', 'sslmode=disable', 'sslmode=prefer', 'sslnegotiation=direct', 'sslcrl=/tmp/x', 'SSLROOTCERT=system']) {
+    refuses(() => checkPilotConfig({ connectionString: remote('nordla_fin_pilot_x', `?${p}`), ca: CA }), 'PILOT_TLS_PARAM_REFUSED');
+  }
+  refuses(() => checkPilotConfig({ connectionString: remote('nordla_fin_pilot_x', '?sslmode=verify-full&sslcert=/tmp/c.pem'), ca: CA }), 'PILOT_TLS_PARAM_REFUSED');
+  // sslmode=verify-full is accepted, and the pool is built with the enforced configuration only
+  const pool = createPilotPool({ connectionString: remote('nordla_fin_pilot_x', '?sslmode=verify-full'), ca: CA });
+  try {
+    assert.equal(pool.options.ssl.rejectUnauthorized, true);
+    assert.equal(pool.options.ssl.ca, CA);
+    assert.equal(pool.options.ssl.cert, undefined, 'no client certificate');
+    assert.equal(pool.options.ssl.key, undefined, 'no client key');
+  } finally { pool.end().catch(() => {}); }
+  // a URL that is accepted never leaves a TLS parameter in the connection string handed to pg
+  refuses(() => createPilotPool({ connectionString: remote('nordla_fin_pilot_x', '?sslrootcert=system'), ca: CA }), 'PILOT_TLS_PARAM_REFUSED');
+});
+
 test('refuses administrative and platform logins, and non-pilot logins', () => {
   for (const login of ['postgres', 'supabase_admin', 'service_role', 'authenticator', 'anon', 'authenticated', 'nordla_other_app']) {
     refuses(() => checkPilotConfig({ connectionString: remote(login), ca: CA }), 'PILOT_LOGIN_REFUSED');
@@ -19,8 +36,8 @@ test('refuses administrative and platform logins, and non-pilot logins', () => {
 
 test('remote hosts need a CA and verify-full; plaintext to a remote host is never accepted', () => {
   refuses(() => checkPilotConfig({ connectionString: remote('nordla_fin_pilot_x'), ca: null }), 'PILOT_TLS_CA_REQUIRED');
-  refuses(() => checkPilotConfig({ connectionString: remote('nordla_fin_pilot_x', '?sslmode=disable'), ca: CA }), 'PILOT_TLS_MODE_REFUSED');
-  refuses(() => checkPilotConfig({ connectionString: remote('nordla_fin_pilot_x', '?sslmode=require'), ca: CA }), 'PILOT_TLS_MODE_REFUSED');
+  refuses(() => checkPilotConfig({ connectionString: remote('nordla_fin_pilot_x', '?sslmode=disable'), ca: CA }), 'PILOT_TLS_PARAM_REFUSED');
+  refuses(() => checkPilotConfig({ connectionString: remote('nordla_fin_pilot_x', '?sslmode=require'), ca: CA }), 'PILOT_TLS_PARAM_REFUSED');
   assert.deepEqual(checkPilotConfig({ connectionString: remote('nordla_fin_pilot_x', '?sslmode=verify-full'), ca: CA }), { login: 'nordla_fin_pilot_x', loopback: false });
 });
 

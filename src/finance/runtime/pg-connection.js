@@ -31,12 +31,17 @@ export function checkPilotConfig({ connectionString, ca = null, allowLoopbackPla
   if (!login || !login.startsWith(PILOT_PREFIX) || FORBIDDEN_LOGINS.has(login)) {
     throw new PilotConnectionError('PILOT_LOGIN_REFUSED', 'the login is not a pilot login');
   }
+  // Every TLS parameter of the URL is refused, except sslmode=verify-full, which is redundant with the enforced
+  // configuration. sslcert, sslkey, sslrootcert, sslcrl, sslpassword, sslnegotiation... could replace or extend the
+  // verified CA or add a client identity: they are never accepted, whatever their value.
+  for (const key of u.searchParams.keys()) {
+    if (!key.toLowerCase().startsWith('ssl')) continue;
+    if (key.toLowerCase() === 'sslmode' && u.searchParams.getAll(key).every((v) => v === 'verify-full')) continue;
+    throw new PilotConnectionError('PILOT_TLS_PARAM_REFUSED', `TLS parameter "${key}" is not accepted in the pilot connection string`);
+  }
   const loopback = LOOPBACK.has(u.hostname);
   if (!loopback) {
     if (!ca) throw new PilotConnectionError('PILOT_TLS_CA_REQUIRED', 'a CA certificate is required to verify the server');
-    if (u.searchParams.has('sslmode') && u.searchParams.get('sslmode') !== 'verify-full') {
-      throw new PilotConnectionError('PILOT_TLS_MODE_REFUSED', 'only sslmode=verify-full is accepted');
-    }
   } else if (!allowLoopbackPlaintext) {
     throw new PilotConnectionError('PILOT_TLS_REQUIRED', 'loopback without the local-test flag is refused');
   }
@@ -47,8 +52,8 @@ export function checkPilotConfig({ connectionString, ca = null, allowLoopbackPla
 export function createPilotPool({ connectionString, ca = null, allowLoopbackPlaintext = false, max = 3, statementTimeoutMs = 15000, applicationName = 'nordla-finance-pilot' } = {}) {
   const { loopback } = checkPilotConfig({ connectionString, ca, allowLoopbackPlaintext });
   const u = new URL(connectionString);
-  // sslmode is handled explicitly below, never by the URL
-  u.searchParams.delete('sslmode');
+  // TLS is configured only through the `ssl` option below; the URL carries no TLS parameter (checked above)
+  for (const key of [...u.searchParams.keys()]) if (key.toLowerCase().startsWith('ssl')) u.searchParams.delete(key);
   const ssl = loopback ? false : { ca, rejectUnauthorized: true, servername: u.hostname };
   return new pg.Pool({
     connectionString: u.toString(),

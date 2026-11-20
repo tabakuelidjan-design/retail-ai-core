@@ -46,10 +46,10 @@ test('the audit refuses extra privileges on protected tables and on PUBLIC', asy
   const admin = await db.open();
   try {
     await admin.query('grant select on public.fin_bank_transactions to nordla_fin_issuer_pilot');
-    assert.ok((await failing(admin)).includes('privileges are exactly the expected set'), 'extra SELECT on a bank table is reported');
+    assert.ok((await failing(admin)).includes('privileges (direct and PUBLIC, effective ACL) are exactly the expected set'), 'extra SELECT on a bank table is reported');
     await admin.query('revoke select on public.fin_bank_transactions from nordla_fin_issuer_pilot');
     await admin.query('grant select on public.fin_documents to public');
-    assert.ok((await failing(admin)).includes('privileges are exactly the expected set'), 'PUBLIC read on fin_documents is reported');
+    assert.ok((await failing(admin)).includes('privileges (direct and PUBLIC, effective ACL) are exactly the expected set'), 'PUBLIC read on fin_documents is reported');
     await admin.query('revoke select on public.fin_documents from public');
     assert.deepEqual(await failing(admin), []);
   } finally { await admin.end(); await db.drop(); }
