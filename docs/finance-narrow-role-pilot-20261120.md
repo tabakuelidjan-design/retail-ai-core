@@ -120,3 +120,24 @@ Risque concret pour ce périmètre : tant que la clé de service est chargée pa
 ## 9. Prochaine portion
 
 Une fois le login créé : activer le mode limité sur le service staging, rejouer le parcours complet depuis Core, tester refus entre entreprises et reprise après panne sur le serveur déployé, puis sauvegarde/restauration.
+
+## 10. Recette sur le serveur staging déployé (2026-11-20, marchand de test, document fictif)
+
+Parcours joué depuis Core (session propriétaire déjà ouverte dans Chrome ; aucun identifiant saisi, aucun jeton saisi) :
+
+1. Plus → Serveur et jeton d'accès → Ouvrir Nordla → Finance → Ouvrir le tableau de bord Finance : OK (tableau de bord du marchand « HABB (test staging) »).
+2. Création d'une facture fictive : client « Client fictif recette 20261120 », adresse fictive, TVA fictive `BE1000000120` (somme de contrôle valide), 1 × 100,00 € HTVA, TVA 21 %, base « Nouvelle vente B2B ». Brouillon enregistré.
+3. Soumission puis émission (confirmée dans la fenêtre « Émettre le document ») : statut `ISSUED`, numéro `INV-2026-0002`, `lockedAt` et `snapshotHash` posés.
+4. Archive écrite par le serveur pendant l'émission (lecture de la base staging, en lecture seule) :
+   - `PDF_ORIGINAL` : 7 017 octets, SHA-256 `8303a9d5d96a211a2d6d4940ade18e09d8e6d913fbf7cb9063245e5b529c449e`, chemin préfixé par le marchand ;
+   - `STRUCTURED_ORIGINAL` (UBL) : 3 832 octets, SHA-256 `3213a7fc8e2a3492e97d0c4ec71b7ae5e300c66f5a8712c72dbfd93d5eaf66e7`, chemin préfixé par le marchand ;
+   - deux événements `ARTIFACT_ARCHIVED` pour ce document.
+
+**Non prouvé ici, à dire clairement :**
+- Téléchargement du PDF et vérification octet par octet : le navigateur bloque la lecture directe de l'URL de téléchargement depuis la page ; je ne peux donc pas comparer le fichier reçu au SHA-256 archivé.
+- Preuve que l'écriture passe par le login pilote : les journaux PostgreSQL accessibles ne contiennent pas d'entrée pour `nordla_fin_*` sur la fenêtre. Le démarrage en mode limité est confirmé ; le chemin d'écriture de l'archive est câblé sur ce mode dans `runtime.js`.
+- Refus entre entreprises sur le serveur déployé : le serveur ne sert qu'un marchand (`NORDLA_MERCHANT_ID`) ; ce cas est couvert par la suite 108 au niveau base de données, pas sur le serveur.
+- Reprise après panne sans réémission sur le serveur déployé : non testée (il faudrait provoquer une panne côté base sur un service partagé) ; couverte par la suite 108.
+- Sauvegarde et restauration : non faites (voir le runbook).
+
+Le brouillon de test `0b0aeb60-3083-4a50-9ec5-43141bbbea1a` (client fictif incomplet, non émis) reste dans le marchand de test ; il est à annuler par le propriétaire si vous le souhaitez.
