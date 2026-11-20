@@ -79,7 +79,7 @@ export function createSourcingApp({ release = { sha: 'unknown', branch: 'unknown
     const ip = clientIp(req);
     if (blocked(ip)) return json(res, 429, { error: 'TOO_MANY_ATTEMPTS' }, { 'retry-after': '60' });
     let actor = { role: 'OWNER', label: 'local-owner' }; // local PC server: the token holder is the owner of that PC (journaled as LOCAL_TOKEN)
-    if (gate) { const a = await gate.authorize(req); if (!a.ok) return json(res, a.status, a.body); actor = { userId: a.access.userId, role: a.access.role }; } // hosted: a Nordla session (and CSRF for a change); who acts comes from the session only
+    if (gate) { const a = await gate.authorize(req); if (!a.ok) return json(res, a.status, a.body); actor = { userId: a.access.userId, role: a.access.role, sessionId: a.access.sessionId }; } // hosted: a Nordla session (and CSRF for a change); who acts comes from the session only
     else if (!sameToken(req.headers['x-sourcing-token'], token)) { failed(ip); return json(res, 401, { error: 'UNAUTHORIZED' }); }
     req.auditActor = actor; // for the access journal: the role and user id of this request, when a session was checked
     const p = url.pathname; const m = req.method;

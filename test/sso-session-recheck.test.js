@@ -54,6 +54,8 @@ test('MFA activation and policy outages close existing Analytics sessions on the
   s.required = true;
   assert.equal((await run(g, { cookie })).r.status, 401);
   s.compliant = true;
+  await assert.rejects(openSession(g, 'OWNER'), /the Core ticket opens a session/, 'an enrolled factor without a session proof is refused');
+  s.required = false;
   const protectedCookie = await openSession(g, 'OWNER');
   assert.equal((await run(g, { cookie: protectedCookie })).ok, true);
   s.policyUnavailable = true;

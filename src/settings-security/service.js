@@ -176,6 +176,10 @@ export function createSecurityService({ supabase, adminAuth = null, verifier = n
   async function mfaDisable(me, token, { password, code } = {}) {
     need(me); mfaReady(); throttled(me);
     const cur = await currentSessionId(me, token); if (!cur) throw new SecurityError('CURRENT_SESSION_UNKNOWN', 'La session actuelle est introuvable : rien n’a été changé.');
+    if (mfaRule && context?.merchantId && MANAGER_ROLES.includes(me.role)) {
+      let required;try { required = await mfaRule.enabled(context.merchantId); } catch { throw new SecurityError('UNAVAILABLE','La vérification de sécurité est temporairement indisponible.'); }
+      if (required) throw new SecurityError('VALIDATION','L’équipe exige la double authentification : un propriétaire doit d’abord modifier cette règle avec une connexion renforcée récente.');
+    }
     const { user } = await proof(me, { password, code });
     for (const f of user.factors ?? []) { let ok = false; try { ok = await adminAuth.deleteFactor(me.userId, f.id); } catch { ok = false; } if (!ok) throw new SecurityError('PROVIDER_REFUSED', 'Le fournisseur n’a pas pu retirer le facteur : rien n’est confirmé.'); }
     await recoveryCodes.clear(me.userId); failures.delete(me.userId); mfaRule?.forget(context?.merchantId, me.userId);
@@ -250,9 +254,12 @@ export function createSecurityService({ supabase, adminAuth = null, verifier = n
   }
   async function saveTeamRules(me, { requireMfa } = {}) {
     need(me);
-    if (!MANAGER_ROLES.includes(me.role)) throw new SecurityError('FORBIDDEN_ROLE', 'Votre rôle ne permet pas de modifier les règles de l’équipe.');
+    if (me.role !== 'OWNER') throw new SecurityError('FORBIDDEN_ROLE', 'Votre rôle ne permet pas de modifier les règles de l’équipe.');
     if (!(features.mfa && mfaRule && context?.merchantId)) throw new SecurityError('FEATURE_UNAVAILABLE', 'La double authentification n’est pas activée sur ce serveur.');
     if (typeof requireMfa !== 'boolean') throw new SecurityError('VALIDATION', 'Valeur inconnue.');
+    let proof;
+    try { proof = await mfaRule.recent(me); } catch { throw new SecurityError('UNAVAILABLE','La vérification de sécurité est temporairement indisponible.'); }
+    if (!proof?.ok) throw new SecurityError(proof?.code === 'MFA_ENROLLMENT_REQUIRED' ? 'VALIDATION' : 'REAUTHENTICATION_REQUIRED', proof?.code === 'MFA_ENROLLMENT_REQUIRED' ? 'Activez d’abord votre propre double authentification.' : 'Reconnectez-vous à Nordla avec votre second facteur avant de modifier cette règle.');
     const r = await mfaRule.set({ merchantId: context.merchantId, actor: me.userId, enabled: requireMfa });
     if (!r?.ok) throw new SecurityError(r?.code === 'ACTOR_NO_MFA' ? 'VALIDATION' : 'FORBIDDEN_ROLE', r?.code === 'ACTOR_NO_MFA' ? 'Activez d’abord votre propre double authentification : sinon vous seriez bloqué.' : 'Seul un propriétaire peut modifier cette règle.');
     return { ok: true, enabled: r.enabled };

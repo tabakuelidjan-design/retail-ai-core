@@ -106,7 +106,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
         const fin = decideModuleOpen({ key: 'finance', role: actor?.role ?? null, activeCodes: await activeModules() });
         if (!fin.ok) { const r = refusalOf(fin); json(res, r.status, r.body); return true; }
         if (!actor?.userId) { json(res, 409, { error: 'NOT_AVAILABLE', message: 'single sign-on needs a signed-in Nordla account' }); return true; }
-        const ticket = issueTicket({ secret: financeSso.secret, merchantId: financeSso.merchantId, ttlSeconds: 60, person: { userId: actor.userId, role: actor.role, module: 'finance' } });
+        const ticket = issueTicket({ secret: financeSso.secret, merchantId: financeSso.merchantId, ttlSeconds: 60, person: { userId: actor.userId, role: actor.role, module: 'finance', ...(actor.sessionId ? { authSessionId: actor.sessionId } : {}) } });
         const ob = await body(req).catch(() => ({})); const dossier = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(ob?.dossier ?? '')) ? `&open=${String(ob.dossier).toLowerCase()}` : ''; // a navigation hint only (the file to land on): it grants nothing, Finance still reads it under the signed-in session
         json(res, 200, { url: `${financeSso.publicUrl}/sso?t=${ticket}${dossier}`, expiresInSeconds: 60 }); return true;
       }
@@ -115,7 +115,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
         const ana = decideModuleOpen({ key: 'analytics', role: actor?.role ?? null, activeCodes: await activeModules() });
         if (!ana.ok) { const r = refusalOf(ana); json(res, r.status, r.body); return true; }
         if (!actor?.userId) { json(res, 409, { error: 'NOT_AVAILABLE', message: 'single sign-on needs a signed-in Nordla account' }); return true; }
-        const ticket = issueTicket({ secret: analyticsSso.secret, merchantId: analyticsSso.merchantId, audience: ANALYTICS_SSO_AUDIENCE, ttlSeconds: 60, person: { userId: actor.userId, role: actor.role, module: 'analytics' } });
+        const ticket = issueTicket({ secret: analyticsSso.secret, merchantId: analyticsSso.merchantId, audience: ANALYTICS_SSO_AUDIENCE, ttlSeconds: 60, person: { userId: actor.userId, role: actor.role, module: 'analytics', ...(actor.sessionId ? { authSessionId: actor.sessionId } : {}) } });
         json(res, 200, { url: `${analyticsSso.publicUrl}/sso?t=${ticket}`, expiresInSeconds: 60 }); return true;
       }
       if (p === '/api/core/growth/open' && m === 'POST') { // a one-time ticket to open Growth on its own domain with THIS Nordla session (no second sign-in). Any signed-in person may ask: Growth re-checks membership, module and role itself.
@@ -126,7 +126,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
         if (!gro.ok) { const r = refusalOf(gro); json(res, r.status, r.body); return true; }
         const b = await body(req); const to = b.to === undefined ? 'dropoff' : String(b.to);
         if (!Object.hasOwn(HANDOFF_DESTINATIONS, to)) { json(res, 400, { error: 'INVALID_DESTINATION' }); return true; }
-        const ticket = issueHandoff({ secret: sso.secret, merchantId: sso.merchantId, userId: actor.userId, ttlSeconds: 60 });
+        const ticket = issueHandoff({ secret: sso.secret, merchantId: sso.merchantId, userId: actor.userId, authSessionId: actor.sessionId, ttlSeconds: 60 });
         json(res, 200, { url: `${sso.origin}/sso?t=${ticket}&to=${to}`, expiresInSeconds: 60 }); return true;
       }
       if (p === '/api/core/finance/inbox' && m === 'GET') { // read-only list of the Finance supplier-invoice inbox of THIS server's merchant; owner, administrator and accountant only

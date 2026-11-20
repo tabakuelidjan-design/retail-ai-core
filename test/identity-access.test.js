@@ -208,9 +208,9 @@ test('the caller cannot choose the merchant or the module (extra fields throw)',
 test('resolveAccessSession(rawToken): only the token; merchant, module and expected module can never be passed', async () => {
   const w = await habbLike();
   const svc = w.service(A, 'finance');
-  const { token } = await login(svc, P.viewer);
+  const { token, session } = await login(svc, P.viewer);
   const r = await svc.resolveAccessSession(token);
-  assert.deepEqual(r, { ok: true, merchantId: A, userId: P.viewer.id, role: 'VIEWER', module: 'finance' });
+  assert.deepEqual(r, { ok: true, merchantId: A, userId: P.viewer.id, role: 'VIEWER', module: 'finance', sessionId: session.sessionId });
   await assert.rejects(svc.resolveAccessSession(token, 'finance'), /takes only the session token/);
   await assert.rejects(svc.resolveAccessSession(token, 'analytics'), /takes only the session token/);
   await assert.rejects(svc.resolveAccessSession(token, { merchantId: B }), /takes only the session token/);
@@ -276,7 +276,7 @@ test('two merchants: one person, two roles; Finances in A only, Growth in B only
   assert.deepEqual(await login(aGro, P.owner), LOGIN_FAILED, 'no Growth in A');
   assert.deepEqual(await bFin.resolveAccessSession(ta.token), SESSION_REFUSED, 'A token refused by a B service');
   assert.deepEqual(await aGro.resolveAccessSession(tb.token), SESSION_REFUSED, 'B token refused by an A service');
-  assert.deepEqual(await bGro.resolveAccessSession(tb.token), { ok: true, merchantId: B, userId: P.owner.id, role: 'VIEWER', module: 'growth' });
+  assert.deepEqual(await bGro.resolveAccessSession(tb.token), { ok: true, merchantId: B, userId: P.owner.id, role: 'VIEWER', module: 'growth', sessionId: tb.session.sessionId });
   assert.equal(w.sessions().find((s) => s.token_hash === hashSessionToken(ta.token)).merchant_id, A);
 });
 

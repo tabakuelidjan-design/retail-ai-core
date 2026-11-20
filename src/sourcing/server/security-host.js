@@ -18,7 +18,7 @@ const HEADERS = { 'Content-Security-Policy': "default-src 'self'; img-src 'self'
 const send = (res, status, type, body, extra = {}) => { res.writeHead(status, { ...HEADERS, 'Content-Type': type, ...extra }); res.end(body); };
 const json = (res, status, body) => send(res, status, 'application/json; charset=utf-8', JSON.stringify(body), { 'Cache-Control': 'no-store' });
 export const SLUGS = Object.freeze({ connexion: 'sign_in', sessions: 'sessions', activite: 'activity', equipe: 'team' });
-const STATUS = Object.freeze({ LINK_INVALID: 410, MFA_REQUIRED: 422, MFA_INVALID: 403, FORBIDDEN_ROLE: 403, FEATURE_UNAVAILABLE: 409, VALIDATION: 422, BAD_CURRENT_PASSWORD: 403, RATE_LIMITED: 429, UNAVAILABLE: 503, PROVIDER_REFUSED: 422, CURRENT_SESSION_UNKNOWN: 409, SESSION_REQUIRED: 401 });
+const STATUS = Object.freeze({ REAUTHENTICATION_REQUIRED:403, LINK_INVALID: 410, MFA_REQUIRED: 422, MFA_INVALID: 403, FORBIDDEN_ROLE: 403, FEATURE_UNAVAILABLE: 409, VALIDATION: 422, BAD_CURRENT_PASSWORD: 403, RATE_LIMITED: 429, UNAVAILABLE: 503, PROVIDER_REFUSED: 422, CURRENT_SESSION_UNKNOWN: 409, SESSION_REQUIRED: 401 });
 const readJson = async (req) => { const chunks = []; let n = 0; for await (const c of req) { n += c.length; if (n > 20_000) throw Object.assign(new Error('too large'), { code: 'BODY_TOO_LARGE' }); chunks.push(c); } try { return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}'); } catch { throw Object.assign(new Error('invalid json'), { code: 'BODY_INVALID' }); } };
 const cookieOf = (req, name) => { for (const part of String(req.headers.cookie ?? '').split(';')) { const i = part.indexOf('='); if (i > 0 && part.slice(0, i).trim() === name) return part.slice(i + 1).trim(); } return null; };
 
@@ -52,7 +52,7 @@ export async function createSecurityHost({ gate, merchantId, service, sessionCoo
           const a = await gate.authorize(req);
           if (!a.ok) { json(res, a.status, a.body); return true; }
           const access = a.access; if (access.merchantId !== merchantId) { json(res, 403, { error: { code: 'TENANT_MISMATCH' } }); return true; }
-          const me = { userId: access.userId, merchantId: access.merchantId, role: access.role, module: access.module }; // ALWAYS the session's own identity
+          const me = { userId: access.userId, merchantId: access.merchantId, role: access.role, module: access.module, sessionId:access.sessionId }; // ALWAYS the session's own identity
           const token = cookieOf(req, sessionCookie); const method = String(req.method ?? '').toUpperCase();
           try {
             if (method === 'GET' && p === '/api/security') {

@@ -7,6 +7,8 @@ import {createServer} from 'node:net';
 import {randomBytes,randomUUID,createHash} from 'node:crypto';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import assert from 'node:assert/strict';
+import {verifyNativeRuntimeRoles} from './fixtures/native-runtime-roles.mjs';
+import {verifyNativeSessionAssurance} from './fixtures/native-session-assurance.mjs';
 import {createBundle,restoreBundle,dumpDatabase,restoreDrillDatabase,verifyBundle} from '../tools/security-recovery.mjs';
 const native=resolve(process.argv[2]);const{default:pg}=await import(pathToFileURL(resolve(process.argv[3])).href);
 const root=await mkdtemp(join(tmpdir(),'nordla-native-recovery-'));const data=join(root,'cluster');
@@ -52,6 +54,8 @@ try{
   await source.query("insert into storage.objects(bucket_id,name) values('finance-inbox',$1)",[m+'/original.pdf']);
  }
  checks.push('four merchants, four numbered locked invoices, four originals');
+ checks.push(await verifyNativeSessionAssurance(source,merchants[0]));
+ if(process.argv[5])checks.push(await verifyNativeRuntimeRoles({admin:source,merchants,pg,port,database:sourceName,roleRoot:resolve(process.argv[5])}));
  const amounts="select merchant_id::text,number,net_cents::text,vat_cents::text,gross_cents::text,snapshot_hash from fin_documents order by merchant_id";
  const snapshot=(await source.query(amounts)).rows;
  const dump=await dumpDatabase({connection:conn(sourceName),env});assert.equal(dump.subarray(0,5).toString(),'PGDMP');
@@ -68,9 +72,9 @@ try{
  assert.equal((await source.query('select count(*)::int n from fin_companies')).rows[0].n,liveBefore);checks.push('live source and other merchants remain untouched');
  await assert.rejects(restoreDrillDatabase({connection:conn(targetName),data:dump,env}),/DATABASE_NOT_EMPTY/);checks.push('populated restore target is refused');
  await verifyBundle({directory:bundle,passphrase});
- console.log(JSON.stringify({ok:true,engine:'PostgreSQL 17 native TCP',migrations:50,merchants:4,documents:4,originalFiles:4,checks,dumpSha256:createHash('sha256').update(dump).digest('hex'),seconds:Math.round((Date.now()-before)/1000),remoteAccess:false,supabaseManagedSchemas:'minimal local stubs, not full hosted Supabase restoration'}));
+ console.log(JSON.stringify({ok:true,engine:'PostgreSQL 17 native TCP',migrations:process.argv[5]?54:50,merchants:merchants.length,documents:snapshot.length,originalFiles:files.length,checks,dumpSha256:createHash('sha256').update(dump).digest('hex'),seconds:Math.round((Date.now()-before)/1000),remoteAccess:false,supabaseManagedSchemas:'minimal local stubs, not full hosted Supabase restoration'}));
 }finally{
  await restored?.end().catch(()=>{});await source?.end().catch(()=>{});await admin?.end().catch(()=>{});
- if(started)await control(['-D',data,'-m','fast','-w','stop']).catch(()=>{});
- if(resolve(root).startsWith(resolve(tmpdir())+sep+'nordla-native-recovery-'))await rm(root,{recursive:true,force:true});
+ if(started)await control(['-D',data,'-m','fast','-w','stop']);
+ if(resolve(root).startsWith(resolve(tmpdir())+sep+'nordla-native-recovery-'))await rm(root,{recursive:true,force:true,maxRetries:10,retryDelay:200});
 }

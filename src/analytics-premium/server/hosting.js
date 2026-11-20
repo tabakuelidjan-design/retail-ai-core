@@ -104,7 +104,7 @@ export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = nul
       failures.delete(ip);
       for (const [k, v] of sessions) if (v < now()) { sessions.delete(k); ssoPeople.delete(k); }
       const sid = randomBytes(32).toString('hex'); sessions.set(sid, now() + SSO_SESSION_MS);
-      if (r.claims) ssoPeople.set(sid, { userId: r.claims.userId, role: r.access?.role ?? r.claims.role }); // re-checked on every request below
+      if (r.claims) ssoPeople.set(sid, { userId: r.claims.userId, role: r.access?.role ?? r.claims.role, ...(r.claims.authSessionId ? {authSessionId:r.claims.authSessionId} : {}) }); // re-checked on every request below
       res.writeHead(302, { ...base, Location: '/', 'Set-Cookie': `${SSO_COOKIE}=${sid}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${SSO_SESSION_MS / 1000}` }); res.end();
       return false; // answered (redirect)
     }
@@ -113,7 +113,7 @@ export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = nul
       // a session opened by Nordla single sign-on is re-checked on EVERY request (suspended, removed, role changed or entitlement gone = refused now)
       const p = ssoPeople.get(sid);
       if (p) {
-        const a = sso?.checkAccess ? await sso.checkAccess({ merchantId: sso.merchantId, userId: p.userId, role: p.role, module: 'analytics' }).catch(() => null) : null;
+        const a = sso?.checkAccess ? await sso.checkAccess({ merchantId: sso.merchantId, userId: p.userId, role: p.role, module: 'analytics', ...(p.authSessionId ? {authSessionId:p.authSessionId} : {}) }).catch(() => null) : null;
         if (!a?.ok) { sessions.delete(sid); ssoPeople.delete(sid); return deny(res, 401, 'SESSION_REVOKED'); }
       }
       failures.delete(ip); for (const [k, v] of Object.entries(base)) res.setHeader(k, v); return true;

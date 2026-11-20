@@ -106,13 +106,14 @@ test('SS-5 revoke-current closes this session server-side and journals it', asyn
   } finally { close(); }
 });
 
-test('SS-6 team rules: readable by a member, management refused to a viewer (403) and unavailable for an admin (409): no setting can change', async () => {
+test('SS-6 team rules: readable by a member, management refused to a viewer (403) and refused to an admin (403): no setting can change', async () => {
   const { call, open, close } = await boot();
   try {
     const v = await open(U.view, M1); const ad = await open(U.admin, M1);
     const g = await call('/api/security/team', { as: v }); assert.equal(g.status, 200); assert.equal(g.json.canManage, false); assert.ok(g.json.applied.every((r) => r.editable === false));
     assert.equal((await call('/api/security/team', { as: v, method: 'PUT', body: { requireMfa: true } })).status, 403);
-    const p = await call('/api/security/team', { as: ad, method: 'PUT', body: { requireMfa: true } }); assert.equal(p.status, 409); assert.equal(p.json.error.code, 'FEATURE_UNAVAILABLE');
+    const p = await call('/api/security/team', { as: ad, method: 'PUT', body: { requireMfa: true } }); assert.equal(p.status, 403); assert.equal(p.json.error.code, 'FORBIDDEN_ROLE');
+    const owner = await open(U.alice, M1); const unavailable = await call('/api/security/team', { as: owner, method: 'PUT', body: { requireMfa: true } }); assert.equal(unavailable.status,409); assert.equal(unavailable.json.error.code,'FEATURE_UNAVAILABLE');
     assert.equal((await call('/api/security/team', { as: ad })).json.canManage, true);
   } finally { close(); }
 });

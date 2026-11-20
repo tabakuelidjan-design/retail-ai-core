@@ -14,7 +14,7 @@ import { rename, writeFile } from 'node:fs/promises';
 
 const keyOf = (sid) => createHash('sha256').update(String(sid ?? '')).digest('hex');
 // The Nordla person of a session opened by single sign-on (kept so the session is re-checked on each request); absent for token sessions.
-const sso0 = (sso) => (sso && typeof sso.userId === 'string' && typeof sso.role === 'string' ? { sso: { userId: sso.userId, role: sso.role } } : {});
+const sso0 = (sso) => (sso && typeof sso.userId === 'string' && typeof sso.role === 'string' ? { sso: { userId: sso.userId, role: sso.role, ...(typeof sso.authSessionId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sso.authSessionId) ? {authSessionId:sso.authSessionId} : {}) } } : {});
 
 /**
  * @param {{ persistence?: { load: () => Array<[string, {csrf: string, expires: number}]>, save: (entries) => Promise<void> } | null, now?: () => number }} [o]

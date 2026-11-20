@@ -1432,7 +1432,7 @@ export function createFinanceApp(deps) {
     }
     failures.delete(ip);
     const sid = randomBytes(32).toString('hex');
-    sessions.set(sid, { csrf: randomBytes(24).toString('hex'), expires: Date.now() + SESSION_MS, ...(r.claims ? { sso: { userId: r.claims.userId, role: r.access?.role ?? r.claims.role } } : {}) });
+    sessions.set(sid, { csrf: randomBytes(24).toString('hex'), expires: Date.now() + SESSION_MS, ...(r.claims ? { sso: { userId: r.claims.userId, role: r.access?.role ?? r.claims.role, ...(r.claims.authSessionId ? {authSessionId:r.claims.authSessionId} : {}) } } : {}) });
     await audit({ at: clock.now(), action: 'LOGIN_SSO' });
     const openId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(url.searchParams.get('open') ?? '') ? url.searchParams.get('open').toLowerCase() : null; // a landing hint (which supplier-invoice file to show): it is not a credential, the page reads it under the session
     send(res, 302, '', { Location: openId ? `/#/purchases?open=${openId}` : '/', 'Cache-Control': 'no-store', 'Set-Cookie': `${COOKIE}=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${cookieFlags}` });
@@ -1454,7 +1454,7 @@ export function createFinanceApp(deps) {
       if (deps.ssoOnly && openedSid && !sessions.get(openedSid)?.sso) sessions.delete(openedSid);
       if (openedSid && sessions.get(openedSid)?.sso) {
         const sso = sessions.get(openedSid).sso;
-        const again = deps.sso?.checkAccess ? await deps.sso.checkAccess({ merchantId, userId: sso.userId, role: sso.role, module: 'finance' }).catch(() => null) : null;
+        const again = deps.sso?.checkAccess ? await deps.sso.checkAccess({ merchantId, userId: sso.userId, role: sso.role, module: 'finance', ...(sso.authSessionId ? {authSessionId:sso.authSessionId} : {}) }).catch(() => null) : null;
         if (!again?.ok) sessions.delete(openedSid);
       }
       const route = routes.map((r) => ({ r, m: r.method === req.method ? r.re.exec(url.pathname) : null })).find((x) => x.m);
