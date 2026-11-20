@@ -18,6 +18,7 @@ import { createConnectorRepository } from '../tenant/connectors.js';
 import { createShopifyConnector, DEFAULT_SHOPIFY_TIMEOUT_MS } from '../connectors/shopify.js';
 import { createRetailAccess } from './retail-access.js';
 import { createSupabaseFinanceStore } from './supabase-store.js';
+import { createNarrowIssuePathFromEnv } from './runtime/narrow-config.js';
 
 /** Sales-source connector kinds: their presence means the merchant's sales come from a synced source. */
 export const SALES_CONNECTOR_KINDS = Object.freeze(['shopify', 'woocommerce', 'prestashop', 'odoo']);
@@ -47,7 +48,10 @@ export async function createRuntime({ env = process.env, supabase: injectedSupab
 
   const retailConfig = mergeConfig(existsSync('data/local/marketing-policy.json') ? JSON.parse(await readFile('data/local/marketing-policy.json', 'utf8')) : {});
   const timeZone = env.MERCHANT_TIMEZONE || 'UTC';
-  const store = createSupabaseFinanceStore(supabase, { merchantId: merchant.id });
+  // Database mode: the service-role store by default. FINANCE_RUNTIME_DB=narrow-pilot routes getDocument and issueDocument through
+  // the least-privilege role; a failed identity check stops the start-up here (no fallback to the service client).
+  const narrow = await createNarrowIssuePathFromEnv({ env, merchantId: merchant.id, log });
+  const store = createSupabaseFinanceStore(supabase, { merchantId: merchant.id, narrowIssuePath: narrow?.path ?? null });
 
   const loadRetail = async (sinceDate) => {
     // Lower bound of the load: the start of the merchant's first day (local midnight), else an instant 400 days back (a technical look-back, not a business date).
@@ -69,5 +73,5 @@ export async function createRuntime({ env = process.env, supabase: injectedSupab
   };
   const hasSalesSource = async () => (await salesSource()) !== 'NONE';
   const retail = createRetailAccess({ loadRetail, listOrderRefs, timeZone });
-  return { shopify, supabase, merchant, tenant, connectors, salesSource, hasSalesSource, retailConfig, timeZone, store, retail, loadRetail, listOrderRefs, retailHistory: () => readCoverage() };
+  return { shopify, supabase, merchant, tenant, connectors, salesSource, hasSalesSource, retailConfig, timeZone, store, retail, loadRetail, listOrderRefs, retailHistory: () => readCoverage(), dbMode: narrow ? 'narrow-pilot' : 'service', narrowPool: narrow?.pool ?? null };
 }
