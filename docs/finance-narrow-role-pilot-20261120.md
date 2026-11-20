@@ -141,3 +141,10 @@ Parcours joué depuis Core (session propriétaire déjà ouverte dans Chrome ; a
 - Sauvegarde et restauration : non faites (voir le runbook).
 
 Le brouillon de test `0b0aeb60-3083-4a50-9ec5-43141bbbea1a` (client fictif incomplet, non émis) reste dans le marchand de test ; il est à annuler par le propriétaire si vous le souhaitez.
+
+## 11. Téléchargement vérifié, trace de rôle, sauvegarde (2026-11-20, suite de la recette)
+
+- **Original PDF** (`GET /api/documents/<id>/original-pdf`, requête same-origin depuis la page Finance) : HTTP 200, `application/pdf`, 7 017 octets, en-tête `%PDF-`, SHA-256 calculé dans le navigateur `8303a9d5d96a211a2d6d4940ade18e09d8e6d913fbf7cb9063245e5b529c449e` = empreinte archivée = `X-Nordla-Sha256`. **Téléchargement de l'original : vérifié.**
+- **Lien « Télécharger le PDF » de l'interface** : pointe vers `/api/documents/<id>/pdf?download=1`, qui peut régénérer un PDF ; il n'est pas une preuve de l'original. Non déclenché : son fichier n'est pas vérifiable depuis ce poste. À corriger côté interface (point ouvert).
+- **Trace de rôle** : `narrow-archive.js` écrit désormais `writtenByRole` (rôle effectif `current_user` dans la même transaction) dans la provenance de l'artefact. Test 108 (6/6 vert) l'asserte sur une archive fictive contrôlée en base locale. Déployée sur staging (`4a6c12e8`, SUCCESS). **Non vérifiée sur une archive réelle de staging** : il faudrait une nouvelle émission ; non faite pour ne pas créer de facture supplémentaire.
+- **Sauvegarde/restauration** : aucune opération réalisable avec les accès existants sur ce poste. Accès conteneur staging bloqué (aucune clé SSH enregistrée pour ce compte ; l'ajouter serait une modification de réglages du compte, non faite). Export de base impossible sans identifiant administrateur. Le runbook reste la procédure à suivre.
