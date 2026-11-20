@@ -22,15 +22,45 @@ Tests : `test/pg/96-security-search-path.pg.test.js` (5 tests, vert sur PostgreS
 
 Pourquoi le retrait est sûr pour Finance : le serveur Finance appelle toutes les RPC `fin_*` avec la clé `service_role` (`src/supabase/client.js`). Aucun appel client `anon` ou `authenticated` n'existe pour ces trois fonctions.
 
-## Pourquoi `nordla_is_active_member(uuid)` garde `authenticated`
+## Exception de sécurité : `nordla_is_active_member(uuid)` garde `authenticated`
 
-Fonction `SECURITY DEFINER` avec `search_path=""`, définie dans la migration Core `20261119150000_security_client_tenant_guards.sql`. Les politiques RLS restrictives `nordla_tenant_guard` (52 tables sur staging) l'appellent en contexte `authenticated` pour vérifier qu'un utilisateur est membre ACTIF, non retiré, de l'entreprise de la ligne. Si `authenticated` perd EXECUTE, ces politiques échouent en fermeture : les clients connectés ne voient plus rien. Le conseil Supabase « SECURITY DEFINER callable by authenticated » est donc un faux positif voulu. La fonction ne prend que `p_merchant`, lit `auth.uid()` (pas de paramètre utilisateur), et ne renvoie qu'un booléen. `anon` n'a pas EXECUTE.
+Statut : **exception de sécurité justifiée et testée**, pas une simple alerte ignorée.
 
-Tests locaux : membre ACTIVE non retiré → vrai ; SUSPENDED → faux ; retiré → faux ; autre entreprise → faux ; `anon` sans EXECUTE ; `authenticated` avec EXECUTE.
+Définition : `SECURITY DEFINER`, `search_path=""`, migration Core `20261119150000_security_client_tenant_guards.sql`. Staging conforme (vérifié : `prosecdef`, `proconfig = {search_path=""}`, EXECUTE pour `authenticated` et `postgres`/`service_role`, pas pour `anon`).
+
+Justification : les politiques restrictives `nordla_tenant_guard` (52 tables sur staging) l'appellent en contexte `authenticated`. Retirer EXECUTE fermerait l'accès des utilisateurs connectés à leurs propres données. Le droit est donc maintenu volontairement.
+
+Pourquoi c'est borné :
+- entrée unique `p_merchant uuid` ; l'identité vient de `auth.uid()`, jamais d'un paramètre ;
+- sortie booléenne ; aucune donnée renvoyée ;
+- `SECURITY DEFINER` nécessaire pour lire `merchant_members` sous RLS sans ouvrir cette table aux clients ;
+- `search_path` vide, donc les noms non qualifiés ne sont pas redirigeables.
+
+Tests (test/pg/96, vert sur PostgreSQL 17 local) : membre `ACTIVE` non retiré → vrai ; `SUSPENDED` → faux ; `removed_at` renseigné → faux ; autre entreprise → faux ; `anon` sans EXECUTE ; `authenticated` avec EXECUTE. Le test reproduit la forme de table Core (`removed_at`) et la fonction source à l'identique.
+
+Rappel de réexamen : si une politique RLS ne l'utilise plus, retirer EXECUTE à `authenticated` redevient la règle par défaut.
+
+## Tests de facturation sous rôles réels (2026-11-20)
+
+- Local (test/pg/97) : `service_role` émet deux factures fictives ; numéros `FACT-2026-0001` puis `FACT-2026-0002`, statut `ISSUED`, sans trou ni doublon. `anon` et `authenticated` sont refusés (`42501`) sur `fin_issue_document`, `fin_next_number`, `fin_payable_cents`, sans rien numéroter ni émettre.
+- Staging (transaction annulée, marchand fictif `99999999-…f1c5`) : `service_role` émet deux factures → `ISSUED_COUNT=2`, `NUMBERS=FACT-2026-0001,FACT-2026-0002`. Second contrôle (`…f1c6`) : `anon` et `authenticated` → `42501` sur les trois fonctions, 0 facture émise. Aucune ligne fictive ne subsiste (vérifié : 0).
+
+## Réconciliation des versions
+
+Les fichiers portent désormais les versions réellement enregistrées sur staging (renommage dans la commit `a8d4f8be`, sans réécriture d'historique) :
+- `20261120083356_fin_function_search_path` (au lieu de `20261120090000`)
+- `20261120085527_fin_function_execute_scope` (au lieu de `20261120100000`)
+
+Le texte exécuté est le corps SQL des fichiers, à partir de `begin;` ; seul l'en-tête de commentaires diffère (références de nom de fichier mises à jour). Les empreintes ci-dessous portent sur les fichiers versionnés.
+
+## Intégration aux branches
+
+- `release/finance-staging` : `a81ffcde` → `a8d4f8be` (fast-forward).
+- `release/sourcing-staging` (Core) : `414c613c` → `e9583407` (fast-forward), mêmes migrations, rollbacks et ce document. Pas de code applicatif modifié.
 
 ## Correspondance migration appliquée / fichier
 
-Le texte SQL envoyé à `apply_migration` est celui des fichiers ci-dessus. Empreintes SHA-256 des fichiers versionnés :
+Le texte SQL envoyé à `apply_migration` est le corps des fichiers ci-dessus. Empreintes SHA-256 des fichiers versionnés :
 
 - `20261120083356_fin_function_search_path.sql` : `8fd804713f1d3c73c45671f6311bd39eef56c2da667ba534d52aec1a3127ff87`
 - `20261120085527_fin_function_execute_scope.sql` : `7eca96ea8461fb1d68a4b5e95d6ee726a3268f30a5dfa0203ecfa6fd231ec537`
