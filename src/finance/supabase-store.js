@@ -55,7 +55,7 @@ export function translateDbError(err) {
   return err;
 }
 
-export function createSupabaseFinanceStore(supabase, { merchantId }) {
+export function createSupabaseFinanceStore(supabase, { merchantId, narrowIssuePath = null }) {
   const guard = async (fn) => { try { return await fn(); } catch (e) { throw translateDbError(e); } };
   const eq = (v) => `eq.${v}`;
   // the reconciled / ignored / remaining amounts and the status of a bank transaction, derived from its reconciliation rows (never read from the legacy status column)
@@ -87,6 +87,8 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
     ...legalStoreMethods(supabase, { merchantId, guard, eq }),
 
     async getDocument(id) {
+      // PILOT: when a narrow path is injected it is the only path for this read; no fallback to the service client
+      if (narrowIssuePath) { const row = await guard(() => narrowIssuePath.getDocument(id)); return row ? rowToDoc(row) : null; }
       const rows = await supabase.select('fin_documents', { select: '*', id: eq(id), merchant_id: eq(merchantId) });
       return rows[0] ? rowToDoc(rows[0]) : null;
     },
@@ -182,6 +184,11 @@ export function createSupabaseFinanceStore(supabase, { merchantId }) {
 
     /** ATOMIC issue through the fin_issue_document() RPC: number allocation, lock, hash and audit event in one DB transaction. */
     async issueDocument({ docId, expectedVersion, newStatus, numbering, year, canonical, placeholder, lockedAt, event }) {
+      // PILOT: when a narrow path is injected it is the only path for this write; no fallback to the service client
+      if (narrowIssuePath) {
+        const row = await guard(() => narrowIssuePath.issueDocument({ docId, expectedVersion, newStatus, numbering, year, canonical, placeholder, lockedAt, event }));
+        return rowToDoc(row);
+      }
       const row = await guard(() => supabase.rpc('fin_issue_document', {
         p_merchant: merchantId, p_doc_id: docId, p_expected_version: expectedVersion, p_new_status: newStatus,
         p_prefix: numbering.prefix, p_pad: numbering.pad, p_format: numbering.format, p_year: year,
