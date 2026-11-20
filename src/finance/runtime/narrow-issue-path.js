@@ -1,11 +1,13 @@
-// PILOT: narrow runtime path for the invoice issue flow (read one document, issue it), on the least-privilege role
-// nordla_fin_issuer_pilot (migration 20261120110000). Local pilot only: not wired by default, not deployed.
+// PILOT (v2): narrow runtime path for the invoice issue flow (read one document, issue it). Local pilot only, not wired by default.
+//
+// Identity (v2): the merchant is the one bound to the PostgreSQL LOGIN of the pool (session_user), not a value this module
+// sends. Every transaction first asks the database to assert that the login is bound to `merchantId` and holds no
+// privilege beyond the pilot role (nordla_runtime.fin_pilot_assert); only then does it switch to nordla_fin_issuer_pilot.
 //
 // Rules (see docs/finance-narrow-role-pilot-20261120.md):
-//  - the connection pool is injected; this module never reads environment variables, secrets or URLs;
-//  - every transaction sets the tenant context (app.merchant_id) and switches to the pilot role with SET LOCAL ROLE;
-//  - NO fallback: a connection or query failure is thrown to the caller, which must not retry through service_role;
-//  - the queries are the exact statements that the service needs: one row by id and merchant, and fin_issue_document.
+//  - the connection pool is injected; this module reads no environment variable, secret or URL;
+//  - no fallback: a connection, assertion or query failure is thrown; the caller must not retry through service_role;
+//  - the statements are the exact ones the service needs: one document row by id, and fin_issue_document.
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const PILOT_ROLE = 'nordla_fin_issuer_pilot';
@@ -21,21 +23,28 @@ export function createNarrowIssuePath({ pool, merchantId }) {
     catch (cause) { const e = new Error('NARROW_CONNECTION_FAILED'); e.cause = cause; throw e; }
     try {
       await client.query('begin');
-      await client.query("select set_config('app.merchant_id', $1, true)", [merchant]);
       await client.query(`set local role ${PILOT_ROLE}`);
+      // Refuses the transaction unless the LOGIN identity (session_user, unchanged by SET ROLE) is bound to this merchant
+      // and is not privileged. The assertion runs as the pilot role, which is the only role with EXECUTE on it.
+      await client.query('select nordla_runtime.fin_pilot_assert($1::uuid)', [merchant]);
       const result = await run(client);
       await client.query('commit');
       return result;
     } catch (err) {
       await client.query('rollback').catch(() => {});
-      throw err; // the original database error is kept so the store can translate it as before
+      throw err; // the original database error is kept so the store translates it as before
     } finally {
       client.release();
     }
   }
 
   return Object.freeze({
-    /** The document row, if it belongs to this merchant; null otherwise (the policy hides every other row). */
+    /** Asserts the identity without touching any business row. Call once at start-up; throws if the login is not allowed. */
+    async verify() {
+      return transaction(async () => true);
+    },
+
+    /** The document row, if it belongs to the bound merchant; null otherwise (the policies hide every other row). */
     async getDocument(id) {
       return transaction(async (c) => {
         const r = await c.query('select * from public.fin_documents where id = $1 and merchant_id = $2', [id, merchant]);

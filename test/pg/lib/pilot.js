@@ -1,0 +1,29 @@
+// Shared helpers for the PILOT narrow-role tests (local, disposable databases only).
+import pg from 'pg';
+import { clientFor, seedMerchants, MERCHANT_A, MERCHANT_B } from './db.js';
+import { testUrl } from './safety.js';
+
+export const LOGIN_A = 'nordla_fin_pilot_login_a';
+export const LOGIN_B = 'nordla_fin_pilot_login_b';
+export const PW = 'pilot_local_test_only'; // a test-only literal for disposable local databases, never a secret
+
+// Two real LOGIN roles, each a member of the pilot role only, each bound (immutably) to one merchant.
+// Runs inside the disposable test database (the principal table lives there). Roles are cluster-wide.
+export async function setupLogins(db) {
+  const a = await clientFor(db.name);
+  try {
+    await seedMerchants(a); // bindings reference merchants
+    for (const l of [LOGIN_A, LOGIN_B]) {
+      await a.query(`do $$ begin if not exists (select 1 from pg_roles where rolname='${l}') then create role ${l} login noinherit nobypassrls password '${PW}'; end if; end $$`);
+      await a.query(`grant nordla_fin_issuer_pilot to ${l}`);
+    }
+    await a.query(`insert into nordla_runtime.fin_pilot_principals (login_role, merchant_id) values ('${LOGIN_A}', '${MERCHANT_A}'), ('${LOGIN_B}', '${MERCHANT_B}') on conflict do nothing`);
+  } finally { await a.end(); }
+}
+
+export function poolFor(db, login, { max = 3 } = {}) {
+  const u = new URL(testUrl());
+  u.pathname = `/${db.name}`;
+  u.username = login; u.password = PW;
+  return new pg.Pool({ connectionString: u.toString(), max });
+}
