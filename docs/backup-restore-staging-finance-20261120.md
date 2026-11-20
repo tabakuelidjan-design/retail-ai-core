@@ -33,3 +33,22 @@ Périmètre : projet Supabase `fvhiammdskpcnfodsnrc` (base + bucket de stockage 
 ## Point de restauration existant (à confirmer par le propriétaire)
 
 Les sauvegardes automatiques de la plateforme Supabase dépendent du plan du projet. Le plan actuel n'a pas été vérifié depuis ce poste, et aucune modification d'abonnement n'est autorisée.
+
+## Exercice réalisé (2026-11-20) — preuves
+
+**Limites d'accès constatées (vérifiées, pas supposées)**
+- Le conteneur staging n'a ni `pg_dump`, ni `psql`, ni `pg_restore`.
+- Aucune variable de connexion administrateur à la base n'est présente. La seule URL PostgreSQL est celle du login pilote restreint (`nordla_fin_pilot_staging`) : elle ne peut lire que les lignes de son marchand, par les rôles limités. Ce n'est pas une sauvegarde complète.
+- L'API REST avec la clé de service (dans le conteneur uniquement) permet de lire les tables finance et le stockage. Elle ne donne ni le schéma, ni les rôles, ni les droits : ceux-ci viennent des migrations du dépôt.
+- L'accès SSH au conteneur a été ouvert par une clé temporaire, enregistrée puis retirée après usage (vérifié : aucune clé enregistrée à la fin).
+
+**Sauvegarde** : export par l'API REST du marchand de test (`67646dbb-…`) : `fin_companies` 1, `fin_documents` 8, `fin_artifacts` 8, `fin_events` 42, `fin_seller_profile_versions` 1, `fin_number_sequences` 2 ; 8 objets de stockage, chacun dont le SHA-256 correspond à la base. Le dossier de sauvegarde reste hors du dépôt.
+
+**Restauration** (base locale jetable, cluster de test, jamais staging) :
+1. Schéma, rôles, appartenances, droits et politiques : rejoués depuis les migrations du dépôt (v1 à v7).
+2. Lignes : rechargées depuis l'export ; nombre et contenu identiques (documents, numéros, statuts, hachages d'artefacts).
+3. Fichiers : écrits dans un dossier isolé ; 8/8 vérifiés contre le hachage stocké et la base.
+4. Audits pilote sur la base restaurée : lecture 0, émission 0, archive 0 écart.
+5. Refus vérifiés : le rôle d'archive ne lit pas `fin_documents` (permission refusée) ; le rôle de lecture ne peut pas insérer (permission refusée) ; sans liaison de login, le rôle d'archive n'accède à aucun artefact (refus `FIN_PILOT_PRINCIPAL_UNKNOWN_OR_DISABLED`, pas une liste vide).
+
+**Non couvert** : sauvegarde PostgreSQL complète (schéma, séquences système, extensions) et restauration sur une instance Supabase dédiée — impossible sans accès administrateur ou sans les sauvegardes de la plateforme. Procédure à compléter par le propriétaire si ce niveau est exigé.
