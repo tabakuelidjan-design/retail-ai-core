@@ -1,79 +1,81 @@
-# Pilote Finance : lecture et émission de facture sur rôle PostgreSQL limité
+# Pilote Finance : approbation d'une facture sur rôles PostgreSQL limités
 
 ## 1. État actuel (2026-11-20, unique et à jour)
 
-- **Branche** : `pilot/finance-narrow-role-20261120`, dernier commit `f9c7c48e`. Base : `release/finance-staging` @ `361c06f5`, inchangée. Rien n'est fusionné dans une branche release, rien n'est déployé.
-- **Périmètre** : deux méthodes du store Finance, `getDocument` (lecture d'une facture) et `issueDocument` (émission via `fin_issue_document`). Tout le reste reste sur `service_role`.
-- **Mode** : désactivé par défaut. `FINANCE_RUNTIME_DB=narrow-pilot` active le chemin limité au démarrage de `createRuntime` (le même point d'entrée que le serveur et la CLI). Toute erreur d'identité, de TLS ou de configuration arrête le démarrage ; aucun repli vers `service_role`.
-- **Staging** (projet d'essai `fvhiammdskpcnfodsnrc`) : migration v4 appliquée (voir §4). Aucun marchand réel, aucune donnée réelle. Les entreprises fictives A et B ont été utilisées.
+- **Branche** : `pilot/finance-narrow-role-20261120`. Dernier commit de ce lot : `57580f27` (précédent : `1c515786`). Base : `release/finance-staging` @ `361c06f5`, inchangée. Rien n'est fusionné dans une branche release, rien n'est déployé.
+- **Périmètre couvert par les rôles limités** : tout ce qui se passe avant l'émission dans `service.decide(APPROVE)` :
+  - lecture de la facture (`getDocument`) : rôle d'émission ;
+  - vérification de liaison (`listDocuments` des factures du marchand) : rôle de lecture ;
+  - chargement du ledger (`loadRetail` → `loadDataset`, mêmes tables, même calcul) : rôle de lecture ;
+  - émission (`issueDocument` → `fin_issue_document`) : rôle d'émission.
+- **Hors lot** (volontairement) : hooks après émission (archive légale, stock), `resettle` des avoirs, paiements, rapprochement, Peppol, réglages, sociétés.
+- **Mode** : désactivé par défaut. `FINANCE_RUNTIME_DB=narrow-pilot` active le mode au démarrage de `createRuntime` (serveur et CLI). Toute erreur d'identité, de TLS ou de configuration arrête le démarrage. Toute erreur de connexion pendant une opération la refuse. Aucun repli vers `service_role`.
+- **Staging** (projet d'essai `fvhiammdskpcnfodsnrc`, entreprises fictives A et B uniquement) : migrations v4 et v5 appliquées (§4). Aucun marchand réel, aucune donnée réelle, le marchand partagé du staging n'a pas été modifié.
 
 ## 2. Preuves LOCALES (PostgreSQL 17 jetable, deux marchands synthétiques, vrais logins)
 
 | Suite | Tests | Résultat |
 |---|---|---|
-| `test/pg/98` parcours fonctionnel | 8 | vert |
+| `test/pg/98` parcours fonctionnel (émission, croisements, SET/RESET ROLE, pool, politique permissive, panne, rollback) | 8 | vert |
 | `test/pg/99` identités (non liée, désactivée, privilégiée, non membre, liaison immuable) | 4 | vert |
-| `test/pg/100` audit exact du rôle | 6 | vert |
+| `test/pg/100` audit exact du rôle d'émission | 6 | vert |
 | `test/pg/101` connexion (TLS, paramètres SSL refusés, identité au démarrage) | 6 | vert |
 | `test/pg/102` matrice EXECUTE rôles × fonctions `extensions` (avant / après / rollback) | 1 | vert |
 | `test/pg/103` PUBLIC SELECT sur une relation `extensions` | 1 | vert |
 | `test/pg/104` démarrage `createRuntime` en mode limité, panne, mode service | 4 | vert |
+| `test/pg/105` `service.decide(APPROVE)` : nominal, données étrangères, absence de liaison, panne | 4 | vert |
+| `test/pg/106` audit du rôle de lecture ; le rôle d'émission ne gagne rien | 2 | vert |
 | `test/finance-narrow-config.test.js` configuration de démarrage | 4 | vert |
 
-Total : 34 tests locaux verts. Les quatre suites `finance-pack` en échec ne sont pas liées au pilote : elles échouent à l'identique sur `361c06f5` (vérifié).
+Total : 40 tests locaux verts. Les quatre suites `finance-pack` en échec ne sont pas liées au pilote (échec identique sur `361c06f5`).
 
 ## 3. Preuves STAGING (fictif uniquement, pooleur `aws-1-eu-west-1`, TLS strict avec le CA officiel)
 
-Exécuté par `createRuntime` lui-même, avec `NORDLA_MERCHANT_ID` = entreprise fictive A et un client Supabase de substitution (la clé de service n'est pas disponible sur ce poste, et elle n'a pas été demandée) :
+Exécuté avec `createRuntime` et `service.decide` (le service Finance réel), login de test lié à l'entreprise fictive A, client Supabase de substitution (la clé de service n'est pas disponible sur ce poste) :
 
-- Démarrage : identité `session_user` vérifiée, liaison au marchand A confirmée, TLS vérifié. Journal : « narrow-pilot (session user login, bound merchant verified, TLS verified) ».
-- Lecture d'un brouillon de A : OK. Émission : `FACT-2026-0002`, statut `ISSUED`.
-- Appels reçus par le client service pendant lecture et émission : **aucun**.
-- Refus entre entreprises : lecture d'un brouillon de B → `null` ; émission d'un brouillon de B → `DOCUMENT_NOT_FOUND` ; réémission du brouillon de A → `CONCURRENT_MODIFICATION`.
-- Démarrage avec le marchand B alors que le login est lié à A → refus (`FIN_PILOT_MERCHANT_MISMATCH`), aucun runtime retourné.
-- Panne de connexion après démarrage : lecture et émission refusées (`NARROW_CONNECTION_FAILED`), rien n'est lu ni émis par le client service.
-- Panne au démarrage (mauvais port) : démarrage refusé.
-- Nettoyage : login supprimé, liaison désactivée, brouillon fictif B supprimé. Restent : les entreprises fictives A et B, deux factures fictives émises pour A (`FACT-2026-0001`, `FACT-2026-0002`, immuables par conception), la migration.
+- Démarrage : `session_user` vérifié, liaison à A, TLS vérifié, rôles d'émission et de lecture vérifiés.
+- **Approbation nominale** : facture fictive A approuvée → `ISSUED`, numéro `INV-2026-0003`.
+- **Appels reçus par le client de substitution pendant l'approbation : aucun** (lecture de la facture, liaison, ledger et émission passent par les rôles limités).
+- Données étrangères : approbation de la facture fictive de B par le runtime de A → `DOCUMENT_NOT_FOUND`.
+- Réapprobation de la facture déjà émise → `INVALID_TRANSITION` (règle métier).
+- Démarrage avec le marchand B alors que le login est lié à A → refus (`FIN_PILOT_MERCHANT_MISMATCH`).
+- Panne de connexion après démarrage → approbation refusée (`NARROW_CONNECTION_FAILED`), rien émis.
+- Panne au démarrage (mauvais port) → démarrage refusé.
+- Limite : les cas « absence de liaison » et « données étrangères liées à une commande » ont été exécutés localement (test 105), pas sur staging, parce que la clé de service n'est pas disponible pour créer les commandes fictives ; et le brouillon fictif de B a été inséré avec une version de corps dont les totaux par ligne ont été simplifiés (les totaux de documents sont corrects).
+- Nettoyage : login supprimé, liaison désactivée, brouillon fictif de B supprimé. Restent sur staging : les entreprises fictives A et B, trois factures fictives émises pour A (`FACT-2026-0001`, `FACT-2026-0002`, `INV-2026-0003`, immuables par conception), les migrations v4 et v5.
 
-Limite : le parcours de décision complet (`service.decide` avec readiness, hooks de stock et d'archive) n'a pas été exécuté sur staging, faute de clé de service.
+## 4. Migrations sur staging
 
-## 4. Migration et rollback (staging)
+- v4 `20261120110000_fin_issuer_narrow_role.sql` (commit `f9c7c48e`).
+- v5 `20261120120000_fin_reader_narrow_role.sql` (commit `57580f27`) : rôle de lecture, politiques par entreprise, audit exact (échec fermé), redéfinition de l'entrée d'identité `fin_pilot_assert` (même sens, accepte aussi le rôle de lecture).
+- Rollbacks : `supabase/rollback/20261120110000_…down.sql` et `20261120120000_…down.sql`.
 
-- Migration `20261120110000_fin_issuer_narrow_role.sql` (v4), appliquée telle que committée dans `f9c7c48e`. Rollback : `supabase/rollback/20261120110000_fin_issuer_narrow_role.down.sql`.
-- Contenu : rôle `nordla_fin_issuer_pilot` (sans login, sans BYPASSRLS), liaison immuable login→entreprise, garde restrictive par entreprise, droits minimaux, retrait de PUBLIC EXECUTE sur `extensions` et de PUBLIC SELECT sur ses relations avec préservation des droits de chaque rôle, audit exact qui échoue fermé.
-- Audit sur staging : 7 contrôles au vert. Droits de `anon`, `authenticated`, `service_role` inchangés (54 fonctions chacun).
+## 5. Accès administratifs encore utilisés dans l'approbation (`service_role`)
 
-## 5. Appels `service_role` avant et après l'émission
+Liste exacte, d'après le code (`src/finance/service.js` et `src/finance/server/app.js`) :
 
-Chemin d'approbation `service.decide(id, 'APPROVE')` (code `src/finance/service.js`) :
+| Moment | Accès | Où dans le code | Statut |
+|---|---|---|---|
+| Démarrage | `merchants` (résolution du tenant) | `src/tenant/index.js`, `runtime.js` | `service_role` (client Supabase conservé pour le reste du serveur) |
+| Démarrage | connecteurs du marchand | `runtime.js` (`createConnectorRepository`) | `service_role` |
+| Après émission | archive légale (`hooks.onIssued` → `legalServices.archiveIssued`) | `server/app.js` | `service_role`, s'exécute à chaque approbation |
+| Après émission | stock (`hooks.afterIssue`), uniquement si le mode stock n'est pas `off` | `server/app.js` | `service_role` |
+| Avoirs seulement | `restockDecisionNeeded`, `resettle` (paiements d'avoir) | `service.js`, `server/app.js` | `service_role` |
+| Échec d'un hook | journal `appendEvent` | `service.js` | `service_role` |
 
-| Étape | Accès | Chemin |
-|---|---|---|
-| `must(id)` → `store.getDocument` | lecture de la facture | **limité** (si mode activé) |
-| `readiness` → `validateForIssue` | calcul, sans base | — |
-| `readiness` → `linkage` → `ledgerProvider()` | chargement des commandes (`loadRetail`) | **service_role** |
-| `readiness` → `linkage` → `store.listDocuments` | lecture des factures du marchand | **service_role** |
-| `readiness` (avoir) → `store.getDocument` de la facture liée | lecture | limité |
-| `store.issueDocument` | émission | **limité** |
-| après émission : `resettle` (avoirs seulement) | `listPayments`, `listAllocations`… | **service_role** |
-| après émission : `hooks.afterIssue` (stock) | écritures de stock | **service_role** |
-| après émission : `hooks.onIssued` (archive légale) | fichiers et tables d'archive | **service_role** |
-| `appendEvent` des échecs de hook | journal | **service_role** |
-
-Autres chemins Finance : paiements, rapprochement bancaire, Peppol, réglages, sociétés, avoirs, devis : **tous sur `service_role`**.
+Avant l'émission : **aucun** accès administratif dans le cas d'une facture standalone, lecture comprise.
 
 ## 6. Plateforme : six fonctions de `extensions` (lecture seule sur staging)
 
-Toutes sont `returns event_trigger`, `SECURITY INVOKER`, `search_path=""`, propriété `supabase_admin`, volatilité `v`. Elles s'exécutent comme déclencheurs d'événements (pg_cron, pg_graphql, pg_net, PostgREST DDL/drop, placeholder GraphQL). PostgreSQL refuse leur appel direct (`0A000`, « trigger functions can only be called as triggers », vérifié localement sur une fonction de même type). Elles restent des exceptions explicites de l'audit ; elles ne sont pas modifiées.
+Toutes sont `returns event_trigger`, `SECURITY INVOKER`, `search_path=""`, propriété `supabase_admin`. Elles s'exécutent comme déclencheurs d'événements. PostgreSQL refuse leur appel direct (`0A000`). Elles restent des exceptions explicites de l'audit.
 
 ## 7. Risques de déploiement (non traités ici)
 
-1. Clé de service : le serveur Finance a besoin de `SUPABASE_SERVICE_ROLE_KEY` pour le reste du parcours ; la limiter aux seuls appels restants exige de réécrire les appels de §5.
-2. `service_role` garde BYPASSRLS : tant que ces appels existent, la protection reste contournable par ce chemin.
-3. Configuration hors dépôt : `FINANCE_PILOT_DATABASE_URL` (login du pooleur), `FINANCE_PILOT_CA_FILE` (PEM officiel), `FINANCE_PILOT_SERVER_NAME` si besoin. Aucun secret dans le dépôt.
-4. Pool : limité à 3 connexions, timeouts ; le pooleur de transaction (6543) et de session (5432) ont été vérifiés.
-5. Rollback : `DROP ROLE` est cluster-wide ; la suppression du rôle suit sur toutes les bases.
+1. La clé de service reste chargée par le serveur tant que les accès du §5 existent : elle reste donc disponible au processus, même si le chemin d'approbation avant émission ne l'utilise plus.
+2. `service_role` garde BYPASSRLS : tant que les accès du §5 existent, la protection reste contournable par ces chemins.
+3. Configuration hors dépôt : `FINANCE_PILOT_DATABASE_URL` (login du pooleur), `FINANCE_PILOT_CA_FILE` (PEM officiel), `FINANCE_PILOT_SERVER_NAME` si besoin.
+4. Rollback : `DROP ROLE` est cluster-wide ; la suppression des rôles suit sur toutes les bases.
 
 ## 8. Prochaine portion à sécuriser
 
-Parcours d'approbation complet : déplacer `ledgerProvider`, `listDocuments` de la vérification de liaison, puis les hooks de stock et d'archive sur des rôles limités, avant de généraliser à d'autres chemins (paiements, rapprochement). Première étape proposée : la vérification de liaison (`checkLinkage`), qui ne lit que des factures du marchand.
+Hooks après émission : archive légale (le plus critique : il écrit en base et dans le stockage) puis stock. Puis les avoirs (`resettle`). Ensuite seulement les autres chemins (paiements, rapprochement).
