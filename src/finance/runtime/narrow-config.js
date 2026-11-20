@@ -11,6 +11,7 @@
 
 import { readFile as readFileDefault } from 'node:fs/promises';
 import { createNarrowIssuePath } from './narrow-issue-path.js';
+import { createNarrowArchive } from './narrow-archive.js';
 import { createPilotPool, verifyPilotConnection, PilotConnectionError } from './pg-connection.js';
 
 export const RUNTIME_DB_MODES = Object.freeze(['service', 'narrow-pilot']);
@@ -47,7 +48,8 @@ export async function createNarrowIssuePathFromEnv({ env = process.env, merchant
   try {
     const identity = await verifyPilotConnection(pool, merchantId);
     log(`Finance runtime database: narrow-pilot (session user ${identity.sessionUser}, bound merchant verified, TLS verified)`);
-    return { path: createNarrowIssuePath({ pool, merchantId }), pool, identity };
+    const path = createNarrowIssuePath({ pool, merchantId });
+    return { path, pool, identity, archive: createNarrowArchive({ transaction: path.archiveTransaction, merchantId }) };
   } catch (err) {
     await pool.end().catch(() => {});
     if (err instanceof PilotConnectionError) throw err;

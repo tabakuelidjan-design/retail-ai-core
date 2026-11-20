@@ -23,6 +23,8 @@ test('removing PUBLIC EXECUTE on extensions changes the rights of the pilot role
   const db = await freshDatabase({ fromZero: true, upTo: '20261120085527' });
   const c = await db.open();
   try {
+    // the issue role exists before the change (in production it does); the replay of the earlier migrations creates it otherwise
+    await c.query('create role nordla_fin_issuer_pilot nologin noinherit').catch(() => {});
     const before = await matrix(c);
     assert.ok(before.length > 100, 'matrix covers every role x extensions function');
     const publicCount = before.filter((r) => r.role === 'anon' && r.ok).length;

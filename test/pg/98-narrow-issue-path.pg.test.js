@@ -190,6 +190,8 @@ test('the store uses the narrow path for the read and the issue, never the servi
 });
 
 test('rollback removes the pilot objects (policies, functions, binding table, grants); service_role privileges unchanged', async () => {
+  const DOWN7 = readFileSync(`${ROOT}supabase/rollback/20261120140000_fin_archive_narrow_role.down.sql`, 'utf8');
+  const DOWN6 = readFileSync(`${ROOT}supabase/rollback/20261120130000_fin_pilot_audit_hardening.down.sql`, 'utf8');
   const DOWN5 = readFileSync(`${ROOT}supabase/rollback/20261120120000_fin_reader_narrow_role.down.sql`, 'utf8');
   const DOWN = readFileSync(`${ROOT}supabase/rollback/20261120110000_fin_issuer_narrow_role.down.sql`, 'utf8');
   const db = await freshDatabase();
@@ -198,7 +200,9 @@ test('rollback removes the pilot objects (policies, functions, binding table, gr
     const q = "select has_table_privilege('service_role','public.fin_documents','SELECT') as svc, has_table_privilege('service_role','public.fin_documents','UPDATE') as svc_upd";
     const before = (await admin.query(q)).rows[0];
     // DROP ROLE is cluster-wide (the template database holds the same grants): verified separately, see the rollback header
-    // reader rollback first (it depends on the binding functions), then the issue rollback; role drops are cluster-wide
+    // audit hardening, then reader, then issue rollback (each depends on the binding functions); role drops are cluster-wide
+    await admin.query(DOWN7.replace('drop role if exists nordla_fin_archive_pilot;', ''));
+    await admin.query(DOWN6.replace('drop role if exists nordla_fin_reader_pilot;', ''));
     await admin.query(DOWN5.replace('drop role if exists nordla_fin_reader_pilot;', ''));
     await admin.query(DOWN.replace('drop role if exists nordla_fin_issuer_pilot;', ''));
     const left = (await admin.query("select (select count(*) from pg_policies where policyname like 'nordla_fin_pilot_%') as policies, (select count(*) from pg_proc where proname in ('fin_pilot_assert','fin_pilot_bound_merchant')) as fns, (select count(*) from pg_namespace where nspname='nordla_runtime') as schemas")).rows[0];

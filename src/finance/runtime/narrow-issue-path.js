@@ -10,6 +10,7 @@
 //  - the statements are the exact ones the service needs.
 
 import { createNarrowReader, PILOT_READER_ROLE } from './narrow-reader.js';
+import { PILOT_ARCHIVE_ROLE } from './narrow-archive.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const PILOT_ROLE = 'nordla_fin_issuer_pilot';
@@ -48,6 +49,7 @@ export function createNarrowIssuePath({ pool, merchantId }) {
     async verify() {
       await transaction(async () => true, PILOT_ROLE);
       await transaction(async () => true, PILOT_READER_ROLE);
+      await transaction(async () => true, PILOT_ARCHIVE_ROLE);
       return true;
     },
 
@@ -72,5 +74,8 @@ export function createNarrowIssuePath({ pool, merchantId }) {
 
     /** Reads for the pre-issue checks (fin_documents, commerce tables), on the reader role only. */
     read,
+
+    /** Runs `run` on the archive role for this merchant (database side of the legal archive only). */
+    archiveTransaction: (run) => transaction(run, PILOT_ARCHIVE_ROLE),
   });
 }

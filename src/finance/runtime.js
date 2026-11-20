@@ -51,7 +51,9 @@ export async function createRuntime({ env = process.env, supabase: injectedSupab
   // Database mode: the service-role store by default. FINANCE_RUNTIME_DB=narrow-pilot routes getDocument and issueDocument through
   // the least-privilege role; a failed identity check stops the start-up here (no fallback to the service client).
   const narrow = await createNarrowIssuePathFromEnv({ env, merchantId: merchant.id, log });
-  const store = createSupabaseFinanceStore(supabase, { merchantId: merchant.id, narrowIssuePath: narrow?.path ?? null });
+  const serviceStore = createSupabaseFinanceStore(supabase, { merchantId: merchant.id, narrowIssuePath: narrow?.path ?? null });
+  // PILOT: in narrow mode the legal archive's database rows (artifacts, seller versions, events) go through the archive role; the PDF/XML bytes stay in storage
+  const store = narrow?.archive ? { ...serviceStore, ...narrow.archive } : serviceStore;
 
   const loadRetail = async (sinceDate) => {
     // Lower bound of the load: the start of the merchant's first day (local midnight), else an instant 400 days back (a technical look-back, not a business date).

@@ -15,7 +15,7 @@ export async function setupLogins(db) {
     await seedMerchants(a); // bindings reference merchants
     for (const l of [LOGIN_A, LOGIN_B]) {
       await a.query(`do $$ begin if not exists (select 1 from pg_roles where rolname='${l}') then create role ${l} login noinherit nobypassrls password '${PW}'; end if; end $$`);
-      await a.query(`grant nordla_fin_issuer_pilot, nordla_fin_reader_pilot to ${l}`);
+      await a.query(`grant nordla_fin_issuer_pilot, nordla_fin_reader_pilot, nordla_fin_archive_pilot to ${l}`);
     }
     await a.query(`insert into nordla_runtime.fin_pilot_principals (login_role, merchant_id) values ('${LOGIN_A}', '${MERCHANT_A}'), ('${LOGIN_B}', '${MERCHANT_B}') on conflict do nothing`);
   } finally { await a.end(); }
@@ -33,8 +33,13 @@ export function poolFor(db, login, { max = 3 } = {}) {
 export async function dropPilotLogins() {
   const a = await adminClient();
   try {
-    for (const l of [LOGIN_A, LOGIN_B, 'nordla_fin_pilot_login', 'nordla_fin_pilot_unbound']) {
-      await a.query(`do $$ begin if exists (select 1 from pg_roles where rolname='${l}') then revoke nordla_fin_issuer_pilot, nordla_fin_reader_pilot from ${l}; execute 'drop owned by ${l}'; execute 'drop role ${l}'; end if; end $$`);
+    // templates and test databases may still hold grants to these logins: they are disposable and are removed first
+    for (const d of (await a.query("select datname from pg_database where datname like 'finance_test%'")).rows) {
+      await a.query(`alter database ${d.datname} is_template false`).catch(() => {});
+      await a.query(`drop database if exists ${d.datname} with (force)`);
+    }
+    for (const l of [LOGIN_A, LOGIN_B, 'nordla_fin_pilot_login', 'nordla_fin_pilot_unbound', 'nordla_fin_arch_login_a', 'nordla_fin_arch_login_b']) {
+      await a.query(`do $$ begin if exists (select 1 from pg_roles where rolname='${l}') then revoke nordla_fin_issuer_pilot, nordla_fin_reader_pilot, nordla_fin_archive_pilot from ${l}; execute 'drop owned by ${l}'; execute 'drop role ${l}'; end if; end $$`);
     }
   } finally { await a.end(); }
 }

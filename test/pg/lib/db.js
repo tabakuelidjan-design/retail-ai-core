@@ -60,14 +60,35 @@ async function createEmpty(admin, name, template) {
 }
 
 /** Builds (once per run) the migrated template; every test database is then a cheap copy of it = "reset". */
+// The pilot roles are cluster-wide. A replay of the migrations that grant rights through a loop over "every role that holds the
+// right" (v4) must see the pilot roles as they were BEFORE the migration, so a new replay starts from a cluster without them.
+// Test databases are disposable: they are dropped here, only when a replay is about to start.
+export async function resetPilotCluster() {
+  const a = await adminClient();
+  try {
+    for (const d of (await a.query("select datname from pg_database where datname like 'finance_test%'")).rows) {
+      await a.query(`alter database ${d.datname} is_template false`).catch(() => {});
+      await a.query(`drop database if exists ${d.datname} with (force)`);
+    }
+    for (const r of ['nordla_fin_reader_pilot', 'nordla_fin_issuer_pilot', 'nordla_fin_archive_pilot']) {
+      if ((await a.query('select 1 from pg_roles where rolname = $1', [r])).rowCount) { await a.query(`drop owned by ${r}`); await a.query(`drop role ${r}`); }
+    }
+  } finally { await a.end(); }
+}
+
 export async function ensureTemplate() {
-  const TEMPLATE = templateName(); const admin = await adminClient();
+  const TEMPLATE = templateName(); let admin = await adminClient();
   try {
     // a template left half-built by an earlier failed replay is dropped and rebuilt, never reused
     const found = (await admin.query('select datistemplate from pg_database where datname=$1', [TEMPLATE])).rows[0];
     if (found && !found.datistemplate) await admin.query(`drop database if exists ${TEMPLATE} with (force)`);
     const exists = found?.datistemplate ? 1 : 0;
     if (!exists) {
+      // v4 grants explicit EXECUTE to every role that can execute an extensions function when it runs: a pilot role left over from
+      // an earlier run would receive those rights (the audit then fails closed). The template is always built from a clean cluster.
+      await admin.end();
+      await resetPilotCluster();
+      admin = await adminClient();
       await createEmpty(admin, TEMPLATE);
       const c = await clientFor(TEMPLATE);
       try { await replayMigrations(c); } finally { await c.end(); }
@@ -79,9 +100,9 @@ export async function ensureTemplate() {
 
 export async function freshDatabase({ fromZero = false, upTo = null } = {}) {
   const name = `finance_test_${randomBytes(5).toString('hex')}`;
-  const admin = await adminClient();
+  let admin = await adminClient();
   try {
-    if (fromZero) { await createEmpty(admin, name); const c = await clientFor(name); try { await replayMigrations(c, { upTo }); } finally { await c.end(); } }
+    if (fromZero) { await admin.end(); await resetPilotCluster(); admin = await adminClient(); await createEmpty(admin, name); const c = await clientFor(name); try { await replayMigrations(c, { upTo }); } finally { await c.end(); } }
     else { const template = await ensureTemplate(); await createEmpty(admin, name, template); }
   } finally { await admin.end(); }
   const open = async () => clientFor(name);
