@@ -25,14 +25,16 @@ const num = (v) => (v === '' || v === undefined || v === null ? null : String(v)
 const FRIENDLY = [[/who spoke/, 'Dites d\'abord qui a écrit cette ligne (fournisseur ou vous).'], [/needs a correction/, 'Ce chiffre est ambigu : corrigez-le avant de le confirmer.'], [/planned quantity/, 'La quantité doit être un nombre entier supérieur à zéro.'], [/at least one value or some text/, 'Collez un texte ou saisissez au moins une valeur.'], [/text is required|needs some text/, 'Collez un texte.'], [/already rejected/, 'Cette information a déjà été rejetée.'], [/conflict/, 'Cette information contredit quelque chose du dossier : levez d\'abord la contradiction.'], [/finished/, 'Cette conversation est terminée : commencez-en une nouvelle.']];
 const friendly = (e) => (/^(Tapez|Utilisez|Valeurs possibles)/.test(String(e?.message ?? '')) ? e.message : (FRIENDLY.find(([rx]) => rx.test(String(e?.message ?? e))) ?? [null, `Impossible (${e?.message ?? e}).`])[1]);
 const CATEGORY_FR = { household_general: 'Article ménager (non électrique)', kitchenware_plastic: 'Ustensile / boîte alimentaire en plastique', water_bottle: 'Gourde / bouteille', tableware_glass_ceramic: 'Vaisselle verre / céramique', usb_charger: 'Chargeur ou adaptateur USB / secteur', power_bank: 'Batterie externe (power bank)', bluetooth_speaker: 'Enceinte Bluetooth / sans fil', bluetooth_earbuds: 'Écouteurs / casque Bluetooth', led_lamp_mains: 'Lampe LED (secteur)', usb_cable: 'Câble USB / de charge', phone_case: 'Coque / accessoire de téléphone (passif)', toy_plastic: 'Jouet (plastique / mécanique)', plush_toy: 'Peluche', textile_adult: 'Vêtement / textile adulte', textile_children: 'Vêtement / textile enfant', cosmetic_product: 'Cosmétique / soin', jewelry_costume: 'Bijou fantaisie / accessoire', ppe_item: 'Équipement de protection (EPI)', battery_standalone: 'Pile / accumulateur seul', small_appliance_mains: 'Petit appareil secteur', gift_decor_generic: 'Déco / cadeau / papeterie', pet_product: 'Article pour animaux' };
-const MAIN_NAV = { thread: 'suppliers', home: 'home', new: 'home', suppliers: 'suppliers', case: 'suppliers', review: 'suppliers', capture: 'suppliers', compare: 'suppliers', ask: 'suppliers', negotiate: 'suppliers', changed: 'suppliers', note: 'note', visits: 'visits', more: 'more', sync: 'more', live: 'suppliers', expert: 'suppliers' };
+import { nordlaHomeHtml, nordlaBackBar } from './nordla-home.js';
+const MAIN_NAV = { nordla: 'home', thread: 'suppliers', home: 'home', new: 'home', suppliers: 'suppliers', case: 'suppliers', review: 'suppliers', capture: 'suppliers', compare: 'suppliers', ask: 'suppliers', negotiate: 'suppliers', changed: 'suppliers', note: 'note', visits: 'visits', more: 'more', sync: 'more', live: 'suppliers', expert: 'suppliers' };
 const NAV_ITEMS = [['home', 'Accueil', 'home'], ['suppliers', 'Fournisseurs', 'suppliers'], ['note', 'Noter', 'note'], ['visits', 'Visites', 'visits'], ['more', 'Plus', 'more']];
 const CONFLICT_FR = { OLD: (l) => l.replace(/^Keep the earlier value/, 'Garder la valeur précédente'), NEW: (l) => l.replace(/^Use the new value/, 'Utiliser la nouvelle valeur') };
 const HELP_FR = { MODEL_MISMATCH: 'Vérifiez le modèle exact sur le produit ou sur le papier. Les modèles sont comparés caractère par caractère.', OTHER: 'L\'une des deux valeurs peut concerner un autre cas (par exemple avec votre logo). Demandez au fournisseur si vous hésitez.' };
 
 export function createSalon(ctx) {
   const { S, ls } = ctx;
-  let view = ls.get(VIEW_KEY, { name: 'home' }); let selected = (view.selected ?? []).filter((id) => S.cases[id]); let engine = null; let engineProfile = undefined; let ws = getBlob(WS_BLOB) ?? newWorkspace(); let flash = ''; let pending = { photo: null, pdfText: null, pdfName: null };
+  // After a Nordla sign-in the entry is the Nordla home, once per page load; offline keeps the stored view (Sourcing works as before).
+  let view = S.authMode === 'session' && !S.nordlaEntered ? { name: 'nordla' } : ls.get(VIEW_KEY, { name: 'home' }); if (S.authMode === 'session') S.nordlaEntered = true; let selected = (view.selected ?? []).filter((id) => S.cases[id]); let engine = null; let engineProfile = undefined; let ws = getBlob(WS_BLOB) ?? newWorkspace(); let flash = ''; let pending = { photo: null, pdfText: null, pdfName: null };
   let capMode = 'quote'; let correcting = null; let editingFact = null; let showQ = null; let wsTimer = null; const openSecs = new Map();
   let filter = 'all'; let query = ''; let visitFilter = 'open'; let noteMode = view.noteMode ?? 'text'; let speaker = 'supplier'; let answering = null; let editing = null; let panels = {}; let lastNote = null; let confirmingServer = null; let pickFor = null; let voiceAvail = null; let voiceProbe = false;
   if (!MAIN_NAV[view.name] && !['capture', 'review', 'negotiate'].includes(view.name)) view = { name: 'home' };
@@ -173,6 +175,7 @@ export function createSalon(ctx) {
     const e = eng(); const cases = allCases();
     try {
       const name = view.name;
+      if (name === 'nordla') { ctx.loadHomeModules?.(); return nordlaHomeHtml({ modules: S.nx?.homeModules ?? null, online: S.online, error: S.nx?.error ?? '' }); }
       if (name === 'home') { const ov = overviewOf(cases); return N.homeHtml({ overview: ov, sync: sync(), counts: countsOf(ov), conflicts: Object.keys(S.conflicts ?? {}).length, flash: takeFlash(), now: Date.now(), growth: (() => { try { ctx.loadHomeModules?.(); return ctx.growthHomeCard?.() ?? ''; } catch { return ''; } })() }); }
       if (name === 'new') return N.newHtml({ flash: takeFlash() });
       if (name === 'suppliers') { const ov = overviewOf(cases); const list = filtered(ov); return N.suppliersHtml({ overview: list, total: ov.length, selected, filter, query, sync: sync(), conflicts: Object.keys(S.conflicts ?? {}).length, counts: countsOf(ov), flash: takeFlash() }); }
@@ -250,6 +253,7 @@ export function createSalon(ctx) {
     const act = t.dataset.act; const key = t.dataset.key; const val = t.dataset.val !== undefined ? JSON.parse(t.dataset.val) : undefined; const cid = t.dataset.case ?? key;
     try {
       switch (act) {
+        case 'sl-nordla': return go({ name: 'nordla' });
         case 'sl-nav': {
           if (key === 'home') return go({ name: 'home', caseId: null, offerId: null });
           if (key === 'suppliers') { pickFor = null; return go({ name: 'suppliers' }); }
@@ -410,7 +414,7 @@ export function createSalon(ctx) {
 
   /** The full-screen question the owner shows to the supplier (overlay on top of the Questions tab). */
   const overlayHtml = () => { if (!showQ) return ''; const c = caseOf(showQ.caseId); if (!c) return ''; const q = questionOf(c, showQ.id); return q ? N.showHtml({ item: { id: q.id, caseId: c.id, en: q.en, fr: q.fr, zh: q.zh } }) : ''; };
-  const renderWithOverlay = () => `${render()}${overlayHtml()}`;
+  const renderWithOverlay = () => `${view.name === 'nordla' ? '' : nordlaBackBar()}${render()}${overlayHtml()}`;
 
   /** Opens a detailed screen ('live' = the live conversation, otherwise an expert section) INSIDE the navigation, for a case. */
   function openEmbedded(kind, caseId = null) {
