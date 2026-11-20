@@ -64,8 +64,9 @@ Ces preuves valent pour les migrations v4/v5 seulement ; elles ne couvrent ni l'
 
 - Le serveur complet avec ses vrais hooks (archive légale, stock) sur staging : **non fait**, le mode limité n'est pas activé.
 - Recette Core : **non faite**.
-- Refus entre entreprises sur le serveur déployé, reprise après panne sur le serveur déployé : **non faits**.
-- Sauvegarde/restauration base et fichiers : **non faite**.
+- Refus entre entreprises sur le serveur déployé : non applicable (le serveur ne sert qu'un marchand) ; couvert par `test/pg/108`.
+- Reprise sur le serveur déployé : **faite** (voir §12).
+- Sauvegarde/restauration : voir `docs/backup-restore-staging-finance-20261120.md` (§1, état unique).
 
 ## 4. Migrations
 
@@ -108,7 +109,7 @@ Risque concret pour ce périmètre : tant que la clé de service est chargée pa
 1. **Login PostgreSQL pilote** : à créer par le propriétaire (voir §8). Le mot de passe doit être généré et stocké hors chat et hors dépôt.
 2. **Variables Railway** à définir : `FINANCE_RUNTIME_DB=narrow-pilot`, `FINANCE_PILOT_DATABASE_URL` (pooleur, login `<login>.fvhiammdskpcnfodsnrc`), `FINANCE_PILOT_CA_FILE` (chemin d'un PEM présent dans le conteneur ; le CA est public mais le code exige un fichier).
 3. **Principal lié** : `nordla_runtime.fin_pilot_principals` doit lier le login au marchand de test `67646dbb-…`.
-4. Sauvegarde/restauration base et fichiers : non faite.
+4. Sauvegarde et restauration : voir le runbook (faites pour les six tables Finance et les huit fichiers ; sauvegarde PostgreSQL complète non faite).
 
 ## 8. Actions humaines nécessaires
 
@@ -138,7 +139,7 @@ Parcours joué depuis Core (session propriétaire déjà ouverte dans Chrome ; a
 - Preuve que l'écriture passe par le login pilote : les journaux PostgreSQL accessibles ne contiennent pas d'entrée pour `nordla_fin_*` sur la fenêtre. Le démarrage en mode limité est confirmé ; le chemin d'écriture de l'archive est câblé sur ce mode dans `runtime.js`.
 - Refus entre entreprises sur le serveur déployé : le serveur ne sert qu'un marchand (`NORDLA_MERCHANT_ID`) ; ce cas est couvert par la suite 108 au niveau base de données, pas sur le serveur.
 - Reprise après panne sans réémission sur le serveur déployé : non testée (il faudrait provoquer une panne côté base sur un service partagé) ; couverte par la suite 108.
-- Sauvegarde et restauration : non faites (voir le runbook).
+- Sauvegarde et restauration : voir §12 et le runbook.
 
 Le brouillon de test `0b0aeb60-3083-4a50-9ec5-43141bbbea1a` (client fictif incomplet, non émis) reste dans le marchand de test ; il est à annuler par le propriétaire si vous le souhaitez.
 
@@ -146,5 +147,14 @@ Le brouillon de test `0b0aeb60-3083-4a50-9ec5-43141bbbea1a` (client fictif incom
 
 - **Original PDF** (`GET /api/documents/<id>/original-pdf`, requête same-origin depuis la page Finance) : HTTP 200, `application/pdf`, 7 017 octets, en-tête `%PDF-`, SHA-256 calculé dans le navigateur `8303a9d5d96a211a2d6d4940ade18e09d8e6d913fbf7cb9063245e5b529c449e` = empreinte archivée = `X-Nordla-Sha256`. **Téléchargement de l'original : vérifié.**
 - **Lien « Télécharger le PDF » de l'interface** : pointe vers `/api/documents/<id>/pdf?download=1`, qui peut régénérer un PDF ; il n'est pas une preuve de l'original. Non déclenché : son fichier n'est pas vérifiable depuis ce poste. À corriger côté interface (point ouvert).
-- **Trace de rôle** : `narrow-archive.js` écrit désormais `writtenByRole` (rôle effectif `current_user` dans la même transaction) dans la provenance de l'artefact. Test 108 (6/6 vert) l'asserte sur une archive fictive contrôlée en base locale. Déployée sur staging (`4a6c12e8`, SUCCESS). **Non vérifiée sur une archive réelle de staging** : il faudrait une nouvelle émission ; non faite pour ne pas créer de facture supplémentaire.
-- **Sauvegarde/restauration** : aucune opération réalisable avec les accès existants sur ce poste. Accès conteneur staging bloqué (aucune clé SSH enregistrée pour ce compte ; l'ajouter serait une modification de réglages du compte, non faite). Export de base impossible sans identifiant administrateur. Le runbook reste la procédure à suivre.
+- **Trace de rôle** (vérifiée sur archive réelle en §12) : `narrow-archive.js` écrit désormais `writtenByRole` (rôle effectif `current_user` dans la même transaction) dans la provenance de l'artefact. Test 108 (6/6 vert) l'asserte sur une archive fictive contrôlée en base locale. Déployée sur staging (`4a6c12e8`, SUCCESS). **Non vérifiée sur une archive réelle de staging** : il faudrait une nouvelle émission ; non faite pour ne pas créer de facture supplémentaire.
+- **Sauvegarde/restauration** (historique ; état actuel en §12) : aucune opération réalisable avec les accès existants sur ce poste à ce moment. Accès conteneur staging bloqué (aucune clé SSH enregistrée pour ce compte ; l'ajouter serait une modification de réglages du compte, non faite). Export de base impossible sans identifiant administrateur. Le runbook reste la procédure à suivre.
+
+## 12. État actuel consolidé (2026-11-20, fin de recette)
+
+- **Téléchargement de l'original** : bouton « Télécharger l'original archivé » (route `/original-pdf`), déployé (`f6cfcb64`). Vérifié sur `INV-2026-0002` (7 017 octets, SHA-256 `8303a9d5…`) et `INV-2026-0003` (6 947 octets, SHA-256 `ce8d9ac2…`) : identique à l'archive et à `X-Nordla-Sha256`.
+- **Écart de taille expliqué** : les deux valeurs appartiennent à deux documents différents, pas au même original. `INV-2026-0002` : artefact `a5516f01-…`, storageRef `…/legal/c0340483…/pdf/8303a9d5…`, créé le 2026-11-20 15:57:37. `INV-2026-0003` : artefact `abf20643-…`, storageRef `…/legal/0d7a7ad1…/pdf/ce8d9ac2…`, créé le 16:23:20. Le même original n'a pas changé.
+- **Trace de rôle** : vérifiée sur `INV-2026-0003` : `writtenByRole = nordla_fin_archive_pilot` sur le PDF et le XML.
+- **Reprise sur le document existant** (`INV-2026-0003`, route `POST /api/documents/<id>/archive`, appelée avec le jeton CSRF de la session, non affiché) : réponse `duplicate: true`, même artefact `abf20643-…`, même SHA-256. En base après l'appel : toujours 2 artefacts (1 PDF d'origine, 1 XML) ; aucun événement ajouté. Pas de réémission, pas de nouvel original, pas d'écrasement.
+- **Brouillons de la recette** : `0b0aeb60-…` et `1f5c4326-…` sont `CANCELLED` (vérifié en base), sans numéro, sans verrouillage, sans artefact. Les documents émis `INV-2026-0002` et `INV-2026-0003` sont inchangés.
+- **Sauvegarde** : six tables Finance et huit fichiers sauvegardés et restaurés dans une base locale jetable. Données HABB non couvertes par cette sauvegarde : voir le runbook §3.

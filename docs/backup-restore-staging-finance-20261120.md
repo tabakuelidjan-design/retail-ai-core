@@ -1,54 +1,58 @@
-# Sauvegarde et restauration — staging Finance (2026-11-20)
+# Sauvegarde et restauration — staging Finance (état actuel, 2026-11-20)
 
-Périmètre : projet Supabase `fvhiammdskpcnfodsnrc` (base + bucket de stockage `finance-inbox`), service Railway `finance-staging`. Données fictives et marchand de test uniquement. Aucune donnée réelle, aucun abonnement modifié, aucune action en production.
+Périmètre : projet Supabase `fvhiammdskpcnfodsnrc` (staging), service Railway `finance-staging`, marchand de test `67646dbb-5e2e-4cd7-aad6-0ab289b068cb` (« HABB (test staging) »). Données fictives uniquement. Aucune donnée réelle HABB, aucun changement de production, aucun abonnement modifié.
 
-## État vérifié
+## 1. État actuel unique
 
-- Pas encore de sauvegarde ni de restauration exécutée.
-- Base : l'accès à la base de staging depuis ce poste n'est pas disponible (aucun identifiant administrateur sur ce PC, par règle). Un export doit donc être lancé par le propriétaire ou par un canal autorisé.
-- Stockage : l'accès au bucket demande la clé de service, présente seulement sur Railway. Même règle.
+| Élément | État |
+|---|---|
+| Sauvegarde des six tables Finance du marchand de test | **faite** (export REST, 2026-11-20) |
+| Sauvegarde des huit fichiers archivés | **faite** (hachages vérifiés contre la base) |
+| Restauration dans une base locale jetable | **faite et vérifiée** (données, fichiers, audits, refus) |
+| Sauvegarde PostgreSQL complète (schéma système, extensions, séquences, toutes les tables) | **non faite** : aucun accès administrateur à la base depuis ce poste ou le conteneur |
+| Restauration sur une instance Supabase dédiée | **non faite** : hors périmètre demandé |
+| Sauvegardes régulières automatiques | **non en place** (voir §4) |
 
-## Procédure (à exécuter dans un environnement isolé)
+## 2. Ce qui a été sauvegardé et restauré
 
-1. **Base** — exporter le schéma et les données du projet staging en format custom :
-   `pg_dump --format=custom --no-owner --no-privileges -f finance-staging.dump "<URL_admin_staging>"`
-   L'URL admin ne doit jamais être écrite dans ce dépôt ni dans le chat.
-2. **Destination isolée** — restaurer dans le cluster de test local (port 54345, nom de cluster `nordla_finance_test`), base jetable `finance_test_restore_<date>`.
-   `pg_restore --no-owner --no-privileges -d "<URL_locale_jetable>" finance-staging.dump`
-   Les rôles Supabase absents localement sont créés par le harnais (`test/pg/lib/db.js`).
-3. **Vérifications après restauration** :
-   - comptes (`select count(*) from fin_documents`) identiques à la source ;
-   - `fin_pilot_reader_audit()`, `fin_pilot_transfer_audit()`, `fin_pilot_archive_audit()` : aucune ligne en échec ;
-   - chaque `fin_artifacts.sha256` correspond au fichier restauré (voir étape 4).
-4. **Fichiers** — lister le bucket `finance-inbox` (clé de service, côté Railway seulement), copier les objets dans un dossier isolé, recalculer les SHA-256 et les comparer à `fin_artifacts.sha256`.
-5. **Preuve** : consigner la date, la taille du dump, le nombre de lignes par table, le nombre d'objets et les hachages en échec (zéro attendu). Ne pas publier l'URL, ni la clé, ni le dump.
-6. **Nettoyage** : supprimer la base jetable et le dossier de fichiers restaurés (fichiers un par un).
+Six tables Finance (marchand de test) : `fin_companies` 1, `fin_documents` 8, `fin_artifacts` 8, `fin_events` 44, `fin_seller_profile_versions` 1, `fin_number_sequences` 2.
 
-## Ce qui reste hors de portée de ce poste
+Huit fichiers archivés (bucket `finance-inbox`, préfixés par le marchand) : deux PDF et un XML par document émis, chacun vérifié par SHA-256 contre `fin_artifacts.sha256`.
 
-- Export de la base de staging (identifiant administrateur requis).
-- Lecture du bucket de stockage (clé de service requise).
-- Test de restauration de bout en bout sur une base isolée distincte du cluster local : à faire avec l'un des deux accès ci-dessus.
+Restauration : base locale jetable (cluster de test, jamais staging) ; schéma, rôles, appartenances, droits et politiques rejoués depuis les migrations du dépôt (v1 à v7) ; données rechargées ; fichiers écrits dans un dossier isolé ; audits pilote à zéro écart ; refus vérifiés (le rôle d'archive ne lit pas `fin_documents` ; le rôle de lecture ne peut pas écrire ; sans liaison de login, le rôle d'archive ne voit aucun artefact).
 
-## Point de restauration existant (à confirmer par le propriétaire)
+## 3. Données HABB essentielles encore absentes de cette sauvegarde
 
-Les sauvegardes automatiques de la plateforme Supabase dépendent du plan du projet. Le plan actuel n'a pas été vérifié depuis ce poste, et aucune modification d'abonnement n'est autorisée.
+Comptage réel sur le marchand de test (toutes tables ayant une colonne `merchant_id`). Les tables à zéro ne sont pas listées.
 
-## Exercice réalisé (2026-11-20) — preuves
+- **Comptes bancaires et paiements** : `fin_bank_accounts` 1, `fin_bank_transactions` 2, `fin_bank_reconciliations` 4, `fin_payment_allocations` 1, `fin_payment_registry` 1, `fin_bank_connections` 0, `fin_payments` 0.
+- **Achats** : `fin_supplier_invoices` 4.
+- **Commandes et remboursements** : `orders` 31, `order_lines` 39, `order_attribution` 0, `refunds` 2, `refund_lines` 2.
+- **Trésorerie** : `fin_cash_counts` 0, `fin_cash_movements` 0 (rien à sauvegarder pour l'instant).
+- **Paramètres et identité** : `merchant_profile` 1, `merchant_establishments` 1, `merchant_general_sections` 5, `module_entitlements` 4, `merchant_members` 16, `merchant_invitations` 9, `merchant_security_settings` 0, `member_recovery_links` 2 (à traiter avec précaution : secrets de récupération).
+- **Croissance et notifications** : `growth_follow_up` 1, `growth_funnel_snapshot` 1, `growth_personalizer_events` 13, `notifications` 3, `identity_events` 548.
+- **Non nécessaires à restaurer** : `app_sessions` 184 (sessions expirées), `provider_oauth_sessions` 0.
+- **Hors base** : le volume Railway `/app/data` (2 entrées en haut de niveau, non examinées), les logos et réglages stockés localement.
 
-**Limites d'accès constatées (vérifiées, pas supposées)**
-- Le conteneur staging n'a ni `pg_dump`, ni `psql`, ni `pg_restore`.
-- Aucune variable de connexion administrateur à la base n'est présente. La seule URL PostgreSQL est celle du login pilote restreint (`nordla_fin_pilot_staging`) : elle ne peut lire que les lignes de son marchand, par les rôles limités. Ce n'est pas une sauvegarde complète.
-- L'API REST avec la clé de service (dans le conteneur uniquement) permet de lire les tables finance et le stockage. Elle ne donne ni le schéma, ni les rôles, ni les droits : ceux-ci viennent des migrations du dépôt.
-- L'accès SSH au conteneur a été ouvert par une clé temporaire, enregistrée puis retirée après usage (vérifié : aucune clé enregistrée à la fin).
+Les `merchant_*` ne font partie d'aucune sauvegarde faite à ce jour.
 
-**Sauvegarde** : export par l'API REST du marchand de test (`67646dbb-…`) : `fin_companies` 1, `fin_documents` 8, `fin_artifacts` 8, `fin_events` 42, `fin_seller_profile_versions` 1, `fin_number_sequences` 2 ; 8 objets de stockage, chacun dont le SHA-256 correspond à la base. Le dossier de sauvegarde reste hors du dépôt.
+## 4. Sauvegardes régulières nécessaires
 
-**Restauration** (base locale jetable, cluster de test, jamais staging) :
-1. Schéma, rôles, appartenances, droits et politiques : rejoués depuis les migrations du dépôt (v1 à v7).
-2. Lignes : rechargées depuis l'export ; nombre et contenu identiques (documents, numéros, statuts, hachages d'artefacts).
-3. Fichiers : écrits dans un dossier isolé ; 8/8 vérifiés contre le hachage stocké et la base.
-4. Audits pilote sur la base restaurée : lecture 0, émission 0, archive 0 écart.
-5. Refus vérifiés : le rôle d'archive ne lit pas `fin_documents` (permission refusée) ; le rôle de lecture ne peut pas insérer (permission refusée) ; sans liaison de login, le rôle d'archive n'accède à aucun artefact (refus `FIN_PILOT_PRINCIPAL_UNKNOWN_OR_DISABLED`, pas une liste vide).
+1. **Base complète** : export logique quotidien (format custom, schéma et données), avec les rôles reconstruits depuis les migrations. Nécessite un accès administrateur PostgreSQL, à stocker hors du dépôt.
+2. **Stockage** : copie quotidienne du bucket `finance-inbox` et du volume `/app/data`, avec vérification des hachages.
+3. **Rétention** : au moins 30 jours, avec une copie hors du projet Supabase.
+4. **Test de restauration** : mensuel, comme celui de ce jour, dans une base isolée.
+5. **Alerte** : échec d'une sauvegarde signalé au propriétaire.
 
-**Non couvert** : sauvegarde PostgreSQL complète (schéma, séquences système, extensions) et restauration sur une instance Supabase dédiée — impossible sans accès administrateur ou sans les sauvegardes de la plateforme. Procédure à compléter par le propriétaire si ce niveau est exigé.
+Ces mécanismes ne sont pas en place. Les mettre en place demande un accès administrateur et un choix d'outillage du propriétaire.
+
+## 5. Accès et limites constatés
+
+- Conteneur staging : ni `pg_dump`, ni `psql`, ni `pg_restore`.
+- Aucune variable de connexion administrateur à la base dans le service. Seule l'URL du login pilote restreint (`nordla_fin_pilot_staging`) y figure : elle ne lit que son marchand, via les rôles limités.
+- Clé de service : présente uniquement dans le conteneur ; elle a servi à l'export REST et à la lecture du stockage, sans être copiée sur le poste.
+- Accès SSH : ouvert par une clé temporaire, retirée après usage.
+
+## 6. Reste à faire pour une sauvegarde complète
+
+Sans accès administrateur PostgreSQL ni outil de sauvegarde côté plateforme, la sauvegarde complète ne peut pas être réalisée. C'est l'obstacle principal à lever par le propriétaire.
