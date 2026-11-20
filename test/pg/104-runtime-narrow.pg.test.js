@@ -1,13 +1,13 @@
 // Start-up path (createRuntime, the function the Finance server and the CLI call) in narrow-pilot mode on a local disposable
 // database. Supabase REST is replaced by a recording fake (the service key is not available here): every call is logged, so
 // the test proves which calls reached the service client and which did not.
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFileSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { freshDatabase, seedMerchants, insertDraft, MERCHANT_A, MERCHANT_B, PLACEHOLDER } from './lib/db.js';
-import { setupLogins, LOGIN_A, PW } from './lib/pilot.js';
+import { setupLogins, LOGIN_A, PW, dropPilotLogins } from './lib/pilot.js';
 import { testUrl } from './lib/safety.js';
 import { createRuntime } from '../../src/finance/runtime.js';
 
@@ -101,3 +101,5 @@ test('service mode (default) keeps the existing store: document reads go through
     assert.ok(sb.calls.includes('select:fin_documents'), 'service mode reads through the service client');
   } finally { await admin.end(); await db.drop(); }
 });
+
+after(dropPilotLogins);

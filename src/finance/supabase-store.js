@@ -111,7 +111,9 @@ export function createSupabaseFinanceStore(supabase, { merchantId, narrowIssuePa
       if (f.status) p.status = eq(f.status);
       if (f.sourceOrderId !== undefined) p.source_order_id = f.sourceOrderId === null ? 'is.null' : eq(f.sourceOrderId);
       if (f.relatedDocumentId !== undefined) p.related_document_id = f.relatedDocumentId === null ? 'is.null' : eq(f.relatedDocumentId);
-      return (await supabase.selectAll('fin_documents', p)).map(rowToDoc);
+      // PILOT: the linkage read goes through the reader role when the narrow path is injected (no fallback)
+      const reads = narrowIssuePath ? narrowIssuePath.read : supabase;
+      return (await reads.selectAll('fin_documents', p)).map(rowToDoc);
     },
 
     async appendEvent(e) {

@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import pg from 'pg';
 import { freshDatabase, seedMerchants, insertDraft, adminClient, MERCHANT_A, MERCHANT_B } from './lib/db.js';
 import { createNarrowIssuePath } from '../../src/finance/runtime/narrow-issue-path.js';
-import { setupLogins, poolFor, LOGIN_A, LOGIN_B, PW } from './lib/pilot.js';
+import { setupLogins, poolFor, LOGIN_A, LOGIN_B, PW, dropPilotLogins } from './lib/pilot.js';
 import { testUrl } from './lib/safety.js';
 
 // Cluster-wide probe roles are removed at the end of this file: a leftover privileged member of the pilot role would make
@@ -124,3 +124,5 @@ test('the login role cannot read the binding table or call the binding functions
     } finally { c.release(); }
   } finally { await pool.end(); await admin.end(); await db.drop(); }
 });
+
+after(dropPilotLogins);

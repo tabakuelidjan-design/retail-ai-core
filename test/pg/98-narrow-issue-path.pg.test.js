@@ -1,7 +1,7 @@
 // PILOT v2 (local, disposable database, two synthetic merchants, REAL distinct LOGIN roles).
 // Functional path on the least-privilege role nordla_fin_issuer_pilot, identity taken from session_user.
 // Identity refusals and privileged logins are in 99-narrow-identity.pg.test.js.
-import { test } from 'node:test';
+import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -10,7 +10,7 @@ import { freshDatabase, seedMerchants, insertDraft, adminClient, MERCHANT_A, MER
 import { testUrl } from './lib/safety.js';
 import { createNarrowIssuePath } from '../../src/finance/runtime/narrow-issue-path.js';
 import { createSupabaseFinanceStore } from '../../src/finance/supabase-store.js';
-import { LOGIN_A, LOGIN_B, setupLogins, poolFor } from './lib/pilot.js';
+import { LOGIN_A, LOGIN_B, setupLogins, poolFor, dropPilotLogins } from './lib/pilot.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -190,6 +190,7 @@ test('the store uses the narrow path for the read and the issue, never the servi
 });
 
 test('rollback removes the pilot objects (policies, functions, binding table, grants); service_role privileges unchanged', async () => {
+  const DOWN5 = readFileSync(`${ROOT}supabase/rollback/20261120120000_fin_reader_narrow_role.down.sql`, 'utf8');
   const DOWN = readFileSync(`${ROOT}supabase/rollback/20261120110000_fin_issuer_narrow_role.down.sql`, 'utf8');
   const db = await freshDatabase();
   const admin = await db.open();
@@ -197,9 +198,13 @@ test('rollback removes the pilot objects (policies, functions, binding table, gr
     const q = "select has_table_privilege('service_role','public.fin_documents','SELECT') as svc, has_table_privilege('service_role','public.fin_documents','UPDATE') as svc_upd";
     const before = (await admin.query(q)).rows[0];
     // DROP ROLE is cluster-wide (the template database holds the same grants): verified separately, see the rollback header
+    // reader rollback first (it depends on the binding functions), then the issue rollback; role drops are cluster-wide
+    await admin.query(DOWN5.replace('drop role if exists nordla_fin_reader_pilot;', ''));
     await admin.query(DOWN.replace('drop role if exists nordla_fin_issuer_pilot;', ''));
     const left = (await admin.query("select (select count(*) from pg_policies where policyname like 'nordla_fin_pilot_%') as policies, (select count(*) from pg_proc where proname in ('fin_pilot_assert','fin_pilot_bound_merchant')) as fns, (select count(*) from pg_namespace where nspname='nordla_runtime') as schemas")).rows[0];
     assert.deepEqual(left, { policies: '0', fns: '0', schemas: '0' });
     assert.deepEqual((await admin.query(q)).rows[0], before, 'service_role privileges unchanged');
   } finally { await admin.end(); await db.drop(); }
 });
+
+after(dropPilotLogins);

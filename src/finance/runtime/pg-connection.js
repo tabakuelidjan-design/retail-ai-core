@@ -48,6 +48,24 @@ export function checkPilotConfig({ connectionString, ca = null, allowLoopbackPla
   return { login, loopback };
 }
 
+// Result shapes follow PostgREST, which the Finance reads were written against: bigint and numeric as numbers (refused above
+// the safe-integer range), timestamps as ISO strings. Other types keep the driver defaults.
+const TIMESTAMP_OIDS = new Set([1114, 1184]);
+const pilotTypes = {
+  getTypeParser(oid, format) {
+    if (oid === 20 || oid === 1700) {
+      return (v) => {
+        const n = Number(v);
+        if (!Number.isFinite(n) || (oid === 20 && !Number.isSafeInteger(n))) throw new PilotConnectionError('PILOT_VALUE_UNSAFE', 'a numeric value is outside the safe range');
+        return n;
+      };
+    }
+    if (TIMESTAMP_OIDS.has(oid)) return (v) => new Date(v).toISOString();
+    if (oid === 1082) return (v) => v; // date: keep the YYYY-MM-DD text the Finance rules validate
+    return pg.types.getTypeParser(oid, format);
+  },
+};
+
 /** Builds the pool (no connection is opened yet). */
 export function createPilotPool({ connectionString, ca = null, allowLoopbackPlaintext = false, max = 3, statementTimeoutMs = 15000, applicationName = 'nordla-finance-pilot', serverName = null } = {}) {
   const { loopback } = checkPilotConfig({ connectionString, ca, allowLoopbackPlaintext });
@@ -64,6 +82,7 @@ export function createPilotPool({ connectionString, ca = null, allowLoopbackPlai
     connectionTimeoutMillis: 10000,
     application_name: applicationName,
     statement_timeout: statementTimeoutMs,
+    types: pilotTypes,
   });
 }
 

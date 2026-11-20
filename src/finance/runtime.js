@@ -56,7 +56,8 @@ export async function createRuntime({ env = process.env, supabase: injectedSupab
   const loadRetail = async (sinceDate) => {
     // Lower bound of the load: the start of the merchant's first day (local midnight), else an instant 400 days back (a technical look-back, not a business date).
     const since = sinceDate ? localMidnight(sinceDate, timeZone) : new Date(Date.now() - 400 * 86_400_000);
-    const data = await loadDataset(supabase, merchant.id, { since });
+    // PILOT: the ledger read goes through the reader role in narrow mode (same tables, same loader, merchant from the login)
+    const data = await loadDataset(narrow ? narrow.path.read : supabase, merchant.id, { since });
     return { data, ledger: buildLedger(data, { config: retailConfig }) };
   };
   const listOrderRefs = async () => {
