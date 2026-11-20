@@ -24,8 +24,12 @@ revoke usage on schema nordla_runtime from nordla_fin_issuer_pilot;
 do $$
 declare s record;
 begin
-  for s in select function_signature from nordla_runtime.fin_pilot_ext_public_snapshot where had_public_execute loop
+  for s in select function_signature from nordla_runtime.fin_pilot_ext_public_snapshot where had_public_execute and function_signature not like 'relation:%' loop
     execute format('grant execute on function %s to public', s.function_signature);
+  end loop;
+  -- relations: key 'relation:<name>:<PRIVILEGE>'
+  for s in select function_signature from nordla_runtime.fin_pilot_ext_public_snapshot where had_public_execute and function_signature like 'relation:%' loop
+    execute format('grant %s on table %s to public', split_part(s.function_signature, ':', 3), split_part(s.function_signature, ':', 2));
   end loop;
 end $$;
 

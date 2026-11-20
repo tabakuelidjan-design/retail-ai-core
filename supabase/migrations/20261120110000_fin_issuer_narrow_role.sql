@@ -23,6 +23,11 @@ begin
   if not exists (select 1 from pg_roles where rolname = 'nordla_fin_issuer_pilot') then
     create role nordla_fin_issuer_pilot nologin noinherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls;
   end if;
+  -- since PostgreSQL 16 the creator of a role is added to it automatically: that membership is not part of the design
+  if exists (select 1 from pg_auth_members m join pg_roles r on r.oid = m.roleid join pg_roles u on u.oid = m.member
+             where r.rolname = 'nordla_fin_issuer_pilot' and u.rolname = current_user) then
+    execute format('revoke nordla_fin_issuer_pilot from %I', current_user);
+  end if;
 end $$;
 
 create schema if not exists nordla_runtime;
@@ -165,6 +170,30 @@ begin
   end loop;
 end $$;
 
+-- PUBLIC privileges on relations of the extensions schema (pg_stat_statements and its info view are owned by postgres):
+-- snapshot, make each existing right explicit for the roles that hold it, then remove PUBLIC. Same rule as for functions.
+do $$
+declare
+  rel record;
+  acl record;
+  r record;
+begin
+  for rel in
+    select c.oid, c.oid::regclass::text as name, coalesce(c.relacl, acldefault((case when c.relkind = 'S' then 'S' else 'r' end)::"char", c.relowner)) as acl
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+    where n.nspname = 'extensions' and c.relkind in ('r', 'p', 'v', 'm', 'f', 'S')
+  loop
+    for acl in select a.privilege_type as priv from aclexplode(rel.acl) a where a.grantee = 0 loop
+      insert into nordla_runtime.fin_pilot_ext_public_snapshot (function_signature, had_public_execute)
+        values ('relation:' || rel.name || ':' || acl.priv, true) on conflict (function_signature) do nothing;
+      for r in select rolname from pg_roles where rolname <> 'nordla_fin_issuer_pilot' and has_table_privilege(rolname, rel.oid, acl.priv) loop
+        execute format('grant %s on table %s to %I', acl.priv, rel.name, r.rolname);
+      end loop;
+      execute format('revoke %s on table %s from public', acl.priv, rel.name);
+    end loop;
+  end loop;
+end $$;
+
 -- Role audit (v4): what the pilot role can actually do, computed from the effective ACLs (NULL acl = platform default),
 -- including rights granted to PUBLIC, and identified by exact signatures. Expected set is exact.
 create or replace function nordla_runtime.fin_pilot_role_audit()
@@ -182,6 +211,15 @@ declare
     'r:public.fin_documents:SELECT@pilot', 'r:public.fin_documents:UPDATE@pilot',
     'r:public.fin_events:INSERT@pilot',
     'r:public.fin_number_sequences:INSERT@pilot', 'r:public.fin_number_sequences:SELECT@pilot', 'r:public.fin_number_sequences:UPDATE@pilot'];
+  -- platform exceptions: functions owned by supabase_admin (postgres cannot change their ACL), SECURITY INVOKER, executable by
+  -- PUBLIC on the hosted project. Listed EXPLICITLY, expected only where they exist. Any other PUBLIC right fails the audit.
+  platform_exc text[] := array[
+    'f:extensions.grant_pg_cron_access():EXECUTE@PUBLIC',
+    'f:extensions.grant_pg_graphql_access():EXECUTE@PUBLIC',
+    'f:extensions.grant_pg_net_access():EXECUTE@PUBLIC',
+    'f:extensions.pgrst_ddl_watch():EXECUTE@PUBLIC',
+    'f:extensions.pgrst_drop_watch():EXECUTE@PUBLIC',
+    'f:extensions.set_graphql_placeholder():EXECUTE@PUBLIC'];
   exp_norm text[];
   actual text[];
   missing text[];
@@ -190,7 +228,11 @@ declare
   bad_members text;
 begin
   -- signatures are compared without blanks on both sides (the catalog prints "timestamp with time zone", "text, text")
-  select array_agg(regexp_replace(x, '\s', '', 'g') order by regexp_replace(x, '\s', '', 'g')) into exp_norm from unnest(expected) x;
+  select array_agg(regexp_replace(x, '\s', '', 'g') order by regexp_replace(x, '\s', '', 'g')) into exp_norm from (
+    select unnest(expected) as x
+    union all
+    select e from unnest(platform_exc) e where to_regprocedure(split_part(e, ':', 2)) is not null
+  ) s;
   select coalesce(array_agg(x order by x), '{}') into actual from (
     -- tables and sequences in the three platform schemas, effective ACL, pilot or PUBLIC grantee
     select 'r:' || n.nspname || '.' || c.relname || ':' || a.privilege_type || '@' || case when a.grantee = pilot then 'pilot' else 'PUBLIC' end as x
@@ -228,12 +270,15 @@ begin
   detail := coalesce((select string_agg(r.rolname, ',') from pg_auth_members m join pg_roles r on r.oid = m.roleid where m.member = pilot), 'none');
   return next;
 
-  check_name := 'nobody can grant the pilot role onward (no ADMIN OPTION)';
-  ok := not exists (select 1 from pg_auth_members where roleid = pilot and admin_option);
+  -- the platform owner role `postgres` receives ADMIN OPTION automatically when it creates a role (PostgreSQL 16+); the grant was
+  -- made by the bootstrap superuser, so this migration cannot remove it. It is the platform owner (it can already do anything on
+  -- this cluster), so it is the one explicit exemption; any other ADMIN OPTION on the pilot role fails the audit.
+  check_name := 'nobody other than the platform owner can grant the pilot role onward (no ADMIN OPTION)';
+  ok := not exists (select 1 from pg_auth_members m join pg_roles u on u.oid = m.member where m.roleid = pilot and m.admin_option and u.rolname <> 'postgres');
   detail := 'checked'; return next;
 
   select string_agg(r.rolname, ',') into bad_members from pg_auth_members m join pg_roles r on r.oid = m.member
-    where m.roleid = pilot and (r.rolsuper or r.rolbypassrls or r.rolcreaterole or r.rolcreatedb or r.rolreplication
+    where m.roleid = pilot and r.rolname <> 'postgres' and (r.rolsuper or r.rolbypassrls or r.rolcreaterole or r.rolcreatedb or r.rolreplication
       or exists (select 1 from pg_auth_members m2 where m2.member = m.member and m2.roleid <> pilot));
   check_name := 'every member of the pilot role is unprivileged and in no other role';
   ok := bad_members is null;
