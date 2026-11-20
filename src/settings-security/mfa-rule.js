@@ -2,6 +2,7 @@
 // The HTTP gate asks `blocked(access)` on EVERY request, so a session that was already open, a promotion to administrator or a removed factor take effect at once.
 // The answer per (merchant, person) is cached for a few seconds only (a verified factor added through Sécurité clears the cache of that person immediately).
 // If the rule cannot be verified, business requests stay closed. Enrolment and sign-in remain reachable at the HTTP gate.
+import { createSessionAssurance } from '../identity/session-assurance.js';
 import { randomUUID } from 'node:crypto';
 import { createSecurityMonitor } from '../security/monitor.js';
 
@@ -14,6 +15,7 @@ export class MfaPolicyError extends Error {
 export function createMfaRule({ supabase, now = () => Date.now(), ttlMs = 8000, newId = randomUUID, module = 'security' }) {
   if (!supabase?.rpc) throw new TypeError('createMfaRule needs a Supabase client');
   const cache = new Map();
+  const assurance = typeof supabase.select === 'function' ? createSessionAssurance({ supabase, now }) : null;
   const report = createSecurityMonitor({ module: 'security', now });
   const unavailable = () => { report('MFA_POLICY_UNAVAILABLE'); return new MfaPolicyError(); };
   async function status(merchantId, userId) {
@@ -25,7 +27,23 @@ export function createMfaRule({ supabase, now = () => Date.now(), ttlMs = 8000, 
   return Object.freeze({
     status,
     /** true when this request must be refused: the rule is ON, the member is OWNER/ADMIN and has no verified second factor. */
-    async blocked(access) { const s = await status(access.merchantId, access.userId); return Boolean(s.required && s.privileged && !s.compliant); },
+    async blocked(access) {
+      const s = await status(access.merchantId, access.userId);
+      if (!s.required || !s.privileged) return false;
+      if (!s.compliant) return true;
+      if (!assurance) throw unavailable();
+      const proof = await assurance.check({ merchantId:access.merchantId, userId:access.userId, sessionId:access.sessionId, module:access.module ?? 'sourcing', requireMfa:true });
+      if (proof.code === 'SESSION_ASSURANCE_UNAVAILABLE') throw unavailable();
+      return !proof.ok;
+    },
+    async recent(access, maxMfaAgeMs = 900000) {
+      const s = await status(access.merchantId, access.userId);
+      if (!s.compliant) return {ok:false,code:'MFA_ENROLLMENT_REQUIRED'};
+      if (!assurance) throw unavailable();
+      const proof = await assurance.check({merchantId:access.merchantId,userId:access.userId,sessionId:access.sessionId,module:access.module ?? 'sourcing',requireMfa:true,maxMfaAgeMs});
+      if (proof.code === 'SESSION_ASSURANCE_UNAVAILABLE') throw unavailable();
+      return proof;
+    },
     forget(merchantId, userId) { cache.delete(`${merchantId}|${userId}`); },
     forgetAll() { cache.clear(); },
     async enabled(merchantId) {

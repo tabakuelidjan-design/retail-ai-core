@@ -15,7 +15,7 @@
 const json = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers }); res.end(JSON.stringify(body)); };
 const SAFE = ['GET', 'HEAD'];
 
-export function createSessionGate({ identity, security, moduleCode = 'sourcing', mfaRule = null }) {
+export function createSessionGate({ identity, security, moduleCode = 'sourcing', mfaRule = null, sessionAssurance = null }) {
   if (!identity || typeof identity.authenticateAndOpenSession !== 'function' || typeof identity.resolveAccessSession !== 'function') throw new TypeError('createSessionGate needs the identity service of this server (createIdentityService)');
   if (!security || typeof security.guardMutation !== 'function') throw new TypeError('createSessionGate needs the HTTP security of this server (createHttpSecurity)');
   // the default stays 'sourcing' (this server); another hosted module (the Creator) names its own, and BOTH collaborators must be built for exactly that module
@@ -53,7 +53,9 @@ export function createSessionGate({ identity, security, moduleCode = 'sourcing',
   /** Every other /api route: a valid session; for a change also the same-origin and CSRF checks. */
   async function authorize(req) {
     const result = await authorizeBase(req);
-    if (!result.ok || !mfaRule) return result;
+    if (!result.ok) return result;
+    if (sessionAssurance) { const source = await sessionAssurance.check({...result.access,module:moduleCode}); if (!source.ok) return {ok:false,status:source.code==='SESSION_ASSURANCE_UNAVAILABLE'?503:401,body:{error:{code:source.code}}}; }
+    if (!mfaRule) return result;
     try {
       if (await mfaRule.blocked(result.access)) return { ok: false, status: 403, body: { error: { code: 'MFA_REQUIRED_FOR_ROLE', message: 'Activez la double authentification depuis Nordla.' } } };
     } catch {

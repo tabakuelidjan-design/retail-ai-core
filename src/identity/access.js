@@ -122,7 +122,7 @@ export function createAccessService({ supabase, merchantId, moduleCode, verifier
     try { rows = await supabase.select(ENTITLEMENTS, { select: 'merchant_id,module_code,status', merchant_id: `eq.${s.merchantId}`, module_code: `eq.${s.module}`, limit: '1' }); } catch { return SESSION_UNAVAILABLE; }
     const ent = (rows ?? []).find((r) => String(r.merchant_id).toLowerCase() === s.merchantId && r.module_code === s.module);
     if (!ent || ent.status !== 'ACTIVE') { await closeLostAccess(s, 'MODULE_ACCESS_DENIED', ent ? 'MODULE_SUSPENDED' : 'MODULE_NOT_ENABLED'); return SESSION_REFUSED; }
-    return Object.freeze({ ok: true, merchantId: s.merchantId, userId: s.userId, role: membership.role, module: s.module });
+    return Object.freeze({ ok: true, merchantId: s.merchantId, userId: s.userId, role: membership.role, module: s.module, sessionId:s.id });
   }
 
   /** « Se déconnecter » : revokes THIS session (this merchant, this module) server-side. Never throws on an unknown token. */

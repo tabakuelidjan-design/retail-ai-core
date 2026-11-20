@@ -24,7 +24,8 @@ test('Growth checks MFA on an existing session and refuses data before any read 
   assert.equal((await call()).status, 200);
   required = true; assert.equal((await call()).status, 403);
   assert.equal(reads, 1);
-  compliant = true; assert.equal((await call()).status, 200);
+  compliant = true; assert.equal((await call()).status, 503, 'enrollment without a session-proof reader is not sufficient');
+  required = false; assert.equal((await call()).status, 200);
   unavailable = true; assert.equal((await call()).status, 503);
   assert.equal(reads, 2);
   assert.equal((await call('/api/auth/login')).status, 403, 'Growth cannot bypass Core MFA through its old password form');

@@ -18,7 +18,7 @@ export function createGrowthSso({ verifier, openSession, cookiesFor, clientIp = 
     const fail = () => { f.n += 1; if (f.n >= maxFailures) { f.until = now() + blockMs; f.n = 0; } failures.set(ip, f); if (failures.size > 5000) failures.clear(); return refuse(res, 403); };
     const v = verifier.verify(url.searchParams.get('t') ?? '');
     if (!v.ok) return fail();
-    let r; try { r = await openSession(v.userId); } catch { r = { ok: false }; }
+    let r; try { r = await openSession(v.userId, v.authSessionId); } catch { r = { ok: false }; }
     if (!r?.ok || typeof r.token !== 'string') return fail();
     failures.delete(ip);
     const to = url.searchParams.get('to') ?? 'dropoff';

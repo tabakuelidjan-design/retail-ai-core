@@ -19,6 +19,7 @@ import { createPersonalizerCollector, collectChannels } from './collect-personal
 import { createSupabaseFollowUpStore } from './follow-up-store.js';
 import { hostedConfig, verifyPinnedProject } from '../../sourcing/server/hosted.js';
 import { createSessionGate } from '../../sourcing/server/session-gate.js';
+import { createSessionAssurance } from '../../identity/session-assurance.js';
 import { createMfaRule } from '../../settings-security/mfa-rule.js';
 import { createGrowthSso } from './sso.js';
 import { createHandoffVerifier, openSessionForHandoff, HANDOFF_MIN_SECRET_LENGTH } from '../../identity/handoff.js';
@@ -37,7 +38,7 @@ export function buildGrowthSso(env, hosted, services = null) {
   const secret = String(env.GROWTH_SSO_SECRET ?? ''); if (secret.length < HANDOFF_MIN_SECRET_LENGTH) return null;
   const security = services?.security ?? createHttpSecurity({ environment: 'hosted', proxy: 'railway', allowedHosts: hosted.allowedHosts, allowedOrigins: [hosted.origin], moduleCode: 'growth', csrfKey: env.NORDLA_CSRF_KEY });
   const supabase = services?.supabase ?? createSupabaseClient(loadSupabaseConfigFromEnv(env)); const sessions = loadIdentityServiceEnv(env).sessions;
-  return createGrowthSso({ verifier: createHandoffVerifier({ secret, merchantId: hosted.merchantId }), openSession: (userId) => openSessionForHandoff({ supabase, merchantId: hosted.merchantId, moduleCode: 'growth', userId, absoluteMs: sessions.absoluteMs }), cookiesFor: (token) => [security.cookies.sessionCookie(token), security.cookies.csrfCookie(security.csrfTokenFor(token))] });
+  return createGrowthSso({ verifier: createHandoffVerifier({ secret, merchantId: hosted.merchantId }), openSession: (userId, authSessionId) => openSessionForHandoff({ supabase, authSessionId, requireCoreSession:true, merchantId: hosted.merchantId, moduleCode: 'growth', userId, absoluteMs: sessions.absoluteMs }), cookiesFor: (token) => [security.cookies.sessionCookie(token), security.cookies.csrfCookie(security.csrfTokenFor(token))] });
 }
 
 /** The Core identity sign-in for the 'growth' module of THIS merchant. `services` lets a test inject both collaborators. */
@@ -45,7 +46,8 @@ export function buildGrowthGate(env, hosted, services = null) {
   const identity = services?.identity ?? createIdentityService({ merchantId: hosted.merchantId, moduleCode: 'growth', supabase: createSupabaseClient(loadSupabaseConfigFromEnv(env)), ...loadIdentityServiceEnv(env) });
   const security = services?.security ?? createHttpSecurity({ environment: 'hosted', proxy: 'railway', allowedHosts: hosted.allowedHosts, allowedOrigins: [hosted.origin], moduleCode: 'growth', csrfKey: env.NORDLA_CSRF_KEY });
   const mfaRule = services?.mfaRule ?? (services?.identity ? null : createMfaRule({ supabase: createSupabaseClient(loadSupabaseConfigFromEnv(env)), ttlMs: 0 }));
-  return createSessionGate({ identity, security, moduleCode: 'growth', mfaRule });
+  const sessionAssurance = services?.sessionAssurance ?? (services?.identity ? null : createSessionAssurance({supabase:createSupabaseClient(loadSupabaseConfigFromEnv(env))}));
+  return createSessionGate({ identity, security, moduleCode: 'growth', mfaRule, sessionAssurance });
 }
 
 export async function startGrowthHosted({ env = process.env, log = console.log, port = Number(env.GROWTH_PORT || env.PORT || 8788), services = null, fetchImpl } = {}) {
