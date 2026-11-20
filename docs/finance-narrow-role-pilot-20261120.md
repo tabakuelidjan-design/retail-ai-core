@@ -155,3 +155,36 @@ Non réalisé (bloqué) :
 - donc **session_user réelle via le pooleur** et **émission nominale par le login** : non démontrées.
 
 Nettoyage : login de test supprimé, liaison désactivée (ligne conservée, suppression interdite par conception), brouillons fictifs supprimés. Restent sur staging : les deux entreprises fictives, la liaison désactivée, le schéma `nordla_runtime`, le rôle `nordla_fin_issuer_pilot` (sans login), la table d'instantané et la migration. Retour arrière : `supabase/rollback/20261120110000_fin_issuer_narrow_role.down.sql`.
+
+## ÉTAT FINAL UNIQUE (2026-11-20, remplace les sections précédentes sur l'état de la recette)
+
+### Pooleur : la cause était l'hôte, pas un enregistrement manuel
+- `aws-0-eu-west-1.pooler.supabase.com` répond « tenant/user postgres.fvhiammdskpcnfodsnrc not found » (y compris pour le compte `postgres`).
+- `aws-1-eu-west-1.pooler.supabase.com` reconnaît le projet (avec un faux mot de passe : « password authentication failed »), sur les ports 6543 et 5432.
+- Le nom d'utilisateur correct est `<login>.fvhiammdskpcnfodsnrc`, conformément à la documentation Supabase (KB « tenant-or-user-not-found »). Aucun enregistrement manuel n'a été nécessaire.
+
+### Preuves LOCALES (PostgreSQL 17, base jetable, deux marchands synthétiques)
+- Suites `98` (8), `99` (4), `100` (6), `101` (6), `102` (1), `103` (1) : 26/26 vertes.
+- Paramètres SSL refusés, PUBLIC retiré sur `extensions` avec préservation des droits, rollback exact, audit exact, identités non liées et privilégiées refusées.
+- Comportement d'une fonction `returns event_trigger` appelée directement : erreur `0A000` (« trigger functions can only be called as triggers ») — vérifié sur une fonction de même type créée localement.
+
+### Preuves STAGING (projet fictif `fvhiammdskpcnfodsnrc`, pooleur `aws-1`, TLS vérifié avec le CA officiel)
+- Identité réelle : `session_user = nordla_fin_pilot_stg` et `current_user` identiques, sur les ports 6543 (transaction) et 5432 (session).
+- Émission nominale : brouillon de l'entreprise fictive A émis, numéro `FACT-2026-0001`, statut `ISSUED`.
+- Refus entre entreprises : le login lié à A ne peut pas vérifier l'identité de B (`FIN_PILOT_MERCHANT_MISMATCH`) ; un brouillon de B est invisible pour A (lecture nulle) ; A ne peut pas émettre le brouillon de B (`FIN_NOT_FOUND`) ; la réémission du brouillon émis est refusée (`FIN_CONCURRENT_MODIFICATION`).
+- Identités non autorisées, via le pooleur : un login sans liaison est refusé (`FIN_PILOT_PRINCIPAL_UNKNOWN_OR_DISABLED`) ; un login avec `BYPASSRLS` lié à A est refusé (`FIN_PILOT_LOGIN_PRIVILEGED`).
+- TLS : le CA officiel est accepté ; un CA témoin est rejeté (`SELF_SIGNED_CERT_IN_CHAIN`) ; `sslcert` dans l'URL est refusé.
+- Audit du rôle sur staging : 7 contrôles au vert.
+
+### Les six fonctions de plateforme (lecture seule sur staging)
+Toutes : propriétaire `supabase_admin`, `returns event_trigger`, `SECURITY INVOKER`, `search_path=""`, volatilité `v`. Elles s'exécutent comme déclencheurs d'événements de schéma (pg_cron, pg_graphql, pg_net, PostgREST DDL/drop, placeholder GraphQL). Appel direct impossible par conception (`0A000`). Aucune n'est `SECURITY DEFINER`. Elles restent listées comme exceptions exactes dans l'audit ; elles ne sont pas modifiées.
+
+### Nettoyage et état restant sur staging
+- Supprimés : login de test, login sans liaison, login privilégié, brouillon fictif B.
+- Désactivées (ligne conservée, suppression interdite par conception) : liaisons du login de test et du login privilégié.
+- Restent : entreprises fictives A et B, un document fictif émis `FACT-2026-0001` (immuable par conception), le schéma `nordla_runtime`, le rôle `nordla_fin_issuer_pilot` sans login, la table d'instantané, la migration v4.
+- Retour arrière : `supabase/rollback/20261120110000_fin_issuer_narrow_role.down.sql`.
+
+### Non traité (volontairement)
+- Aucune autre route Finance n'est généralisée (paiements, rapprochement, Peppol, etc.).
+- Protection des mots de passe divulgués : Pro, non traitée.
