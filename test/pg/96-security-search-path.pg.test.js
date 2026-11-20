@@ -108,3 +108,30 @@ test('nordla_is_active_member: ACTIVE, not removed, same merchant only; authenti
     assert.equal(cfg.empty_path, true, 'search_path already fixed to empty in the source');
   } finally { await c.end(); await db.drop(); }
 });
+
+// ---------- EXECUTE scope of the non-trigger fin_* functions (migration 20261120100000) ----------
+const EXEC_SCOPED = [
+  'public.fin_issue_document(uuid, uuid, integer, text, text, integer, text, integer, text, text, timestamptz, jsonb)',
+  'public.fin_next_number(uuid, text, integer)',
+  'public.fin_payable_cents(public.fin_documents)',
+];
+const EXEC_UP = readFileSync(`${ROOT}supabase/migrations/20261120100000_fin_function_execute_scope.sql`, 'utf8');
+const EXEC_DOWN = readFileSync(`${ROOT}supabase/rollback/20261120100000_fin_function_execute_scope.down.sql`, 'utf8');
+const execState = async (c) => (await c.query(`select f as sig, has_function_privilege('anon', f, 'EXECUTE') as anon_x, has_function_privilege('authenticated', f, 'EXECUTE') as auth_x, has_function_privilege('service_role', f, 'EXECUTE') as svc_x from unnest($1::regprocedure[]) f`, [EXEC_SCOPED])).rows;
+
+test('anon and authenticated lose EXECUTE on the three exposed fin_* functions; service_role keeps it; rollback restores', async () => {
+  const db = await freshDatabase();
+  const c = await db.open();
+  try {
+    await c.query(EXEC_UP);
+    const after = await execState(c);
+    for (const r of after) {
+      assert.equal(r.anon_x, false, `${r.sig}: anon must not execute`);
+      assert.equal(r.auth_x, false, `${r.sig}: authenticated must not execute`);
+      assert.equal(r.svc_x, true, `${r.sig}: service_role keeps execute (Finance server)`);
+    }
+    await c.query(EXEC_DOWN);
+    for (const r of await execState(c)) assert.equal(r.auth_x, true, `${r.sig}: rollback restores authenticated`);
+    await c.query(EXEC_UP);
+  } finally { await c.end(); await db.drop(); }
+});
