@@ -65,6 +65,8 @@ test('MFA activation and policy outages close existing Finance sessions on the n
     s.required = true;
     assert.equal((await overview(a, cookie)).status, 401);
     s.compliant = true;
+    await assert.rejects(openedSession(a), /the Core ticket opens the session/, 'an enrolled factor without a session proof is refused');
+    s.required = false;
     const protectedCookie = await openedSession(a);
     assert.equal((await overview(a, protectedCookie)).status, 200);
     s.policyUnavailable = true;

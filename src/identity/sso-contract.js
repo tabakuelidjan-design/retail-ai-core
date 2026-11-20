@@ -21,6 +21,7 @@
 //
 // Shared-token access is a separate legacy path; hosted services can disable it with NORDLA_SSO_ONLY=1.
 
+import { createSessionAssurance } from './session-assurance.js';
 import { MODULE_CODES } from './modules.js';
 import { decideModuleOpen } from './module-catalog.js';
 import { createMfaRule } from '../settings-security/mfa-rule.js';
@@ -42,12 +43,13 @@ const ENTITLEMENTS = 'module_entitlements';
  * Default deny: any missing row, unknown status or read error is a refusal.
  * @returns {(input: {merchantId: string, userId: string, role: string, module: string}) => Promise<{ok: true, role: string} | {ok: false, code: string}>}
  */
-export function createAccessChecker({ supabase, merchantId }) {
+export function createAccessChecker({ supabase, merchantId, requireCoreSession = false }) {
   const merchant = String(merchantId ?? '').toLowerCase();
   if (!merchant) throw new TypeError('createAccessChecker: merchantId is required');
   // No cache here: removing a factor or enabling the rule must affect an already open service session on its next request.
   const mfaRule = typeof supabase?.rpc === 'function' ? createMfaRule({ supabase, ttlMs: 0 }) : null;
-  return async function checkAccess({ merchantId: claimed, userId, role, module }) {
+  const assurance = createSessionAssurance({ supabase });
+  return async function checkAccess({ merchantId: claimed, userId, role, module, authSessionId = null }) {
     if (String(claimed ?? '').toLowerCase() !== merchant) return { ok: false, code: 'SSO_WRONG_MERCHANT' };
     if (!SSO_CONTRACT.modules.includes(module) || !MODULE_CODES.includes(module)) return { ok: false, code: 'MODULE_UNKNOWN' };
     if (typeof userId !== 'string' || !userId) return { ok: false, code: 'NOT_MEMBER' };
@@ -63,8 +65,12 @@ export function createAccessChecker({ supabase, merchantId }) {
       if (!e || e.status !== 'ACTIVE' || String(e.merchant_id ?? merchant).toLowerCase() !== merchant) return { ok: false, code: 'MODULE_NOT_ENABLED' };
       const d = decideModuleOpen({ key: module, role, activeCodes: new Set([module]) });
       if (!d.ok) return { ok: false, code: d.code === 'FORBIDDEN' ? 'MODULE_ROLE_FORBIDDEN' : d.code };
+      if (authSessionId || requireCoreSession) {
+        const source = await assurance.check({merchantId:merchant,userId,sessionId:authSessionId,module:'sourcing'});
+        if (!source.ok) return {ok:false,code:source.code};
+      }
       if (!mfaRule) return { ok: false, code: 'MFA_POLICY_UNAVAILABLE' };
-      if (await mfaRule.blocked({ merchantId: merchant, userId })) return { ok: false, code: 'MFA_REQUIRED_FOR_ROLE' };
+      if (await mfaRule.blocked({ merchantId: merchant, userId, sessionId:authSessionId, module:'sourcing' })) return { ok: false, code: 'MFA_REQUIRED_FOR_ROLE' };
       return { ok: true, role };
     } catch (error) {
       if (error?.code === 'MFA_POLICY_UNAVAILABLE') return { ok: false, code: 'MFA_POLICY_UNAVAILABLE' };

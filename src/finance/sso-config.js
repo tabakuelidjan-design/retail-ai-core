@@ -28,5 +28,5 @@ export function financeSsoOptions({ hosted, enabled, env, dashboardToken, supaba
   if (!hosted || enabled !== true) return null;
   const { key } = financeSsoKeyOf(env, dashboardToken);
   if (!key) return null;
-  return { secret: key, requirePerson: true, checkAccess: createAccessChecker({ supabase, merchantId }) };
+  return { secret: key, requirePerson: true, checkAccess: createAccessChecker({ supabase, merchantId, requireCoreSession:true }) };
 }

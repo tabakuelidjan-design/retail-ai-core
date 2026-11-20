@@ -27,7 +27,8 @@ export function issueTicket({ secret, merchantId, audience = SSO_AUDIENCE, ttlSe
   // Person claims (contract v2, see identity/sso-contract.js): the person, their role and the module they open. Set by the Nordla server only.
   const personClaims = person ? (() => {
     if (typeof person.userId !== 'string' || !person.userId || typeof person.role !== 'string' || !person.role || typeof person.module !== 'string' || !person.module) throw Object.assign(new Error('a person needs userId, role and module'), { code: 'SSO_PERSON_REQUIRED' });
-    return { u: person.userId, r: person.role, mod: person.module, iss: 'nordla-core' };
+    if (person.authSessionId !== undefined && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(person.authSessionId)) throw Object.assign(new Error('a valid source session is required'), {code:'SSO_SOURCE_SESSION_INVALID'});
+    return { u: person.userId, r: person.role, mod: person.module, iss: 'nordla-core', ...(person.authSessionId ? {sid:person.authSessionId.toLowerCase()} : {}) };
   })() : {};
   const body = b64u(JSON.stringify({ v: person ? 2 : 1, aud: audience, m: merchantId, ...personClaims, jti: id(), iat, exp: iat + ttl }));
   return `${body}.${b64u(sign(secret, body, audience))}`;
@@ -58,13 +59,14 @@ export function createTicketVerifier({ secret, merchantId, audience = SSO_AUDIEN
     if (p.exp < nowS) return { ok: false, code: 'SSO_EXPIRED' };
     if (p.m !== merchantId) return { ok: false, code: 'SSO_WRONG_MERCHANT' };
     const hasPerson = typeof p.u === 'string' && typeof p.r === 'string' && typeof p.mod === 'string';
+    if (p.sid !== undefined && (typeof p.sid !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p.sid))) return {ok:false,code:'SSO_INVALID'};
     if (p.v === 2 && !hasPerson) return { ok: false, code: 'SSO_INVALID' };
     if (requirePerson && !hasPerson) return { ok: false, code: 'SSO_NO_PERSON' };
     if (module !== null && (!hasPerson || p.mod !== module)) return { ok: false, code: 'SSO_WRONG_MODULE' };
     prune(nowS);
     if (used.has(p.jti)) return { ok: false, code: 'SSO_REPLAYED' };
     used.set(p.jti, p.exp);
-    return hasPerson ? { ok: true, claims: Object.freeze({ userId: p.u, role: p.r, module: p.mod }) } : { ok: true };
+    return hasPerson ? { ok: true, claims: Object.freeze({ userId: p.u, role: p.r, module: p.mod, ...(p.sid ? {authSessionId:p.sid} : {}) }) } : { ok: true };
   }
   /**
    * The full check, used by the services: the ticket (as verify) AND, when a checkAccess is given, the person's CURRENT access
@@ -74,7 +76,7 @@ export function createTicketVerifier({ secret, merchantId, audience = SSO_AUDIEN
     const r = verify(ticket);
     if (!r.ok || !checkAccess || !r.claims) return r;
     let a;
-    try { a = await checkAccess({ merchantId, userId: r.claims.userId, role: r.claims.role, module: r.claims.module }); } catch { return { ok: false, code: 'SSO_ACCESS_UNAVAILABLE' }; }
+    try { a = await checkAccess({ merchantId, userId: r.claims.userId, role: r.claims.role, module: r.claims.module, ...(r.claims.authSessionId ? {authSessionId:r.claims.authSessionId} : {}) }); } catch { return { ok: false, code: 'SSO_ACCESS_UNAVAILABLE' }; }
     if (!a || a.ok !== true) return { ok: false, code: (a && typeof a.code === 'string' && a.code) || 'SSO_ACCESS_DENIED' };
     return { ok: true, claims: r.claims, access: Object.freeze({ role: a.role ?? r.claims.role }) };
   }

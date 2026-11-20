@@ -1,0 +1,10 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {issueTicket} from '../src/finance/sso-ticket.js';
+import {createAccessChecker} from '../src/identity/sso-contract.js';
+import {startApp} from './finance-dashboard-helpers.js';
+import {K_FINANCE} from './fixtures/sso-test-keys.js';
+import {assuranceFixture} from './fixtures/session-assurance.js';
+test('Finance HTTP: a real linked MFA proof opens data, revoking Core closes the existing module session',async()=>{const f=assuranceFixture();const a=await startApp({merchantId:f.merchantId,deps:{ssoOnly:true,sso:{secret:K_FINANCE,requirePerson:true,checkAccess:createAccessChecker({supabase:f.db,merchantId:f.merchantId,requireCoreSession:true})}}});try{const ticket=issueTicket({secret:K_FINANCE,merchantId:f.merchantId,person:{userId:f.userId,role:'OWNER',module:'finance',authSessionId:f.sessionId}});const entry=await fetch(a.base+'/sso?t='+ticket,{redirect:'manual'});assert.equal(entry.status,302);const cookie=entry.headers.get('set-cookie').split(';')[0];const data=()=>fetch(a.base+'/api/overview',{headers:{cookie}});assert.equal((await data()).status,200);f.tables.app_sessions[0].revoked_at=new Date().toISOString();assert.equal((await data()).status,401);}finally{await a.close();}});
+test('hosted access refuses missing, foreign or unproven parent even with a correctly signed ticket',async()=>{const f=assuranceFixture();const check=createAccessChecker({supabase:f.db,merchantId:f.merchantId,requireCoreSession:true});for(const id of [null,randomUUID()])assert.equal((await check({merchantId:f.merchantId,userId:f.userId,role:'OWNER',module:'finance',authSessionId:id})).ok,false);delete f.tables.identity_events[0].detail.mfa;assert.equal((await check({merchantId:f.merchantId,userId:f.userId,role:'OWNER',module:'finance',authSessionId:f.sessionId})).ok,false);});
