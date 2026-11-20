@@ -86,7 +86,7 @@ test('the audit refuses a pilot that owns an object, and an ADMIN OPTION on the 
     await admin.query("do $$ begin if not exists (select 1 from pg_roles where rolname='nordla_fin_audit_admin') then create role nordla_fin_audit_admin login; end if; end $$");
     await admin.query('grant nordla_fin_issuer_pilot to nordla_fin_audit_admin with admin option');
     try {
-      assert.ok((await failing(admin)).includes('nobody can grant the pilot role onward (no ADMIN OPTION)'), 'ADMIN OPTION is reported');
+      assert.ok((await failing(admin)).includes('nobody other than the platform owner can grant the pilot role onward (no ADMIN OPTION)'), 'ADMIN OPTION is reported');
     } finally {
       await admin.query('revoke nordla_fin_issuer_pilot from nordla_fin_audit_admin');
       await admin.query('drop role nordla_fin_audit_admin');

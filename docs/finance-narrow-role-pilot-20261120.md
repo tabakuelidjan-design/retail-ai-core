@@ -120,3 +120,38 @@ Les deux tests `finance-pack` en échec (`ISOLATION: only company.js may touch t
 - Conséquence : `session_user` **via le pooler** (mode transaction 6543 et session 5432) n'a pas été démontré. Ce point reste ouvert.
 
 Étapes restantes une fois le CA disponible : créer un login de test lié à une entreprise fictive, appliquer la migration v3 sur staging après accord explicite, vérifier `verifyPilotConnection` en session (5432) et en transaction (6543), puis la recette nominale et les refus.
+
+## Corrections v4 (SSL, PUBLIC, audit) et recette staging (2026-11-20)
+
+### Paramètres SSL de l'URL
+Refusés : tout paramètre `ssl*` (sslcert, sslkey, sslrootcert, sslcrl, sslnegotiation, SSLROOTCERT…), et `sslmode` sauf `verify-full`. Le pool ne reçoit que la configuration TLS imposée (`rejectUnauthorized: true`, CA fournie, `servername` explicite). Tests : `test/pg/101` (6/6).
+
+### Retrait de PUBLIC EXECUTE et de PUBLIC SELECT sur `extensions`
+Mesure réelle sur staging (lecture seule) : 54 fonctions sur 55 sont exécutables par PUBLIC ; `anon`, `authenticated`, `service_role`, `authenticator`, `pgbouncer` et des rôles `supabase_*` n'ont ce droit **que** par PUBLIC. Un retrait brut les aurait cassés. La migration v4 rend d'abord explicite, pour chaque rôle, le droit qu'il possède, puis retire PUBLIC ; un instantané (`nordla_runtime.fin_pilot_ext_public_snapshot`) permet un retour arrière exact. Tests : `test/pg/102` (matrice rôles × fonctions avant/après/rollback : seul le pilote change) et `test/pg/103` (relation `pg_stat_statements`-like : PUBLIC retiré, droits préservés, rollback exact).
+
+### Audit corrigé
+- droits effectifs calculés avec `coalesce(acl, acldefault(...))` : les ACL NULL (droits implicites) sont comptés ;
+- PUBLIC est compté dans `public`, `extensions` et `nordla_runtime` ;
+- fonctions identifiées par leur signature exacte (`regprocedure`) ;
+- comparaison en ensembles (manquant / en trop).
+
+### Exceptions de plateforme explicites (à valider)
+Six fonctions de `extensions` appartiennent à `supabase_admin` (non `postgres`) ; leur ACL ne peut pas être modifiée par cette migration. Elles restent exécutables par PUBLIC, sont `SECURITY INVOKER` et sont listées une à une dans l'audit : `grant_pg_cron_access`, `grant_pg_graphql_access`, `grant_pg_net_access`, `pgrst_ddl_watch`, `pgrst_drop_watch`, `set_graphql_placeholder`. Tout autre droit PUBLIC fait échouer l'audit. Risque résiduel : le pilote peut les appeler ; leur effet sous un rôle non privilégié n'a pas été vérifié.
+
+### Membre automatique `postgres`
+PostgreSQL 16+ ajoute le créateur d'un rôle comme membre avec ADMIN OPTION, accordé par le superutilisateur d'amorçage : cette migration ne peut pas le retirer. Le rôle `postgres` (propriétaire de la plateforme) est donc la seule exemption, explicite dans l'audit.
+
+### Recette staging (projet `nordla-finance-staging`, entreprises fictives uniquement)
+Réalisé :
+- migration v4 appliquée sur staging après audit (l'audit a d'abord refusé deux fois, la transaction a été annulée à chaque fois ; état final : 7 contrôles au vert, rien d'autre changé) ;
+- 57 entrées de sauvegarde ; `anon`, `authenticated`, `service_role` conservent leurs 54 droits ; le pilote n'a plus que `digest` et les 6 exceptions ;
+- deux entreprises fictives (A et B), un brouillon chacune, une liaison login → A ;
+- TLS : le CA officiel (racine « Supabase Root 2021 CA », empreinte SHA-256 `80:70:25:AD…:CA:FA`, identique à la racine présentée par le pooleur) est accepté ; un CA témoin est rejeté (`SELF_SIGNED_CERT_IN_CHAIN`) : la vérification est réelle. Aucune autorité Windows n'a été modifiée.
+- refus : `sslcert` dans l'URL refusé ; CA absent refusé ; `SET ROLE` vers le pilote refusé pour le rôle `postgres`.
+
+Non réalisé (bloqué) :
+- **connexion pooleur** (6543 transaction, 5432 session) : le pooleur répond après un TLS vérifié mais renvoie « tenant/user not found » pour le login de test : ce rôle n'est pas enregistré dans la configuration du pooleur du projet. Il faut l'enregistrer côté plateforme.
+- **connexion directe** : `db.fvhiammdskpcnfodsnrc.supabase.co` n'a qu'une adresse IPv6, et ce poste n'a aucune route IPv6 (`ENETUNREACH`).
+- donc **session_user réelle via le pooleur** et **émission nominale par le login** : non démontrées.
+
+Nettoyage : login de test supprimé, liaison désactivée (ligne conservée, suppression interdite par conception), brouillons fictifs supprimés. Restent sur staging : les deux entreprises fictives, la liaison désactivée, le schéma `nordla_runtime`, le rôle `nordla_fin_issuer_pilot` (sans login), la table d'instantané et la migration. Retour arrière : `supabase/rollback/20261120110000_fin_issuer_narrow_role.down.sql`.

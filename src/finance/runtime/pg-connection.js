@@ -49,12 +49,13 @@ export function checkPilotConfig({ connectionString, ca = null, allowLoopbackPla
 }
 
 /** Builds the pool (no connection is opened yet). */
-export function createPilotPool({ connectionString, ca = null, allowLoopbackPlaintext = false, max = 3, statementTimeoutMs = 15000, applicationName = 'nordla-finance-pilot' } = {}) {
+export function createPilotPool({ connectionString, ca = null, allowLoopbackPlaintext = false, max = 3, statementTimeoutMs = 15000, applicationName = 'nordla-finance-pilot', serverName = null } = {}) {
   const { loopback } = checkPilotConfig({ connectionString, ca, allowLoopbackPlaintext });
   const u = new URL(connectionString);
   // TLS is configured only through the `ssl` option below; the URL carries no TLS parameter (checked above)
   for (const key of [...u.searchParams.keys()]) if (key.toLowerCase().startsWith('ssl')) u.searchParams.delete(key);
-  const ssl = loopback ? false : { ca, rejectUnauthorized: true, servername: u.hostname };
+  // the verified name is the DNS name of the server: when the URL carries an IP literal, serverName must be given explicitly
+  const ssl = loopback ? false : { ca, rejectUnauthorized: true, servername: serverName ?? u.hostname };
   return new pg.Pool({
     connectionString: u.toString(),
     ssl,
