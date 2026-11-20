@@ -5,7 +5,7 @@ Statut : **local uniquement**. Rien n'est appliqué à staging, Supabase distant
 ## Base et état du dépôt
 
 - Base : `release/finance-staging` @ `361c06f5` (contient déjà les migrations de durcissement `20261120083356` et `20261120085527`).
-- Branche pilote : `pilot/finance-narrow-role-20261120`, worktree isolé `C:\Users\etaba\Desktop\nordla-finance-pilote-20261120` (nom exact : `nordla-finance-pilot-20261120`).
+- Branche pilote : `pilot/finance-narrow-role-20261120`, worktree isolé `C:\Users\etaba\Desktop\nordla-finance-pilot-20261120` .
 - Autres worktrees non touchés (ex. `nordla-finance-mfa-wt`, dont le SHA a changé entre-temps : ce n'est pas le nôtre).
 - Compteur de numérotation staging (lecture seule, avant tout nouvel essai) : la numérotation est une **ligne** de `fin_number_sequences` (upsert), pas une séquence PostgreSQL. Un rollback annule donc bien l'avance. Vérifié : 0 ligne de compteur, 0 facture et 0 marchand fictifs subsistent après le test de staging précédent. Aucun compteur n'a été modifié.
 
