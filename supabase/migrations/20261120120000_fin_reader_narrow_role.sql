@@ -138,4 +138,12 @@ begin
 end $$;
 revoke all on function nordla_runtime.fin_pilot_reader_audit() from public, anon, authenticated, service_role;
 
+-- fail closed: any reader privilege outside the expected set aborts this migration
+do $$
+declare bad text;
+begin
+  select string_agg(check_name || ': ' || detail, ' | ') into bad from nordla_runtime.fin_pilot_reader_audit() where not ok;
+  if bad is not null then raise exception 'FIN_READER_ROLE_UNSAFE: %', bad; end if;
+end $$;
+
 commit;
