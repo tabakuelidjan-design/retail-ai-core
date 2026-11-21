@@ -1563,3 +1563,8 @@ body:has(.modal-back) .contact-support { display: none; }
   .menu-toggle { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; border: 1px solid #E6E9EF; background: #fff; color: #0F1B2D; font-size: 20px; cursor: pointer; flex: 0 0 auto; }
   .fbar { padding: 6px 8px; }
 }
+/* Phone: the top bar wraps instead of pushing the language switch and the seller name off the screen. */
+@media (max-width: 900px) {
+  .shell.nordla-frame .topbar2 { flex-wrap: wrap; gap: 8px; }
+  .shell.nordla-frame .topbar2 .tb-right { flex-wrap: wrap; justify-content: flex-end; min-width: 0; }
+}
