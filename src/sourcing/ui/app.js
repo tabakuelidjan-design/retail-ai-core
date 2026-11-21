@@ -195,7 +195,7 @@ const embeddedHtml = createEmbedded({ S, ls, cur, run, status, render: () => ren
 let salonInstance = null;
 const salon = () => (salonInstance ??= createSalon({ S, ls, loadHomeModules: () => nxPanel.loadHomeModules(), growthHomeCard: () => nxPanel.growthHomeCard(), render: () => render(), persist, markDirty, queueSync, externals, setMode: (m) => setMode(m), openMenu: () => openMenu(), embedded: embeddedHtml, expertSections: () => TABS, syncInfo, conflictVersions, keepBoth, takeServer, syncNow, exportCase, voice: () => voice, capabilities: () => showCapabilities() }));
 
-const backup = createBackup({ S, ls, api, getBlob, photoKeysFor, dirty, isSyncing: () => syncing, persist, paintHeader, refresh: () => openMenu() }); const corePanel = createCorePanel({ S, api, refresh: () => openMenu() }); const nxPanel = createModulesPanel({ S, api, refresh: () => openMenu(), repaintHome: () => render() }); const { syncInfo, conflictVersions, keepBoth, takeServer, syncNow, exportCase } = createSyncHelpers({ S, dirty, status, persist, markDirty, queueSync, ping, sync, getBlob, putBlob, buildExport, exportSummary });
+const backup = createBackup({ S, ls, api, getBlob, photoKeysFor, dirty, isSyncing: () => syncing, persist, paintHeader, refresh: () => openMenu() }); const corePanel = createCorePanel({ S, api, refresh: () => (S.parlePage ? openParle() : openMenu()) }); const nxPanel = createModulesPanel({ S, api, refresh: () => openMenu(), repaintHome: () => render() }); const { syncInfo, conflictVersions, keepBoth, takeServer, syncNow, exportCase } = createSyncHelpers({ S, dirty, status, persist, markDirty, queueSync, ping, sync, getBlob, putBlob, buildExport, exportSummary });
 
 const menuCase = () => activeMenuCase(S, cur(), S.mode === 'salon' ? salon().state().view : null);
 const readForm = (f) => Object.fromEntries(new FormData(f).entries());
@@ -481,8 +481,25 @@ async function recDecide(id, keep) {
   r.pending = r.pending.filter((x) => x.id !== id); persist(); openMenu();
 }
 /** Réglages et sauvegarde: the one sheet behind "Plus" (see embedded.js). */
-function openSettings() { const o = $('#overlay'); o.hidden = false; o.className = 'show'; o.innerHTML = settingsHtml({ S, active: menuCase(), esc }); o.insertAdjacentHTML('beforeend', recoverySection(S.rec, { online: S.online, hasToken: !!S.token, local: S.cases }) + backupSection({ backup: S.backup, online: S.online, hasToken: !!S.token, busy: S.backupBusy, esc }) + corePanel.section(menuCase())); o.firstElementChild?.insertAdjacentHTML('afterend', nxPanel.section()) /* the single Nordla entry, first */; if (S.reanalysisMessage) o.scrollTop = 0; }
+function openSettings() { S.parlePage = false; const o = $('#overlay'); o.hidden = false; o.className = 'show'; o.innerHTML = settingsHtml({ S, active: menuCase(), esc }); o.insertAdjacentHTML('beforeend', recoverySection(S.rec, { online: S.online, hasToken: !!S.token, local: S.cases }) + backupSection({ backup: S.backup, online: S.online, hasToken: !!S.token, busy: S.backupBusy, esc }) + corePanel.section(menuCase())); o.firstElementChild?.insertAdjacentHTML('afterend', nxPanel.section()) /* the single Nordla entry, first */; if (S.reanalysisMessage) o.scrollTop = 0; }
+/** Parle à Nordla as its own conversation page (menu item), not the settings sheet. `question` pre-fills the box (home question). */
+function openParle(question) {
+  S.parlePage = true;
+  const o = $('#overlay'); o.hidden = false; o.className = 'show nxa-overlay';
+  if (question != null && S.core?.nx) S.core.nx.draft = String(question);
+  // inside the Core shell: the same menu and mobile header as the home, the conversation in place of the home (a copy of the menu as it is now)
+  const side = document.querySelector('.nx-home-side'), top = document.querySelector('.nx-h-top');
+  if (side && top) {
+    const aside = side.cloneNode(true);
+    aside.querySelectorAll('.nx-h-cur').forEach((n) => n.classList.remove('nx-h-cur'));
+    aside.querySelector('[data-act="nx-open-parle"]')?.closest('li')?.classList.add('nx-h-cur');
+    const home = aside.querySelector('ul > li'); if (home) { home.dataset.act = 'close-overlay'; home.style.cursor = 'pointer'; } // "Tableau de bord" leaves the page
+    o.innerHTML = `<div class="nx-home nxp-shell">${top.outerHTML}${aside.outerHTML}<div class="nx-h-main">${corePanel.page(menuCase(), { shell: true })}</div></div>`;
+  } else o.innerHTML = corePanel.page(menuCase());
+  o.scrollTop = 0;
+}
 function openMenu() {
+  S.parlePage = false;
   if (!LEGACY_UI) return openSettings();
   const o = $('#overlay'); o.hidden = false; o.className = 'show';
   const active = menuCase();
@@ -512,6 +529,7 @@ document.addEventListener('input', (ev) => { const t = ev.target; if (t?.matches
 document.addEventListener('click', onClick); document.addEventListener('submit', (ev) => { onSubmit(ev).catch((e) => { console.error(e); discardDrafts = false; S.flash = `This could not be saved (${e?.message ?? e}). What you typed is still in the form: try again.`; render(); }); }); document.addEventListener('change', onPhoto);
 document.addEventListener('change', (ev) => { const fi = ev.target.closest?.('input[data-act="rec-file"]'); if (fi) { const f = fi.files?.[0]; fi.value = ''; if (f) recFile(f).catch(() => { (S.rec ??= {}).error = 'Ce fichier n’a pas pu être lu.'; openMenu(); }); return; } const f = ev.target.closest?.('form[data-form]'); if (!f || !['quote', 'costs', 'sale', 'amazon-sale'].includes(f.dataset.form) || !cur()) return; S.quiet = true; try { f.requestSubmit(); } finally { S.quiet = false; } });
 $('#btn-cases').addEventListener('click', openMenu);
+document.addEventListener('nordla:parle', (ev) => openParle(ev.detail?.question));
 window.addEventListener('online', ping); window.addEventListener('offline', () => { S.online = false; S.verifiedAt = 0; render(); });
 setInterval(() => { try { paintHeader(); } catch { /* ignore */ } }, 15000); // a verification expires: the header must not keep saying VERIFIED
 setInterval(() => { if (S.token) ping(); }, 30000); // notice a lost or recovered connection

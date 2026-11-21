@@ -43,8 +43,9 @@ export function createModulesPanel({ S, api, refresh, repaintHome = () => {} }) 
     const t = ev.target.closest?.('[data-act^="nx-"]'); if (!t || st.busy) return;
     const a = t.dataset.act; st.open = t.closest('[data-nx-module]')?.dataset.nxModule ?? st.open; // keep the section the person works in open after the redraw
     if (a === 'nx-load') return load();
+    if (a === 'nx-open-parle') { document.querySelector('.nx-home')?.classList.remove('nx-menu-open'); document.dispatchEvent(new CustomEvent('nordla:parle')); return; } // menu item: close the drawer, open the conversation page
     if (a === 'nx-open-panel') { document.getElementById('btn-cases')?.click(); return; }
-    if (a === 'nx-home-ask') { st.askInput = document.getElementById('nx-home-q')?.value ?? ''; document.getElementById('btn-cases')?.click(); return; } // read-only: the question goes to the Parle à Nordla panel, which answers it // the Nordla panel (Parle à Nordla, décisions, marque, campagnes, création) opens from its own menu button
+    if (a === 'nx-home-ask') { document.dispatchEvent(new CustomEvent('nordla:parle', { detail: { question: document.getElementById('nx-home-q')?.value ?? '' } })); return; } // the home question opens the Core conversation page (never the Sourcing panel) // read-only: the question goes to the Parle à Nordla panel, which answers it // the Nordla panel (Parle à Nordla, décisions, marque, campagnes, création) opens from its own menu button
     if (a === 'nx-menu') { document.querySelector('.nx-home')?.classList.toggle('nx-menu-open'); return; } // mobile: the common menu behind ☰
     if (a === 'nx-parle') return parle(document.getElementById('nx-q')?.value);
     if (a === 'nx-parle-ex') { st.askInput = t.dataset.label; return parle(t.dataset.q, t.dataset.label); }

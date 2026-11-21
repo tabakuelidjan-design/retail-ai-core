@@ -47,7 +47,7 @@ function actionOf(m) {
   if (m.key === 'creative' && m.creator_screen === true) return { type: 'link', href: '/creator', label: 'Ouvrir le Créateur' };
   if (m.key === 'marketing' && m.video_screen === true) return { type: 'link', href: '/videos', label: 'Ajouter une vidéo' };
   if (m.key === 'procurement') return { type: 'link', href: '/procurement', label: 'Ouvrir Stock / Achats' }; // the existing Stock / Achats screen (its data stays behind its own sign-in)
-  return null; // Branding: no screen of its own yet, so no destination is invented (the card says so)
+  return null;
 }
 
 // Menu icons and module colours, as the « Mes modules » reference: one line icon per entry, in the module's colour.
@@ -87,8 +87,7 @@ function navHtml(c) {
   if (a?.type === 'nx' && a.href) return `<a class="nx-h-nav" data-key="${esc(c.key)}"${m} href="${esc(a.href)}" data-act="${esc(a.act)}" data-to="${esc(a.to)}" target="_blank" rel="noopener">${ico}${label}</a>`;
   if (a?.type === 'nx') return `<button type="button" class="nx-h-nav" data-key="${esc(c.key)}"${m} data-act="${esc(a.act)}">${ico}${label}</button>`;
   if (a?.type === 'link') return `<a class="nx-h-nav" data-key="${esc(c.key)}"${m} href="${esc(a.href)}">${ico}${label}</a>`;
-  const soon = c.key === 'branding' ? '<em class="nx-h-soon">Écran pas encore accessible</em>' : ''; // honest state: no screen exists yet
-  return `<span class="nx-h-nav nx-h-nav-off" data-key="${esc(c.key)}"${m}>${ico}${label}${soon}</span>`;
+  return `<span class="nx-h-nav nx-h-nav-off" data-key="${esc(c.key)}"${m}>${ico}${label}</span>`;
 }
 
 /** The decisions journal, read as Core's activity and its pending validations. Anything that is not a list means Core could not answer. */
@@ -240,13 +239,13 @@ export function nordlaHomeHtml({ modules = null, decisions = null, sales = null,
 
   // ---- commercial indicators (left on PC, top on phone)
   const ventes = sm.available
-    ? kpiCard({ title: 'Ventes', value: money(sm.net, sm.currency, 0), delta: sm.deltas.net, spark: demo ? DEMO_SPARKS.ventes : bars(sm.weekly.map((w) => w.net)), line: true, colour: '#E8891C', caption: caption(`Ventes nettes HT, 30 derniers jours · ${sm.source}`), demo })
+    ? kpiCard({ title: 'Ventes', value: money(sm.net, sm.currency, 0), delta: sm.deltas.net, spark: bars(demo ? DEMO_SPARKS.ventes : sm.weekly.map((w) => w.net)), line: true, colour: '#E8891C', caption: caption(`Ventes nettes HT, 30 derniers jours · ${sm.source}`), demo })
     : kpiCard({ title: 'Ventes', value: null, caption: waitOr(false), demo });
   const commandes = sm.available
-    ? kpiCard({ title: 'Commandes', value: String(sm.orders), delta: sm.deltas.orders, spark: demo ? DEMO_SPARKS.commandes : bars(sm.weekly.map((w) => w.orders)), colour: '#3FA58A', caption: caption(`30 derniers jours · ${sm.source}`), demo })
+    ? kpiCard({ title: 'Commandes', value: String(sm.orders), delta: sm.deltas.orders, spark: bars(demo ? DEMO_SPARKS.commandes : sm.weekly.map((w) => w.orders)), colour: '#3FA58A', caption: caption(`30 derniers jours · ${sm.source}`), demo })
     : kpiCard({ title: 'Commandes', value: null, caption: waitOr(false), demo });
   const panier = sm.available && sm.basket != null
-    ? kpiCard({ title: 'Panier moyen', value: money(sm.basket, sm.currency), delta: sm.deltas.basket, spark: demo ? DEMO_SPARKS.panier : bars(sm.weekly.map((w) => w.basket)), sparkMobile: demo ? DEMO_SPARKS.panierPh : null, colour: '#8FA7C6', caption: caption(`Ventes nettes HT ÷ commandes · ${sm.source}`), demo })
+    ? kpiCard({ title: 'Panier moyen', value: money(sm.basket, sm.currency), delta: sm.deltas.basket, spark: bars(demo ? DEMO_SPARKS.panier : sm.weekly.map((w) => w.basket)), sparkMobile: demo ? bars(DEMO_SPARKS.panierPh) : null, colour: '#8FA7C6', caption: caption(`Ventes nettes HT ÷ commandes · ${sm.source}`), demo })
     : kpiCard({ title: 'Panier moyen', value: null, caption: waitOr(false), demo });
 
   // ---- charts: evolution (weekly bars) and split by channel (donut)
@@ -254,9 +253,9 @@ export function nordlaHomeHtml({ modules = null, decisions = null, sales = null,
   const axisHtml = sm.available ? `<div class="nx-h-axis" aria-hidden="true">${[1, 0.75, 0.5, 0.25, 0].map((k) => `<span>${esc(Math.round((topNet * k) / 50) * 50 === 0 ? '0' : Math.round((topNet * k) / 50) * 50 >= 1000 ? (Math.round((topNet * k) / 50) * 50).toLocaleString('fr-FR') : String(Math.round((topNet * k) / 50) * 50))}</span>`).join('')}</div>` : '';
   const weeklyOk = sm.available && sm.weekly.some((w) => w.net != null);
   // demonstration: the chart of the reference (image 106), fifteen thin gold bars; production keeps the weekly bars
-  const evoDemo = `<div class="nx-h-chart nx-h-chart-ref" role="img" aria-label="Évolution des ventes">${DEMO_SPARKS.evoRef.map((hh) => `<span style="height:${hh}%"></span>`).join('')}</div>`;
+  const evoDemo = `<div class="nx-h-chart nx-h-chart-ref" role="img" aria-label="Évolution des ventes">${bars(DEMO_SPARKS.evoRef).map((hh) => `<span style="height:${hh}%"></span>`).join('')}</div>`;
   const evo = demo ? evoDemo : weeklyOk
-    ? `<div class="nx-h-chart" role="img" aria-label="Ventes par semaine">${axisHtml}${(demo ? DEMO_SPARKS.evo : bars(sm.weekly.map((w) => w.net))).map((h, i) => `<div class="nx-h-cbar"><span style="height:${h}%" title="${esc(money(sm.weekly[i].net, sm.currency))}"></span><small class="nx-h-lbl-w">${esc(sm.weekly[i].label)}</small><small class="nx-h-lbl-m">${esc(sm.weekly[i].month)}</small></div>`).join('')}</div>`
+    ? `<div class="nx-h-chart" role="img" aria-label="Ventes par semaine">${axisHtml}${bars(demo ? DEMO_SPARKS.evo : sm.weekly.map((w) => w.net)).map((h, i) => `<div class="nx-h-cbar"><span style="height:${h}%" title="${esc(money(sm.weekly[i].net, sm.currency))}"></span><small class="nx-h-lbl-w">${esc(sm.weekly[i].label)}</small><small class="nx-h-lbl-m">${esc(sm.weekly[i].month)}</small></div>`).join('')}</div>`
     : `<p class="nx-h-quiet-line">${esc(waitOr(false))}</p>`;
   const split = sm.available && sm.channels.length
     ? `<div class="nx-h-split"><div class="nx-h-donut" style="background:conic-gradient(${sm.channels.reduce((acc, c) => { const from = acc.at; const to = from + c.share * 100; acc.parts.push(`${c.colour} ${from.toFixed(2)}% ${to.toFixed(2)}%`); acc.at = to; return acc; }, { at: 0, parts: [] }).parts.join(', ')})" role="img" aria-label="Répartition des ventes par canal"><span>${esc(money(sm.net, sm.currency, 0))}<small>${esc(demo ? '' : 'Ventes nettes HT')}</small></span></div>
@@ -349,7 +348,7 @@ export function nordlaHomeHtml({ modules = null, decisions = null, sales = null,
   };
   const ringPc = `<div class="nx-h-ring-pc"><img src="/assets/core-ring.svg" alt="Nordla et ses quatre piliers" width="460" height="380">${PC_HITS.map(hitOf).join('')}</div>`;
   const searchBar = `<div class="nx-h-search" aria-hidden="true"><span class="nx-h-search-ico">${icon('<circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/>', 16)}</span><span class="nx-h-search-txt">Rechercher dans Nordla…</span></div>`;
-  return `<section class="nx-home${demo ? ' nx-home-demo' : ''}" aria-label="Accueil Nordla — Core">
+  return `<section class="nx-home${demo ? ' nx-home-demo' : ''}" aria-label="Nordla Core">
     <header class="nx-h-top">
       <button type="button" class="nx-h-burger" data-act="nx-menu" aria-label="Menu des modules">☰</button>
       <img class="nx-h-logo-img nx-h-logo-top" src="/assets/nordla-logo.png" alt="Nordla" width="120" height="34">
@@ -361,7 +360,7 @@ export function nordlaHomeHtml({ modules = null, decisions = null, sales = null,
       <p class="nx-h-menu-title">Menu principal</p>
       <ul>
         <li class="nx-h-cur"><span class="nx-h-navico" style="color:#0F1B2D">${icon('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>', 16)}</span><span>Tableau de bord</span></li>
-        <li><button type="button" class="nx-h-nav" data-act="nx-open-panel"><span class="nx-h-navico" style="color:#0F1B2D">${icon('<path d="M4 5h16v11H9l-5 4z"/>', 16)}</span><span>Parle à Nordla</span></button></li>
+        <li><button type="button" class="nx-h-nav" data-act="nx-open-parle"><span class="nx-h-navico" style="color:#0F1B2D">${icon('<path d="M4 5h16v11H9l-5 4z"/>', 16)}</span><span>Parle à Nordla</span></button></li>
         ${menu.map((c) => `<li>${navHtml(c)}</li>`).join('')}
       </ul>
       <section class="nx-h-settings" aria-label="Réglages"><p class="nx-h-menu-title">Réglages</p><ul>
@@ -379,7 +378,6 @@ export function nordlaHomeHtml({ modules = null, decisions = null, sales = null,
       </div>
       <header class="nx-h-hero">
         <div class="nx-h-hero-txt">
-          <p class="nx-h-kicker">Accueil Nordla — Core</p>
           <h1>Nordla Core</h1>
           <p>Votre entreprise, augmentée par l’IA</p>
           <span class="nx-h-status ${statusClass}">${esc(status)}</span>${demo ? ` ${DEMO_TAG}` : ''}${role ? ` <span class="nx-h-chip">Rôle : ${esc(role)}</span>` : ''}

@@ -1,9 +1,6 @@
 /* Nordla Core home: the commercial layout (PC and phone). Every rule is scoped under .nx-home so it cannot reach other screens.
    Palette: cool white and light grey backgrounds, dark navy text, gold accent, green/teal, blue-grey and orange charts. No cream or beige. */
 
-/* The page identity line above the title ("Accueil Nordla — Core"). */
-.nx-home .nx-h-kicker { margin: 0 0 4px; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #6B7280; }
-
 /* The Sourcing bottom tab bar is not part of the Core home. */
 body:has(.nx-home) #tabs { display: none !important; }
 /* The Sourcing screens cap the page at 640 px: the Core home uses the full width of the window (its own gutters). */
@@ -511,3 +508,16 @@ body.sl-mode main:has(.nx-home) { max-width: none; width: 100%; margin: 0; paddi
 /* demonstration: the evolution chart is the reference of image 106 (fifteen thin gold bars) */
 .nx-h-chart-ref { gap: 8px; height: 150px; align-items: flex-end; justify-content: space-between; padding: 0 4px; }
 .nx-h-chart-ref span { flex: 0 0 9px; height: auto; max-height: 100%; border-radius: 2px 2px 0 0; background: linear-gradient(#E0B060, #B07A2E); }
+
+/* phone: the fifteen-bar demonstration chart stays inside its card, above the legend of the donut card */
+@media (max-width: 899px) {
+  .nx-h-chart-ref { height: 120px; gap: 3px; padding: 0; overflow: hidden; }
+  .nx-h-chart-ref span { flex: 1 1 0; min-width: 0; max-width: 9px; }
+  .nx-h-ccol > article { overflow: hidden; }
+}
+
+/* phone: the same circle as the PC (the supplied SVG with its four links); the older drawn circle is hidden */
+@media (max-width: 899px) {
+  .nx-h-ring-pc { display: block; max-width: 100%; }
+  .nx-h-svg-ph { display: none !important; }
+}
