@@ -1,10 +1,12 @@
 // Core home: the sales figures read-only, from the Analytics brief (the report the Analytics module already
 // produces). Core never computes a metric here: it reshapes what Analytics reports, or says why it cannot.
 //
-// Configuration (both required, never committed):
-//   ANALYTICS_BRIEF_URL    base address of the Analytics server (https), e.g. the Analytics staging address
-//   ANALYTICS_BRIEF_TOKEN  the Analytics access token, sent as the Basic password (same as the Analytics dashboard)
-// Without both: status NOT_CONNECTED. A failed or slow call: UNAVAILABLE. Never a zero in place of a missing figure.
+// Contract (checked in src/analytics-premium/server/hosting.js and app.js):
+//   - Analytics refuses its access token on staging (NORDLA_SSO_ONLY=1): the brief is read with a Nordla session.
+//   - Core signs a one-time ticket for the signed-in person (the same ticket that opens Analytics, ANALYTICS_SSO_SECRET).
+//   - GET <analytics>/sso?t=<ticket> answers 302 with a session cookie (an_sid); that cookie is sent to GET /api/brief.
+//   - Analytics re-checks the person's access on every request. 404 = no report for this merchant yet.
+// Missing configuration or no personal session: NOT_CONNECTED. Any failure: UNAVAILABLE. Never a zero in place of a figure.
 
 const TIMEOUT_MS = 4000;
 
@@ -44,15 +46,22 @@ function weeklyOf(series) {
     .map(({ netSeen, ordSeen, ...w }) => ({ ...w, net_sales_ex_tax: netSeen ? w.net_sales_ex_tax : null, order_count: ordSeen ? w.order_count : null }));
 }
 
-/** Reads the Analytics brief with the configured address and token. Any failure is UNAVAILABLE, never a figure. */
-export async function loadSalesHome({ env = process.env, fetchImpl = globalThis.fetch } = {}) {
-  const base = String(env.ANALYTICS_BRIEF_URL ?? '').trim(); const token = String(env.ANALYTICS_BRIEF_TOKEN ?? '');
-  if (!base || !token) return { status: 'NOT_CONNECTED', source: 'Analytics' };
-  let url;
-  try { url = new URL('/api/brief', base); } catch { return { status: 'UNAVAILABLE', source: 'Analytics' }; }
-  if (url.protocol !== 'https:' && url.hostname !== 'localhost') return { status: 'UNAVAILABLE', source: 'Analytics' };
+/**
+ * Reads the Analytics brief for the signed-in person. `publicUrl` and `ticket` come from the Core server (ANALYTICS_PUBLIC_URL
+ * and a ticket signed just now for this person). Nothing is stored; the session cookie lives for this one read.
+ */
+export async function loadSalesHome({ publicUrl = '', ticket = '', fetchImpl = globalThis.fetch } = {}) {
+  if (!publicUrl || !ticket) return { status: 'NOT_CONNECTED', source: 'Analytics' };
+  let base;
+  try { base = new URL(publicUrl); } catch { return { status: 'UNAVAILABLE', source: 'Analytics' }; }
+  if (base.protocol !== 'https:' && base.hostname !== 'localhost') return { status: 'UNAVAILABLE', source: 'Analytics' }; // the ticket is never sent in clear
   try {
-    const res = await fetchImpl(url.href, { headers: { authorization: `Basic ${Buffer.from(`nordla:${token}`).toString('base64')}`, accept: 'application/json' }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    const signal = AbortSignal.timeout(TIMEOUT_MS);
+    const sso = await fetchImpl(new URL(`/sso?t=${encodeURIComponent(ticket)}`, base).href, { redirect: 'manual', signal });
+    const cookie = (sso.headers.getSetCookie?.() ?? []).find((c) => c.startsWith('an_sid='));
+    if (sso.status !== 302 || !cookie) return { status: 'UNAVAILABLE', source: 'Analytics' };
+    const sid = cookie.split(';')[0];
+    const res = await fetchImpl(new URL('/api/brief', base).href, { headers: { cookie: sid, accept: 'application/json' }, signal });
     if (res.status === 404) return { status: 'NOT_CONNECTED', source: 'Analytics' }; // no report for this merchant yet
     if (!res.ok) return { status: 'UNAVAILABLE', source: 'Analytics' };
     return salesHomeFromBrief(await res.json());

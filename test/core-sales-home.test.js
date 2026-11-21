@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { salesHomeFromBrief, loadSalesHome } from '../src/core-pilot/sales-home.js';
-import { ROUTE_RULES as PERMISSIONS } from '../src/identity/permissions.js';
+import { ROUTE_RULES } from '../src/identity/permissions.js';
 
 const BRIEF = {
   generatedAt: '2026-11-20T10:00:00Z', currency: 'EUR',
@@ -12,6 +12,8 @@ const BRIEF = {
     netRevenue: [100, null, 50, 25], orders: [2, 1, 3, null], aov: [], grossMargin: [], // a null day stays null
   },
 };
+const SSO_OK = () => new Response(null, { status: 302, headers: { 'set-cookie': 'an_sid=abc123; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=28800' } });
+const BASE = 'https://analytics.example';
 
 test('brief -> home: net sales and orders from the report, no comparison invented, weeks grouped Monday-first', () => {
   const s = salesHomeFromBrief(BRIEF);
@@ -37,39 +39,52 @@ test('no brief, or no net sales in it: NOT_CONNECTED, never a zero', () => {
   assert.equal(salesHomeFromBrief({ kpis: null }).status, 'NOT_CONNECTED');
 });
 
-test('not configured (no address or no token): NOT_CONNECTED without calling anything', async () => {
+test('no Analytics link or no ticket: NOT_CONNECTED, nothing is called', async () => {
   let called = false;
-  const fetchImpl = async () => { called = true; return new Response('{}'); };
-  assert.equal((await loadSalesHome({ env: {}, fetchImpl })).status, 'NOT_CONNECTED');
-  assert.equal((await loadSalesHome({ env: { ANALYTICS_BRIEF_URL: 'https://a.example' }, fetchImpl })).status, 'NOT_CONNECTED');
+  const fetchImpl = async () => { called = true; return SSO_OK(); };
+  assert.equal((await loadSalesHome({ publicUrl: '', ticket: 't', fetchImpl })).status, 'NOT_CONNECTED');
+  assert.equal((await loadSalesHome({ publicUrl: BASE, ticket: '', fetchImpl })).status, 'NOT_CONNECTED');
   assert.equal(called, false);
 });
 
-test('reads /api/brief with the configured token as the Basic password, and reshapes it', async () => {
-  let seen = null;
-  const fetchImpl = async (url, init) => { seen = { url, auth: init.headers.authorization }; return new Response(JSON.stringify(BRIEF), { status: 200 }); };
-  const s = await loadSalesHome({ env: { ANALYTICS_BRIEF_URL: 'https://analytics.example', ANALYTICS_BRIEF_TOKEN: 'tok-123' }, fetchImpl });
-  assert.equal(seen.url, 'https://analytics.example/api/brief');
-  assert.equal(seen.auth, `Basic ${Buffer.from('nordla:tok-123').toString('base64')}`);
+test('signs in with the one-time ticket, then reads /api/brief with the session cookie only', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, init });
+    if (url.startsWith(`${BASE}/sso?t=`)) { assert.equal(init.redirect, 'manual'); return SSO_OK(); }
+    return new Response(JSON.stringify(BRIEF), { status: 200 });
+  };
+  const s = await loadSalesHome({ publicUrl: BASE, ticket: 'tk.1', fetchImpl });
+  assert.equal(calls[0].url, `${BASE}/sso?t=tk.1`);
+  assert.equal(calls[1].url, `${BASE}/api/brief`);
+  assert.equal(calls[1].init.headers.cookie, 'an_sid=abc123', 'only the session cookie is sent, not the ticket');
+  assert.equal(calls[1].init.headers.authorization, undefined, 'no access token is sent');
   assert.equal(s.status, 'AVAILABLE');
 });
 
-test('an Analytics 404 (no report yet): NOT_CONNECTED; a 500 or a network error: UNAVAILABLE', async () => {
-  const env = { ANALYTICS_BRIEF_URL: 'https://analytics.example', ANALYTICS_BRIEF_TOKEN: 't' };
-  assert.equal((await loadSalesHome({ env, fetchImpl: async () => new Response('{}', { status: 404 }) })).status, 'NOT_CONNECTED');
-  assert.equal((await loadSalesHome({ env, fetchImpl: async () => new Response('{}', { status: 500 }) })).status, 'UNAVAILABLE');
-  assert.equal((await loadSalesHome({ env, fetchImpl: async () => { throw new Error('down'); } })).status, 'UNAVAILABLE');
+test('a ticket that does not open a session: UNAVAILABLE, the brief is not read', async () => {
+  let briefCalled = false;
+  const fetchImpl = async (url) => { if (url.includes('/api/brief')) briefCalled = true; return new Response('{}', { status: 401 }); };
+  assert.equal((await loadSalesHome({ publicUrl: BASE, ticket: 't', fetchImpl })).status, 'UNAVAILABLE');
+  assert.equal(briefCalled, false);
 });
 
-test('a plain-http remote address is refused: UNAVAILABLE, the token is never sent in clear', async () => {
+test('an Analytics 404 (no report yet): NOT_CONNECTED; a 500 or a network error: UNAVAILABLE', async () => {
+  const sso = (url) => (url.includes('/sso?') ? SSO_OK() : null);
+  assert.equal((await loadSalesHome({ publicUrl: BASE, ticket: 't', fetchImpl: async (u) => sso(u) ?? new Response('{}', { status: 404 }) })).status, 'NOT_CONNECTED');
+  assert.equal((await loadSalesHome({ publicUrl: BASE, ticket: 't', fetchImpl: async (u) => sso(u) ?? new Response('{}', { status: 500 }) })).status, 'UNAVAILABLE');
+  assert.equal((await loadSalesHome({ publicUrl: BASE, ticket: 't', fetchImpl: async () => { throw new Error('down'); } })).status, 'UNAVAILABLE');
+});
+
+test('a plain-http remote address is refused: UNAVAILABLE, the ticket is never sent in clear', async () => {
   let called = false;
-  const s = await loadSalesHome({ env: { ANALYTICS_BRIEF_URL: 'http://analytics.example', ANALYTICS_BRIEF_TOKEN: 't' }, fetchImpl: async () => { called = true; return new Response('{}'); } });
+  const s = await loadSalesHome({ publicUrl: 'http://analytics.example', ticket: 't', fetchImpl: async () => { called = true; return SSO_OK(); } });
   assert.equal(s.status, 'UNAVAILABLE');
   assert.equal(called, false);
 });
 
 test('the route is listed with the same rights as opening Analytics (read-only GET)', () => {
-  const row = PERMISSIONS.find((r) => r.path === '/api/core/sales');
+  const row = ROUTE_RULES.find((r) => r.path === '/api/core/sales');
   assert.ok(row, 'GET /api/core/sales is in the permission table');
   assert.equal(row.method, 'GET');
   assert.equal(row.access, 'module-open:analytics');

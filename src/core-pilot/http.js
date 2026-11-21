@@ -114,7 +114,9 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
       if (p === '/api/core/sales' && m === 'GET') { // the Core home sales tiles: read-only, same rights as opening Analytics; never a figure of its own (see sales-home.js)
         const ana = decideModuleOpen({ key: 'analytics', role: actor?.role ?? null, activeCodes: await activeModules() });
         if (!ana.ok) { const r = refusalOf(ana); json(res, r.status, r.body); return true; }
-        json(res, 200, await loadSalesHome({ env })); return true;
+        if (!analyticsSso || !actor?.userId) { json(res, 200, { status: 'NOT_CONNECTED', source: 'Analytics' }); return true; } // no Analytics link, or no personal Nordla session to read it with
+        const ticket = issueTicket({ secret: analyticsSso.secret, merchantId: analyticsSso.merchantId, audience: ANALYTICS_SSO_AUDIENCE, ttlSeconds: 60, person: { userId: actor.userId, role: actor.role, module: 'analytics', ...(actor.sessionId ? { authSessionId: actor.sessionId } : {}) } });
+        json(res, 200, await loadSalesHome({ publicUrl: analyticsSso.publicUrl, ticket })); return true;
       }
       if (p === '/api/core/analytics/open' && m === 'POST') { // a one-time ticket to open the Analytics dashboard on its own domain with THIS Nordla session: no access token typed. Same audience of people as the Finance dashboard.
         if (!analyticsSso) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
