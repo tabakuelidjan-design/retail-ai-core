@@ -43,6 +43,7 @@ export const ROUTE_RULES = Object.freeze([
   { method: 'GET', path: '/api/core/finance/inbox', access: 'inbox' },
   { method: 'POST', path: '/api/core/finance/open', access: 'module-open:finance' },
   { method: 'POST', path: '/api/core/analytics/open', access: 'module-open:analytics' },
+  { method: 'GET', path: '/api/core/sales', access: 'module-open:analytics' },
   { method: 'POST', path: '/api/core/growth/open', access: 'module-open:growth' },
   { method: 'POST', path: '/api/core/ask', access: 'read-only-post' },
   { method: 'POST', path: '/api/safety/check', access: 'read-only-post' },

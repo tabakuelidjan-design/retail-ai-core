@@ -35,7 +35,7 @@ test('rights: an action appears only where the server confirms it', () => {
   const byKey = Object.fromEntries(homeCards(SERVER).map((c) => [c.key, c]));
   assert.equal(byKey.finance.action.act, 'nx-open-finance');
   assert.equal(byKey.analytics.action.act, 'nx-open-analytics');
-  assert.equal(byKey.procurement.action, null, 'Achats: state only');
+  assert.deepEqual(byKey.procurement.action, { type: 'link', href: '/procurement', label: 'Ouvrir Stock / Achats' }, 'Achats: the existing Stock / Achats screen');
   assert.equal(byKey.branding.action, null, 'Brand: state only');
   assert.equal(byKey.creative.action.href, '/creator');
   assert.equal(byKey.marketing.action.href, '/videos');

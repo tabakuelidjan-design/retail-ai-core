@@ -15,6 +15,7 @@ import { issueHandoff, HANDOFF_DESTINATIONS, HANDOFF_MIN_SECRET_LENGTH } from '.
 import { validateConversation } from './field-context.js';
 import { creativeCapability } from './campaign.js';
 import { decideModuleOpen } from '../identity/module-catalog.js';
+import { loadSalesHome } from './sales-home.js';
 import { FINANCE_INBOX_ROLES } from '../identity/permissions.js';
 
 const ID = '([A-Za-z0-9_-]{1,80})';
@@ -109,6 +110,11 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
         const ticket = issueTicket({ secret: financeSso.secret, merchantId: financeSso.merchantId, ttlSeconds: 60, person: { userId: actor.userId, role: actor.role, module: 'finance', ...(actor.sessionId ? { authSessionId: actor.sessionId } : {}) } });
         const ob = await body(req).catch(() => ({})); const dossier = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(ob?.dossier ?? '')) ? `&open=${String(ob.dossier).toLowerCase()}` : ''; // a navigation hint only (the file to land on): it grants nothing, Finance still reads it under the signed-in session
         json(res, 200, { url: `${financeSso.publicUrl}/sso?t=${ticket}${dossier}`, expiresInSeconds: 60 }); return true;
+      }
+      if (p === '/api/core/sales' && m === 'GET') { // the Core home sales tiles: read-only, same rights as opening Analytics; never a figure of its own (see sales-home.js)
+        const ana = decideModuleOpen({ key: 'analytics', role: actor?.role ?? null, activeCodes: await activeModules() });
+        if (!ana.ok) { const r = refusalOf(ana); json(res, r.status, r.body); return true; }
+        json(res, 200, await loadSalesHome({ env })); return true;
       }
       if (p === '/api/core/analytics/open' && m === 'POST') { // a one-time ticket to open the Analytics dashboard on its own domain with THIS Nordla session: no access token typed. Same audience of people as the Finance dashboard.
         if (!analyticsSso) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }

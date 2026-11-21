@@ -46,7 +46,8 @@ function actionOf(m) {
   if (m.key === 'growth' && m.growth_sso === true && typeof m.growth_url === 'string' && SAFE_HTTPS.test(m.growth_url)) return { type: 'nx', act: 'nx-open-growth', to: 'dropoff', href: `${m.growth_url}/#/dropoff`, label: 'Ouvrir Développement des ventes' };
   if (m.key === 'creative' && m.creator_screen === true) return { type: 'link', href: '/creator', label: 'Ouvrir le Créateur' };
   if (m.key === 'marketing' && m.video_screen === true) return { type: 'link', href: '/videos', label: 'Ajouter une vidéo' };
-  return null;
+  if (m.key === 'procurement') return { type: 'link', href: '/procurement', label: 'Ouvrir Stock / Achats' }; // the existing Stock / Achats screen (its data stays behind its own sign-in)
+  return null; // Branding: no screen of its own yet, so no destination is invented (the card says so)
 }
 
 // Menu icons and module colours, as the « Mes modules » reference: one line icon per entry, in the module's colour.
@@ -86,7 +87,8 @@ function navHtml(c) {
   if (a?.type === 'nx' && a.href) return `<a class="nx-h-nav" data-key="${esc(c.key)}"${m} href="${esc(a.href)}" data-act="${esc(a.act)}" data-to="${esc(a.to)}" target="_blank" rel="noopener">${ico}${label}</a>`;
   if (a?.type === 'nx') return `<button type="button" class="nx-h-nav" data-key="${esc(c.key)}"${m} data-act="${esc(a.act)}">${ico}${label}</button>`;
   if (a?.type === 'link') return `<a class="nx-h-nav" data-key="${esc(c.key)}"${m} href="${esc(a.href)}">${ico}${label}</a>`;
-  return `<span class="nx-h-nav nx-h-nav-off" data-key="${esc(c.key)}"${m}>${ico}${label}</span>`;
+  const soon = c.key === 'branding' ? '<em class="nx-h-soon">Écran pas encore accessible</em>' : ''; // honest state: no screen exists yet
+  return `<span class="nx-h-nav nx-h-nav-off" data-key="${esc(c.key)}"${m}>${ico}${label}${soon}</span>`;
 }
 
 /** The decisions journal, read as Core's activity and its pending validations. Anything that is not a list means Core could not answer. */
