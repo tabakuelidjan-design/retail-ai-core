@@ -162,16 +162,17 @@ function gate() {
 /** Whatever the owner has typed but not yet submitted must survive ANY re-render (a connection blip, the status check, the Safety Gate download all re-render by themselves).
  *  Only fields that differ from what was rendered are kept; they are put back into the same form of the same case and tab. */
 let lastRenderKey = null; let discardDrafts = false;
+function finishBoot() { document.body.classList.remove('ui-booting'); }
 function render() {
   ensureCase(); const c = cur();
-  if ((!S.token && !S.offlineChoice) || S.authFailed) { $('#tabs').innerHTML = ''; $('#screen').innerHTML = S.authMode === 'session' ? loginScreen(S) : gate(); $('#case-name').textContent = 'Nordla - Sourcing'; return; }
+  if ((!S.token && !S.offlineChoice) || S.authFailed) { $('#tabs').innerHTML = ''; $('#screen').innerHTML = S.authMode === 'session' ? loginScreen(S) : gate(); $('#case-name').textContent = 'Nordla - Sourcing'; finishBoot(); return; }
   const fm = S.mode === 'field'; const sl = S.mode === 'salon';
   document.body.classList.toggle('fm-mode', fm); document.body.classList.toggle('sl-mode', sl);
   if (sl) { // Field V1 salon: its own screens and bottom bar; the drafts the owner typed survive a re-render exactly like everywhere else
     $('#tabs').innerHTML = salon().nav(); try { paintHeader(); } catch { /* ignore */ }
     const main = $('#screen'); const key = `salon|${salon().state().view.name}|${salon().state().view.caseId ?? ''}|${salon().state().view.offerId ?? ''}`; const keep = !discardDrafts && lastRenderKey === key; discardDrafts = false; lastRenderKey = key;
     const drafts = keep ? captureDrafts(main) : {}; const ae = document.activeElement; const focus = keep && ae?.form && main.contains(ae) && ae.name ? { form: formKey(ae.form), name: ae.name, pos: ae.selectionStart ?? null } : null;
-    main.innerHTML = salon().render(); salon().paint(); if (keep) restoreDrafts(main, drafts, focus); return;
+    main.innerHTML = salon().render(); salon().paint(); if (keep) restoreDrafts(main, drafts, focus); finishBoot(); return;
   }
   $('#tabs').innerHTML = fm ? fmNav() : TABS.map(([k, l]) => `<button data-act="tab" data-key="${k}" aria-current="${S.tab === k}">${l}</button>`).join('');
   try { S.A = run(c); S.error = null; } catch (e) { S.error = e; console.error(e); }
@@ -185,6 +186,7 @@ function render() {
   main.innerHTML = `${S.flash && !fm ? `<div class="warn">${esc(S.flash)}</div>` : ''}${S.error ? `<div class="warn"><b>This screen could not be computed.</b> Your case is saved. ${esc(String(S.error.message ?? S.error))}</div>` : (fm ? (a, k) => fieldFirst(a, k, fmv) : SCREENS[S.tab])(S.A, c)}`;
   if (!fm && S.returnMode === 'field') main.insertAdjacentHTML('afterbegin', '<div class="card"><button type="button" class="btn" data-act="mode-field">← Retour au mode terrain</button></div>');
   if (keep) restoreDrafts(main, drafts, focus);
+  finishBoot();
 }
 
 const embeddedHtml = createEmbedded({ S, ls, cur, run, status, render: () => render(), SCREENS, fmNav, fieldFirst, fmCompute, turnClosesAt, esc });
@@ -515,4 +517,4 @@ setInterval(() => { try { paintHeader(); } catch { /* ignore */ } }, 15000); // 
 setInterval(() => { if (S.token) ping(); }, 30000); // notice a lost or recovered connection
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').then(() => { S.sw = 'registered'; }).catch((e) => { S.sw = `not registered (${e.message})`; });
 window.nordlaSourcing = { state: () => ({ sw: S.sw, online: S.online, token: !!S.token, server: status().server.state, safety: status().safety.state }) };
-initStorage().then(async () => { await detectAuth(S); installSignIn({ S, after: () => { render(); if (S.token) ping(); } }); render(); ping(); });
+initStorage().then(async () => { await detectAuth(S); installSignIn({ S, after: () => { render(); if (S.token) ping(); } }); render(); ping(); }).catch((e) => { console.error('Nordla startup failed', e); $('#screen').innerHTML = '<div class="card"><h2>Nordla</h2><p>Impossible de charger l’application. Rechargez la page.</p></div>'; finishBoot(); });
