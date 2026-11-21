@@ -347,7 +347,7 @@ export function nordlaHomeHtml({ modules = null, decisions = null, sales = null,
   };
   const ringPc = `<div class="nx-h-ring-pc"><img src="/assets/core-ring.svg" alt="Nordla et ses quatre piliers" width="460" height="380">${PC_HITS.map(hitOf).join('')}</div>`;
   const searchBar = `<div class="nx-h-search" aria-hidden="true"><span class="nx-h-search-ico">${icon('<circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/>', 16)}</span><span class="nx-h-search-txt">Rechercher dans Nordla…</span></div>`;
-  return `<section class="nx-home${demo ? ' nx-home-demo' : ''}" aria-label="Nordla Core">
+  return `<section class="nx-home${demo ? ' nx-home-demo' : ''}" aria-label="Accueil Nordla — Core">
     <header class="nx-h-top">
       <button type="button" class="nx-h-burger" data-act="nx-menu" aria-label="Menu des modules">☰</button>
       <img class="nx-h-logo-img nx-h-logo-top" src="/assets/nordla-logo.png" alt="Nordla" width="120" height="34">
@@ -377,6 +377,7 @@ export function nordlaHomeHtml({ modules = null, decisions = null, sales = null,
       </div>
       <header class="nx-h-hero">
         <div class="nx-h-hero-txt">
+          <p class="nx-h-kicker">Accueil Nordla — Core</p>
           <h1>Nordla Core</h1>
           <p>Votre entreprise, augmentée par l’IA</p>
           <span class="nx-h-status ${statusClass}">${esc(status)}</span>${demo ? ` ${DEMO_TAG}` : ''}${role ? ` <span class="nx-h-chip">Rôle : ${esc(role)}</span>` : ''}

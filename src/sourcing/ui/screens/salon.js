@@ -257,7 +257,7 @@ export function createSalon(ctx) {
       switch (act) {
         case 'sl-nordla': return go({ name: 'nordla' });
         case 'sl-nav': {
-          if (key === 'home') return go({ name: 'home', caseId: null, offerId: null });
+          if (key === 'home' || key === 'sourcing') return go({ name: 'home', caseId: null, offerId: null }); // 'sourcing' = the Sourcing home from Core, never the last case
           if (key === 'suppliers') { pickFor = null; return go({ name: 'suppliers' }); }
           if (key === 'new') return go({ name: 'new' });
           if (key === 'visits') return go({ name: 'visits' });
