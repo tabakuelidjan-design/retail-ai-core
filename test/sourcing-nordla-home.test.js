@@ -18,7 +18,7 @@ const SERVER = [
 test('cards: Sourcing is a module card, first, with a local action that works offline', () => {
   const cards = homeCards(SERVER, { online: false });
   assert.equal(cards[0].key, 'sourcing');
-  assert.deepEqual(cards[0].action, { type: 'local', to: 'sourcing', label: 'Ouvrir China Sourcing' });
+  assert.deepEqual(cards[0].action, { type: 'local', to: 'sourcing', label: 'Ouvrir Sourcing' });
   assert.equal(cards.filter((c) => c.action && c.action.type !== 'local').length, 0, 'offline: no server action');
 });
 

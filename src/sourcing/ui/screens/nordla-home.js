@@ -17,7 +17,7 @@ export function homeCards(modules, { online = true } = {}) {
   const byKey = new Map(list.map((m) => [m.key, m]));
   const cards = [];
   // Sourcing is a module like the others. It works offline, so it is the only card that stays actionable without the server.
-  cards.push({ key: 'sourcing', label: 'China Sourcing', state: 'DISPONIBLE', detail: 'Fournisseurs, photos, analyses d’achat ; fonctionne hors ligne.', colour: MODULE_COLOURS.sourcing, action: { type: 'local', to: 'sourcing', label: 'Ouvrir China Sourcing' } });
+  cards.push({ key: 'sourcing', label: 'Sourcing', state: 'DISPONIBLE', detail: 'Fournisseurs, photos, analyses d’achat ; fonctionne hors ligne.', colour: MODULE_COLOURS.sourcing, action: { type: 'local', to: 'sourcing', label: 'Ouvrir Sourcing' } });
   for (const m of list) {
     if (!m || typeof m.key !== 'string' || m.key === 'core' || m.key === 'sourcing') continue; // Core is this home; Sourcing is added above from the same rule
     const colour = MODULE_COLOURS[m.key] ?? '#44506a';
