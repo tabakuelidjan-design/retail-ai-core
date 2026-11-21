@@ -1,23 +1,510 @@
-/* Nordla Core home (minimal): only what the Core home screen needs. Every rule is scoped to .nx-home or .nx-back,
-   so the Sourcing screens are unchanged except for the return bar shown on them. */
+/* Nordla Core home: the commercial layout (PC and phone). Every rule is scoped under .nx-home so it cannot reach other screens.
+   Palette: cool white and light grey backgrounds, dark navy text, gold accent, green/teal, blue-grey and orange charts. No cream or beige. */
 
 /* The Sourcing bottom tab bar is not part of the Core home. */
 body:has(.nx-home) #tabs { display: none !important; }
-/* Sourcing caps the page at 640 px; the Core home uses a wider page on PC. */
-body.sl-mode main:has(.nx-home) { max-width: 1100px; }
+/* The Sourcing screens cap the page at 640 px: the Core home uses the full width of the window (its own gutters). */
+body.sl-mode main:has(.nx-home) { max-width: none; width: 100%; margin: 0; padding: 0; overflow-x: clip; }
 
-.nx-home { color: var(--nx-ink, #0F1B2D); padding: 16px 16px 32px; }
-.nx-home h1 { margin: 0 0 4px; font-size: 26px; line-height: 1.2; color: var(--nx-ink, #0F1B2D); }
-.nx-home .muted { color: #6B7280; }
-.nx-home .warn { color: #B42318; }
+.nx-home {
+  --nx-ink: #0F1B2D; --nx-muted: #6B7280; --nx-line: #E6E9EF; --nx-gold: #B07A2E; --nx-gold-soft: #C9A24A;
+  display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100vh;
+  background: #F5F7FA; color: var(--nx-ink); font-family: system-ui, "Segoe UI", sans-serif; overflow-x: hidden;
+}
+.nx-home *, .nx-home *::before, .nx-home *::after { box-sizing: border-box; }
+.nx-home h1, .nx-home h2 { margin: 0; }
+.nx-home h2 { font-size: 15px; font-weight: 700; color: var(--nx-ink); }
 
-.nx-home-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 16px; }
-@media (min-width: 720px) { .nx-home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (min-width: 1000px) { .nx-home-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* ---- menu (PC: fixed column; phone: drawer behind ☰) */
+.nx-home-side { background: #FFFFFF; border-right: 1px solid var(--nx-line); padding: 18px 12px; position: sticky; top: 0; height: 100vh; overflow-y: auto; min-width: 0; }
+.nx-home-side ul { list-style: none; margin: 14px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.nx-h-brand-side { padding: 4px 8px 0; }
+.nx-h-logo-img { display: block; height: auto; max-width: 150px; }
+.nx-h-nav, .nx-h-cur { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border-radius: 10px; color: #1F2937; font: inherit; font-size: 14px; text-align: left; text-decoration: none; background: none; border: 0; cursor: pointer; }
+.nx-h-nav:hover { background: #F3F5F8; }
+.nx-h-nav small { margin-left: auto; font-size: 10px; color: var(--nx-muted); white-space: nowrap; }
+.nx-h-nav-off { opacity: .6; cursor: default; }
+.nx-h-cur { background: #EEF2F7; font-weight: 700; color: var(--nx-ink); }
+.nx-h-tile { flex: 0 0 26px; width: 26px; height: 26px; border-radius: 8px; color: #FFFFFF; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+.nx-h-tile-core, .nx-h-tile-ask { background: var(--nx-ink); }
+.nx-h-tile .nx-h-ico, .nx-h-tile-core .nx-h-ico, .nx-h-tile-ask .nx-h-ico { color: #FFFFFF; }
 
-.nx-home-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; border-radius: 14px; background: #FFFFFF; border: 1px solid #E6E9EF; min-width: 0; }
-.nx-home-card h2 { margin: 0; font-size: 16px; font-weight: 700; color: var(--nx-ink, #0F1B2D); }
-.nx-home-card p { margin: 0; }
-.nx-home-card .btn { align-self: flex-start; margin-top: auto; }
+/* ---- top bar: phone only */
+.nx-h-top { display: none; }
 
-.nx-back { padding: 10px 16px 0; }
+/* ---- main column */
+.nx-h-main { min-width: 0; padding: 14px 24px 28px; }
+.nx-h-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+.nx-h-search { flex: 1; display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 14px; background: #FFFFFF; border: 1px solid var(--nx-line); border-radius: 12px; color: var(--nx-muted); font-size: 14px; min-width: 0; }
+.nx-h-bar-r { display: flex; align-items: center; gap: 10px; }
+.nx-h-iconbtn, .nx-h-avatar { width: 42px; height: 42px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: #FFFFFF; border: 1px solid var(--nx-line); color: var(--nx-ink); font-size: 13px; font-weight: 700; }
+.nx-h-avatar { background: #E5E7EB; border-color: transparent; }
+.nx-h-iconbtn:disabled { opacity: .7; }
+.nx-h-ico { display: block; }
+
+/* ---- hero */
+.nx-h-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 56%); align-items: center; gap: 12px; margin: 10px 0 14px; }
+.nx-h-hero h1 { font-family: Georgia, "Times New Roman", serif; font-size: 46px; font-weight: 700; letter-spacing: .2px; }
+.nx-h-hero p { margin: 8px 0 14px; font-size: 18px; color: #4B5563; }
+.nx-h-hero-txt { min-width: 0; }
+.nx-h-hero-art { position: relative; min-width: 0; }
+.nx-h-hero-img { display: block; width: 100%; height: auto; }
+.nx-h-claim { position: absolute; right: 8px; bottom: 6px; font-family: Georgia, "Times New Roman", serif; font-size: 20px; line-height: 1.15; text-align: right; color: var(--nx-gold); }
+.nx-h-status { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px; background: #E6F6EE; color: #15803D; font-size: 13px; font-weight: 600; }
+.nx-h-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #16A34A; }
+.nx-h-status.off { background: #FDECEC; color: #B42318; }
+.nx-h-status.off::before { background: #B42318; }
+.nx-h-chip { display: inline-block; margin-left: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--nx-line); font-size: 12px; color: #4B5563; background: #FFFFFF; }
+
+/* ---- notes and demonstration */
+.nx-h-note { margin: 0 0 10px; font-size: 13px; color: #4B5563; }
+.nx-h-note.warn, .nx-home .warn { color: #B42318; }
+.nx-h-demo-banner { margin: 0 0 12px; padding: 10px 14px; border: 1px dashed var(--nx-gold-soft); border-radius: 10px; background: #FFFFFF; color: #7A5A1E; font-size: 13px; text-align: center; }
+.nx-h-demo-tag { display: inline-block; flex: 0 0 auto; padding: 2px 9px; border: 1px solid var(--nx-gold); border-radius: 999px; color: var(--nx-gold); font-size: 11px; font-weight: 700; letter-spacing: .04em; background: transparent; }
+.nx-h-quiet-line { margin: 10px 0; font-size: 13px; color: var(--nx-muted); }
+
+/* ---- centre band: indicators | ring | charts */
+.nx-h-band { display: grid; grid-template-columns: 250px minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+.nx-h-kcol, .nx-h-ccol { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.nx-h-panel { background: #FFFFFF; border: 1px solid var(--nx-line); border-radius: 14px; padding: 16px 18px; min-width: 0; box-shadow: 0 1px 2px rgba(16, 24, 40, .04); }
+.nx-h-panel > small { display: block; margin-top: 6px; font-size: 11px; color: var(--nx-muted); line-height: 1.35; }
+.nx-h-ph { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; min-width: 0; }
+.nx-h-kpi-v { display: block; margin-top: 4px; font-family: Georgia, "Times New Roman", serif; font-size: 30px; font-weight: 700; color: var(--nx-ink); overflow-wrap: anywhere; }
+.nx-h-kpi-v.na { font-family: system-ui, "Segoe UI", sans-serif; font-size: 14px; font-weight: 600; color: var(--nx-muted); }
+.nx-h-delta { display: inline-block; margin-top: 8px; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.nx-h-delta.up { background: #E6F6EE; color: #15803D; }
+.nx-h-delta.down { background: #FDEDE6; color: #C2410C; }
+.nx-h-spark { display: flex; align-items: flex-end; gap: 4px; height: 46px; margin-top: 8px; }
+.nx-h-spark span { flex: 1; min-height: 2px; border-radius: 3px 3px 0 0; background: var(--nx-gold-soft); }
+
+/* ring: the PC version (SVG) and the phone version (3x3 grid) */
+.nx-h-stage { position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 460px; }
+.nx-h-svg { display: block; width: 100%; max-width: 640px; height: auto; }
+.nx-h-ring-m { display: none; }
+
+/* charts */
+.nx-h-chart { display: flex; align-items: flex-end; gap: 8px; height: 170px; margin-top: 10px; }
+.nx-h-cbar { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; }
+.nx-h-cbar span { display: block; width: 100%; max-width: 46px; border-radius: 4px 4px 0 0; background: var(--nx-gold-soft); }
+.nx-h-cbar small { margin-top: 5px; font-size: 10px; color: var(--nx-muted); white-space: nowrap; }
+.nx-h-split { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; align-items: center; margin-top: 10px; }
+.nx-h-donut { position: relative; width: 150px; height: 150px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.nx-h-donut::before { content: ""; position: absolute; inset: 27%; border-radius: 50%; background: #FFFFFF; }
+.nx-h-donut span { position: relative; z-index: 1; font-size: 13px; font-weight: 700; text-align: center; padding: 0 6px; }
+.nx-h-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.nx-h-legend li { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 8px; align-items: center; font-size: 13px; }
+.nx-h-legend i { display: block; width: 10px; height: 10px; border-radius: 50%; }
+.nx-h-legend b { font-size: 13px; }
+
+/* ---- bottom: four Core functions */
+.nx-h-bottom { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 18px; }
+.nx-h-fn { min-height: 190px; display: flex; flex-direction: column; }
+.nx-h-readonly { font-size: 11px; padding: 2px 9px; border: 1px solid #D1D5DB; border-radius: 999px; color: #4B5563; white-space: nowrap; }
+.nx-h-list, .nx-h-conn, .nx-h-acts { list-style: none; margin: 6px 0 0; padding: 0; }
+.nx-h-list li, .nx-h-conn li, .nx-h-acts li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 7px 0; border-bottom: 1px solid #F0F2F5; font-size: 13px; }
+.nx-h-list li { grid-template-columns: minmax(0, 1fr); }
+.nx-h-conn li em { font-style: normal; font-size: 12px; color: var(--nx-muted); white-space: nowrap; }
+.nx-h-cdot { width: 8px; height: 8px; border-radius: 50%; background: #D1D5DB; }
+.nx-h-cdot.ok { background: #16A34A; }
+.nx-h-link { display: inline-block; margin-top: 10px; font-size: 13px; color: var(--nx-ink); text-decoration: underline; }
+.nx-h-btn { margin-top: 10px; height: 36px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--nx-line); background: #FFFFFF; color: var(--nx-ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.nx-h-ask { display: flex; gap: 8px; margin-top: 8px; }
+.nx-h-ask input { flex: 1; min-width: 0; height: 38px; padding: 0 10px; border: 1px solid var(--nx-line); border-radius: 10px; font: inherit; font-size: 13px; background: #FFFFFF; }
+.nx-h-ask .nx-h-btn { margin-top: 0; background: var(--nx-ink); border-color: var(--nx-ink); color: #FFFFFF; }
+.nx-h-fn > small { margin-top: auto; padding-top: 8px; }
+.nx-h-acts li { grid-template-columns: minmax(0, 1fr) auto; }
+.nx-h-acts li div { display: flex; flex-direction: column; min-width: 0; }
+.nx-h-acts li span { font-size: 11px; color: var(--nx-muted); }
+.nx-h-state { font-style: normal; font-size: 11px; color: #4B5563; white-space: nowrap; }
+.nx-h-empty { display: block !important; color: var(--nx-muted); border: 0 !important; }
+
+/* ---- phone: the menu is a drawer behind ☰, one column, no horizontal overflow */
+@media (max-width: 899px) {
+  .nx-home { display: block; }
+  .nx-home-side { position: fixed; top: 0; left: 0; bottom: 0; width: min(280px, 86vw); height: auto; z-index: 60; transform: translateX(-102%); transition: transform .2s ease; box-shadow: 0 0 24px rgba(16, 24, 40, .18); }
+  .nx-home.nx-menu-open .nx-home-side { transform: none; }
+  .nx-h-top { display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: #FFFFFF; border-bottom: 1px solid var(--nx-line); position: sticky; top: 0; z-index: 40; }
+  .nx-h-burger { width: 42px; height: 42px; border-radius: 12px; border: 1px solid var(--nx-line); background: #FFFFFF; font-size: 18px; color: var(--nx-ink); cursor: pointer; }
+  .nx-h-top .nx-h-logo-top { margin-right: auto; }
+  .nx-h-top .nx-h-status { font-size: 11px; padding: 4px 10px; }
+  .nx-h-main { padding: 12px 16px 28px; }
+  .nx-h-bar { display: none; }
+  .nx-h-hero { grid-template-columns: minmax(0, 1fr) minmax(0, 44%); gap: 10px; margin: 6px 0 12px; }
+  .nx-h-hero h1 { font-size: 30px; }
+  .nx-h-hero p { font-size: 14px; margin: 4px 0 8px; }
+  .nx-h-hero .nx-h-status { font-size: 11px; padding: 4px 10px; }
+  .nx-h-hero-img { height: 84px; width: 100%; object-fit: cover; }
+  .nx-h-claim { font-size: 12px; right: 6px; bottom: 4px; }
+  .nx-h-band { display: flex; flex-direction: column; align-items: stretch; gap: 14px; }
+  .nx-h-kcol { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; order: 1; }
+  .nx-h-kcol > :last-child { grid-column: 1 / -1; }
+  .nx-h-kpi-card { padding: 12px 14px; }
+  .nx-h-kpi-v { font-size: 22px; }
+  .nx-h-spark { height: 34px; }
+  .nx-h-ccol { order: 2; }
+  .nx-h-split { grid-template-columns: minmax(0, 1fr); justify-items: center; }
+  .nx-h-legend { width: 100%; }
+  .nx-h-stage { order: 3; min-height: 0; display: block; }
+  .nx-h-svg { display: none; }
+  .nx-h-ring-m { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-areas: ". top ." "left core right" ". bottom ."; gap: 8px; align-items: center; padding: 12px; background: #FFFFFF; border: 1px solid var(--nx-line); border-radius: 14px; }
+  .nx-h-rm { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; padding: 8px 4px; background: #FFFFFF; border: 1px solid var(--nx-line); border-radius: 12px; font-size: 11px; color: var(--nx-muted); min-width: 0; }
+  .nx-h-rm b { font-size: 12px; color: var(--nx-ink); }
+  .nx-h-pillar-ico { display: inline-flex; width: 30px; height: 30px; border-radius: 8px; background: var(--nx-gold); color: #FFFFFF; align-items: center; justify-content: center; margin-bottom: 4px; }
+  .nx-h-rm-top { grid-area: top; } .nx-h-rm-left { grid-area: left; } .nx-h-rm-right { grid-area: right; } .nx-h-rm-bottom { grid-area: bottom; }
+  .nx-h-rm-core { grid-area: core; display: flex; align-items: center; justify-content: center; }
+  .nx-h-rm-core span { display: inline-flex; width: 74px; height: 74px; border-radius: 50%; border: 2px solid var(--nx-gold); align-items: center; justify-content: center; font-family: Georgia, serif; font-size: 36px; color: var(--nx-gold); background: #FFFFFF; }
+  .nx-h-bottom { order: 4; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+  .nx-h-fn { min-height: 0; padding: 12px 12px; }
+  .nx-h-fn .nx-h-ph h2 { font-size: 13px; }
+  .nx-h-ask input { font-size: 12px; }
+  .nx-h-ask { flex-direction: column; }
+  .nx-h-ask .nx-h-btn { width: 100%; }
+  .nx-h-conn li { grid-template-columns: 8px minmax(0, 1fr); }
+  .nx-h-conn li em { grid-column: 2; font-size: 11px; }
+}
+
+@media (max-width: 559px) {
+  .nx-h-bottom { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 380px) {
+  .nx-h-hero h1 { font-size: 26px; }
+  .nx-h-kpi-v { font-size: 19px; }
+}
+
+@media (min-width: 900px) and (max-width: 1180px) {
+  .nx-h-band { grid-template-columns: 220px minmax(0, 1fr) 280px; }
+  .nx-h-bottom { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nx-h-hero h1 { font-size: 38px; }
+}
+
+/* ---- round 2: per-card colours of the reference, function headers with icons, pills, two columns for the four functions on phone */
+.nx-h-line { display: block; width: 100%; height: 46px; margin-top: 8px; overflow: visible; }
+.nx-h-fn-ico { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 9px; background: #EEF2F7; color: var(--nx-gold); display: inline-flex; align-items: center; justify-content: center; }
+.nx-h-fn .nx-h-ph { justify-content: flex-start; }
+.nx-h-fn .nx-h-ph h2 { flex: 1; min-width: 0; }
+.nx-h-chev { display: inline-flex; color: #9CA3AF; }
+.nx-h-pill { font-style: normal; font-size: 11px; padding: 3px 9px; border-radius: 999px; background: #EEF2F7; color: #4B5563; white-space: nowrap; }
+.nx-h-pill.ok { background: #E6F6EE; color: #15803D; }
+.nx-h-conn li em.nx-h-pill { font-size: 11px; color: #4B5563; }
+.nx-h-conn li em.nx-h-pill.ok { color: #15803D; }
+.nx-h-ask { position: relative; display: block; margin-top: 10px; }
+.nx-h-ask input { width: 100%; padding: 0 36px 0 34px; }
+.nx-h-ask-ico { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: #9CA3AF; display: inline-flex; }
+.nx-h-ask-go { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; margin: 0; padding: 0; border: 0; background: none; color: #4B5563; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+
+@media (max-width: 899px) {
+  .nx-h-bottom { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+  .nx-h-ccol { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+  .nx-h-chart { height: 120px; gap: 5px; }
+  .nx-h-cbar small { font-size: 9px; }
+  .nx-h-chart-card { padding: 12px; }
+  .nx-h-split { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 10px; }
+  .nx-h-donut { width: 110px; height: 110px; }
+  .nx-h-donut span { font-size: 11px; }
+  .nx-h-legend li { font-size: 11px; grid-template-columns: 10px minmax(0, 1fr) auto; }
+  .nx-h-fn { padding: 12px; min-height: 0; }
+  .nx-h-fn .nx-h-ph h2 { font-size: 13px; }
+  .nx-h-fn-ico { width: 26px; height: 26px; }
+  .nx-h-list li, .nx-h-conn li, .nx-h-acts li { font-size: 12px; }
+  .nx-h-conn li { grid-template-columns: 8px minmax(0, 1fr); }
+  .nx-h-conn li em.nx-h-pill { grid-column: 2; justify-self: start; margin-top: 2px; }
+  .nx-h-ask input { font-size: 12px; }
+}
+@media (max-width: 339px) {
+  .nx-h-bottom { grid-template-columns: minmax(0, 1fr); }
+  .nx-h-ccol { grid-template-columns: minmax(0, 1fr); }
+}
+
+.nx-h-evo-v { display: inline-block; margin: 2px 8px 0 0; font-size: 26px; }
+.nx-h-legend li.nx-h-total { border-top: 1px solid #E6E9EF; padding-top: 6px; margin-top: 2px; font-weight: 700; grid-template-columns: 10px minmax(0, 1fr) auto auto; }
+.nx-h-legend li.nx-h-total i { background: transparent; }
+.nx-h-legend li .nx-h-demo-tag { font-size: 10px; padding: 1px 6px; }
+
+/* ---- round 3: phone fixes for the functions and the split legend (no colour or chart change) */
+@media (max-width: 899px) {
+  .nx-h-legend li { grid-template-columns: 10px minmax(0, 1fr) auto auto; gap: 6px; }
+  .nx-h-legend li > span { min-width: 0; overflow-wrap: anywhere; }
+  .nx-h-legend b { white-space: nowrap; }
+  .nx-h-legend .nx-h-demo-tag { font-size: 9px; padding: 1px 5px; }
+  .nx-h-legend li.nx-h-total { grid-template-columns: 10px minmax(0, 1fr) auto auto; }
+  .nx-h-fn .nx-h-ph { flex-wrap: wrap; row-gap: 4px; align-items: flex-start; }
+  .nx-h-fn .nx-h-ph h2 { flex: 1 1 60px; font-size: 13px; line-height: 1.2; }
+  .nx-h-fn .nx-h-ph .nx-h-demo-tag, .nx-h-fn .nx-h-ph .nx-h-readonly { font-size: 9px; padding: 1px 6px; }
+  .nx-h-fn .nx-h-ph .nx-h-chev { display: none; }
+  .nx-h-fn .nx-h-ph .nx-h-fn-ico { margin-top: 1px; }
+  .nx-h-conn li em.nx-h-pill { font-size: 10px; }
+}
+@media (max-width: 899px) {
+  .nx-h-legend li { grid-template-columns: 10px minmax(0, 1fr) auto; }
+  .nx-h-legend .nx-h-demo-tag { display: none; }
+  .nx-h-legend li.nx-h-total { grid-template-columns: 10px minmax(0, 1fr) auto; }
+}
+
+/* ---- round 4: menu with one icon per entry (as the reference), compact indicators, no empty space beside the ring, donut caption */
+.nx-h-navico { flex: 0 0 26px; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; }
+.nx-h-nav { font-size: 15px; padding: 10px 10px; }
+.nx-h-nav-off { cursor: default; }
+.nx-h-nav-off:hover { background: none; }
+.nx-h-kpi-card { padding: 14px 16px; }
+.nx-h-kpi-v { font-size: 26px; }
+.nx-h-spark { height: 34px; }
+.nx-h-line { height: 40px; margin-top: 6px; }
+.nx-h-kcol { gap: 12px; }
+.nx-h-donut span small { display: block; margin-top: 3px; font-size: 9px; font-weight: 400; color: #6B7280; line-height: 1.2; }
+@media (min-width: 900px) {
+  .nx-h-split { grid-template-columns: 140px minmax(0, 1fr); gap: 10px; }
+  .nx-h-donut { width: 140px; height: 140px; }
+  .nx-h-donut span { max-width: 84px; font-size: 11px; }
+  .nx-h-donut span small { font-size: 8px; }
+  .nx-h-legend li { grid-template-columns: 10px minmax(0, 1fr) auto; font-size: 11px; gap: 5px; }
+  .nx-h-legend li > span { min-width: 0; }
+  .nx-h-legend li .nx-h-demo-tag { font-size: 8px; padding: 1px 4px; }
+  .nx-h-legend li.nx-h-total { grid-template-columns: 10px minmax(0, 1fr) auto; }
+  .nx-h-legend b { white-space: nowrap; }
+}
+.nx-h-nav-off { color: #1F2937; }
+/* ---- open point: no empty band under the ring. The columns beside the ring are more compact; the ring and its box do not move. */
+@media (min-width: 900px) {
+  .nx-h-kpi-card { padding: 12px 14px; }
+  .nx-h-kpi-v { font-size: 24px; }
+  .nx-h-spark { height: 28px; }
+  .nx-h-line { height: 34px; }
+  .nx-h-kcol, .nx-h-ccol { gap: 10px; }
+  .nx-h-chart { height: 126px; }
+  .nx-h-chart-card { padding: 12px 14px; }
+  .nx-h-chart-card .nx-h-kpi-v.nx-h-evo-v { font-size: 22px; }
+}
+@media (min-width: 900px) {
+  .nx-h-kpi-card { padding: 10px 14px; }
+  .nx-h-kpi-v { font-size: 22px; margin-top: 2px; }
+  .nx-h-delta { margin-top: 5px; }
+  .nx-h-spark { height: 24px; margin-top: 4px; }
+  .nx-h-line { height: 30px; margin-top: 4px; }
+  .nx-h-kpi-card > small { margin-top: 4px; }
+  .nx-h-bottom { margin-top: 12px; }
+}
+
+/* ---- module colours in the menu (reference « Mes modules »): each row takes a light tint of its module colour, an accent bar, a darker label;
+   the active row is filled with the module colour. Entries without a colour keep the menu's neutral look. */
+.nx-home-side .nx-h-nav { position: relative; background: color-mix(in srgb, var(--m, #64748B) 10%, #FFFFFF); box-shadow: inset 3px 0 0 var(--m, #64748B); color: color-mix(in srgb, var(--m, #64748B) 62%, #111827); margin-bottom: 2px; }
+.nx-home-side .nx-h-nav:hover, .nx-home-side .nx-h-nav:focus-visible { background: color-mix(in srgb, var(--m, #64748B) 18%, #FFFFFF); }
+.nx-home-side .nx-h-nav.is-active, .nx-home-side .nx-h-nav[aria-current="page"] { background: var(--m, #64748B); color: #FFFFFF; }
+.nx-home-side .nx-h-nav.is-active .nx-h-navico, .nx-home-side .nx-h-nav[aria-current="page"] .nx-h-navico { color: #FFFFFF !important; }
+.nx-home-side .nx-h-navico { color: var(--m, #64748B); }
+.nx-home-side .nx-h-nav-off { cursor: default; }
+.nx-home-side .nx-h-nav-off:hover { background: color-mix(in srgb, var(--m, #64748B) 10%, #FFFFFF); }
+
+/* ---- menu as specified: « Menu principal » on top, « Réglages » (Connexions, Paramètres) at the bottom */
+.nx-home-side { display: flex; flex-direction: column; }
+.nx-home-side ul:first-of-type { flex: 0 0 auto; }
+.nx-h-menu-title { margin: 14px 10px 6px; font-size: 13px; font-weight: 600; color: var(--nx-muted); }
+.nx-h-settings { margin-top: auto; padding-top: 14px; border-top: 1px solid var(--nx-line); }
+.nx-h-settings ul { margin-top: 0; }
+/* menu: the open « Tableau de bord » row in cream with brown text on the PC */
+@media (min-width: 900px) {
+  .nx-home-side .nx-h-cur { background: #F4EFE6; color: #8A5A1E; font-weight: 700; }
+  .nx-home-side .nx-h-cur .nx-h-navico { color: #B07A2E !important; }
+}
+/* menu as the reference (image 59): plain rows on the white panel, dark navy labels, module colour only on the icon */
+.nx-home-side .nx-h-nav { background: transparent; box-shadow: none; color: #1F2937; margin-bottom: 0; }
+.nx-home-side .nx-h-nav-off { color: #1F2937; opacity: 1; }
+.nx-home-side .nx-h-nav:hover, .nx-home-side .nx-h-nav:focus-visible { background: #F3F5F8; }
+.nx-home-side .nx-h-nav.is-active, .nx-home-side .nx-h-nav[aria-current="page"] { background: transparent; color: var(--m, #1F2937); font-weight: 700; }
+.nx-home-side .nx-h-nav.is-active .nx-h-navico, .nx-home-side .nx-h-nav[aria-current="page"] .nx-h-navico { color: var(--m, #1F2937) !important; }
+
+/* the four function icons of the bottom row, as the copy: light grey tile, gold icon */
+.nx-h-fn-ico { background: #F3F4F6; color: #B07A2E; }
+
+/* phone, as the reference (image 69): chevrons on the function headers, each connection status on the same line as its name */
+@media (max-width: 899px) {
+  .nx-h-fn .nx-h-ph .nx-h-chev { display: inline-flex; }
+  .nx-h-conn li { grid-template-columns: 8px minmax(0, 1fr) auto; }
+  .nx-h-conn li em.nx-h-pill { grid-column: auto; justify-self: end; margin-top: 0; }
+}
+
+/* ---- phone evolution chart, as the reference (image 69): value axis on the left, months under the bars; the PC keeps the weeks */
+.nx-h-lbl-m { display: none; }
+.nx-h-axis { display: none; }
+@media (max-width: 899px) {
+  .nx-h-chart { position: relative; padding-left: 34px; }
+  .nx-h-axis { position: absolute; left: 0; top: 0; bottom: 22px; width: 32px; display: flex; flex-direction: column; justify-content: space-between; font-size: 9px; color: #6B7280; text-align: right; padding-right: 4px; }
+  .nx-h-lbl-w { display: none; }
+  .nx-h-lbl-m { display: block; font-size: 9px; }
+}
+
+/* ---- phone defects found on the capture (image 70 against 71): one status only (in the hero), no role chip, a single avatar in the top bar,
+   no example tags on the bottom cards, the donut keeps its value only, the chart titles on one line, the hero line on one line */
+@media (max-width: 899px) {
+  .nx-h-top .nx-h-top-av { width: 36px; height: 36px; font-size: 12px; }
+  .nx-h-chip { display: none; }
+  .nx-h-fn .nx-h-ph .nx-h-demo-tag { display: none; }
+  .nx-h-donut span small { display: none; }
+  .nx-h-chart-card .nx-h-ph h2 { font-size: 12px; white-space: nowrap; }
+  .nx-h-hero p { font-size: 13px; }
+  .nx-h-demo-banner { font-size: 12px; padding: 8px 10px; }
+}
+
+/* ---- beside-the-value mini charts (images 66, 70-72) */
+.nx-h-kpi-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 10px; }
+.nx-h-kpi-l { min-width: 0; }
+.nx-h-kpi-row .nx-h-spark { flex: 0 0 auto; width: auto; height: 40px; margin: 0 0 6px; justify-content: flex-end; gap: 4px; }
+.nx-h-kpi-row .nx-h-spark span { flex: 0 0 8px; }
+.nx-h-kpi-row .nx-h-line { flex: 0 0 118px; width: 118px; height: 40px; margin: 0 0 6px; }
+/* ---- phone, as the copy (image 72): the Panier bars rise, the activity icon is a clock; the PC keeps its own */
+.nx-h-ico-ph { display: none; }
+.nx-h-ico-pc, .nx-h-ico-ph { align-items: center; justify-content: center; }
+.nx-h-spark-ph { display: none; }
+@media (max-width: 899px) {
+  .nx-h-ico-pc { display: none; }
+  .nx-h-ico-ph { display: inline-flex; }
+  .nx-h-spark-pc { display: none; }
+  .nx-h-spark-ph { display: flex; }
+}
+
+/* ---- phone ring, as the reference (image 74): horizontal cards and the dotted circle; the PC keeps its ring */
+.nx-h-svg-ph { display: none; }
+@media (max-width: 899px) {
+  .nx-h-svg { display: none; }
+  .nx-h-svg-ph { display: block; width: 100%; max-width: 400px; height: auto; margin: 0 auto; }
+}
+
+
+
+/* the four functions of the circle are links */
+.nx-h-svg-link { cursor: pointer; }
+.nx-h-svg-link:hover rect:first-of-type { stroke: #B07A2E; }
+.nx-h-svg-link:focus-visible { outline: 2px solid #B07A2E; }
+
+/* phone KPI cards, as the reference (image 72): the value on its own line, the pill on the left and the mini chart on the right of the same row */
+@media (max-width: 899px) {
+  .nx-h-kpi-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: end; column-gap: 8px; }
+  .nx-h-kpi-l { display: contents; }
+  .nx-h-kpi-l .nx-h-kpi-v { grid-column: 1 / -1; white-space: nowrap; font-size: 21px; margin-top: 2px; }
+  .nx-h-kpi-l .nx-h-delta { grid-column: 1; grid-row: 2; justify-self: start; white-space: nowrap; margin-top: 6px; font-size: 11px; padding: 2px 8px; }
+  .nx-h-kpi-row > .nx-h-spark, .nx-h-kpi-row > .nx-h-line { grid-column: 2; grid-row: 2; justify-self: end; margin: 6px 0 0; }
+  .nx-h-kpi-row .nx-h-line { width: 84px; height: 34px; flex: none; }
+  .nx-h-kpi-row .nx-h-spark { height: 30px; gap: 3px; }
+  .nx-h-kpi-row .nx-h-spark span { flex: 0 0 6px; }
+  .nx-h-kpi-card { padding: 12px 14px; }
+}
+
+/* phone chart cards: titles may wrap so the DÉMO tag stays inside the card */
+@media (max-width: 899px) {
+  .nx-h-chart-card .nx-h-ph { flex-wrap: wrap; align-items: flex-start; }
+  .nx-h-chart-card .nx-h-ph h2 { white-space: normal; font-size: 13px; }
+  .nx-h-ccol > * { min-width: 0; }
+}
+
+/* PC: the legend of « Répartition des ventes » stays on one line per channel (label and percentage), and the value in the donut fits its hole */
+@media (min-width: 900px) {
+  .nx-h-legend li { white-space: nowrap; grid-template-columns: 10px minmax(0, 1fr) auto; }
+  .nx-h-legend li > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nx-h-legend b { white-space: nowrap; }
+  .nx-h-donut span { white-space: nowrap; max-width: 80px; font-size: 12px; }
+}
+
+/* ---- phone fixes from the review: the ring sits on the page (no white box), the Parle field fits its card, the connection names stay on one line, the bottom cards have no empty space */
+@media (max-width: 899px) {
+  .nx-h-ask, .nx-h-ask input { min-width: 0; max-width: 100%; box-sizing: border-box; }
+  .nx-h-ask input { width: 100%; font-size: 12px; }
+  .nx-h-conn li { grid-template-columns: 8px minmax(0, 1fr) auto; }
+  .nx-h-conn li b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .nx-h-conn li em.nx-h-pill { font-size: 10px; padding: 2px 7px; }
+  .nx-h-bottom { align-items: start; }
+  .nx-h-fn { min-height: 0; height: auto; }
+  .nx-h-fn > small { margin-top: 6px; }
+}
+
+/* ---- bottom cards on the phone: two independent columns. Left: À traiter, then Connexions. Right: Parle à Nordla, then Activité récente. No empty band. PC unchanged. */
+.nx-h-bcol { display: contents; }
+.nx-h-bcol:first-child > :nth-child(2) { order: 3; }
+.nx-h-bcol:last-child > :nth-child(1) { order: 2; }
+.nx-h-bcol:last-child > :nth-child(2) { order: 4; }
+@media (max-width: 899px) {
+  .nx-h-bottom { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+  .nx-h-bcol { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .nx-h-bcol > * { order: 0; }
+}
+@media (max-width: 339px) {
+  .nx-h-bottom { grid-template-columns: minmax(0, 1fr); }
+  .nx-h-bcol { display: contents; }
+  .nx-h-bcol:first-child > :nth-child(2) { order: 3; }
+  .nx-h-bcol:last-child > :nth-child(1) { order: 2; }
+  .nx-h-bcol:last-child > :nth-child(2) { order: 4; }
+}
+
+/* PC, integrated into the home component (the validated design, image 84): sidebar 240 px, bands 250 | centre | 300 */
+@media (min-width: 900px) {
+  .nx-home { grid-template-columns: 240px minmax(0, 1fr); }
+  .nx-h-band { grid-template-columns: 250px minmax(0, 1fr) 300px; }
+}
+
+/* PC demonstration, as image 86: the status pill at the top right of the hero, the legend and the donut sized so each label fits on one line */
+@media (min-width: 900px) {
+  .nx-home-demo .nx-h-hero { position: relative; }
+  .nx-home-demo .nx-h-hero-txt .nx-h-status { position: absolute; left: 46%; top: 6px; }
+  .nx-h-split { grid-template-columns: 100px minmax(0, 1fr); gap: 12px; }
+  .nx-h-donut { width: 100px; height: 100px; }
+  .nx-h-donut span { max-width: 62px; font-size: 11px; }
+  .nx-h-legend li { font-size: 11.5px; gap: 5px; }
+  .nx-h-legend li > span { overflow: visible; text-overflow: clip; }
+}
+
+/* PC, as image 88: the demonstration banner across the top of the page; the role at the bottom of the page, not in the hero */
+@media (min-width: 900px) {
+  .nx-home-demo > .nx-h-demo-banner { grid-column: 1 / -1; grid-row: 1; margin: 0; border-radius: 0; border: 0; border-bottom: 1px dashed #C9A24A; background: #FFFFFF; color: #805C2D; font-size: 13px; padding: 7px 16px; text-align: center; }
+  .nx-home-demo > .nx-home-side, .nx-home-demo > .nx-h-main { grid-row: 2; }
+  .nx-home { grid-template-rows: auto minmax(0, 1fr); }
+  .nx-h-chip { display: none; }
+  .nx-h-role-line { font-size: 12px; color: #566170; margin: 10px 0 0; }
+}
+.nx-h-role-line { display: none; }
+@media (min-width: 900px) { .nx-h-role-line { display: block; } }
+
+/* PC demonstration, as image 93: the status pill sits above the photograph, at the top right of the title area; the donut at its full size */
+@media (min-width: 900px) {
+  .nx-home-demo .nx-h-hero-txt .nx-h-status { z-index: 2; top: 34px; }
+  .nx-h-split { grid-template-columns: 118px minmax(0, 1fr); }
+  .nx-h-donut { width: 118px; height: 118px; }
+  .nx-h-donut span { max-width: 80px; font-size: 12px; }
+}
+
+/* PC, as image 94: the empty messages of the bottom cards are centred; the status pill of the demonstration is the size of the reference */
+@media (min-width: 900px) {
+  .nx-h-fn .nx-h-quiet-line { text-align: center; margin: 22px 0 0; }
+  .nx-h-acts li.nx-h-empty { text-align: center; padding-top: 22px; }
+  .nx-home-demo .nx-h-hero-txt .nx-h-status { padding: 8px 16px; font-size: 13px; }
+}
+
+/* PC demonstration, as image 95: the status pill starts at the reference position and has its size */
+@media (min-width: 900px) {
+  .nx-home-demo .nx-h-hero-txt .nx-h-status { left: 47.2%; padding: 7px 18px; }
+}
+
+/* the PC circle is the reference picture (image 102) with four links over its cards; the phone keeps its own circle */
+.nx-h-ring-pc { position: relative; width: 100%; max-width: 640px; margin: 0 auto; }
+.nx-h-ring-pc img { display: block; width: 100%; height: auto; }
+.nx-h-hit { position: absolute; background: transparent; border: 0; padding: 0; margin: 0; border-radius: 22px; cursor: pointer; }
+.nx-h-hit:hover { background: rgba(176, 122, 46, .06); }
+.nx-h-hit:focus-visible { outline: 2px solid #B07A2E; }
+@media (max-width: 899px) { .nx-h-ring-pc { display: none; } }
+
+/* positions of the four links over the SVG circle (460 x 380) */
+.nx-h-hit-top { left: 34.78%; top: 6.58%; width: 30.43%; height: 15.79%; }
+.nx-h-hit-left { left: 1.96%; top: 43.16%; width: 30.43%; height: 15.53%; }
+.nx-h-hit-right { left: 65.65%; top: 43.16%; width: 29.57%; height: 15.53%; }
+.nx-h-hit-bottom { left: 34.78%; top: 77.63%; width: 30.43%; height: 15.79%; }
+
+/* PC: the circle (image 102) is enlarged to the height of the row; it overlaps the side columns slightly */
+@media (min-width: 900px) {
+  .nx-h-ring-pc { transform: scale(1.12); transform-origin: 50% 50%; z-index: 1; }
+  .nx-h-stage { overflow: visible; }
+}
+
+/* demonstration only: the evolution bars take the shape and the gold of the reference (image 105) */
+.nx-home-demo .nx-h-cbar span { background: linear-gradient(#E0B060, #B07A2E); }
+
+/* demonstration: the evolution chart is the reference of image 106 (fifteen thin gold bars) */
+.nx-h-chart-ref { gap: 8px; height: 150px; align-items: flex-end; justify-content: space-between; padding: 0 4px; }
+.nx-h-chart-ref span { flex: 0 0 9px; height: auto; max-height: 100%; border-radius: 2px 2px 0 0; background: linear-gradient(#E0B060, #B07A2E); }

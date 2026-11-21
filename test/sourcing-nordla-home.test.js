@@ -1,7 +1,7 @@
 // Nordla home (Core entry): cards come only from the server's module list, rights are never invented, Sourcing is a module, the return link is one button.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { homeCards, nordlaHomeHtml, nordlaBackBar, MODULE_COLOURS } from '../src/sourcing/ui/screens/nordla-home.js';
+import { homeCards, nordlaHomeHtml, nordlaBackBar, MODULE_COLOURS, coreSummary, NO_DATA } from '../src/sourcing/ui/screens/nordla-home.js';
 
 const SERVER = [
   { key: 'core', label: 'Nordla Core', state: 'DISPONIBLE', detail: 'x' },
@@ -17,8 +17,8 @@ const SERVER = [
 
 test('cards: Sourcing is a module card, first, with a local action that works offline', () => {
   const cards = homeCards(SERVER, { online: false });
-  assert.equal(cards[0].key, 'sourcing');
-  assert.deepEqual(cards[0].action, { type: 'local', to: 'sourcing', label: 'Ouvrir Sourcing' });
+  assert.ok(cards.findIndex((c) => c.key === 'sourcing') < cards.findIndex((c) => c.key === 'growth'), 'Sourcing sits in the Menu principal order, before Croissance');
+  assert.deepEqual(cards.find((c) => c.key === 'sourcing').action, { type: 'local', to: 'sourcing', label: 'Ouvrir Sourcing' });
   assert.equal(cards.filter((c) => c.action && c.action.type !== 'local').length, 0, 'offline: no server action');
 });
 
@@ -72,7 +72,7 @@ test('html: escapes server text, renders the states, and never shows a figure of
 });
 
 test('html: loading and offline say so, and the offline screen keeps Sourcing', () => {
-  assert.ok(nordlaHomeHtml({ modules: null, online: true }).includes('Chargement des modules'));
+  assert.ok(nordlaHomeHtml({ modules: null, online: true }).includes('Chargement'));
   const off = nordlaHomeHtml({ modules: null, online: false });
   assert.ok(off.includes('Hors connexion'));
   assert.ok(off.includes('data-act="sl-nav"'), 'Sourcing stays reachable offline');
@@ -81,4 +81,40 @@ test('html: loading and offline say so, and the offline screen keeps Sourcing', 
 test('return link: one button back to the Nordla home', () => {
   assert.ok(nordlaBackBar().includes('data-act="sl-nordla"'));
   assert.ok(nordlaBackBar().includes('← Accueil Nordla'));
+});
+
+test('redesign: the visible label is Sourcing, never China Sourcing; no unbuilt module or invented figure appears', () => {
+  const html = nordlaHomeHtml({ modules: SERVER, online: true });
+  assert.ok(!html.includes('China Sourcing'), 'label');
+  assert.ok(html.includes('>Sourcing<') || html.includes('>Sourcing</h3>'), 'Sourcing shown');
+  for (const name of ['Ventes &amp; CRM', 'Ventes & CRM', 'Publications', 'Agents &amp; Automatisations', 'Conformité']) assert.ok(!html.includes(name), name);
+  assert.ok(html.includes('class="nx-home-side"'), 'common menu present');
+  for (const c of Object.values(MODULE_COLOURS)) assert.ok(html.includes('--m:' + c), 'colour ' + c);
+});
+
+test('no duplicate module list: the content has no module cards and no grid, only Core content', () => {
+  const html = nordlaHomeHtml({ modules: SERVER, online: true });
+  assert.ok(!html.includes('Mes modules'));
+  assert.ok(!html.includes('nx-home-grid'));
+  assert.ok(!html.includes('data-module='));
+  assert.ok(html.includes('Activité récente') && html.includes('Nordla Core'));
+  assert.ok(html.includes('Analyses') && !html.includes('>Analytics<'));
+});
+
+test("dashboard figures: come only from the decisions journal; without it, the panel says no data", () => {
+  const decisions = [
+    { id: 1, created_at: "2026-11-01T10:00:00Z", recommendation: { kind: "X" }, human_decision: null, subject: { title: "Coque" } },
+    { id: 2, created_at: "2026-11-02T10:00:00Z", recommendation: { kind: "Y" }, human_decision: { decision: "APPROVED" }, subject: { title: "Gourde" } },
+    { id: 3, created_at: "2026-11-03T10:00:00Z", recommendation: null, human_decision: null, subject: { title: "Sans reco" } },
+  ];
+  const s = coreSummary(decisions);
+  assert.equal(s.awaiting, 1);
+  assert.equal(s.approved, 1);
+  assert.equal(s.recent[0].id, 3);
+  const off = nordlaHomeHtml({ modules: SERVER, decisions: "UNAVAILABLE", online: true });
+  assert.ok(off.includes(NO_DATA));
+  assert.ok(!/nx-h-kpi-v[^>]*>d/.test(off), "no invented figure when Core cannot answer");
+  const on = nordlaHomeHtml({ modules: SERVER, decisions, online: true });
+  assert.ok(on.includes("Gourde") && on.includes("Validée"));
+  assert.ok(!on.includes("Temps moyen</span><b class=\"nx-h-kpi-v\">"), "average time is not invented");
 });

@@ -14,9 +14,10 @@ import { callProvider, DATA_CLASS, ProviderPolicyError } from '../adapters/ai-pr
 import { StoreError } from '../store/file-store.js';
 import { createVoiceAssets } from './voice-assets.js';
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.json': 'application/json' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.webp': 'image/webp', '.json': 'application/json' };
 const MAX_BODY = 16 * 1024 * 1024;
 const STATIC = { '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css', '/field.css': 'field.css', '/salon.css': 'salon.css', '/nx.css': 'nx.css', '/nordla-home.css': 'nordla-home.css', '/sw.js': 'sw.js', '/manifest.webmanifest': 'manifest.webmanifest', '/icon.svg': 'icon.svg', '/storage.js': 'storage.js', '/icon-192.png': 'icon-192.png', '/icon-512.png': 'icon-512.png', '/icon-maskable-512.png': 'icon-maskable-512.png', '/apple-touch-icon.png': 'apple-touch-icon.png' };
+const UI_ASSET = /^\/assets\/[a-z0-9-]+\.(?:svg|webp|png)$/;
 const UI_MODULE = /^\/(?:screens\/)?[a-z0-9-]+\.js$/; // the UI is split into small modules (screens/*.js, dom.js, state.js...): only .js files directly under the UI folder
 const CORE_FILE = /^\/core\/((?:(?:rulebook|extract|field)\/)?[a-z0-9-]+\.js)$/;
 
@@ -207,6 +208,7 @@ export function createSourcingApp({ release = { sha: 'unknown', branch: 'unknown
       if (voice && await voice.handle(req, res, url.pathname)) return;
       if (STATIC[url.pathname]) return await serveStatic(res, STATIC[url.pathname], uiDir);
       if (UI_MODULE.test(url.pathname)) return await serveStatic(res, url.pathname.slice(1), uiDir);
+      if (UI_ASSET.test(url.pathname)) return await serveStatic(res, url.pathname.slice(1), uiDir); // Core home images (assets/*.svg|webp|png) only
       const core = CORE_FILE.exec(url.pathname); if (core) return await serveStatic(res, core[1], coreDir);
       return json(res, 404, { error: 'NOT_FOUND' });
     } catch (e) { const status = e.status ?? 500; json(res, status, { error: status === 500 ? 'INTERNAL' : String(e.message) }); if (status === 500) console.error('[sourcing]', e); }

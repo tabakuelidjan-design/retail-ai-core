@@ -3,6 +3,7 @@
 // screen says so. Actions are read-only questions, a brand check, a campaign PROPOSAL, a local visual and human decisions: nothing is published or paid.
 import { esc } from './dom.js';
 import { coreDisabledReason, coreErrorMessage } from './core-journal-errors.js';
+import { connectionRows } from './screens/nordla-home.js';
 
 const BADGE = { DISPONIBLE: '#1b7f3b', 'LECTURE SEULE': '#1b5e7f', 'ACCÈS RÉSERVÉ': '#666', LIMITÉ: '#8a6d00', 'À APPROUVER': '#8a6d00', 'À VÉRIFIER': '#8a6d00', BLOQUÉ: '#a12', 'NON RACCORDÉ': '#666', 'NON CONFIGURÉ': '#666' };
 const QUICK = { finance: [['Factures fournisseurs à payer', 'quelles factures fournisseurs dois-je payer et quelles sont les échéances ?'], ['Trésorerie', 'ma trésorerie'], ['Achats du mois', 'mes achats du mois']], analytics: [['Évolution des ventes', 'comment évoluent mes ventes et pourquoi certaines performances changent-elles ?']] };
@@ -18,7 +19,15 @@ export function createModulesPanel({ S, api, refresh, repaintHome = () => {} }) 
   // ACCUEIL: only the module list is read (one light GET, once per page load), so "Développement des ventes" can be shown on the home. Nothing else is loaded; a failure leaves the home exactly as it was.
   async function loadHomeModules() {
     if (st.homeTried || !S.online || !S.token) return; st.homeTried = true;
-    try { const m = await api('/api/core/modules'); st.homeModules = Array.isArray(m?.modules) ? m.modules : null; } catch { st.homeModules = null; }
+    // A failed load is a state of its own: the home must say so, not stay on "Chargement" forever.
+    try { const m = await api('/api/core/modules'); st.homeModules = Array.isArray(m?.modules) ? m.modules : null; st.homeFailed = !st.homeModules; } catch { st.homeModules = null; st.homeFailed = true; }
+    // The decisions journal feeds the Core dashboard (tasks, validated actions, activity). If Core cannot answer, the panels say so.
+    if (st.homeModules) { try { const d = await api('/api/core/decisions'); st.homeDecisions = Array.isArray(d?.decisions) ? d.decisions : 'UNAVAILABLE'; } catch { st.homeDecisions = 'UNAVAILABLE'; } }
+    // The sales and the connections are read on their own: a failure blanks only its own panel, never the home.
+    if (st.homeModules) {
+      api('/api/core/sales').then((s) => { st.homeSales = s; repaintHome(); }, () => { st.homeSales = { status: 'UNAVAILABLE' }; repaintHome(); });
+      api('/api/connections').then((o) => { st.homeConnections = connectionRows(o) ?? 'UNAVAILABLE'; repaintHome(); }, () => { st.homeConnections = 'UNAVAILABLE'; repaintHome(); });
+    }
     if (st.homeModules) repaintHome();
   }
   async function post(path, body, after) { st.busy = true; st.error = ''; refresh(); let failed = false; try { const r = await api(path, { method: 'POST', body: JSON.stringify(body ?? {}) }); after?.(r); /* NOT after?.(await api()): optional chaining would skip the request itself when there is no callback */ } catch (e) { failed = true; fail(e); } st.busy = false; await load({ preserveError: failed }); }
@@ -34,6 +43,9 @@ export function createModulesPanel({ S, api, refresh, repaintHome = () => {} }) 
     const t = ev.target.closest?.('[data-act^="nx-"]'); if (!t || st.busy) return;
     const a = t.dataset.act; st.open = t.closest('[data-nx-module]')?.dataset.nxModule ?? st.open; // keep the section the person works in open after the redraw
     if (a === 'nx-load') return load();
+    if (a === 'nx-open-panel') { document.getElementById('btn-cases')?.click(); return; }
+    if (a === 'nx-home-ask') { st.askInput = document.getElementById('nx-home-q')?.value ?? ''; document.getElementById('btn-cases')?.click(); return; } // read-only: the question goes to the Parle à Nordla panel, which answers it // the Nordla panel (Parle à Nordla, décisions, marque, campagnes, création) opens from its own menu button
+    if (a === 'nx-menu') { document.querySelector('.nx-home')?.classList.toggle('nx-menu-open'); return; } // mobile: the common menu behind ☰
     if (a === 'nx-parle') return parle(document.getElementById('nx-q')?.value);
     if (a === 'nx-parle-ex') { st.askInput = t.dataset.label; return parle(t.dataset.q, t.dataset.label); }
     if (a === 'nx-open-growth') { // single sign-on: a one-time ticket for THIS Nordla session; any failure falls back to the plain link (Growth then asks its own sign-in, never a broken page). No repaint: this also runs from the home.

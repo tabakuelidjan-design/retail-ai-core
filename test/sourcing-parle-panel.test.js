@@ -83,7 +83,7 @@ test('HOME: the Développement des ventes card (same two links) shows on the hom
   const mk = (api, S = { online: true, token: 'synthetic' }) => createModulesPanel({ S, api: async (p) => { calls.push(p); return api(p); }, refresh: () => {}, repaintHome: () => { repaints += 1; } });
   const p = mk(async () => mods({ growth_url: 'https://growth.example' })); assert.equal(p.growthHomeCard(), '', 'nothing before the list is read');
   await p.loadHomeModules(); await p.loadHomeModules();
-  assert.deepEqual(calls, ['/api/core/modules'], 'one light read, once: no branding, campaigns or creation'); assert.equal(repaints, 1);
+  assert.deepEqual(calls, ['/api/core/modules', '/api/core/decisions', '/api/core/sales', '/api/connections'], 'one read of each home panel, once: no branding, campaigns or creation'); assert.equal(repaints, 1);
   const card = p.growthHomeCard(); assert.match(card, /data-nx-growth-home/); assert.match(card, /Développement des ventes/);
   assert.match(card, /href="https:\/\/growth\.example\/#\/dropoff" target="_blank" rel="noopener"[^>]*>Où les visiteurs abandonnent/); assert.match(card, /href="https:\/\/growth\.example\/#\/opportunities" target="_blank" rel="noopener"[^>]*>Opportunités/);
   for (const bad of [null, { growth_url: 'http://growth.example' }, { growth_url: 'javascript:alert(1)' }]) { const q = mk(async () => mods(bad)); await q.loadHomeModules(); assert.equal(q.growthHomeCard(), '', JSON.stringify(bad)); }
