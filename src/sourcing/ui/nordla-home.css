@@ -1,7 +1,8 @@
 /* Nordla Core home: the commercial layout (PC and phone). Every rule is scoped under .nx-home so it cannot reach other screens.
-   .nx-h-kicker: the page identity line above the title. */
-.nx-home .nx-h-kicker { margin: 0 0 4px; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #6B7280; }
    Palette: cool white and light grey backgrounds, dark navy text, gold accent, green/teal, blue-grey and orange charts. No cream or beige. */
+
+/* The page identity line above the title ("Accueil Nordla — Core"). */
+.nx-home .nx-h-kicker { margin: 0 0 4px; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: #6B7280; }
 
 /* The Sourcing bottom tab bar is not part of the Core home. */
 body:has(.nx-home) #tabs { display: none !important; }
