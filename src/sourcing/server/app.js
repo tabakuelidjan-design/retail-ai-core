@@ -36,6 +36,7 @@ async function readBody(req) {
 
 /** Behind the local tunnel every request comes from 127.0.0.1: the proxy's own header (trusted ONLY from a loopback peer) tells the real client apart, so one attacker cannot lock the owner out. */
 const clientIp = (req) => { const peer = req.socket.remoteAddress ?? 'unknown'; const loop = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(peer); const fwd = loop ? String(req.headers['cf-connecting-ip'] ?? '').trim() : ''; return /^[0-9a-f.:]{3,45}$/i.test(fwd) ? fwd : peer; };
+const SOURCING_WRITERS = new Set(['OWNER', 'ADMIN', 'COLLABORATOR']);
 const LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '[::1]'];
 const FAIL_LIMIT = 8; const FAIL_WINDOW_MS = 60_000;
 
@@ -92,6 +93,8 @@ export function createSourcingApp({ release = { sha: 'unknown', branch: 'unknown
     // ROLES (hosted): a change needs OWNER or ADMIN, decided here from the SESSION's role, not by what the page shows. Reads stay open to every member; Stock / Achats keeps its own role table.
     if (gate && !['GET', 'HEAD'].includes(m) && !p.startsWith('/api/procurement/') && !SOURCING_WRITERS.has(actor.role) && !READ_ONLY_POSTS.has(p)) return json(res, 403, { error: 'FORBIDDEN_ROLE', message: 'Votre rôle permet de consulter, pas de modifier.' });
     if (core && p.startsWith('/api/core/')) return core.handle(req, res, url, actor); // Nordla Core: Subject -> Levers -> Decision -> human -> follow-up, Parle à Nordla (src/core-pilot)
+    // Hosted: sign-in proves membership and module access, NOT the right to change Sourcing data. VIEWER and ACCOUNTANT read; changing or deleting a case, storing a photo, the workspace, refreshing the Safety Gate cache or sending a document / photo to an AI reader needs OWNER, ADMIN or COLLABORATOR. (Core and Stock / Achats above and below enforce their own role tables.)
+    if (gate && !SOURCING_WRITERS.has(actor.role) && !['GET', 'HEAD'].includes(m) && !(m === 'POST' && p === '/api/safety/check') && !p.startsWith('/api/procurement/')) return json(res, 403, { error: 'FORBIDDEN_ROLE', message: 'your role can read China Sourcing but not change it' });
     if (procurement && p.startsWith('/api/procurement/')) { const user = procurementUserFor(actor); return user ? procurement.handleApi(req, res, url, user) : json(res, 403, { error: 'FORBIDDEN', message: 'your role has no access to Stock / Achats' }); } // Stock / Achats: same sign-in, same volume (src/procurement/server/hosted.js)
     if (p === '/api/health' && m === 'GET') return json(res, 200, { ok: true, time: now().toISOString(), safetyGate: safety ? (await safety.get()).source : { mode: 'OFFLINE_VERIFICATION_REQUIRED', coverage: 'no Safety Gate adapter configured' } });
     if (p === '/api/cases' && m === 'GET') return json(res, 200, { cases: await store.list() });

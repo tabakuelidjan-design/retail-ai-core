@@ -9,7 +9,7 @@
 //   - writing the same bytes again is a no-op; different bytes under an existing key are NOT written over: the server keeps the first
 //     version and answers CONFLICT with both hashes (nothing is ever lost or silently replaced);
 //   - there is no delete: neither the phone nor the server removes a photo through this store.
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { StoreError } from './file-store.js';
@@ -41,25 +41,33 @@ export function decodePhoto(dataUrl) {
 export function createFilePhotoStore(dir) {
   const caseDir = (caseId) => { if (!CASE_ID.test(String(caseId))) throw new StoreError('CASE_ID_INVALID', 'case id must be letters, digits, - or _'); return join(dir, caseId); };
   const fileBase = (key) => key.replace(':', '__'); // a colon is not a portable file-name character (Windows)
+  // One upload at a time PER PHOTO KEY: "is there a photo under this key? then write" must not interleave (two uploads of different photos would both be stored and overwrite each other;
+  // a retry of the same photo would collide on one temporary file). Other keys never wait.
+  const chains = new Map();
+  const serial = (id, task) => { const run = (chains.get(id) ?? Promise.resolve()).catch(() => {}).then(task); const tail = run.catch(() => {}); chains.set(id, tail); tail.then(() => { if (chains.get(id) === tail) chains.delete(id); }); return run; };
   const readMeta = async (caseId, key) => { try { return JSON.parse(await readFile(join(caseDir(caseId), `${fileBase(key)}.json`), 'utf8')); } catch (e) { if (e.code === 'ENOENT') return null; throw e; } };
+
+  const putSerial = async (caseId, key, mime, bytes) => {
+    const hash = sha256(bytes);
+    const prev = await readMeta(caseId, key);
+      if (prev) {
+        if (prev.sha256 === hash) return { status: 'UNCHANGED', key, sha256: hash, size: bytes.length };
+        throw new StoreError('PHOTO_CONFLICT', 'a different photo is already stored under this key; it is kept', { server: { sha256: prev.sha256, size: prev.size }, sent: { sha256: hash, size: bytes.length } });
+      }
+      const d = caseDir(caseId); await mkdir(d, { recursive: true });
+      const base = join(d, fileBase(key)); const tmp = `.${process.pid}.${randomUUID()}.tmp`;
+      await writeFile(`${base}.${EXT[mime]}${tmp}`, bytes); await rename(`${base}.${EXT[mime]}${tmp}`, `${base}.${EXT[mime]}`);
+      const meta = { key, mime, sha256: hash, size: bytes.length, file: `${fileBase(key)}.${EXT[mime]}`, storedAt: new Date().toISOString() };
+      await writeFile(`${base}.json${tmp}`, JSON.stringify(meta)); await rename(`${base}.json${tmp}`, `${base}.json`); // the meta is written LAST: a photo is listed only once its bytes are on disk
+      return { status: 'STORED', key, sha256: hash, size: bytes.length };
+  };
 
   return {
     /** Stores one photo. Returns { status: 'STORED' | 'UNCHANGED', key, sha256, size }; throws StoreError (PHOTO_KEY_INVALID, PHOTO_INVALID, PHOTO_TOO_BIG, PHOTO_CONFLICT). */
     async put(caseId, key, dataUrl) {
       if (!parsePhotoKey(key, caseId)) throw new StoreError('PHOTO_KEY_INVALID', 'the photo key does not belong to this case');
       const { mime, bytes } = decodePhoto(dataUrl);
-      const hash = sha256(bytes);
-      const prev = await readMeta(caseId, key);
-      if (prev) {
-        if (prev.sha256 === hash) return { status: 'UNCHANGED', key, sha256: hash, size: bytes.length };
-        throw new StoreError('PHOTO_CONFLICT', 'a different photo is already stored under this key; it is kept', { server: { sha256: prev.sha256, size: prev.size }, sent: { sha256: hash, size: bytes.length } });
-      }
-      const d = caseDir(caseId); await mkdir(d, { recursive: true });
-      const base = join(d, fileBase(key)); const tmp = `.${process.pid}.${Date.now()}.tmp`;
-      await writeFile(`${base}.${EXT[mime]}${tmp}`, bytes); await rename(`${base}.${EXT[mime]}${tmp}`, `${base}.${EXT[mime]}`);
-      const meta = { key, mime, sha256: hash, size: bytes.length, file: `${fileBase(key)}.${EXT[mime]}`, storedAt: new Date().toISOString() };
-      await writeFile(`${base}.json${tmp}`, JSON.stringify(meta)); await rename(`${base}.json${tmp}`, `${base}.json`); // the meta is written LAST: a photo is listed only once its bytes are on disk
-      return { status: 'STORED', key, sha256: hash, size: bytes.length };
+      return serial(`${caseId}|${key}`, () => putSerial(caseId, key, mime, bytes));
     },
     /** What the server holds for a case: [{ key, sha256, size, mime }]. */
     async list(caseId) {
