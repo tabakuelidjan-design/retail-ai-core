@@ -36,7 +36,9 @@ const HELP_FR = { MODEL_MISMATCH: 'Vérifiez le modèle exact sur le produit ou 
 export function createSalon(ctx) {
   const { S, ls } = ctx;
   // After a Nordla sign-in the entry is the Nordla home, once per page load; offline keeps the stored view (Sourcing works as before).
-  let view = S.authMode === 'session' && !S.nordlaEntered ? { name: 'nordla' } : ls.get(VIEW_KEY, { name: 'home' }); if (S.authMode === 'session') S.nordlaEntered = true; let selected = (view.selected ?? []).filter((id) => S.cases[id]); let engine = null; let engineProfile = undefined; let ws = getBlob(WS_BLOB) ?? newWorkspace(); let flash = ''; let pending = { photo: null, pdfText: null, pdfName: null };
+  // /sourcing opens the Sourcing home (the module); the root address opens the Nordla Core home after sign-in.
+  const onSourcingPath = typeof location !== 'undefined' && location.pathname === '/sourcing';
+  let view = onSourcingPath && S.authMode === 'session' ? { name: 'home' } : S.authMode === 'session' && !S.nordlaEntered ? { name: 'nordla' } : ls.get(VIEW_KEY, { name: 'home' }); if (S.authMode === 'session') S.nordlaEntered = true; let selected = (view.selected ?? []).filter((id) => S.cases[id]); let engine = null; let engineProfile = undefined; let ws = getBlob(WS_BLOB) ?? newWorkspace(); let flash = ''; let pending = { photo: null, pdfText: null, pdfName: null };
   let capMode = 'quote'; let correcting = null; let editingFact = null; let showQ = null; let wsTimer = null; const openSecs = new Map();
   let filter = 'all'; let query = ''; let visitFilter = 'open'; let noteMode = view.noteMode ?? 'text'; let speaker = 'supplier'; let answering = null; let editing = null; let panels = {}; let lastNote = null; let confirmingServer = null; let pickFor = null; let voiceAvail = null; let voiceProbe = false;
   if (!MAIN_NAV[view.name] && !['capture', 'review', 'negotiate'].includes(view.name)) view = { name: 'home' };
@@ -255,9 +257,10 @@ export function createSalon(ctx) {
     const act = t.dataset.act; const key = t.dataset.key; const val = t.dataset.val !== undefined ? JSON.parse(t.dataset.val) : undefined; const cid = t.dataset.case ?? key;
     try {
       switch (act) {
-        case 'sl-nordla': return go({ name: 'nordla' });
+        case 'sl-nordla': if (typeof history !== 'undefined' && location.pathname !== '/') history.pushState(null, '', '/'); return go({ name: 'nordla' }); // back to the Core home at the root address
         case 'sl-nav': {
-          if (key === 'home' || key === 'sourcing') return go({ name: 'home', caseId: null, offerId: null }); // 'sourcing' = the Sourcing home from Core, never the last case
+          if (key === 'sourcing') { if (typeof history !== 'undefined' && location.pathname !== '/sourcing') history.pushState(null, '', '/sourcing'); return go({ name: 'home', caseId: null, offerId: null }); } // the Sourcing home from Core, never the last case
+          if (key === 'home') return go({ name: 'home', caseId: null, offerId: null });
           if (key === 'suppliers') { pickFor = null; return go({ name: 'suppliers' }); }
           if (key === 'new') return go({ name: 'new' });
           if (key === 'visits') return go({ name: 'visits' });

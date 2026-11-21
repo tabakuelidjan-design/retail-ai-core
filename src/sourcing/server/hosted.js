@@ -17,6 +17,7 @@
 // is checked when set.
 export class HostedConfigError extends Error { constructor(code, message) { super(message); this.name = 'HostedConfigError'; this.code = code; } }
 
+import { legacyHostsFrom } from './canonical.js';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PROJECT_REF = /^[a-z0-9]{20}$/;
 const onRailway = (env) => Boolean(String(env.RAILWAY_SERVICE_ID ?? env.RAILWAY_ENVIRONMENT_ID ?? env.RAILWAY_PROJECT_ID ?? '').trim());
@@ -62,7 +63,7 @@ export function hostedConfig(env = process.env) {
   }
   if (!String(env.SOURCING_MERCHANT_ID ?? '').trim() && !String(env.SOURCING_MERCHANT_PROFILE ?? '').trim()) throw new HostedConfigError('HOSTED_PROFILE_REQUIRED', 'hosted mode needs SOURCING_MERCHANT_ID (or SOURCING_MERCHANT_PROFILE): the merchant sourcing profile');
   const supabaseRef = supabaseProjectPin(env);
-  return { host: String(env.SOURCING_HOST ?? '').trim() || '0.0.0.0', merchantId, origin: origin.origin, allowedHosts: [origin.hostname], dataDir: String(env.SOURCING_DATA_DIR ?? '').trim() || 'data/local/sourcing', supabaseRef };
+  return { host: String(env.SOURCING_HOST ?? '').trim() || '0.0.0.0', merchantId, origin: origin.origin, allowedHosts: [origin.hostname], legacyHosts: legacyHostsFrom(env.SOURCING_LEGACY_HOSTS, origin.hostname), dataDir: String(env.SOURCING_DATA_DIR ?? '').trim() || 'data/local/sourcing', supabaseRef };
 }
 
 /**

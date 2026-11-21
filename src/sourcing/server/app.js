@@ -1,6 +1,7 @@
 // HTTP app for China Sourcing field mode. The decision logic lives in src/sourcing/core and runs IN THE BROWSER too (offline): this server only adds what a phone cannot do
 // alone - cases kept on disk, the Safety Gate cache, PDF text, optional ECB rates and an optional AI provider. Every /api route needs the token.
 import { procurementUserFor } from '../../procurement/server/hosted.js';
+import { redirectTarget } from './canonical.js';
 import { WRITER_ROLES, READ_ONLY_POSTS as READ_ONLY_POSTS_LIST } from '../../identity/permissions.js';
 import { randomUUID } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
@@ -16,7 +17,7 @@ import { createVoiceAssets } from './voice-assets.js';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.webp': 'image/webp', '.json': 'application/json' };
 const MAX_BODY = 16 * 1024 * 1024;
-const STATIC = { '/': 'index.html', '/index.html': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css', '/field.css': 'field.css', '/salon.css': 'salon.css', '/nx.css': 'nx.css', '/nordla-home.css': 'nordla-home.css', '/sw.js': 'sw.js', '/manifest.webmanifest': 'manifest.webmanifest', '/icon.svg': 'icon.svg', '/storage.js': 'storage.js', '/icon-192.png': 'icon-192.png', '/icon-512.png': 'icon-512.png', '/icon-maskable-512.png': 'icon-maskable-512.png', '/apple-touch-icon.png': 'apple-touch-icon.png' };
+const STATIC = { '/': 'index.html', '/sourcing': 'index.html','/index.html': 'index.html', '/app.js': 'app.js', '/app.css': 'app.css', '/field.css': 'field.css', '/salon.css': 'salon.css', '/nx.css': 'nx.css', '/nordla-home.css': 'nordla-home.css', '/sw.js': 'sw.js', '/manifest.webmanifest': 'manifest.webmanifest', '/icon.svg': 'icon.svg', '/storage.js': 'storage.js', '/icon-192.png': 'icon-192.png', '/icon-512.png': 'icon-512.png', '/icon-maskable-512.png': 'icon-maskable-512.png', '/apple-touch-icon.png': 'apple-touch-icon.png' };
 const UI_ASSET = /^\/assets\/[a-z0-9-]+\.(?:svg|webp|png)$/;
 const UI_MODULE = /^\/(?:screens\/)?[a-z0-9-]+\.js$/; // the UI is split into small modules (screens/*.js, dom.js, state.js...): only .js files directly under the UI folder
 const CORE_FILE = /^\/core\/((?:(?:rulebook|extract|field)\/)?[a-z0-9-]+\.js)$/;
@@ -56,7 +57,7 @@ export function backupHealth(st, nowMs, { maxAgeH = 26, firstRunGraceMin = 30 } 
 export const SOURCING_WRITERS = new Set(WRITER_ROLES); // src/identity/permissions.js is the source of these rules
 /** POST routes that only compute or read (no stored change): open to every member. */
 export const READ_ONLY_POSTS = new Set(READ_ONLY_POSTS_LIST);
-export function createSourcingApp({ release = { sha: 'unknown', branch: 'unknown', source: 'none' }, accessJournal = null, backupStatus = null, token, gate = null, core = null, procurement = null, creator = null, gbp = null, videos = null, connections = null, general = null, security = null, team = null, notifications = null, preferences = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
+export function createSourcingApp({ redirect = null, release = { sha: 'unknown', branch: 'unknown', source: 'none' },accessJournal = null, backupStatus = null, token, gate = null, core = null, procurement = null, creator = null, gbp = null, videos = null, connections = null, general = null, security = null, team = null, notifications = null, preferences = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
   if (!gate && (!token || String(token).length < 24)) throw new Error('a token of at least 24 characters is required'); // hosted: the session gate (Core identity) replaces the token
   // Host header allow-list (blocks DNS-rebinding on the loopback server). A tunnel's public host name must be added by the owner (SOURCING_ALLOWED_HOSTS).
   // `allowedHosts` may be a live array: the phone launcher adds the tunnel host name once it is known
@@ -186,6 +187,9 @@ export function createSourcingApp({ release = { sha: 'unknown', branch: 'unknown
       if (req.method === 'GET' && String(req.url).split('?')[0] === '/healthz') return json(res, 200, { ok: true });
       // Phase 4: which code runs (commit and branch only, no data). Compare with the expected release/* commit.
       if (req.method === 'GET' && String(req.url).split('?')[0] === '/version') return json(res, 200, { service: 'core', ...release }, { 'cache-control': 'no-store' });
+      // an older address of the same server: redirected to the canonical origin, never served (see canonical.js)
+      const moved = redirect ? redirectTarget({ host: req.headers.host, method: req.method, url: req.url, canonicalOrigin: redirect.canonicalOrigin, legacyHosts: redirect.legacyHosts }) : null;
+      if (moved) { res.writeHead(302, { Location: moved, 'cache-control': 'no-store' }); return res.end(); }
       if (!hostOk(req)) return json(res, 421, { error: 'HOST_NOT_ALLOWED' });
       // backup health for an OUTSIDE monitor (no session: a monitor has none). Ages and counts only - no file name, path, key or data.
       if (req.method === 'GET' && String(req.url).split('?')[0] === '/healthz/backup') { const h = backupHealth(backupStatus?.() ?? null, now().getTime()); return json(res, h.ok ? 200 : 503, h, { 'cache-control': 'no-store' }); }
