@@ -1,4 +1,5 @@
 // The mobile server over real HTTP (loopback, ephemeral ports, throw-away data directories). Memory store for the API tests; the FILE store for the restart test.
+import { readdir } from 'node:fs/promises';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -198,4 +199,22 @@ test('FOUND AGAIN AFTER A RESTART: what was captured on the phone is there when 
   const s3 = await startProcurementServer({ env, port: 0, log: () => {}, dataDir });
   assert.equal((await api(s3.port, token)('GET', `/api/purchase-orders/${po.id}`)).json.status, 'APPROVED', 'and that, too, survives the next restart');
   await s3.stop();
+});
+
+test('uploads: storing a photo needs a capability (prepare or receive): a reader or a warehouse person without RECEIVE is refused before the file is read or stored', async () => {
+  const s = await boot();
+  const png = { raw: PNG, headers: { 'content-type': 'image/png' } };
+  const VIEWER = { id: 'viewer', name: 'Viewer', role: 'VIEWER', token: 'v'.repeat(32) };
+  const PLAIN = { id: 'wh', name: 'Warehouse', role: 'WAREHOUSE', token: 'w'.repeat(32) };
+  const RECV = { id: 'wh2', name: 'Warehouse RECEIVE', role: 'WAREHOUSE', grants: ['RECEIVE'], token: 'x'.repeat(32) };
+  const dir = mkdtempSync(join(tmpdir(), 'nordla-up-'));
+  const app = createProcurementApp({ procurement: s.procurement, users: [OWNER, FIELD, VIEWER, PLAIN, RECV], uploadsDir: join(dir, 'uploads') });
+  const l = await listen(app);
+  const up = (u, body = PNG) => fetch(`http://127.0.0.1:${l.port}/api/uploads`, { method: 'POST', headers: { 'x-nordla-token': u.token, 'content-type': 'image/png' }, body }).then((r) => r.status);
+  assert.equal(await up(VIEWER), 403, 'VIEWER cannot store a photo');
+  assert.equal(await up(PLAIN), 403, 'WAREHOUSE without RECEIVE cannot store a photo');
+  assert.equal(await up(VIEWER, Buffer.alloc(0)), 403, 'refused before the body is even judged');
+  assert.equal((await readdir(join(dir, 'uploads')).catch(() => [])).length, 0, 'nothing was stored by a refused caller');
+  for (const u of [OWNER, FIELD, RECV]) assert.equal(await up(u), 201, `${u.id} may store a photo`);
+  l.server.closeAllConnections?.(); await new Promise((r) => l.server.close(r)); s.server.closeAllConnections?.(); await s.close();
 });
