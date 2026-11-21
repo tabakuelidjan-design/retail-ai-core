@@ -83,7 +83,7 @@ export function createCorePanel({ S, api, refresh }) {
     const offline = !S.online || !S.token ? `<p class="small muted" role="status">Hors ligne : vos réponses précédentes restent lisibles ; une nouvelle question demande le serveur.</p>` : '';
     // inside the Core shell the menu closes the page (Tableau de bord), so no separate close button
     const bar = shell ? '' : '<div class="nxa-bar"><button type="button" class="btn sec" data-act="close-overlay">Fermer</button></div>';
-    return `<div class="nxa-page">${bar}${offline}${askUi.render(active, st.busy, st.error)}</div>`;
+    return `<div class="nxa-page">${bar}${offline}${askUi.render(null, st.busy, st.error, { caseLine: false })}</div>`; // the Core conversation never carries a Sourcing case: the data questions only
   }
   return { section, load, page };
 }

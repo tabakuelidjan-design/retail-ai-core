@@ -7,7 +7,7 @@ const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '
 export const MAX_TURNS = 10;
 const CASE_CHIPS = [['Qu’est-ce qui manque ?', 'Ce qui manque'], ['Quels sont les risques ?', 'Risques'], ['Quelle est la marge estimée ?', 'Marge'], ['Est-ce que je peux commander ce produit ?', 'Puis-je commander ?'], ['Quelle est la prochaine étape ?', 'Prochaine étape'], ['Quelles questions dois-je poser au fournisseur ?', 'Questions à poser'], ['Pourquoi cette recommandation ?', 'Pourquoi cette recommandation ?']];
 // Only questions the server already answers (the same ones the Core home offers): no figure is promised that the data cannot give.
-const NO_CASE_CHIPS = [['ma trésorerie', 'Ma trésorerie ?'], ['quelles factures fournisseurs dois-je payer et quelles sont les échéances ?', 'Quelles factures dois-je payer ?'], ['comment évoluent mes ventes et pourquoi certaines performances changent-elles ?', 'Évolution des ventes']];
+const NO_CASE_CHIPS = [['ma trésorerie', 'Ma trésorerie ?'], ['quelles factures fournisseurs dois-je payer et quelles sont les échéances ?', 'Quelles factures dois-je payer ?'], ['quel est mon chiffre d’affaires des 30 derniers jours ?', 'Chiffre d’affaires des 30 derniers jours']];
 const SECTIONS = [['known', null], ['unknown', 'Ce que nous ne savons pas'], ['risks', 'Risques'], ['consequences', 'Pourquoi c’est important'], ['next', 'Prochaine vérification']];
 const SOURCE_KIND = { sourcing_case: 'dossier', core_journal: 'journal', rulebook: 'règles', finance: 'Finance', analytics: 'Analyses' };
 const VERDICT_UI = { GO: 'GO', CONDITIONAL_GO: 'Sous conditions', CONDITIONAL_GO_BLOCKED: 'Sous conditions, commande bloquée', NO_GO: 'NO-GO', INSUFFICIENT_INFORMATION: 'Informations insuffisantes' };
@@ -68,7 +68,7 @@ const CSS_PAGE = `.nxa{max-width:100%;overflow-wrap:anywhere}
 .nxa-card-txt{flex:1;min-width:0;line-height:20px}
 .nxa-send{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:48px;padding:0 20px;border:0;border-radius:12px;background:#0F1B2D;color:#fff;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
 .nxa-send:disabled{opacity:.55;cursor:default}
-@media (max-width:480px){.nxa-cards{grid-template-columns:1fr}.nxa-stage{padding:12px;border-radius:14px}.nxa-title{font-size:22px;line-height:28px}.nxa-form{flex-direction:column}.nxa-send{width:100%}.nxa-page{min-height:calc(100vh - 32px)}}`;
+.nxa-dock .nxa-form{display:flex;flex-direction:row;align-items:center;gap:8px;background:#fff;border:1px solid #CBD3DF;border-radius:14px;padding:6px 6px 6px 14px}.nxa-dock .nxa-field{flex:1;min-width:0;border:0;padding:0;background:transparent}.nxa-dock .nxa-send{width:auto;min-height:44px;border-radius:10px;padding:0 22px;white-space:nowrap}@media (max-width:480px){.nxa-cards{grid-template-columns:1fr}.nxa-stage{padding:12px;border-radius:14px}.nxa-title{font-size:22px;line-height:28px}.nxa-form{flex-direction:column}.nxa-send{width:100%}.nxa-page{min-height:calc(100vh - 32px)}}`;
 function ensureStyle() { if (typeof document === 'undefined' || document.getElementById('nxa-style')) return; const el = document.createElement('style'); el.id = 'nxa-style'; el.textContent = CSS + CSS_PAGE; document.head.appendChild(el); }
 
 const list = (arr) => (arr?.length ? `<ul>${arr.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
@@ -96,18 +96,18 @@ export function renderTurn(t, { newest = false } = {}) {
 }
 
 /** The whole block, as the conversation page: title, read-only mark, the answers, a loading / error / empty state, and the composer always in reach. `model` = { turns[newest first], notice, draft, busy, active:{id,name}|null }. */
-export function renderAsk({ turns = [], notice = '', draft = '', busy = false, active = null, error = '' } = {}) {
+export function renderAsk({ turns = [], notice = '', draft = '', busy = false, active = null, error = '', caseLine = true } = {}) {
+  const where = active ? `Dossier ouvert : ${esc(active.name || active.id)}` : 'Aucun dossier ouvert : les questions sur un produit demandent d’en ouvrir un.';
   const suggestions = active ? CASE_CHIPS : NO_CASE_CHIPS;
   const cards = suggestions.map(([text, label]) => `<button type="button" class="nxa-card" data-act="core-ask-chip" data-text="${esc(text)}" data-case="${esc(active?.id ?? '')}" ${busy ? 'disabled' : ''}><span class="nxa-card-ico">${BARS}</span><span class="nxa-card-txt">${esc(label)}</span><span class="nxa-card-arr">${ARROW}</span></button>`).join('');
   const pills = suggestions.map(([text, label]) => `<button type="button" class="nxa-chip" data-act="core-ask-chip" data-text="${esc(text)}" data-case="${esc(active?.id ?? '')}" ${busy ? 'disabled' : ''}>${esc(label)}</button>`).join('');
-  const where = active ? `Dossier ouvert : ${esc(active.name || active.id)}` : 'Aucun dossier ouvert : les questions sur un produit demandent d’en ouvrir un.';
   const empty = !turns.length && !busy && !error ? `<div class="nxa-empty"><div class="nxa-mark">${BUBBLE}</div><h4 class="nxa-empty-title">Que souhaitez-vous savoir ?</h4><p class="nxa-empty-sub">Nordla répond à partir des données accessibles à votre entreprise.</p></div>` : '';
   const loading = busy ? '<div class="nxa-loading" role="status"><span class="nxa-dots" aria-hidden="true"><i></i><i></i><i></i></span>Nordla prépare la réponse à partir des données…</div>' : '';
   const alert = error ? `<p class="nxa-block" role="alert"><b>La question n’a pas pu partir</b>${esc(error)} Votre question est conservée : réessayez.</p>` : '';
   const note = notice ? `<p class="small muted" role="status">${esc(notice)}</p>` : '';
   const tools = turns.length ? `<div class="nxa-tools"><span class="small muted">${turns.length} question${turns.length > 1 ? 's' : ''} dans cette conversation</span><button type="button" class="btn sec" data-act="core-ask-reset">Nouvelle conversation</button></div>` : '';
   return `<div class="nxa nxa-page-body"><div class="nxa-head"><div><h3 class="nxa-title">Parle à Nordla</h3><p class="nxa-lead">Nordla répond à partir des données accessibles à votre entreprise, en lecture seule.</p></div><span class="nxa-ro">Lecture seule</span></div>
-    <p class="nxa-case">${where}</p>
+    ${caseLine ? `<p class="nxa-case">${where}</p>` : ''}
     <div class="nxa-stage"><div class="nxa-feed" aria-live="polite">${empty}${turns.map((t, i) => renderTurn(t, { newest: i === 0 })).join('')}${loading}</div>${alert}${note}${tools}${turns.length ? '' : `<div class="nxa-cards" role="group" aria-label="Questions suggérées">${cards}</div>`}</div>
     <div class="nxa-dock">${turns.length ? `<div class="nxa-chips" role="group" aria-label="Questions fréquentes">${pills}</div>` : ''}
       <div class="nxa-form"><div class="nxa-field">${BUBBLE_SMALL}<input id="core-ask-text" aria-label="Votre question" value="${esc(draft)}" maxlength="1000" autocomplete="off" placeholder="Posez votre question"></div><button type="button" class="nxa-send" data-act="core-ask" data-case="${esc(active?.id ?? '')}" ${busy ? 'disabled' : ''}>Demander ${ARROW_W}</button></div></div></div>`;
@@ -147,6 +147,6 @@ export function createAskUi({ st, post }) {
       return false;
     },
     history(online) { return renderHistory(nx.turns, { online }); },
-    render(active, busy, error) { return renderAsk({ turns: nx.turns, notice: nx.notice, draft: nx.draft, busy, error: nx.pending && !busy ? error : '', active: active ? { id: active.id, name: active.name ?? active.workingName ?? '' } : null }); },
+    render(active, busy, error, { caseLine = true } = {}) { return renderAsk({ caseLine, turns: nx.turns, notice: nx.notice, draft: nx.draft, busy, error: nx.pending && !busy ? error : '', active: active ? { id: active.id, name: active.name ?? active.workingName ?? '' } : null }); },
   };
 }
