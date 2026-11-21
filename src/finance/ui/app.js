@@ -201,6 +201,7 @@ const NAV = [
   { href: '#/', label: 'Home', icon: 'home', nordla: 'accueil', primary: true },
   { href: '#/todo', label: 'To do', icon: 'check', nordla: 'aFaire', primary: true },
   { href: '#/sales', label: 'Sales', icon: 'doc', nordla: 'ventes', primary: true },
+  { href: '#/receivables', label: 'Payments and receivables', icon: 'clock', primary: false }, // existing screen, previously reachable only by its address
   { href: '#/purchases', label: 'Purchases', icon: 'cart', nordla: 'achats', primary: false },
   { href: '#/bank', label: 'Bank & Cash', icon: 'coins', nordla: 'banqueEtCaisse', primary: true },
   { href: '#/contacts', label: 'Contacts', icon: 'building', nordla: 'contacts', primary: false },
@@ -280,23 +281,66 @@ async function refreshSyncPill() {
   } catch (e) { /* the pill keeps its neutral text */ }
 }
 
+/** Core menu (the same entries and order as the Nordla Core home). Pages of other modules open on the Nordla address. */
+const CORE_MENU = Object.freeze([
+  { label: 'Tableau de bord', path: '/', icon: 'grid', colour: '#0F1B2D' },
+  { label: 'Parle à Nordla', path: '/', icon: 'chat', colour: '#0F1B2D' },
+  { label: 'Finance', current: true, icon: 'card', colour: '#46778D' },
+  { label: 'Analyses', path: '/', icon: 'chart', colour: '#7842B8' },
+  { label: 'Stock & Achats', path: '/procurement', icon: 'box', colour: '#E87924' },
+  { label: 'Sourcing', path: '/sourcing', icon: 'globe', colour: '#B92335' },
+  { label: 'Croissance', path: '/', icon: 'chart', colour: '#D1A44F' },
+  { label: 'Marketing', path: '/videos', icon: 'megaphone', colour: '#F17821' },
+  { label: 'Création', path: '/creator', icon: 'paint', colour: '#C84FA4' },
+  { label: 'Branding', icon: 'tag', colour: '#9E2F86', note: 'Écran pas encore accessible' },
+  { label: 'Paramètres', path: '/settings', icon: 'gear', colour: '#6B7280' },
+]);
+const CORE_PATHS = Object.freeze({
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+  chat: '<path d="M4 5h16v11H9l-5 4z"/>',
+  card: '<rect x="3" y="6" width="18" height="12" rx="2"/><path d="M3 10h18"/>',
+  box: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/>',
+  chart: '<path d="M4 20V4M4 20h16"/><path d="M8 16v-4M12 16V8M16 16v-6"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+  megaphone: '<path d="M4 10v4h3l8 4V6L7 10z"/>',
+  paint: '<path d="M4 20l4-1 11-11-3-3L5 16z"/>',
+  tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+});
+/** Where a Core menu entry leads: on the Nordla address when the app knows it, else as written. */
+function coreUrl(path) { return state.nordlaHome ? new URL(path, state.nordlaHome).href : path; }
+function coreIcon(name, colour) {
+  const span = h('span', { class: 'cr-ico', style: `--m:${colour}`, 'aria-hidden': 'true' });
+  // The static icon is parsed as SVG and appended as a node (the Finance UI never assigns innerHTML).
+  const doc = new DOMParser().parseFromString(`<svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${CORE_PATHS[name] ?? CORE_PATHS.grid}</svg>`, 'image/svg+xml');
+  span.appendChild(document.importNode(doc.documentElement, true));
+  return span;
+}
+function coreRail() {
+  return h('nav', { class: 'corerail', id: 'corerail', 'aria-label': 'Menu Nordla' },
+    h('div', { class: 'cr-brand' }, h('span', { class: 'cr-mark' }, 'N'), h('span', null, 'Nordla')),
+    h('p', { class: 'cr-title' }, 'Menu principal'),
+    h('ul', { class: 'cr-menu' }, CORE_MENU.map((m) => {
+      const body = [coreIcon(m.icon, m.colour), h('span', null, m.label, m.note ? h('em', { class: 'cr-note' }, m.note) : null)];
+      if (m.current) return h('li', null, h('span', { class: 'cr-cur', 'aria-current': 'page' }, ...body));
+      if (!m.path) return h('li', null, h('span', { class: 'cr-off' }, ...body));
+      return h('li', null, h('a', { href: coreUrl(m.path) }, ...body));
+    })));
+}
+function menuToggle() {
+  return h('button', { class: 'menu-toggle', type: 'button', 'aria-label': 'Menu Nordla', 'aria-controls': 'corerail', on: { click: () => document.querySelector('.shell')?.classList.toggle('menu-open') } }, '☰');
+}
 function layout(active, ...content) {
   const seller = (state.settings && state.settings.seller && state.settings.seller.name) || 'Finance';
   const initial = seller.trim().charAt(0).toUpperCase() || 'F';
-  const rail = h('nav', { class: 'rail', 'aria-label': 'Finance navigation' },
-    h('a', { class: 'rail-mark', href: '#/', title: seller }, initial),
-    h('div', { class: 'rail-nav' }, NAV.map((n) => h('a', { href: n.href, class: `railitem ${n.href === active ? 'active' : ''}`, ...(n.primary ? {} : { 'data-more': '1' }), title: tr(n.label), 'aria-label': tr(n.label) }, h('span', { class: n.nordla ? 'rail-ico official' : 'rail-ico' }, navIcon(n, 'md')), h('span', { class: 'rlabel' }, tr(n.label))))),
-    h('button', { class: 'railitem rail-more', type: 'button', title: tt('More'), 'aria-label': tt('More'), on: { click: openMoreSheet } }, svgIcon('chevron', 18), h('span', { class: 'rlabel' }, tt('More'))),
-    h('div', { class: 'rail-foot' },
-      h('a', { class: `railitem ${active === '#/settings' ? 'active' : ''}`, href: '#/settings', title: tt('Settings'), 'aria-label': tt('Settings') }, h('span', { class: 'rail-ico official' }, NordlaIcon.semantic('parametres', 'md')))));
-  // The merchant's own name, not a hardcoded brand string - this Finance shell is generic/multi-tenant
-  // under the hood (see tenant-isolation tests), so the context label must reflect whoever is actually
-  // signed in rather than one fixed name.
-  const topbar2 = h('div', { class: 'topbar2' }, globalSearch(), h('div', { class: 'tb-right' }, state.nordlaHome ? h('a', { class: 'back-nordla', href: state.nordlaHome, title: 'Retour à l’accueil Nordla' }, '← Accueil Nordla') : null, h('span', { class: 'sync-pill', 'data-sync-pill': '' }, h('span', { class: 'sync-dot warn' }), h('span', { class: 'sync-label' }, tt('Sales source sync unknown'))), langSwitch(), accountMenu(seller)));
+  const topbar2 = h('div', { class: 'topbar2' }, menuToggle(), globalSearch(), h('div', { class: 'tb-right' }, state.nordlaHome ? h('a', { class: 'back-nordla', href: state.nordlaHome, title: 'Retour à l’accueil Nordla' }, '← Accueil Nordla') : null, h('span', { class: 'sync-pill', 'data-sync-pill': '' }, h('span', { class: 'sync-dot warn' }), h('span', { class: 'sync-label' }, tt('Sales source sync unknown'))), langSwitch(), accountMenu(seller)));
   setTimeout(refreshSyncPill, 0);
   const main = h('main', { class: 'main premium' }, content);
   const support = h('button', { class: 'contact-support', type: 'button', on: { click: openContactSupport } }, svgIcon('inbox', 16), h('span', null, tt('Contact us')));
-  show(h('div', { class: 'shell' }, rail, h('div', { class: 'mainarea' }, topbar2, main, support)));
+  // Shared Nordla frame: the Core menu on the left (vertical; a menu button on a phone) and this module's menu on top (horizontal).
+  const fbar = h('nav', { class: 'fbar', 'aria-label': tr('Finance') },
+    NAV.map((n) => h('a', { href: n.href, class: n.href === active ? 'active' : '', ...(n.href === active ? { 'aria-current': 'page' } : {}) }, h('span', { class: 'fbar-ico' }, navIcon(n, 'md')), h('span', null, tr(n.label)))));
+  show(h('div', { class: 'shell nordla-frame' }, coreRail(), h('div', { class: 'mainarea' }, topbar2, fbar, main, support)));
   return main;
 }
 function applyAccent() { const a = state.settings && state.settings.branding && state.settings.branding.accent; if (/^#[0-9a-fA-F]{6}$/.test(a || '')) document.documentElement.style.setProperty('--accent', a); }
