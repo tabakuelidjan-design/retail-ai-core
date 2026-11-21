@@ -59,13 +59,14 @@ export async function loadSalesHome({ publicUrl = '', ticket = '', fetchImpl = g
     const signal = AbortSignal.timeout(TIMEOUT_MS);
     const sso = await fetchImpl(new URL(`/sso?t=${encodeURIComponent(ticket)}`, base).href, { redirect: 'manual', signal });
     const cookie = (sso.headers.getSetCookie?.() ?? []).find((c) => c.startsWith('an_sid='));
-    if (sso.status !== 302 || !cookie) return { status: 'UNAVAILABLE', source: 'Analytics' };
+    if (sso.status !== 302 || !cookie) return { status: 'UNAVAILABLE', source: 'Analytics', reason: `SSO_HTTP_${sso.status}${cookie ? '' : '_NO_COOKIE'}` };
     const sid = cookie.split(';')[0];
     const res = await fetchImpl(new URL('/api/brief', base).href, { headers: { cookie: sid, accept: 'application/json' }, signal });
     if (res.status === 404) return { status: 'NOT_CONNECTED', source: 'Analytics' }; // no report for this merchant yet
-    if (!res.ok) return { status: 'UNAVAILABLE', source: 'Analytics' };
+    if (!res.ok) return { status: 'UNAVAILABLE', source: 'Analytics', reason: `BRIEF_HTTP_${res.status}` };
     return salesHomeFromBrief(await res.json());
-  } catch {
-    return { status: 'UNAVAILABLE', source: 'Analytics' };
+  } catch (e) {
+    // a short, non-secret reason only (never the ticket, the cookie or a response body)
+    return { status: 'UNAVAILABLE', source: 'Analytics', reason: `ERROR_${String(e?.name ?? 'Error').slice(0, 40)}` };
   }
 }
