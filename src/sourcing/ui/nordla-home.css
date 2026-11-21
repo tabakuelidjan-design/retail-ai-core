@@ -1,0 +1,23 @@
+/* Nordla Core home (minimal): only what the Core home screen needs. Every rule is scoped to .nx-home or .nx-back,
+   so the Sourcing screens are unchanged except for the return bar shown on them. */
+
+/* The Sourcing bottom tab bar is not part of the Core home. */
+body:has(.nx-home) #tabs { display: none !important; }
+/* Sourcing caps the page at 640 px; the Core home uses a wider page on PC. */
+body.sl-mode main:has(.nx-home) { max-width: 1100px; }
+
+.nx-home { color: var(--nx-ink, #0F1B2D); padding: 16px 16px 32px; }
+.nx-home h1 { margin: 0 0 4px; font-size: 26px; line-height: 1.2; color: var(--nx-ink, #0F1B2D); }
+.nx-home .muted { color: #6B7280; }
+.nx-home .warn { color: #B42318; }
+
+.nx-home-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 16px; }
+@media (min-width: 720px) { .nx-home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1000px) { .nx-home-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+.nx-home-card { display: flex; flex-direction: column; gap: 6px; padding: 16px; border-radius: 14px; background: #FFFFFF; border: 1px solid #E6E9EF; min-width: 0; }
+.nx-home-card h2 { margin: 0; font-size: 16px; font-weight: 700; color: var(--nx-ink, #0F1B2D); }
+.nx-home-card p { margin: 0; }
+.nx-home-card .btn { align-self: flex-start; margin-top: auto; }
+
+.nx-back { padding: 10px 16px 0; }
