@@ -555,6 +555,7 @@ document.addEventListener('click', onClick); document.addEventListener('submit',
 document.addEventListener('change', (ev) => { const fi = ev.target.closest?.('input[data-act="rec-file"]'); if (fi) { const f = fi.files?.[0]; fi.value = ''; if (f) recFile(f).catch(() => { (S.rec ??= {}).error = 'Ce fichier n’a pas pu être lu.'; openMenu(); }); return; } const f = ev.target.closest?.('form[data-form]'); if (!f || !['quote', 'costs', 'sale', 'amazon-sale'].includes(f.dataset.form) || !cur()) return; S.quiet = true; try { f.requestSubmit(); } finally { S.quiet = false; } });
 $('#btn-cases').addEventListener('click', openMenu);
 document.addEventListener('nordla:parle', (ev) => openParle(ev.detail?.question));
+document.addEventListener('nordla:finance', () => openFinance());
 openFromLink(); // ?ouvrir=… from the other Nordla modules (see core-link.js)
 window.addEventListener('online', ping); window.addEventListener('offline', () => { S.online = false; S.verifiedAt = 0; render(); });
 setInterval(() => { try { paintHeader(); } catch { /* ignore */ } }, 15000); // a verification expires: the header must not keep saying VERIFIED
