@@ -1,6 +1,6 @@
 /* Nordla Core navigation frame (shared by Nordla modules; see nordla-core-rail.js). Every selector is scoped to
    .shell.nordla-frame or .corerail, so a module's own styles are not changed. */
-.shell.nordla-frame { display: grid; grid-template-columns: 232px minmax(0, 1fr); }
+.shell.nordla-frame { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100vh; } /* the Core column stays in view while the page scrolls */
 .shell.nordla-frame > .mainarea { min-width: 0; }
 .corerail { position: sticky; top: 0; height: 100vh; overflow-y: auto; box-sizing: border-box; background: #fff; border-right: 1px solid #E6E9EF; padding: 16px 12px; }
 .corerail .cr-brand { display: flex; align-items: center; gap: 8px; padding: 2px 8px 14px; font-weight: 700; color: #0F1B2D; font-size: 15px; }
