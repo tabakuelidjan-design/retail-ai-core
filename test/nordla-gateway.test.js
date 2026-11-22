@@ -45,7 +45,7 @@ async function fakeService(name) {
     if (p === '/login') { res.writeHead(302, { location: '/after', 'set-cookie': ['fin_sid=abc; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800', 'other=1; Path=/'] }); return res.end(); }
     if (p === '/basic') { res.writeHead(401, { 'www-authenticate': 'Basic realm="x"', 'content-type': 'application/json' }); return res.end('{}'); }
     if (p === '/pdf') { res.writeHead(200, { 'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="facture.pdf"', 'content-length': String(PDF.length) }); return res.end(PDF); }
-    res.writeHead(200, { 'content-type': 'text/html' }); res.end('<html>' + name + '</html>');
+    res.writeHead(200, { 'content-type': 'text/html', 'content-security-policy': "default-src 'self'; frame-ancestors 'none'", 'x-frame-options': 'DENY' }); res.end('<html>' + name + '</html>');
   });
   return { ...svc, seen };
 }
@@ -175,6 +175,20 @@ test('finance: redirects stay under /finance and its session cookie is scoped to
     const cookies = [].concat(login.headers['set-cookie']);
     assert.ok(cookies.some((c) => c.startsWith('fin_sid=abc') && c.includes('Path=/finance')), 'session cookie scoped to /finance');
     assert.ok(cookies.every((c) => !/Path=\/(?!finance)/.test(c)), 'no cookie left at Path=/');
+  } finally { await f.close(); }
+});
+
+test('Finance can be framed by the same Core origin only; direct upstream frame policy is replaced at the gateway', async () => {
+  const f = await gatewayFixture();
+  try {
+    const r = await f.call({ path: '/finance/', headers: f.session });
+    assert.equal(r.status, 200);
+    assert.equal(r.headers['x-frame-options'], 'SAMEORIGIN');
+    assert.match(r.headers['content-security-policy'], /frame-ancestors 'self'/);
+    assert.doesNotMatch(r.headers['content-security-policy'], /frame-ancestors 'none'/);
+    const analytics = await f.call({ path: '/analytics/', headers: f.session });
+    assert.equal(analytics.headers['x-frame-options'], 'DENY', 'other modules keep their own frame policy');
+    assert.match(analytics.headers['content-security-policy'], /frame-ancestors 'none'/);
   } finally { await f.close(); }
 });
 
