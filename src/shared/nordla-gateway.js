@@ -62,6 +62,8 @@ const STRIP_RESPONSE = ['www-authenticate']; // a service's Basic prompt must ne
  * @returns {(req, res, url: URL) => Promise<boolean>} true when the request was handled here (proxied or refused); false for Core's own paths
  */
 // upstreamRequest: the transport to a module (tests inject one to reach a local service); production uses http or https by the module address.
+const keepAliveHttps = new https.Agent({ keepAlive: true, maxSockets: 32 });
+const keepAliveHttp = new http.Agent({ keepAlive: true, maxSockets: 32 });
 export function createGateway({ publicOrigin, services, authorize, modules = MODULES, upstreamRequest = null }) {
   const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
   return async function handle(req, res, url) {
@@ -92,7 +94,9 @@ export function createGateway({ publicOrigin, services, authorize, modules = MOD
     if (svc.token) headers.authorization = `Basic ${Buffer.from(`nordla:${svc.token}`).toString('base64')}`;
 
     const request = upstreamRequest ?? (up.protocol === 'https:' ? https.request : http.request); // a hosted module is https (Railway)
-    const upReq = request({ host: up.hostname, port: up.port, method: req.method, path: route.upstreamPath + url.search, headers }, (ur) => {
+    // connections to a module are kept open and reused: each new one costs TCP and TLS round trips (the module is in another region)
+    const agent = up.protocol === 'https:' ? keepAliveHttps : keepAliveHttp;
+    const upReq = request({ host: up.hostname, port: up.port, method: req.method, path: route.upstreamPath + url.search, headers, agent }, (ur) => {
       const out = { ...ur.headers };
       for (const h of STRIP_RESPONSE) delete out[h];
       if (out.location) out.location = rewriteLocation(String(out.location), up.origin, route.prefix);
