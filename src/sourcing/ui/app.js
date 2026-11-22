@@ -499,6 +499,30 @@ function openParle(question) {
   } else o.innerHTML = corePanel.page(menuCase());
   o.scrollTop = 0;
 }
+/** Finance stays inside the Core page: the Core shell and address remain in place. Its ticketed service page is mounted in the central workspace. */
+async function openFinance() {
+  S.parlePage = false;
+  const o = $('#overlay'); o.hidden = false; o.className = 'show nxa-overlay';
+  const side = document.querySelector('.nx-home-side'), top = document.querySelector('.nx-h-top');
+  if (!side || !top) { o.innerHTML = '<div class="card"><h2>Finance</h2><p class="warn" role="alert">Le cadre Nordla n’est pas disponible. Revenez à l’accueil et réessayez.</p></div>'; return; }
+  const aside = side.cloneNode(true);
+  aside.querySelectorAll('.nx-h-cur').forEach((n) => n.classList.remove('nx-h-cur'));
+  aside.querySelector('[data-act="nx-open-finance"]')?.closest('li')?.classList.add('nx-h-cur');
+  const home = aside.querySelector('ul > li'); if (home) { home.dataset.act = 'close-overlay'; home.style.cursor = 'pointer'; }
+  o.innerHTML = '<div class="nx-home nxp-shell nx-finance-core">' + top.outerHTML + aside.outerHTML + '<div class="nx-h-main"><div class="nx-finance-panel"><p class="nx-finance-loading" role="status">Ouverture de Finance…</p><iframe class="nx-finance-frame" title="Finance" referrerpolicy="same-origin"></iframe></div></div></div>';
+  const frame = o.querySelector('.nx-finance-frame');
+  const loading = o.querySelector('.nx-finance-loading');
+  frame.addEventListener('load', () => { if (loading) loading.hidden = true; });
+  try {
+    const r = await api('/api/core/finance/open', { method: 'POST', body: '{}' });
+    const target = new URL(r.url, window.location.href);
+    if (target.origin !== window.location.origin || !target.pathname.startsWith('/finance/sso')) throw new Error('Finance URL is not on the Core origin');
+    frame.src = target.href; // the browser address stays on Core; /finance is only the internal same-origin module transport
+  } catch {
+    if (loading) { loading.textContent = 'Finance n’a pas pu s’ouvrir. Revenez à l’accueil et réessayez.'; loading.setAttribute('role', 'alert'); }
+  }
+  o.scrollTop = 0;
+}
 function openMenu() {
   S.parlePage = false;
   if (!LEGACY_UI) return openSettings();
