@@ -36,7 +36,8 @@ test('source documents are downloads in the same tab, never a new tab', async ()
 
 test('the Finance server serves the pdf.js files and the embed bundle through the module (session and gateway apply)', async () => {
   const server = await readFile(new URL('../src/finance/server/app.js', import.meta.url), 'utf8');
-  assert.match(server, /'\/pdf\.mjs': \['\.\.\/\.\.\/node_modules\/pdfjs-dist\/build\/pdf\.mjs'/);
-  assert.match(server, /'\/pdf\.worker\.mjs': \['\.\.\/\.\.\/node_modules\/pdfjs-dist\/build\/pdf\.worker\.mjs'/);
+  // from src/finance/ui/ the package root is three levels up (the deployed image has /app/node_modules)
+  assert.match(server, /'\/pdf\.mjs': \['\.\.\/\.\.\/\.\.\/node_modules\/pdfjs-dist\/build\/pdf\.mjs'/);
+  assert.match(server, /'\/pdf\.worker\.mjs': \['\.\.\/\.\.\/\.\.\/node_modules\/pdfjs-dist\/build\/pdf\.worker\.mjs'/);
   assert.match(server, /'\/finance-embed\.js': \['\.\.\/\.\.\/finance-embed\/finance-embed\.js'/);
 });
