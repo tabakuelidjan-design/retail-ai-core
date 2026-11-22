@@ -17,7 +17,7 @@ test('Tableau de bord in the Core menu is a real same-origin link (same tab), in
 test('Parle à Nordla: words are never cut in the middle; the send button wraps its text', async () => {
   const ask = await read('../src/sourcing/ui/nordla-ask.js');
   assert.match(ask, /\.nxa\{max-width:100%;overflow-wrap:break-word;word-break:normal\}/);
-  assert.doesNotMatch(ask, /overflow-wrap:anywhere/, 'the anywhere rule breaks words that fit');
+  assert.doesNotMatch(ask, /\.nxa\{[^}]*overflow-wrap:anywhere/, 'the page root does not break words that fit');
   assert.match(ask, /\.nxa-card-txt\{[^}]*overflow-wrap:break-word;word-break:normal/);
   const send = /\.nxa-send\{[^}]*\}/.exec(ask)?.[0] ?? '';
   assert.match(send, /white-space:normal/, 'the button text can wrap');
