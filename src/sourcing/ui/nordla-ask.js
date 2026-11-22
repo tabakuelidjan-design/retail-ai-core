@@ -28,7 +28,7 @@ const CSS = `.nxa{margin:0 0 12px}.nxa-chips{display:flex;flex-wrap:wrap;gap:8px
 .nxa-sec h4{margin:10px 0 2px;font-size:13px;letter-spacing:.02em;color:var(--muted);text-transform:uppercase}.nxa-sec ul{margin:0;padding-left:18px}.nxa-sec li{font-size:14px;line-height:20px;margin:2px 0}
 .nxa-next{border-left:4px solid var(--accent);padding-left:10px;margin-top:10px}.nxa-src{font-size:13px;color:var(--muted);margin:8px 0 0}.nxa details{margin-top:6px;font-size:13px}.nxa-tools{display:flex;justify-content:space-between;align-items:center;margin:4px 0}`;
 // Conversation page (Parle à Nordla as its own screen): white card, navy text, gold read-only mark, teal activity, one clear composer.
-const CSS_PAGE = `.nxa{max-width:100%;overflow-wrap:anywhere}
+const CSS_PAGE = `.nxa{max-width:100%;overflow-wrap:break-word;word-break:normal}
 .nxa-page{display:flex;flex-direction:column;min-height:calc(100vh - 32px);max-width:880px;margin:0 auto;box-sizing:border-box}
 .nxa-bar{display:flex;justify-content:flex-start;margin:0 0 8px}
 .nxa-page-body{display:flex;flex-direction:column;flex:1;min-height:0;color:#0F1B2D}
@@ -65,10 +65,11 @@ const CSS_PAGE = `.nxa{max-width:100%;overflow-wrap:anywhere}
 .nxa-card:hover{border-color:#B8C3D2}
 .nxa-card:disabled{opacity:.55;cursor:default}
 .nxa-card-ico,.nxa-card-arr{display:inline-flex;flex:0 0 auto}
-.nxa-card-txt{flex:1;min-width:0;line-height:20px}
-.nxa-send{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:48px;padding:0 20px;border:0;border-radius:12px;background:#0F1B2D;color:#fff;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap}
+.nxa-card-txt{flex:1;min-width:0;line-height:20px;overflow-wrap:break-word;word-break:normal;hyphens:manual} /* words are never cut in the middle on a phone */
+.nxa-send{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:48px;max-width:100%;box-sizing:border-box;padding:10px 20px;border:0;border-radius:12px;background:#0F1B2D;color:#fff;font:inherit;font-weight:600;line-height:1.3;text-align:center;cursor:pointer;white-space:normal;overflow-wrap:break-word}
 .nxa-send:disabled{opacity:.55;cursor:default}
-.nxa-dock .nxa-form{display:flex;flex-direction:row;align-items:center;gap:8px;background:#fff;border:1px solid #CBD3DF;border-radius:14px;padding:6px 6px 6px 14px}.nxa-dock .nxa-field{flex:1;min-width:0;border:0;padding:0;background:transparent}.nxa-dock .nxa-send{width:auto;min-height:44px;border-radius:10px;padding:0 22px;white-space:nowrap}@media (max-width:480px){.nxa-cards{grid-template-columns:1fr}.nxa-stage{padding:12px;border-radius:14px}.nxa-title{font-size:22px;line-height:28px}.nxa-form{flex-direction:column}.nxa-send{width:100%}.nxa-page{min-height:calc(100vh - 32px)}}`;
+.nxa-dock .nxa-form{display:flex;flex-direction:row;align-items:center;gap:8px;background:#fff;border:1px solid #CBD3DF;border-radius:14px;padding:6px 6px 6px 14px}.nxa-dock .nxa-field{flex:1;min-width:0;border:0;padding:0;background:transparent}.nxa-dock .nxa-send{width:auto;min-height:44px;border-radius:10px;padding:0 22px;white-space:nowrap}@media (max-width:760px){.nxa-cards{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:480px){.nxa-cards{grid-template-columns:1fr}.nxa-stage{padding:12px;border-radius:14px}.nxa-title{font-size:22px;line-height:28px}.nxa-form{flex-direction:column}.nxa-send{width:100%}.nxa-page{min-height:calc(100vh - 32px)}}`;
 function ensureStyle() { if (typeof document === 'undefined' || document.getElementById('nxa-style')) return; const el = document.createElement('style'); el.id = 'nxa-style'; el.textContent = CSS + CSS_PAGE; document.head.appendChild(el); }
 
 const list = (arr) => (arr?.length ? `<ul>${arr.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '');

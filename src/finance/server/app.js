@@ -106,7 +106,9 @@ export function createFinanceApp(deps) {
     'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://cdn.shopify.com; frame-src 'self'; object-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
     'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', 'Cross-Origin-Resource-Policy': 'same-origin', ...(deps.secureCookie ? { 'Strict-Transport-Security': 'max-age=31536000' } : {}), ...extra,
   });
-  const send = (res, status, body, extra = {}) => { res.writeHead(status, headers(extra)); res.end(body); };
+  // Server-Timing (safe: durations only, no ticket, no secret): the total time the application spent on this request, and its named steps.
+  const timed = async (res, name, fn) => { const t = performance.now(); try { return await fn(); } finally { res.__timings?.push(`${name};dur=${(performance.now() - t).toFixed(1)}`); } };
+  const send = (res, status, body, extra = {}) => { const now = performance.now(); const timing = res.__t0 !== undefined ? [`app;dur=${(now - res.__t0).toFixed(1)}`, ...(res.__route ? [`route;desc="${res.__route.path}";dur=${(now - res.__route.t).toFixed(1)}`] : []), ...(res.__timings ?? [])].join(', ') : null; res.writeHead(status, headers(timing ? { ...extra, 'Server-Timing': timing } : extra)); res.end(body); };
   const staticAssets = createStaticAssets({ resolve: async (pathname) => (await readNordlaShared(pathname)) ?? (STATIC[pathname] ? { body: await readFile(new URL(STATIC[pathname][0], UI)), type: STATIC[pathname][1] } : null) });
   const json = (res, status, obj, extra = {}) => send(res, status, JSON.stringify(obj), { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...extra });
   // Oversized bodies are drained (not stored) and answered with 413, so the client gets a real response instead of a dropped connection.
@@ -389,7 +391,7 @@ export function createFinanceApp(deps) {
     // Never included for an anonymous caller.
     const withSettings = s && ctx.url.searchParams.get('include') === 'settings';
     if (withSettings && s.unconfirmed) { s.expires = Date.now() + SESSION_MS; delete s.unconfirmed; sessions.set(cookies(ctx.req)[COOKIE], s); } // the explicit start confirms the session
-    json(ctx.res, 200, s ? { authenticated: true, csrf: s.csrf, ...(deps.homeUrl ? { nordlaHome: deps.homeUrl } : {}), ...(withSettings ? { settings: await settingsPayload() } : {}) } : { authenticated: false });
+    json(ctx.res, 200, s ? { authenticated: true, csrf: s.csrf, ...(deps.homeUrl ? { nordlaHome: deps.homeUrl } : {}), ...(withSettings ? { settings: await timed(ctx.res, 'settings', settingsPayload) } : {}) } : { authenticated: false });
   }, { public: true });
 
   on('POST', '/api/logout', async (ctx) => { sessions.delete(cookies(ctx.req)[COOKIE]); json(ctx.res, 200, { ok: true }, { 'Set-Cookie': `${COOKIE}=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${cookieFlags}` }); });
@@ -1443,7 +1445,7 @@ export function createFinanceApp(deps) {
     send(res, 302, '', { Location: openId ? `/#/purchases?open=${openId}` : '/', 'Cache-Control': 'no-store', 'Set-Cookie': `${COOKIE}=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${cookieFlags}` });
   }
 
-  const handler = (req, res) => readCache.run(() => handleRequest(req, res));
+  const handler = (req, res) => { res.__t0 = performance.now(); res.__timings = []; return readCache.run(() => handleRequest(req, res)); };
   async function handleRequest(req, res) {
     try {
       const host = req.headers.host ?? '';
@@ -1480,6 +1482,7 @@ export function createFinanceApp(deps) {
         if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) throw new HttpError(415, 'JSON_REQUIRED');
       }
       const body = mutating ? await readBody(req, route.r.bodyLimit) : undefined;
+      res.__route = { path: url.pathname, t: performance.now() }; // the route step: from dispatch to the answer, named by its path (see send)
       await route.r.fn({ req, res, url, m: route.m, body, session });
     } catch (e) { errorResponse(res, e); }
   }

@@ -96,12 +96,15 @@ export function createGateway({ publicOrigin, services, authorize, modules = MOD
     const request = upstreamRequest ?? (up.protocol === 'https:' ? https.request : http.request); // a hosted module is https (Railway)
     // connections to a module are kept open and reused: each new one costs TCP and TLS round trips (the module is in another region)
     const agent = up.protocol === 'https:' ? keepAliveHttps : keepAliveHttp;
+    const gwStart = performance.now();
     const upReq = request({ host: up.hostname, port: up.port, method: req.method, path: route.upstreamPath + url.search, headers, agent }, (ur) => {
       const out = { ...ur.headers };
       for (const h of STRIP_RESPONSE) delete out[h];
       if (out.location) out.location = rewriteLocation(String(out.location), up.origin, route.prefix);
       if (out['set-cookie']) out['set-cookie'] = modules[route.key].cookies ? [].concat(out['set-cookie']).map((c) => rewriteSetCookie(c, route.prefix)) : undefined;
       if (out['set-cookie'] === undefined) delete out['set-cookie'];
+      // Server-Timing: the module's own timing is kept, and the gateway adds the time it waited for the module to answer (network + module)
+      out['server-timing'] = [out['server-timing'], `gw;dur=${(performance.now() - gwStart).toFixed(1)}`].filter(Boolean).join(', ');
       res.writeHead(ur.statusCode, out);
       ur.pipe(res);
     });

@@ -494,7 +494,7 @@ function openParle(question) {
     const aside = side.cloneNode(true);
     aside.querySelectorAll('.nx-h-cur').forEach((n) => n.classList.remove('nx-h-cur'));
     aside.querySelector('[data-act="nx-open-parle"]')?.closest('li')?.classList.add('nx-h-cur');
-    const home = aside.querySelector('ul > li'); if (home) { home.dataset.act = 'close-overlay'; home.style.cursor = 'pointer'; } // "Tableau de bord" leaves the page
+    homeAsLink(aside.querySelector('ul > li')); // "Tableau de bord" is a real link to the Core home, same tab
     o.innerHTML = `<div class="nx-home nxp-shell">${top.outerHTML}${aside.outerHTML}<div class="nx-h-main">${corePanel.page(menuCase(), { shell: true })}</div></div>`;
   } else o.innerHTML = corePanel.page(menuCase());
   o.scrollTop = 0;
@@ -542,6 +542,13 @@ document.addEventListener('focusin', onFinanceInterest);
 document.addEventListener('touchstart', onFinanceInterest, { passive: true });
 // The explicit start of the Finance screen: confirms the session and returns the first answer (settings). A preparation that expired
 // (two minutes without a click) is prepared again, once.
+/** The Core home entry as a real link (same origin, same tab): the menu item keeps its look, the browser follows the href. */
+function homeAsLink(li) {
+  if (!li || li.querySelector('a[href="/"]')) return;
+  const a = document.createElement('a'); a.href = '/'; a.style.cssText = 'display:contents;color:inherit;text-decoration:none';
+  while (li.firstChild) a.appendChild(li.firstChild);
+  li.appendChild(a); li.style.cursor = 'pointer';
+}
 async function fetchFinanceStart() {
   return fetch('/finance/api/session?include=settings', { credentials: 'same-origin', cache: 'no-store' }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
 }
@@ -561,7 +568,7 @@ async function openFinance() {
   const aside = side.cloneNode(true);
   aside.querySelectorAll('.nx-h-cur').forEach((n) => n.classList.remove('nx-h-cur'));
   aside.querySelector('[data-act="nx-open-finance"]')?.closest('li')?.classList.add('nx-h-cur');
-  const home = aside.querySelector('ul > li'); if (home) { home.dataset.act = 'close-overlay'; home.style.cursor = 'pointer'; } // "Tableau de bord" leaves the page
+  homeAsLink(aside.querySelector('ul > li')); // "Tableau de bord" is a real link to the Core home, same tab
   o.innerHTML = `<div class="nx-home nxp-shell nx-finance-core">${top.outerHTML}${aside.outerHTML}<div class="nx-h-main"><div class="nx-finance-panel" data-nx-finance><p class="nx-finance-loading" role="status">Ouverture de Finance…</p></div></div></div>`;
   const panel = o.querySelector('[data-nx-finance]');
   const fail = () => { const loading = panel.querySelector('.nx-finance-loading'); if (loading) { loading.textContent = 'Finance n’a pas pu s’ouvrir. Revenez à l’accueil et réessayez.'; loading.setAttribute('role', 'alert'); } };

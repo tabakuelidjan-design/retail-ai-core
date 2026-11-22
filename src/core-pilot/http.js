@@ -50,7 +50,8 @@ export function httpsOrigin(value) { try { const u = new URL(String(value ?? '')
 export function growthSsoConfig(env, merchantId) { const origin = growthOrigin(env); const secret = String(env?.GROWTH_SSO_SECRET ?? ''); return origin && secret.length >= HANDOFF_MIN_SECRET_LENGTH && merchantId ? { origin, secret, merchantId } : null; }
 
 export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null, procurement = null, branding = null, campaigns = null, creation = null, financeSso = null, analyticsSso = null, merchantIdentity = null, merchantId = null, entitlements = null, env = process.env }) {
-  const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
+  // Server-Timing: Core's own processing time for the answer (durations only, nothing secret)
+  const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...(res.__t0 !== undefined ? { 'server-timing': `core;dur=${(performance.now() - res.__t0).toFixed(1)}` } : {}) }); res.end(JSON.stringify(body)); };
   // ACTIVE module codes of THIS merchant, read on each call. No reader, or a failed read: nothing is active (default deny).
   async function activeModules() { if (typeof entitlements !== 'function') return new Set(); try { const s = await entitlements(); return s instanceof Set ? s : new Set(); } catch { return new Set(); } }
   const refusalOf = (decision) => ({ status: 403, body: { error: decision.code, message: 'Ce module n’est pas ouvert pour votre compte ou votre rôle.' } });
@@ -87,6 +88,7 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
 
   /** @returns {Promise<boolean>} true when the request was a /api/core route (answered). `actor` = { userId?, role, label? } from the server's authorisation. */
   async function handle(req, res, url, actor) {
+    res.__t0 = performance.now();
     const p = url.pathname; const m = req.method;
     if (!p.startsWith('/api/core/')) return false;
     try {
