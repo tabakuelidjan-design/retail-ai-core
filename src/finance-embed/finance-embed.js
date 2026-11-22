@@ -1334,6 +1334,7 @@ window.NordlaCharts = (function () {
   window.FINANCE_LANG.fr = { messages, patterns };
 })();
 
+  const FINANCE_LANG = window.FINANCE_LANG;
 
   // ---- src/finance/ui/lang-nl.js ----
 'use strict';
@@ -2219,6 +2220,7 @@ window.NordlaCharts = (function () {
   window.tt = tt; window.tr = tr;
 })();
 
+  const I18N = window.I18N; const tt = window.tt; const tr = window.tr;
 
   // ---- src/finance/ui/bank-connect.js ----
 'use strict';
@@ -5526,6 +5528,7 @@ function openContactDrawer(id, onClose) {
   window.viewPackComptable = viewPackComptable; window.openExpenseCapture = openExpenseCapture; window.attachButton = attachButton; window.captureInfoNode = captureInfoNode;
 })();
 
+  const viewPackComptable = window.viewPackComptable; const openExpenseCapture = window.openExpenseCapture; const attachButton = window.attachButton; const captureInfoNode = window.captureInfoNode;
 
   // ---- src/finance/ui/pdf-preview.js ----
 // PDF preview inside the Finance screen, without an iframe and without a new window: the PDF is drawn page by page on canvases,
