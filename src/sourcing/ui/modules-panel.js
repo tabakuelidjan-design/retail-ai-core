@@ -54,7 +54,7 @@ export function createModulesPanel({ S, api, refresh, repaintHome = () => {} }) 
       return api('/api/core/growth/open', { method: 'POST', body: JSON.stringify({ to: t.dataset.to }) }).then((r) => go(typeof r?.url === 'string' && r.url.startsWith(`${new URL(plain, window.location.href).origin}/`) ? r.url : plain), () => go(plain));
     }
     if (a === 'nx-open-analytics') { const w = window.open('', '_blank'); if (w) w.opener = null; st.busy = true; st.error = ''; refresh(); return api('/api/core/analytics/open', { method: 'POST', body: '{}' }).then((r) => { if (w) w.location.href = r.url; else window.location.href = r.url; }, (e) => { if (w) w.close(); fail(e); }).finally(() => { st.busy = false; refresh(); }); }
-    if (a === 'nx-open-finance') { const w = window.open('', '_blank'); if (w) w.opener = null; st.busy = true; st.error = ''; refresh(); return api('/api/core/finance/open', { method: 'POST', body: '{}' }).then((r) => { if (w) w.location.href = r.url; else window.location.href = r.url; }, (e) => { if (w) w.close(); fail(e); }).finally(() => { st.busy = false; refresh(); });
+    if (a === 'nx-open-finance') { st.busy = true; st.error = ''; refresh(); return api('/api/core/finance/open', { method: 'POST', body: '{}' }).then((r) => { window.location.assign(r.url); }, (e) => { fail(e); }).finally(() => { st.busy = false; refresh(); });
     }
     if (a === 'nx-ask') return post('/api/core/ask', { text: t.dataset.q }, (r) => { st.answer = { q: t.dataset.label, ...r }; });
     if (a === 'nx-check') return post('/api/core/branding/check', { text: val('nx-copy') }, (r) => { st.check = r; });

@@ -16,5 +16,5 @@ test('Home does not request /api/actions (not rendered there)', () => {
 test('the To do page still requests the Action Center', () => {
   const ws = readFileSync(new URL('../src/finance/ui/views-workspace.js', import.meta.url), 'utf8');
   const todo = ws.slice(ws.indexOf('async function viewTodo()'), ws.indexOf('async function viewTodo()') + 800);
-  assert.match(todo, /api\('GET', '\/api\/actions'\)/);
+  assert.match(todo, /api\('GET', '(?:\/)?api\/actions'\)/);
 });

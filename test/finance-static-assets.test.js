@@ -46,16 +46,16 @@ test('index.html is revalidated and versions every local script/style by content
     const idx = await get(h.base, '/');
     assert.equal(idx.headers['cache-control'], 'no-cache');
     const html = decode(idx).toString('utf8');
-    const refs = [...html.matchAll(/(?:src|href)="(\/[^"]+)"/g)].map((m) => m[1]);
+    const refs = [...html.matchAll(/(?:src|href)="((?!https?:)[^"]+.(?:js|css)[^"]*)"/g)].map((m) => m[1]); // scripts and styles only (relative under <base>, or root-absolute)
     assert.ok(refs.length >= 10);
     for (const r of refs) assert.match(r, /\?v=[0-9a-f]{20}$/, `unversioned reference ${r}`);
-    const appRef = refs.find((r) => r.startsWith('/app.js?v='));
-    const cur = await get(h.base, appRef);
+    const appRef = refs.find((r) => r.startsWith('app.js?v='));
+    const cur = await get(h.base, '/' + appRef);
     assert.equal(cur.status, 200); assert.equal(cur.headers['cache-control'], 'public, max-age=31536000, immutable');
     const stale = await get(h.base, '/app.js?v=00000000000000000000');
     assert.equal(stale.status, 200); assert.equal(stale.headers['cache-control'], 'no-cache');
-    const shared = refs.find((r) => r.startsWith('/nordla-icon.js?v='));
-    assert.equal((await get(h.base, shared)).headers['cache-control'], 'public, max-age=31536000, immutable');
+    const shared = refs.find((r) => r.startsWith('nordla-icon.js?v='));
+    assert.equal((await get(h.base, '/' + shared)).headers['cache-control'], 'public, max-age=31536000, immutable');
   } finally { await h.close(); }
 });
 

@@ -58,7 +58,7 @@ export function backupHealth(st, nowMs, { maxAgeH = 26, firstRunGraceMin = 30 } 
 export const SOURCING_WRITERS = new Set(WRITER_ROLES); // src/identity/permissions.js is the source of these rules
 /** POST routes that only compute or read (no stored change): open to every member. */
 export const READ_ONLY_POSTS = new Set(READ_ONLY_POSTS_LIST);
-export function createSourcingApp({ redirect = null, release = { sha: 'unknown', branch: 'unknown', source: 'none' },accessJournal = null, backupStatus = null, token, gate = null, core = null, procurement = null, creator = null, gbp = null, videos = null, connections = null, general = null, security = null, team = null, notifications = null, preferences = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
+export function createSourcingApp({ financeGateway = null, redirect = null, release = { sha: 'unknown', branch: 'unknown', source: 'none' },accessJournal = null, backupStatus = null, token, gate = null, core = null, procurement = null, creator = null, gbp = null, videos = null, connections = null, general = null, security = null, team = null, notifications = null, preferences = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
   if (!gate && (!token || String(token).length < 24)) throw new Error('a token of at least 24 characters is required'); // hosted: the session gate (Core identity) replaces the token
   // Host header allow-list (blocks DNS-rebinding on the loopback server). A tunnel's public host name must be added by the owner (SOURCING_ALLOWED_HOSTS).
   // `allowedHosts` may be a live array: the phone launcher adds the tunnel host name once it is known
@@ -196,6 +196,7 @@ export function createSourcingApp({ redirect = null, release = { sha: 'unknown',
       if (req.method === 'GET' && String(req.url).split('?')[0] === '/healthz/backup') { const h = backupHealth(backupStatus?.() ?? null, now().getTime()); return json(res, h.ok ? 200 : 503, h, { 'cache-control': 'no-store' }); }
       const url = new URL(req.url, 'http://local');
       if (url.pathname === '/shell-manifest.json' && req.method === 'GET') return json(res, 200, await shellManifest(), { 'cache-control': 'no-cache' });
+      if (financeGateway && await financeGateway.handle(req, res, url)) return; // Finance under the Core origin (/finance/*): Core session + CSRF checked by the gateway, then proxied
       if (gate && url.pathname.startsWith('/api/auth/') && await gate.handle(req, res, url.pathname)) return;
       if (!gate && url.pathname === '/api/auth/session' && req.method === 'GET') return json(res, 200, { mode: 'token' }); // the page asks which sign-in: no data, no token check (would count as a failed attempt)
       if (creator && await creator.handle(req, res, url)) return; // the Creator (staging module, only when built): its own paths, its own failures

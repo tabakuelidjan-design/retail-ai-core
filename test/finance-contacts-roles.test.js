@@ -117,7 +117,7 @@ test('UI: the form asks the role (required), person or company, and every field;
   assert.match(form, /\[\['business', tt\('A company'\)\], \['individual', tt\('A person'\)\]\]/);
   for (const k of ["inp('firstName'", "inp('name'", "inp('vatNumber'", "inp('enterpriseNumber'", "inp('email'", "inp('phone'", "inp('street'", "inp('postalCode'", "inp('city'", "inp('countryCode'", "inp('iban'", "inp('notes'"]) assert.ok(form.includes(k), k);
   assert.match(form, /if \(!m\.role\) problems\.push/, 'no request without a role');
-  const call = form.indexOf("await api('POST', '/api/companies', body)"); const ok = form.indexOf("toast(tt('Contact saved'), 'ok')");
+  const call = form.indexOf("await api('POST', 'api/companies', body)"); const ok = form.indexOf("toast(tt('Contact saved'), 'ok')");
   assert.ok(call > 0 && ok > call, 'the success toast only after the API answered');
   assert.match(form, /location\.hash = target;/); assert.match(form, /#\/contacts\?open=\$\{r\.id\}/, 'the list reloads and the contact opens');
   assert.match(form, /e\.code === 'CONTACT_POSSIBLE_DUPLICATE'/); assert.match(form, /tt\('Create anyway'\)/); assert.match(form, /e\.code === 'ROLE_IN_USE'/);

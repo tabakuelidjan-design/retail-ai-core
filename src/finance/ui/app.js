@@ -97,11 +97,18 @@ function toast(msg, kind) { const t = h('div', { class: `toast ${kind || ''}` },
 
 // ---------- API ----------
 class ApiError extends Error { constructor(status, body) { super((body && body.error && body.error.code) || 'ERROR'); this.status = status; this.code = this.message; this.fields = (body && body.error && body.error.fields) || null; this.extra = (body && body.error) || {}; } }
+// the Core CSRF token is read from the Core cookie (set by Core), never stored or invented here
+function coreCsrf() { const m = String(document.cookie || '').match(/(?:^|;\s*)__Host-nordla_sourcing_csrf=([A-Za-z0-9_-]{43})(?:;|$)/); return m ? m[1] : ''; }
 async function api(method, path, body) {
-  const res = await fetch(path, { method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': state.csrf || '' }, body: body === undefined ? undefined : JSON.stringify(body) });
+  // Under the Nordla Core gateway every change also carries the Core CSRF token (the Core cookie, checked by Core on each change).
+  // Finance keeps its own token (X-CSRF-Token) on top: both are required. Standalone (no Core cookie) the header is simply absent.
+  const core = method !== 'GET' ? coreCsrf() : '';
+  const res = await fetch(path, { method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': state.csrf || '', ...(core ? { 'x-nordla-csrf': core } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
   const ct = res.headers.get('content-type') || '';
   const data = ct.includes('application/json') ? await res.json() : null;
-  if (res.status === 401 && path !== '/api/login') { state.csrf = null; renderLogin(); throw new ApiError(401, data); }
+  // session expired: back to the Nordla sign-in when Finance runs under Core (never a Finance token form inside Core)
+  if (res.status === 401 && path !== 'api/login' && state.nordlaHome) { state.csrf = null; window.location.assign(state.nordlaHome); throw new ApiError(401, data); }
+  if (res.status === 401 && path !== 'api/login') { state.csrf = null; renderLogin(); throw new ApiError(401, data); }
   if (!res.ok) throw new ApiError(res.status, data);
   return data;
 }
@@ -242,7 +249,7 @@ function accountMenu(seller) {
     document.addEventListener('click', (e) => { if (!e.target.closest || !e.target.closest('.acct')) closeAll(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeAll(); });
   }
-  const logout = h('button', { class: 'acct-item', type: 'button', role: 'menuitem', on: { click: async () => { await api('POST', '/api/logout', {}).catch(() => {}); state.csrf = null; renderLogin(); } } }, svgIcon('logout', 16), tt('Log out'));
+  const logout = h('button', { class: 'acct-item', type: 'button', role: 'menuitem', on: { click: async () => { await api('POST', 'api/logout', {}).catch(() => {}); state.csrf = null; renderLogin(); } } }, svgIcon('logout', 16), tt('Log out'));
   const wrap = h('div', { class: 'acct' });
   const trigger = h('button', { class: 'tb-brand', type: 'button', 'aria-haspopup': 'menu', 'aria-expanded': 'false', on: { click: () => { const open = wrap.classList.toggle('open'); trigger.setAttribute('aria-expanded', String(open)); } } }, seller, h('span', { class: 'acct-chev' }, svgIcon('chevron', 13)));
   wrap.appendChild(trigger);
@@ -262,7 +269,7 @@ async function refreshSyncPill() {
   const el = document.querySelector('[data-sync-pill]');
   if (!el) return;
   try {
-    const r = await api('GET', '/api/sync-status'); const s = r.sync;
+    const r = await api('GET', 'api/sync-status'); const s = r.sync;
     const dot = el.querySelector('.sync-dot'); const label = el.querySelector('.sync-label');
     let text; let tone = 'ok';
     if (s && s.reason === 'NO_SALES_SOURCE') { text = tt('No sales source connected'); tone = 'mute'; }
@@ -296,13 +303,13 @@ function layout(active, ...content) {
 }
 function applyAccent() { const a = state.settings && state.settings.branding && state.settings.branding.accent; if (/^#[0-9a-fA-F]{6}$/.test(a || '')) document.documentElement.style.setProperty('--accent', a); }
 /** @param {object} [pre] a /api/settings payload already received (startup: /api/session?include=settings) */
-async function loadSettings(pre) { const r = pre ?? await api('GET', '/api/settings'); state.timeZone = r.timeZone; state.settings = r.settings; state.missing = r.missing; state.regimes = r.vatRegimes; applyAccent(); return r; }
+async function loadSettings(pre) { const r = pre ?? await api('GET', 'api/settings'); state.timeZone = r.timeZone; state.settings = r.settings; state.missing = r.missing; state.regimes = r.vatRegimes; applyAccent(); return r; }
 
 // ---------- login ----------
 function renderLogin() {
   const inp = h('input', { type: 'password', placeholder: 'Access token', autocomplete: 'current-password' });
   const msg = h('div');
-  const go = async () => { try { const r = await api('POST', '/api/login', { token: inp.value }); state.csrf = r.csrf; inp.value = ''; await loadSettings(); route(); } catch (e) { fail(e, msg); } };
+  const go = async () => { try { const r = await api('POST', 'api/login', { token: inp.value }); state.csrf = r.csrf; inp.value = ''; await loadSettings(); route(); } catch (e) { fail(e, msg); } };
   inp.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') go(); });
   show(h('div', { class: 'login card' }, h('div', { style: 'display:flex;justify-content:flex-end' }, langSwitch()), h('h1', null, 'Finance'), h('p', { class: 'muted' }, 'Enter the access token stored in your .env file (FINANCE_DASHBOARD_TOKEN).'), h('div', { class: 'field' }, inp), msg, h('button', { class: 'primary', on: { click: go } }, 'Log in')));
   inp.focus();
@@ -373,7 +380,7 @@ async function invoicePreviewNode(sample, cur) {
       h('div', { class: 'mini-table' }, h('div', { class: 'trow' }, h('span', null, tt('Blank template')))));
   }
   let detail = null;
-  try { detail = await api('GET', `/api/documents/${sample.id}`); } catch (e) { /* fall back to the list row's own totals below */ }
+  try { detail = await api('GET', `api/documents/${sample.id}`); } catch (e) { /* fall back to the list row's own totals below */ }
   const rows = [];
   const lines = detail?.doc?.lines || [];
   const tLines = detail?.totals?.lines || [];
@@ -410,10 +417,10 @@ async function viewOverview() {
     // /api/actions is NOT requested here: since the approved dashboard redesign (887d978) the Home no longer shows the Action Center
     // (the "A faire" page does), and its result was fetched but never used - the heaviest endpoint, for nothing.
     const [o, treasury, purchaseRows, invoiceRows] = await Promise.all([
-      api('GET', '/api/overview'),
-      api('GET', '/api/treasury').catch(() => null),
-      api('GET', '/api/inbox?scope=purchases').then((r) => r.rows).catch(() => []),
-      api('GET', '/api/documents?type=invoice').then((r) => r.rows).catch(() => []),
+      api('GET', 'api/overview'),
+      api('GET', 'api/treasury').catch(() => null),
+      api('GET', 'api/inbox?scope=purchases').then((r) => r.rows).catch(() => []),
+      api('GET', 'api/documents?type=invoice').then((r) => r.rows).catch(() => []),
     ]);
     clear(box);
     const cur = o.currency;
@@ -459,7 +466,7 @@ async function viewOverview() {
     // .home-chart scopes the reference-matched recolour (grey/blue Entrées, terracotta Solde) to this one
     // instance - the Tresorerie page reuses the same treasuryChart()/CSS classes and keeps its own colours.
     const chartWrap = h('div', { class: 'home-chart' }, h('div', { class: 'muted small' }, 'Loading...'));
-    const loadChart = (months) => api('GET', `/api/overview/cashflow?months=${months}`).then((r) => {
+    const loadChart = (months) => api('GET', `api/overview/cashflow?months=${months}`).then((r) => {
       clear(chartWrap);
       // #3: an explicitly honest "not enough history" state instead of a flat, misleading chart when nothing
       // has actually been recorded yet.
@@ -485,7 +492,7 @@ async function viewOverview() {
     // Recent activity: the real document-lifecycle trail, unchanged data source.
     const actCard = h('div', { class: 'card panel-tall', style: 'padding:16px 18px' }, h('div', { class: 'section-head' }, h('h3', { class: 'section-title' }, 'Recent activity'), h('a', { href: '#/todo', class: 'viewall' }, tt('See all'), ' →')), h('div', { class: 'muted small' }, 'Loading...'));
     mid.appendChild(actCard);
-    api('GET', '/api/overview/activity').then((r) => {
+    api('GET', 'api/overview/activity').then((r) => {
       clear(actCard); actCard.appendChild(h('div', { class: 'section-head' }, h('h3', { class: 'section-title' }, 'Recent activity'), h('a', { href: '#/todo', class: 'viewall' }, tt('See all'), ' →')));
       if (!r.rows.length) { actCard.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('doc', 20)), h('div', null, h('strong', null, 'Nothing yet'), h('div', { class: 'muted small' }, 'Issued invoices, payments and credit notes will show up here.')))); return; }
       actCard.appendChild(h('div', { class: 'activity' }, r.rows.map((e) => activityRow(e))));
@@ -525,7 +532,7 @@ async function viewOverview() {
         h('div', { class: 'bankbal-col' }, h('div', { class: 'bankbal' }, `${a.balance} ${a.currency}`), a.asOf ? h('div', { class: 'blastsync' }, tt('Last sync: {0}', a.asOf)) : null)))));
       const txWrap = h('div', { class: 'bank-tx' });
       bankCard.appendChild(txWrap);
-      api('GET', '/api/bank/transactions').then((r) => {
+      api('GET', 'api/bank/transactions').then((r) => {
         const rows = r.rows.slice(0, 3);
         if (!rows.length) return;
         clear(txWrap);
@@ -591,7 +598,7 @@ async function viewOverview() {
       }
       mount(donutBody, foreignNote(r.excludedForeign));
     };
-    const loadBreakdown = (period) => api('GET', `/api/overview/expense-breakdown?period=${period}`).then(renderBreakdown).catch(() => { clear(donutBody); donutBody.appendChild(h('div', { class: 'muted small' }, 'Breakdown unavailable.')); });
+    const loadBreakdown = (period) => api('GET', `api/overview/expense-breakdown?period=${period}`).then(renderBreakdown).catch(() => { clear(donutBody); donutBody.appendChild(h('div', { class: 'muted small' }, 'Breakdown unavailable.')); });
     loadBreakdown('all');
 
     bottom.appendChild(bankCard); bottom.appendChild(invCard); bottom.appendChild(donutCard);
@@ -641,7 +648,7 @@ async function viewList(kind, query) {
   search.addEventListener('input', () => { text = search.value; draw(); });
   try {
     const types = isQuote ? ['quote'] : ['invoice', 'credit_note'];
-    const lists = await Promise.all(types.map((t) => api('GET', `/api/documents?type=${t}`)));
+    const lists = await Promise.all(types.map((t) => api('GET', `api/documents?type=${t}`)));
     rows = lists.flatMap((l) => l.rows).sort((a, b) => String(b.issueDate).localeCompare(String(a.issueDate)));
     draw();
   } catch (e) { fail(e, box); }
@@ -672,7 +679,7 @@ function companySearchBox({ onPick }) {
   async function choose(r, serverMsg) {
     try {
       let result = r;
-      if (r.needsResolve || r.needsVatCheck) { const x = await api('POST', '/api/companies/resolve', { enterpriseNumber: r.enterpriseNumber, name: r.name, status: r.status || undefined }); result = x.result; say(x.status === 'FOUND' ? 'ok' : 'warn', x.message); }
+      if (r.needsResolve || r.needsVatCheck) { const x = await api('POST', 'api/companies/resolve', { enterpriseNumber: r.enterpriseNumber, name: r.name, status: r.status || undefined }); result = x.result; say(x.status === 'FOUND' ? 'ok' : 'warn', x.message); }
       else if (serverMsg) say(r.personalData || (r.vatState && r.vatState !== 'ACTIVE') || /Register status/.test(serverMsg) ? 'warn' : 'ok', serverMsg + ' Check the fields below: you can still correct them.');
       else say('ok', tt('Filled in from: {0}. Check the fields below: you can still correct them.', tr(r.sourceLabel)));
       clear(list); onPick(result);
@@ -683,7 +690,7 @@ function companySearchBox({ onPick }) {
     if (!input.value.trim()) return say('warn', 'Type a company name, or a VAT / enterprise number.');
     say('info', 'Searching...');
     try {
-      const r = await api('POST', '/api/companies/search', { query: input.value });
+      const r = await api('POST', 'api/companies/search', { query: input.value });
       if (mine !== seq) return;
       const good = r.status === 'FOUND' || r.status === 'OK';
       const partial = r.partial ? h('div', { style: 'margin-top:6px' }, h('button', { type: 'button', on: { click: () => { clear(list); onPick(r.partial); say('warn', 'Number kept. Complete the other fields by hand.'); } } }, 'Use this number and complete by hand')) : null;
@@ -726,7 +733,7 @@ function productSearchBox({ onPick, onClose, currency }) {
     if (q.length < 2) { clear(list); return say('Type at least 2 characters: a product name, variant or SKU.'); }
     say(''); skeleton();
     try {
-      const r = await api('GET', `/api/catalog/search?q=${encodeURIComponent(q)}`);
+      const r = await api('GET', `api/catalog/search?q=${encodeURIComponent(q)}`);
       if (mine !== seq) return;
       clear(list); active = -1;
       if (!r.rows.length) return say('No product found in the catalogue. Use "+ Add custom line" for a service or a special item.');
@@ -742,7 +749,7 @@ function productSearchBox({ onPick, onClose, currency }) {
     } catch (e) { clear(list); say(e && e.message ? e.message : 'Search failed.'); }
   }
   async function pick(x) {
-    try { const r = await api('POST', '/api/catalog/select', { variantId: x.variantId }); onPick(r); } catch (e) { fail(e, msg); }
+    try { const r = await api('POST', 'api/catalog/select', { variantId: x.variantId }); onPick(r); } catch (e) { fail(e, msg); }
   }
   input.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(run, 180); });
   input.addEventListener('keydown', (ev) => {
@@ -769,10 +776,10 @@ async function viewForm(kind, editId) {
   const errBox = h('div');
   const s = state.settings;
   let doc = null;
-  if (editId) { try { doc = await api('GET', `/api/documents/${editId}`); } catch (e) { return fail(e, main); } }
+  if (editId) { try { doc = await api('GET', `api/documents/${editId}`); } catch (e) { return fail(e, main); } }
   const D = doc ? doc.doc : null;
   let PF = null;
-  if (!editId && prefillCompanyId) { try { PF = await api('GET', `/api/companies/${prefillCompanyId}`); } catch (e) { /* unknown/foreign id: fall back to a blank form rather than failing the page */ } }
+  if (!editId && prefillCompanyId) { try { PF = await api('GET', `api/companies/${prefillCompanyId}`); } catch (e) { /* unknown/foreign id: fall back to a blank form rather than failing the page */ } }
   const model = {
     companyId: (D && D.customer.companyId) || (PF && PF.id) || null,
     name: D ? D.customer.name : (PF ? PF.name : ''), vatNumber: D ? (D.customer.vatNumber || '') : (PF ? (PF.vatNumber || '') : ''), enterpriseNumber: D ? (D.customer.enterpriseNumber || '') : (PF ? (PF.enterpriseNumber || '') : ''),
@@ -801,7 +808,7 @@ async function viewForm(kind, editId) {
     const seq = ++calcSeq;
     try {
       const p = payload();
-      const r = await api('POST', '/api/calc', { lines: p.lines, vat: p.vat, customer: { vatNumber: p.customer.vatNumber, countryCode: p.customer.address.countryCode }, currency: p.currency, language: p.language });
+      const r = await api('POST', 'api/calc', { lines: p.lines, vat: p.vat, customer: { vatNumber: p.customer.vatNumber, countryCode: p.customer.address.countryCode }, currency: p.currency, language: p.language });
       if (seq !== calcSeq) return; lastCalc = r; renderTotals(); renderLineTotals();
     } catch (e) { /* the next edit retries */ }
   }
@@ -943,7 +950,7 @@ async function viewForm(kind, editId) {
     const run = async () => {
       try {
         const qs = new URLSearchParams(); if (q.value) qs.set('q', q.value); if (from.value) qs.set('from', from.value); if (to.value) qs.set('to', to.value); if (min.value) qs.set('min', min.value); if (max.value) qs.set('max', max.value);
-        const r = await api('GET', `/api/orders?${qs}`); clear(out);
+        const r = await api('GET', `api/orders?${qs}`); clear(out);
         out.appendChild(r.rows.length ? h('table', null, h('tr', null, ['Order', 'Date', 'Channel', 'Items', 'Total', ''].map((x, i) => h('th', { class: i === 4 ? 'num' : '' }, x))), r.rows.map((o) => h('tr', { class: `picker-row ${o.invoiced ? 'disabled' : ''}` }, h('td', null, `#${o.ref}`), h('td', { class: 'nowrap' }, o.date), h('td', null, o.channel), h('td', { class: 'small' }, o.items.join(', '), o.moreItems ? ` +${o.moreItems}` : ''), h('td', { class: 'num nowrap' }, `${o.total} ${model.currency}`, o.refunded ? h('div', { class: 'small muted' }, tt('refunded {0}', o.refunded)) : null), h('td', null, o.invoiced ? h('span', { class: 'badge PARTIAL' }, tt('Invoiced {0}', o.invoiced.number || '')) : h('button', { class: 'primary', on: { click: () => { model.sourceOrderId = o.sourceOrderId; model.sourceLabel = `#${o.ref} (${o.date}, ${o.total})`; bk.remove(); renderBasis(); } } }, 'Select'))))) : h('div', { class: 'muted' }, 'No matching orders.'));
       } catch (e) { fail(e, out); }
     };
@@ -965,10 +972,10 @@ async function viewForm(kind, editId) {
       const body = payload();
       if (!model.companyId && model.saveCompany && model.name && (model.vatNumber || model.enterpriseNumber)) {
         const src = model.dirty || !model.csource ? 'manual' : model.csource; // edited data is no longer "as returned by" the provider
-        try { const c = await api('POST', '/api/companies', { kind: 'business', name: model.name, vatNumber: model.vatNumber || undefined, enterpriseNumber: model.enterpriseNumber || undefined, address: { street: model.street, postalCode: model.postalCode, city: model.city, countryCode: model.countryCode }, email: model.email || undefined, source: src }); body.customer.companyId = c.id; model.companyId = c.id; } catch (e) { if (e.code !== 'COMPANY_ALREADY_EXISTS' && e.status !== 422) throw e; }
+        try { const c = await api('POST', 'api/companies', { kind: 'business', name: model.name, vatNumber: model.vatNumber || undefined, enterpriseNumber: model.enterpriseNumber || undefined, address: { street: model.street, postalCode: model.postalCode, city: model.city, countryCode: model.countryCode }, email: model.email || undefined, source: src }); body.customer.companyId = c.id; model.companyId = c.id; } catch (e) { if (e.code !== 'COMPANY_ALREADY_EXISTS' && e.status !== 422) throw e; }
       }
-      const saved = editId ? await api('PUT', `/api/documents/${editId}`, body) : await api('POST', '/api/documents', body);
-      if (thenSubmit && !isQuote) { try { await api('POST', `/api/documents/${saved.id}/submit`, {}); toast('Submitted for approval', 'ok'); } catch (e) { toast('Saved as draft. Fix the listed items to submit.', 'bad'); } }
+      const saved = editId ? await api('PUT', `api/documents/${editId}`, body) : await api('POST', 'api/documents', body);
+      if (thenSubmit && !isQuote) { try { await api('POST', `api/documents/${saved.id}/submit`, {}); toast('Submitted for approval', 'ok'); } catch (e) { toast('Saved as draft. Fix the listed items to submit.', 'bad'); } }
       else toast('Draft saved', 'ok');
       location.hash = `#/doc/${saved.id}`;
     } catch (e) { fail(e, errBox); window.scrollTo(0, 0); }
@@ -1021,10 +1028,10 @@ async function viewDoc(id) {
   const box = h('div'); main.appendChild(box);
   const reload = () => viewDoc(id);
   let d;
-  try { d = await api('GET', `/api/documents/${id}`); } catch (e) { return fail(e, box); }
+  try { d = await api('GET', `api/documents/${id}`); } catch (e) { return fail(e, box); }
   const cur = d.currency;
   const has = (a) => d.actions.includes(a);
-  const call = (path, body, msg) => async () => { try { await api('POST', `/api/documents/${id}/${path}`, body || {}); toast(msg, 'ok'); reload(); } catch (e) { fail(e); if (e.fields || e.code.startsWith('NOT_READY')) reload(); } };
+  const call = (path, body, msg) => async () => { try { await api('POST', `api/documents/${id}/${path}`, body || {}); toast(msg, 'ok'); reload(); } catch (e) { fail(e); if (e.fields || e.code.startsWith('NOT_READY')) reload(); } };
   const isQ = d.type === 'quote';
   // TYPE[d.type] and the '(draft)' fallback are each individually translated (both have dictionary entries);
   // composed here with tt('{0} {1}', ...) rather than a template literal, because a literal fuses them into one
@@ -1051,14 +1058,14 @@ async function viewDoc(id) {
       has('send_quote') ? h('button', { class: 'primary', on: { click: () => confirmModal('Send quote', tt('This numbers the quote ({0}) and locks it. Send the PDF to your customer yourself; the system sends nothing.', d.nextNumber || ''), 'Number and lock', call('send-quote', {}, 'Quote numbered')) } }, 'Mark as sent') : null,
       has('accept') ? h('button', { class: 'ok', on: { click: call('accept', {}, 'Quote accepted') } }, 'Accepted') : null,
       has('reject_quote') ? h('button', { class: 'danger', on: { click: call('reject-quote', {}, 'Quote rejected') } }, 'Rejected') : null,
-      has('convert') ? h('button', { class: 'primary', on: { click: async () => { try { const r = await api('POST', `/api/documents/${id}/convert`, { revenueBasis: 'standalone_b2b' }); toast('Invoice draft created from the quote', 'ok'); location.hash = `#/doc/${r.id}`; } catch (e) { fail(e); } } } }, 'Convert to invoice') : null,
+      has('convert') ? h('button', { class: 'primary', on: { click: async () => { try { const r = await api('POST', `api/documents/${id}/convert`, { revenueBasis: 'standalone_b2b' }); toast('Invoice draft created from the quote', 'ok'); location.hash = `#/doc/${r.id}`; } catch (e) { fail(e); } } } }, 'Convert to invoice') : null,
       has('mark_sent') ? h('button', { on: { click: () => confirmModal('Mark as sent', 'Record that you have sent this document to your customer. The system does not send anything.', 'Mark sent', call('mark-sent', {}, 'Marked as sent')) } }, 'Mark sent') : null,
       has('add_payment') ? h('button', { class: 'primary', on: { click: () => paymentModal(d, reload) } }, 'Add payment') : null,
       has('credit_note') ? h('button', { on: { click: () => creditModal(d) } }, 'Create credit note') : null,
       has('refund') ? h('button', { class: 'primary', on: { click: () => refundModal(d, reload) } }, 'Record a refund') : null,
       has('cancel') ? h('button', { class: 'danger', on: { click: () => confirmModal('Cancel draft', 'This draft will be cancelled. No number is used.', 'Cancel draft', call('cancel', {}, 'Draft cancelled')) } }, 'Cancel draft') : null,
-      h('a', { class: 'btn', href: `/api/documents/${id}/pdf?download=1` }, 'Download PDF'),
-      has('ubl') ? h('a', { class: 'btn', href: `/api/documents/${id}/ubl` }, 'Peppol/UBL file') : null));
+      h('a', { class: 'btn', href: `api/documents/${id}/pdf?download=1` }, 'Download PDF'),
+      has('ubl') ? h('a', { class: 'btn', href: `api/documents/${id}/ubl` }, 'Peppol/UBL file') : null));
   box.appendChild(top);
   const FLOW = isQ ? [['DRAFT', 'Draft'], ['SENT', 'Sent'], ['ACCEPTED', 'Accepted'], ['CONVERTED', 'Converted']] : [['DRAFT', 'Draft'], ['READY_FOR_APPROVAL', 'Ready'], ['ISSUED', 'Issued'], ['SENT', 'Sent'], ['PAID', 'Paid']];
   const flowKey = { OVERDUE: 'SENT', PARTIALLY_PAID: 'SENT', CREDITED: 'PAID', REJECTED: 'DRAFT', CANCELLED: 'DRAFT' }[d.effectiveStatus] || d.effectiveStatus;
@@ -1127,7 +1134,7 @@ async function viewDoc(id) {
   if (d.payments.length) box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Payments'), h('table', null, h('tr', null, ['Date', 'Amount', 'Method', 'Reference', ''].map((x) => h('th', null, x))), d.payments.map((p) => h('tr', null, h('td', null, p.paidOn), h('td', null, `${p.amount} ${cur}`), h('td', null, p.method), h('td', null, p.reference || ''), h('td', null, p.amountCents > 0 && p.allocationId ? h('button', { class: 'small', on: { click: () => reverseModal(p.allocationId, reload) } }, 'Reverse') : null))))));
   if (d.refund && d.refund.payments.length) box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Refunds made for this credit note'), h('table', null, h('tr', null, ['Date', 'Amount', 'Method', 'Reference', ''].map((x) => h('th', null, x))), d.refund.payments.map((p) => h('tr', null, h('td', null, p.paidOn), h('td', null, `${p.amount} ${cur}`), h('td', null, p.method), h('td', null, p.reference || ''), h('td', null, p.amountCents > 0 && p.allocationId ? h('button', { class: 'small', on: { click: () => reverseModal(p.allocationId, reload) } }, 'Reverse') : null))))));
   if (d.creditNotes.length) box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Credit notes'), d.creditNotes.map((cn) => h('div', null, h('a', { href: `#/doc/${cn.id}` }, `${cn.number || '(draft)'} - ${cn.gross} ${cn.currency}`), ' ', badge(cn.status)))));
-  const pdfWrap = h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'topbar' }, h('h2', null, tt('PDF preview') + (d.doc.lockedAt ? '' : ' ' + tt('(draft watermark)'))), h('button', { on: { click: (ev) => { ev.target.remove(); pdfWrap.appendChild(h('iframe', { class: 'pdf', src: `/api/documents/${id}/pdf`, title: 'PDF preview' })); } } }, 'Show preview')));
+  const pdfWrap = h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'topbar' }, h('h2', null, tt('PDF preview') + (d.doc.lockedAt ? '' : ' ' + tt('(draft watermark)'))), h('button', { on: { click: (ev) => { ev.target.remove(); pdfWrap.appendChild(h('iframe', { class: 'pdf', src: `api/documents/${id}/pdf`, title: 'PDF preview' })); } } }, 'Show preview')));
   box.appendChild(pdfWrap);
   mount(box, stockMovementsCard(d)); mount(box, peppolCard(d, reload));
   box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Audit trail'), h('table', null, h('tr', null, ['When', 'Action', 'Status', 'By'].map((x) => h('th', null, x))), d.events.map((e) => h('tr', null, h('td', { class: 'nowrap small' }, String(e.at).replace('T', ' ').slice(0, 19)), h('td', null, human(e.action)), h('td', null, `${e.fromStatus ? STATUS[e.fromStatus] || e.fromStatus : ''} ${e.toStatus ? `-> ${STATUS[e.toStatus] || e.toStatus}` : ''}`), h('td', { class: 'small' }, e.actor ? `${e.actor.type}` : ''))))));
@@ -1139,7 +1146,7 @@ function paymentModal(d, reload) {
   const amt = h('input', { inputmode: 'decimal', placeholder: d.remaining }); const date = h('input', { type: 'date', value: civilToday(state.timeZone) });
   const method = h('select', null, METHOD_OPTIONS.map(([v, l]) => h('option', { value: v }, l))); const ref = h('input', { placeholder: 'Bank reference (optional)' }); const note = h('input', { placeholder: 'Note (optional)' }); const err = h('div');
   modal('Add a payment', h('div', null, h('p', { class: 'muted' }, tt('Still due: {0} {1}', d.remaining, d.currency)), err, h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, 'Amount'), amt), h('div', { class: 'field' }, h('label', null, 'Date paid'), date)), h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, 'Method'), method), h('div', { class: 'field' }, h('label', null, 'Reference'), ref)), h('div', { class: 'field' }, h('label', null, 'Note'), note)),
-    (close) => [h('button', { class: 'primary', on: { click: async () => { try { await api('POST', `/api/documents/${d.id}/payments`, { amount: amt.value, paidOn: date.value, method: method.value, reference: ref.value || undefined, note: note.value || undefined, idempotencyKey }); close(); toast('Payment recorded', 'ok'); reload(); } catch (e) { fail(e, err); } } } }, 'Record payment'), h('button', { on: { click: close } }, 'Cancel')]);
+    (close) => [h('button', { class: 'primary', on: { click: async () => { try { await api('POST', `api/documents/${d.id}/payments`, { amount: amt.value, paidOn: date.value, method: method.value, reference: ref.value || undefined, note: note.value || undefined, idempotencyKey }); close(); toast('Payment recorded', 'ok'); reload(); } catch (e) { fail(e, err); } } } }, 'Record payment'), h('button', { on: { click: close } }, 'Cancel')]);
 }
 const METHOD_OPTIONS = [['bank_transfer', 'Bank transfer'], ['cash', 'Cash'], ['card', 'Card'], ['bancontact', 'Bancontact'], ['direct_debit', 'Direct debit'], ['other', 'Other']];
 const newKey = (p) => (globalThis.crypto?.randomUUID?.() ?? (p + '-' + Date.now() + '-' + Math.random().toString(36).slice(2))); // one key per opened form: a double click or a retry is the same operation
@@ -1151,18 +1158,18 @@ function refundModal(d, reload) {
   modal('Record a refund', h('div', null, h('p', { class: 'muted' }, tt('Refundable: {0} {1}', d.refund.max, cur)), err,
     h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, 'Amount'), amt), h('div', { class: 'field' }, h('label', null, 'Date paid'), date)),
     h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, 'Method'), method), h('div', { class: 'field' }, h('label', null, 'Reference'), ref))),
-  (close) => [h('button', { class: 'primary', on: { click: async () => { try { await api('POST', '/api/documents/' + d.id + '/refund', { amount: amt.value, paidOn: date.value, method: method.value, reference: ref.value || undefined, idempotencyKey }); close(); toast('Refund recorded', 'ok'); reload(); } catch (e) { fail(e, err); } } } }, 'Record a refund'), h('button', { on: { click: close } }, 'Cancel')]);
+  (close) => [h('button', { class: 'primary', on: { click: async () => { try { await api('POST', 'api/documents/' + d.id + '/refund', { amount: amt.value, paidOn: date.value, method: method.value, reference: ref.value || undefined, idempotencyKey }); close(); toast('Refund recorded', 'ok'); reload(); } catch (e) { fail(e, err); } } } }, 'Record a refund'), h('button', { on: { click: close } }, 'Cancel')]);
 }
 /** Reverse one allocation: a reason is required, nothing is deleted, the amount becomes unallocated again. */
 function reverseModal(allocationId, reload) {
   const idempotencyKey = newKey('rv'); const reason = h('input', { placeholder: 'Reason (required)' }); const err = h('div');
   modal('Reverse this payment', h('div', null, h('p', { class: 'muted' }, 'The payment stays in the history; the amount becomes unallocated again.'), err, h('div', { class: 'field' }, h('label', null, 'Reason (required)'), reason)),
-  (close) => [h('button', { class: 'danger', on: { click: async () => { try { await api('POST', '/api/payment-allocations/' + allocationId + '/reverse', { reason: reason.value, idempotencyKey }); close(); toast('Payment reversed', 'ok'); reload(); } catch (e) { fail(e, err); } } } }, 'Reverse'), h('button', { on: { click: close } }, 'Cancel')]);
+  (close) => [h('button', { class: 'danger', on: { click: async () => { try { await api('POST', 'api/payment-allocations/' + allocationId + '/reverse', { reason: reason.value, idempotencyKey }); close(); toast('Payment reversed', 'ok'); reload(); } catch (e) { fail(e, err); } } } }, 'Reverse'), h('button', { on: { click: close } }, 'Cancel')]);
 }
 const ALLOC_STATUS = { UNALLOCATED: 'Unallocated', PARTIALLY_ALLOCATED: 'Partly allocated', ALLOCATED: 'Allocated', REVERSED: 'Reversed' };
 /** Money received or paid that is not applied to a document yet. Never applied by itself: a person chooses the invoice. */
 async function unallocatedPaymentsCard(box) {
-  let rows = []; try { rows = (await api('GET', '/api/payments?unallocated=1')).rows; } catch { return; } // a failure here must never break the page
+  let rows = []; try { rows = (await api('GET', 'api/payments?unallocated=1')).rows; } catch { return; } // a failure here must never break the page
   if (!rows.length) return;
   const reload = () => route();
   box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Unallocated payments'), h('p', { class: 'muted small' }, 'Money received or paid that is not yet applied to a document. It is never applied by itself.'),
@@ -1172,11 +1179,11 @@ async function unallocatedPaymentsCard(box) {
 }
 async function allocateModal(p, reload) {
   const idempotencyKey = newKey('al'); const err = h('div'); let open = [];
-  try { open = (await api('GET', '/api/documents?type=invoice')).rows.filter((r) => ['ISSUED', 'SENT', 'PARTIALLY_PAID'].includes(r.status) && r.remainingCents > 0 && r.currency === p.currency); } catch (e) { return fail(e); }
+  try { open = (await api('GET', 'api/documents?type=invoice')).rows.filter((r) => ['ISSUED', 'SENT', 'PARTIALLY_PAID'].includes(r.status) && r.remainingCents > 0 && r.currency === p.currency); } catch (e) { return fail(e); }
   if (!open.length) return modal('Allocate this payment', h('p', { class: 'muted' }, 'No open invoice to allocate to'), (close) => [h('button', { on: { click: close } }, 'Cancel')]);
   const sel = h('select', null, open.map((r) => h('option', { value: r.id }, (r.number || '') + ' - ' + (r.customer || '') + ' - ' + r.remaining + ' ' + r.currency))); const amt = h('input', { inputmode: 'decimal', value: (Math.min(p.unallocatedCents, open[0].remainingCents) / 100).toFixed(2) });
   modal('Allocate this payment', h('div', null, h('p', { class: 'muted' }, tt('Still to allocate: {0} {1}', p.unallocated, p.currency)), err, h('div', { class: 'field' }, h('label', null, 'Invoice'), sel), h('div', { class: 'field' }, h('label', null, 'Amount'), amt)),
-  (close) => [h('button', { class: 'primary', on: { click: async () => { try { await api('POST', '/api/payments/' + p.id + '/allocate', { allocations: [{ documentId: sel.value, amount: amt.value }], idempotencyKey }); close(); toast('Payment allocated', 'ok'); reload(); } catch (e) { fail(e, err); } } } }, 'Allocate'), h('button', { on: { click: close } }, 'Cancel')]);
+  (close) => [h('button', { class: 'primary', on: { click: async () => { try { await api('POST', 'api/payments/' + p.id + '/allocate', { allocations: [{ documentId: sel.value, amount: amt.value }], idempotencyKey }); close(); toast('Payment allocated', 'ok'); reload(); } catch (e) { fail(e, err); } } } }, 'Allocate'), h('button', { on: { click: close } }, 'Cancel')]);
 }
 function creditModal(d) {
   const reason = h('input', { placeholder: 'Reason (required)' }); const err = h('div'); const full = h('input', { type: 'checkbox', checked: true });
@@ -1187,7 +1194,7 @@ function creditModal(d) {
   const draw = () => { clear(editor); if (full.checked) return; rows.forEach((r, i) => editor.appendChild(h('div', { class: 'row r4', style: 'margin-bottom:6px' }, h('input', { value: r.description, on: { input: (e) => { r.description = e.target.value; } } }), h('input', { value: r.quantity, on: { input: (e) => { r.quantity = e.target.value; } } }), h('input', { value: r.unitPrice, on: { input: (e) => { r.unitPrice = e.target.value; } } }), h('button', { on: { click: () => { rows.splice(i, 1); draw(); } } }, 'Remove')))); };
   full.addEventListener('change', draw);
   modal('Create a credit note', h('div', null, h('p', { class: 'muted' }, 'A credit note corrects an issued invoice. The invoice itself is never changed.'), err, h('div', { class: 'field' }, h('label', null, 'Reason'), reason), h('label', { style: 'color:var(--ink)' }, full, 'Credit the whole invoice'), editor, restockBox),
-    (close) => [h('button', { class: 'primary', on: { click: async () => { try { const r = await api('POST', `/api/documents/${d.id}/credit-note`, { reason: reason.value, lines: full.checked ? undefined : rows, restock: restock === null ? undefined : restock }); close(); toast('Credit note draft created', 'ok'); location.hash = `#/doc/${r.id}`; } catch (e) { fail(e, err); } } } }, 'Create draft'), h('button', { on: { click: close } }, 'Cancel')]);
+    (close) => [h('button', { class: 'primary', on: { click: async () => { try { const r = await api('POST', `api/documents/${d.id}/credit-note`, { reason: reason.value, lines: full.checked ? undefined : rows, restock: restock === null ? undefined : restock }); close(); toast('Credit note draft created', 'ok'); location.hash = `#/doc/${r.id}`; } catch (e) { fail(e, err); } } } }, 'Create draft'), h('button', { on: { click: close } }, 'Cancel')]);
 }
 
 // ---------- companies (the "Add/edit a company" form only - the list/detail pages were replaced by the
@@ -1270,7 +1277,7 @@ function companyModal(existing, ctx) {
       roles: { customer: m.role === 'customer' || m.role === 'both', supplier: m.role === 'supplier' || m.role === 'both' }, source: src, confirmDuplicate: confirmDuplicate || undefined };
     btn.disabled = true;
     try {
-      const r = existing ? await api('PUT', `/api/companies/${existing.id}`, body) : await api('POST', '/api/companies', body);
+      const r = existing ? await api('PUT', `api/companies/${existing.id}`, body) : await api('POST', 'api/companies', body);
       bk.remove(); toast(tt('Contact saved'), 'ok');
       if (ctx && ctx.onSaved) { await ctx.onSaved(r); return; } // e.g. created from a purchase document: link it there, stay on the document
       const target = `#/contacts?open=${r.id}`;
@@ -1301,7 +1308,7 @@ function companyModal(existing, ctx) {
 async function viewReceivables() {
   const main = layout('#/receivables', h('div', { class: 'topbar' }, h('div', null, h('h1', null, 'Payments and receivables'), h('div', { class: 'muted small' }, 'No reminders are sent automatically.')))); const box = h('div'); main.appendChild(box);
   try {
-    const r = await api('GET', '/api/receivables'); const cur = state.settings.defaults.currency;
+    const r = await api('GET', 'api/receivables'); const cur = state.settings.defaults.currency;
     mount(box, foreignNote(r.foreignDocuments));
     box.appendChild(h('div', { class: 'grid cards' }, [['Unpaid', r.unpaid.count, r.unpaid.outstanding, ''], ['Due soon', r.due_soon.count, r.due_soon.outstanding, 'warn'], ['Overdue', r.overdue.count, r.overdue.outstanding, r.overdue.count ? 'bad' : '']].map(([l, n, a, cls]) => h('div', { class: `card stat ${cls}` }, h('div', { class: 'n' }, `${a}`), h('div', { class: 'l' }, tt('{0}: {1} invoice(s) ({2})', tr(l), n, cur))))));
     box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Ageing (days past due)'), h('table', null, h('tr', null, ['Not yet due', '0-7', '8-30', '31-60', '60+'].map((x) => h('th', { class: 'num' }, x))), h('tr', null, ['not_due', '0_7', '8_30', '31_60', '60_plus'].map((k) => h('td', { class: 'num' }, `${r.aging[k].outstanding} (${r.aging[k].count})`))))));
@@ -1322,13 +1329,13 @@ async function viewSettings() {
   main.appendChild(h('div', { class: 'card' }, h('h2', null, 'Your company (seller)'), h('div', { class: 'row r2' }, inp(s.seller, 'name', 'Legal name'), inp(s.seller, 'email', 'Finance email')), h('div', { class: 'row r2' }, inp(s.seller, 'vatNumber', 'VAT number', { ph: 'BE0123456789' }), inp(s.seller, 'enterpriseNumber', 'Enterprise number', { ph: '0123.456.789' })), h('div', { class: 'row r2' }, inp(s.seller.address, 'street', 'Street and number'), inp(s.seller.address, 'postalCode', 'Postal code')), h('div', { class: 'row r2' }, inp(s.seller.address, 'city', 'City'), inp(s.seller.address, 'countryCode', 'Country (2 letters)')), h('div', { class: 'row r2' }, inp(s.seller, 'iban', 'IBAN'), inp(s.seller, 'bic', 'BIC (optional)'))));
   main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'VAT and payment'), inp(st, 'rates', 'Allowed VAT rates (%)', { ph: '21, 12, 6, 0', hint: 'The rates you may choose on domestic invoices. You decide these; nothing is assumed.' }), h('div', { class: 'row r3' }, inp(s.defaults, 'paymentTermsDays', 'Default payment terms (days)'), inp(s.defaults, 'currency', 'Currency'), sel(s.defaults, 'language', 'Default language', [['fr', 'Francais'], ['nl', 'Nederlands'], ['en', 'English']])), inp(s.defaults, 'paymentTerms', 'Payment terms text'), inp(s.branding, 'paymentInstructions', 'Extra payment instructions'), h('label', { style: 'color:var(--ink)' }, h('input', { type: 'checkbox', checked: s.branding.structuredCommunication, on: { change: (e) => { s.branding.structuredCommunication = e.target.checked; } } }), 'Print a Belgian structured communication (+++xxx/xxxx/xxxxx+++)')));
   main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Numbering'), h('div', { class: 'row r4' }, inp(s.numbering.invoice, 'prefix', 'Invoice prefix'), inp(s.numbering.credit_note, 'prefix', 'Credit note prefix'), inp(s.numbering.quote, 'prefix', 'Quote prefix'), inp(s.numbering.invoice, 'pad', 'Digits')), inp(s.numbering, 'format', 'Format', { hint: 'Use {prefix}, {year} and {seq}, e.g. {prefix}-{year}-{seq} gives INV-2026-0001. Numbers are assigned when a document is issued and never skip.' })));
-  main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Look and feel'), h('div', { class: 'row r2' }, inp(s.branding, 'accent', 'Accent colour', { ph: '#183247' }), inp(s.branding, 'footer', 'Footer text on documents')), h('div', { class: 'field' }, h('label', null, tt('Logo (PNG or JPEG, max 400 KB)') + (s.branding.hasLogo ? ' - ' + tt('a logo is set') : '')), h('input', { type: 'file', accept: 'image/png,image/jpeg', on: { change: (e) => { const f = e.target.files[0]; if (!f) return; const fr = new FileReader(); fr.onload = async () => { try { await api('POST', '/api/settings/logo', { dataUrl: fr.result }); toast('Logo saved', 'ok'); } catch (er) { fail(er, err); } }; fr.readAsDataURL(f); } } }))));
+  main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Look and feel'), h('div', { class: 'row r2' }, inp(s.branding, 'accent', 'Accent colour', { ph: '#183247' }), inp(s.branding, 'footer', 'Footer text on documents')), h('div', { class: 'field' }, h('label', null, tt('Logo (PNG or JPEG, max 400 KB)') + (s.branding.hasLogo ? ' - ' + tt('a logo is set') : '')), h('input', { type: 'file', accept: 'image/png,image/jpeg', on: { change: (e) => { const f = e.target.files[0]; if (!f) return; const fr = new FileReader(); fr.onload = async () => { try { await api('POST', 'api/settings/logo', { dataUrl: fr.result }); toast('Logo saved', 'ok'); } catch (er) { fail(er, err); } }; fr.readAsDataURL(f); } } }))));
   main.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Company lookup and e-invoicing'), sel(s.companyLookup, 'provider', 'VAT / enterprise number lookup', [['vies', 'EU VIES (free, official) with manual fallback'], ['manual', 'Manual entry only']]), sel(s.companySearch, 'registry', 'Belgian company register (primary)', [['cbeapi', 'CBEAPI: official KBO/BCE data (needs CBEAPI_KEY)'], ['none', 'Off']]), sel(s.companySearch, 'provider', 'Secondary name search (if the register finds nothing)', [['peppol_directory', 'OpenPeppol Directory (Peppol-registered companies) + VIES for the address'], ['none', 'Off: search by number or type by hand']]), h('div', { class: 'field' }, h('label', null, 'Peppol provider'), h('span', { class: 'badge NOT_CONFIGURED' }, 'NOT CONFIGURED'), h('div', { class: 'hint' }, 'Nothing is transmitted. Structured invoices (UBL) can be prepared and downloaded.'))));
   main.appendChild(await workspaceSettingsCards());
   main.appendChild(h('div', { class: 'actions', style: 'margin-top:16px' }, h('button', { class: 'primary', on: { click: async () => { try {
     const num = (v) => (v === '' || v === null ? undefined : Number(v));
     const body = { seller: s.seller, vat: { allowedRatesPercent: st.rates.split(',').map((x) => x.trim()).filter(Boolean) }, defaults: { ...s.defaults, paymentTermsDays: num(s.defaults.paymentTermsDays) }, numbering: { invoice: { prefix: s.numbering.invoice.prefix, pad: num(s.numbering.invoice.pad) }, credit_note: { prefix: s.numbering.credit_note.prefix, pad: num(s.numbering.invoice.pad) }, quote: { prefix: s.numbering.quote.prefix, pad: num(s.numbering.invoice.pad) }, format: s.numbering.format }, branding: { accent: s.branding.accent, footer: s.branding.footer, paymentInstructions: s.branding.paymentInstructions, structuredCommunication: s.branding.structuredCommunication }, companyLookup: { provider: s.companyLookup.provider }, companySearch: { registry: s.companySearch.registry, provider: s.companySearch.provider } };
-    const r2 = await api('PUT', '/api/settings', body); state.settings = r2.settings; state.missing = r2.missing; applyAccent(); toast('Settings saved', 'ok'); viewSettings(); } catch (e) { fail(e, err); window.scrollTo(0, 0); } } } }, 'Save settings')));
+    const r2 = await api('PUT', 'api/settings', body); state.settings = r2.settings; state.missing = r2.missing; applyAccent(); toast('Settings saved', 'ok'); viewSettings(); } catch (e) { fail(e, err); window.scrollTo(0, 0); } } } }, 'Save settings')));
 }
 
 // ---------- router ----------
@@ -1342,7 +1349,7 @@ try {
 
 async function route() {
   // One request instead of two at startup: the session answer carries the settings when signed in.
-  if (!state.csrf) { try { const s = await api('GET', '/api/session?include=settings'); if (s.authenticated) { state.csrf = s.csrf; state.nordlaHome = s.nordlaHome || null; await loadSettings(s.settings); } else return renderLogin(); } catch (e) { return renderLogin(); } }
+  if (!state.csrf) { try { const s = await api('GET', 'api/session?include=settings'); if (s.authenticated) { state.csrf = s.csrf; state.nordlaHome = s.nordlaHome || null; await loadSettings(s.settings); } else return renderLogin(); } catch (e) { return renderLogin(); } }
   if (pendingBankReturn) { const ret = pendingBankReturn; pendingBankReturn = null; await processBankReturn(ret); }
   const [path, qs] = (location.hash.slice(1) || '/').split('?'); const q = new URLSearchParams(qs || ''); const parts = path.split('/').filter(Boolean);
   try {
@@ -1354,7 +1361,7 @@ async function route() {
     if (parts[0] === 'quotes') { location.hash = `#/sales?tab=quotes${qs ? `&${qs}` : ''}`; return; }
     if (parts[0] === 'sales') return await viewSales(q);
     if (parts[0] === 'new') return await viewForm(parts[1] === 'quote' ? 'quote' : 'invoice', null, q.get('companyId') || null);
-    if (parts[0] === 'doc' && parts[2] === 'edit') { const d = await api('GET', `/api/documents/${parts[1]}`); return await viewForm(d.type === 'quote' ? 'quote' : 'invoice', parts[1]); }
+    if (parts[0] === 'doc' && parts[2] === 'edit') { const d = await api('GET', `api/documents/${parts[1]}`); return await viewForm(d.type === 'quote' ? 'quote' : 'invoice', parts[1]); }
     if (parts[0] === 'doc') return await viewDoc(parts[1]);
     // #/companies is kept working (never removed/renamed) but now redirects into the unified Contacts
     // workspace - same underlying fin_companies id, so #/companies/:id still lands on the right contact.

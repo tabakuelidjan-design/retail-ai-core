@@ -18,7 +18,7 @@ const gz = promisify(gzip);
 const COMPRESSIBLE = /^(text\/|application\/(javascript|json)|image\/svg\+xml)/;
 const IMMUTABLE = 'public, max-age=31536000, immutable';
 const MAX_COMPRESSED = 200; // distinct (content, encoding) pairs kept; cleared when exceeded (only grows while files are edited locally)
-const ASSET_REF = /(src|href)="(\/[A-Za-z0-9_./-]+\.(?:js|css))"/g;
+const ASSET_REF = /(src|href)="\/?([A-Za-z0-9_./-]+\.(?:js|css))"/g; // relative (under <base href="/finance/">) or root-absolute
 
 const hashOf = (buf) => createHash('sha256').update(buf).digest('hex').slice(0, 20);
 
@@ -54,10 +54,10 @@ export function createStaticAssets({ resolve }) {
   }
 
   /** index.html with every local script/style reference versioned by the referenced file's content hash. */
-  async function versionedIndex(html) {
-    const text = html.toString('utf8');
+  async function versionedIndex(html, base) {
+    const text = html.toString('utf8').replace(/<base href="[^"]*">/, `<base href="${base}">`);
     const refs = [...new Set([...text.matchAll(ASSET_REF)].map((m) => m[2]))];
-    const hashes = new Map(await Promise.all(refs.map(async (p) => { const f = await resolve(p); return [p, f ? hashOf(f.body) : null]; })));
+    const hashes = new Map(await Promise.all(refs.map(async (p) => { const f = await resolve('/' + p); return [p, f ? hashOf(f.body) : null]; })));
     return Buffer.from(text.replace(ASSET_REF, (all, attr, p) => (hashes.get(p) ? `${attr}="${p}?v=${hashes.get(p)}"` : all)), 'utf8');
   }
 
@@ -69,7 +69,9 @@ export function createStaticAssets({ resolve }) {
   async function serve(req, res, url, send) {
     const file = await resolve(url.pathname);
     if (!file) return false;
-    const body = url.pathname === '/' ? await versionedIndex(file.body) : file.body;
+    // Under the Nordla gateway the page lives at /finance/ (the gateway announces it); standalone it is at /. Relative references resolve against it.
+    const base = req.headers['x-nordla-prefix'] === '/finance' ? '/finance/' : '/';
+    const body = url.pathname === '/' ? await versionedIndex(file.body, base) : file.body;
     const hash = hashOf(body);
     const cacheControl = url.pathname !== '/' && url.searchParams.get('v') === hashOf(file.body) ? IMMUTABLE : 'no-cache';
     const enc = COMPRESSIBLE.test(file.type) ? pickEncoding(req.headers['accept-encoding']) : null;

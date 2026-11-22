@@ -211,7 +211,7 @@ test('ui/civil-date.js gives the same date as the server primitive (winter, summ
   assert.match(ui.civilToday(BRU), /^\d{4}-\d{2}-\d{2}$/);
   assert.throws(() => ui.civilDateIn('2026-01-01T00:00:00Z'), TypeError);
   const html = readFileSync(path.join(ROOT, 'ui/index.html'), 'utf8');
-  assert.ok(html.indexOf('/civil-date.js') > 0 && html.indexOf('/civil-date.js') < html.indexOf('/app.js'), 'loaded before the views that use it');
+  assert.ok(html.indexOf('"civil-date.js"') > 0 && html.indexOf('"civil-date.js"') < html.indexOf('"app.js"'), 'loaded before the views that use it');
 });
 
 // ---------- regression guard: no instant -> date by truncation, no UTC default clock ----------

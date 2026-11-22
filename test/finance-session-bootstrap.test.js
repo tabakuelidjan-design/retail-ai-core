@@ -29,6 +29,6 @@ test('signed in: without the parameter the answer is unchanged; with it, setting
 test('the dashboard boots with one session+settings request (no separate /api/settings call at startup)', () => {
   const app = readFileSync(new URL('../src/finance/ui/app.js', import.meta.url), 'utf8');
   const route = app.slice(app.indexOf('async function route()'), app.indexOf('async function route()') + 600);
-  assert.match(route, /api\('GET', '\/api\/session\?include=settings'\)/);
+  assert.match(route, /api\('GET', '(?:\/)?api\/session\?include=settings'\)/);
   assert.match(route, /loadSettings\(s\.settings\)/);
 });

@@ -185,9 +185,9 @@ test('the return from the bank is captured, stripped from the address bar, check
   assert.match(appJs, /if \(pendingBankReturn\) \{[^}]*processBankReturn\(ret\)/);
   const p = ws.slice(ws.indexOf('async function processBankReturn'), ws.indexOf('async function viewBank'));
   assert.match(p, /bankStateMatches\(saved, ret\.state\)/);
-  assert.match(p, /'\/api\/bank\/consent', \{ code: ret\.code, state: ret\.state \}/);
+  assert.match(p, /'(?:\/)?api\/bank\/consent', \{ code: ret\.code, state: ret\.state \}/);
   assert.match(p, /r && r\.connected/, 'connected is claimed only from the backend answer');
-  assert.ok(p.indexOf('bankStateMatches') < p.indexOf('/api/bank/consent'), 'nothing is sent before the state is checked');
+  assert.ok(p.indexOf('bankStateMatches') < p.indexOf('api/bank/consent'), 'nothing is sent before the state is checked');
 });
 
 test('provider-neutral and secret-safe: no provider name, no token handling in the browser code', () => {
@@ -199,7 +199,7 @@ test('provider-neutral and secret-safe: no provider name, no token handling in t
 });
 
 test('the helper script is served and loaded before app.js', async () => {
-  assert.ok(html.indexOf('/bank-connect.js') > 0 && html.indexOf('/bank-connect.js') < html.indexOf('/app.js'));
+  assert.ok(html.indexOf('"bank-connect.js"') > 0 && html.indexOf('"bank-connect.js"') < html.indexOf('"app.js"'));
   const a = await startApp();
   try { const r = await fetch(`${a.base}/bank-connect.js`, { headers: { Host: `127.0.0.1:${a.port}` } }); assert.equal(r.status, 200); assert.match(r.headers.get('content-type'), /javascript/); } finally { await a.close(); }
 });

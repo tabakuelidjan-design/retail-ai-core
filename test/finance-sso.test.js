@@ -86,7 +86,7 @@ test('Nordla side: the ticket is issued only to owner / administrator / accounta
   };
   for (const role of ['VIEWER', 'COLLABORATOR']) assert.equal((await call(role)).status, 403);
   const r = await call('OWNER'); assert.equal(r.status, 200);
-  const u = new URL(r.body.url); assert.equal(u.origin, 'https://finance.example.app'); assert.equal(u.pathname, '/sso');
+  const u = new URL(r.body.url); assert.equal(u.origin, 'https://finance.example.app'); assert.equal(u.pathname, '/finance/sso'); // under the Core origin, through the gateway
   assert.ok(!r.body.url.includes(SECRET)); assert.deepEqual(createTicketVerifier({ secret: SECRET, merchantId: M }).verify(u.searchParams.get('t')).ok, true);
   const none = createCoreHttp({ runtime: null, store: {}, finance: { source: 's' }, financeSso: null });
   const res2 = { s: 0, writeHead(s) { this.s = s; }, end() {}, setHeader() {} };

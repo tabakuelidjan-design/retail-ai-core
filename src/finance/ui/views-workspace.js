@@ -134,7 +134,7 @@ function supplierBlock(it, reload, err, focusSearch) {
   const sm = it.supplierMatch; if (!sm) return null;
   const box = h('div', { class: 'doc-intel doc-supplier' });
   const why = (c) => tt(matchReason(c));
-  const link = (contactId, created) => async () => { try { await api('POST', `/api/inbox/${it.id}/contact`, { contactId, created: !!created }); toast(tt('Contact linked'), 'ok'); reload(); } catch (e) { fail(e, err); } };
+  const link = (contactId, created) => async () => { try { await api('POST', `api/inbox/${it.id}/contact`, { contactId, created: !!created }); toast(tt('Contact linked'), 'ok'); reload(); } catch (e) { fail(e, err); } };
   const other = h('button', { type: 'button', on: { click: () => focusSearch() } }, tt('Choose another contact'));
   if (sm.status === 'linked') { box.appendChild(intelHead('Supplier', 'ok', 'Linked')); if (sm.candidates[0]) box.appendChild(h('div', { class: 'small' }, sm.candidates[0].displayName)); return box; }
   if (sm.proposal) {
@@ -157,7 +157,7 @@ function supplierBlock(it, reload, err, focusSearch) {
   const acts = h('div', { class: 'doc-intel-actions' });
   if (sm.createPrefill) acts.appendChild(h('button', { type: 'button', class: 'primary', on: { click: () => companyModal(null, { prefill: sm.createPrefill, onSaved: async (c) => link(c.id, true)() }) } }, tt('Create this supplier')));
   acts.appendChild(other);
-  if (sm.createPrefill && !declined) acts.appendChild(h('button', { type: 'button', on: { click: async () => { try { await api('POST', `/api/inbox/${it.id}/supplier-decision`, { action: 'decline_create' }); reload(); } catch (e) { fail(e, err); } } } }, tt('Not now')));
+  if (sm.createPrefill && !declined) acts.appendChild(h('button', { type: 'button', on: { click: async () => { try { await api('POST', `api/inbox/${it.id}/supplier-decision`, { action: 'decline_create' }); reload(); } catch (e) { fail(e, err); } } } }, tt('Not now')));
   box.appendChild(acts);
   return box;
 }
@@ -168,7 +168,7 @@ function duplicatesBlock(it, reload, err) {
   box.appendChild(intelHead('Duplicates', d.level === 'certain' ? 'bad' : d.level === 'possible' ? 'warn' : 'mute', d.level === 'certain' ? 'Certain duplicate' : d.level === 'possible' ? 'Possible duplicate' : 'None'));
   if (setAside) box.appendChild(h('div', { class: 'muted small' }, tt('{0} possible duplicate(s) set aside by you.', setAside)));
   const val = (k, v, cur) => (v == null || v === '' ? '—' : /Cents$/.test(k) ? fmtMoney(v, cur) : k === 'status' ? tt(INBOX_STATUS[v] || v) : k === 'source' ? tt(SOURCE_BADGE[v] || v) : String(v));
-  const decide = (otherId, decision) => async () => { try { await api('POST', `/api/inbox/${it.id}/duplicate-decision`, { otherId, decision }); toast(tt('Saved'), 'ok'); reload(); } catch (e) { fail(e, err); } };
+  const decide = (otherId, decision) => async () => { try { await api('POST', `api/inbox/${it.id}/duplicate-decision`, { otherId, decision }); toast(tt('Saved'), 'ok'); reload(); } catch (e) { fail(e, err); } };
   live.forEach((i) => {
     const o = i.document || {};
     const row = h('div', { class: 'doc-intel-dup' },
@@ -218,7 +218,7 @@ function renderInboxDetail(host, id, opts = {}) {
   clear(host); host.appendChild(err); host.appendChild(body);
   async function draw() {
     clear(body);
-    let it; try { it = await api('GET', `/api/inbox/${id}`); } catch (e) { return fail(e, body); }
+    let it; try { it = await api('GET', `api/inbox/${id}`); } catch (e) { return fail(e, body); }
     const editable = ['RECEIVED', 'TO_REVIEW'].includes(it.status);
     // where a prefilled value comes from: a PDF value shows its page, or "to check" when its reading rule is weak (no % shown for heuristics)
     const fieldMark = (x, key) => { const pv = x.provenance && x.provenance[key]; if (pv && pv.source === 'PDF_TEXT') return h('span', { class: `conf ${pv.confidence < 0.7 ? 'check' : ''}` }, ` · ${pv.confidence < 0.7 ? tt('to check') : tt('PDF p. {0}', pv.page)}`); return h('span', { class: 'conf' }, ` ${Math.round(x.extraction.fields[key] * 100)}%`); };
@@ -233,7 +233,7 @@ function renderInboxDetail(host, id, opts = {}) {
     if (it.checks && it.checks.length) body.appendChild(h('div', { class: 'banner warn small doc-checks' }, h('strong', null, tt('To check:')), h('ul', { class: 'plain' }, it.checks.map((c) => h('li', null, checkText(c))))));
     let focusContactSearch = () => {};
     mount(body, supplierBlock(it, () => { draw(); onChange(); }, err, () => focusContactSearch())); mount(body, duplicatesBlock(it, () => { draw(); onChange(); }, err));
-    if (it.hasFile) body.appendChild(h('div', { style: 'margin:8px 0' }, h('a', { class: 'btn', href: `/api/inbox/${id}/file`, target: '_blank', rel: 'noopener' }, tt('Open the source document'))));
+    if (it.hasFile) body.appendChild(h('div', { style: 'margin:8px 0' }, h('a', { class: 'btn', href: `api/inbox/${id}/file`, target: '_blank', rel: 'noopener' }, tt('Open the source document'))));
     else if (it.status !== 'REJECTED') body.appendChild(h('div', { style: 'margin:8px 0' }, attachButton(id, () => { draw(); onChange(); })));
     const capInfo = captureInfoNode(it); if (capInfo) body.appendChild(capInfo); // null for a document that is neither a capture nor an attached receipt
     const typeSel = h('select', { disabled: !editable, 'data-field': 'documentType', on: { change: (e) => { f.documentType = e.target.value; } } }, Object.keys(DOC_TYPE).map((k) => h('option', { value: k, selected: k === it.documentType }, tt(DOC_TYPE[k]))));
@@ -244,7 +244,7 @@ function renderInboxDetail(host, id, opts = {}) {
     body.appendChild(h('div', { class: 'row r2' }, inp('supplierName', tr('Supplier'), it.supplierName), inp('supplierVatNumber', tr('Supplier VAT number'), it.supplierVatNumber, 'BE0123456789')));
     body.appendChild(h('div', { class: 'row r2' }, inp('supplierEnterpriseNumber', tr('Enterprise number'), it.supplierEnterpriseNumber, '0123.456.789'), inp('supplierIban', tr('Supplier IBAN'), it.supplierIban, 'BE68 5390 0754 7034')));
     body.appendChild(h('div', { class: 'row r3' }, inp('invoiceNumber', tr('Invoice number'), it.invoiceNumber), inp('issueDate', tr('Invoice date'), it.issueDate, 'YYYY-MM-DD'), inp('dueDate', tr('Due date'), it.dueDate, 'YYYY-MM-DD')));
-    const dueBox = dueNote(it, ['RECEIVED', 'TO_REVIEW'].includes(it.status) ? async () => { try { await api('POST', `/api/inbox/${id}/acknowledge-due-conflict`, {}); toast('Difference acknowledged', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } : null);
+    const dueBox = dueNote(it, ['RECEIVED', 'TO_REVIEW'].includes(it.status) ? async () => { try { await api('POST', `api/inbox/${id}/acknowledge-due-conflict`, {}); toast('Difference acknowledged', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } : null);
     if (dueBox) body.appendChild(dueBox);
     body.appendChild(h('div', { class: 'row r4' }, inp('net', tr('Excl. VAT'), centsToInput(it.netCents)), inp('vat', tr('VAT'), centsToInput(it.vatCents)), inp('gross', tr('Incl. VAT'), centsToInput(it.grossCents)), inp('currency', tr('Currency'), it.currency, 'EUR')));
     body.appendChild(h('div', { class: 'row r2' }, inp('paymentReference', tr('Payment reference'), it.paymentReference, '+++000/0000/00000+++'), it.documentType === 'CREDIT_NOTE' ? inp('orderReference', tr('Order reference'), it.orderReference) : h('div', null)));
@@ -260,8 +260,8 @@ function renderInboxDetail(host, id, opts = {}) {
       clear(contactBox); contactBox.appendChild(h('label', null, tt('Linked contact')));
       if (it.supplierCompanyId) {
         let name = it.supplierCompanyId;
-        try { name = (await api('GET', `/api/contacts/${it.supplierCompanyId}`)).displayName; } catch (e) { /* keep the id as a fallback */ }
-        contactBox.appendChild(h('div', { class: 'row r2', style: 'align-items:center' }, h('strong', null, name), h('button', { type: 'button', on: { click: async () => { try { await api('POST', `/api/inbox/${id}/contact`, { contactId: null }); toast(tt('Contact unlinked'), 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Unlink'))));
+        try { name = (await api('GET', `api/contacts/${it.supplierCompanyId}`)).displayName; } catch (e) { /* keep the id as a fallback */ }
+        contactBox.appendChild(h('div', { class: 'row r2', style: 'align-items:center' }, h('strong', null, name), h('button', { type: 'button', on: { click: async () => { try { await api('POST', `api/inbox/${id}/contact`, { contactId: null }); toast(tt('Contact unlinked'), 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Unlink'))));
       } else {
         const q = h('input', { placeholder: tr('Search contacts by name or VAT...') });
         focusContactSearch = () => { if (q.scrollIntoView) q.scrollIntoView({ block: 'center' }); if (q.focus) q.focus(); };
@@ -269,9 +269,9 @@ function renderInboxDetail(host, id, opts = {}) {
         let timer = null;
         q.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(async () => {
           clear(results); const term = q.value.trim(); if (!term) return;
-          try { const rows = (await api('GET', `/api/contacts?q=${encodeURIComponent(term)}`)).rows.slice(0, 6);
+          try { const rows = (await api('GET', `api/contacts?q=${encodeURIComponent(term)}`)).rows.slice(0, 6);
             if (!rows.length) { results.appendChild(h('div', { class: 'muted small' }, tt('No contact matches.'))); return; }
-            rows.forEach((c) => results.appendChild(h('button', { type: 'button', class: 'result', on: { click: async () => { try { await api('POST', `/api/inbox/${id}/contact`, { contactId: c.id }); toast(tt('Contact linked'), 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, c.displayName)));
+            rows.forEach((c) => results.appendChild(h('button', { type: 'button', class: 'result', on: { click: async () => { try { await api('POST', `api/inbox/${id}/contact`, { contactId: c.id }); toast(tt('Contact linked'), 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, c.displayName)));
           } catch (e) { fail(e, results); }
         }, 220); });
         contactBox.appendChild(q); contactBox.appendChild(results);
@@ -279,14 +279,14 @@ function renderInboxDetail(host, id, opts = {}) {
     })();
     if (it.errors.length && ['RECEIVED', 'TO_REVIEW'].includes(it.status)) body.appendChild(h('div', { class: 'banner info small' }, h('strong', null, tt('Still needed before validation:')), h('ul', { class: 'plain' }, it.errors.map((c) => h('li', null, inboxErrText(c))))));
     const act = h('div', { class: 'actions', style: 'margin-top:12px' });
-    const go = (path, payload, msg) => async () => { try { await api('POST', `/api/inbox/${id}/${path}`, payload || {}); toast(msg, 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } };
+    const go = (path, payload, msg) => async () => { try { await api('POST', `api/inbox/${id}/${path}`, payload || {}); toast(msg, 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } };
     if (editable) {
-      act.appendChild(h('button', { on: { click: async () => { try { await api('PUT', `/api/inbox/${id}`, f); toast('Saved', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Save')));
-      act.appendChild(h('button', { class: 'primary', on: { click: async () => { try { await api('PUT', `/api/inbox/${id}`, f); await api('POST', `/api/inbox/${id}/validate`, {}); toast('Validated', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Validate')));
-      act.appendChild(h('button', { class: 'danger', on: { click: () => { const reason = h('input', { placeholder: tr('Reason (required)') }); modal('Reject this document', h('div', null, h('p', { class: 'muted' }, tt('It is not a supplier invoice, or it is a duplicate.')), h('div', { class: 'field' }, h('label', null, tt('Reason')), reason)), (close) => [h('button', { class: 'danger', on: { click: async () => { close(); try { await api('POST', `/api/inbox/${id}/reject`, { reason: reason.value }); toast('Rejected', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Reject')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Reject')));
+      act.appendChild(h('button', { on: { click: async () => { try { await api('PUT', `api/inbox/${id}`, f); toast('Saved', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Save')));
+      act.appendChild(h('button', { class: 'primary', on: { click: async () => { try { await api('PUT', `api/inbox/${id}`, f); await api('POST', `api/inbox/${id}/validate`, {}); toast('Validated', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Validate')));
+      act.appendChild(h('button', { class: 'danger', on: { click: () => { const reason = h('input', { placeholder: tr('Reason (required)') }); modal('Reject this document', h('div', null, h('p', { class: 'muted' }, tt('It is not a supplier invoice, or it is a duplicate.')), h('div', { class: 'field' }, h('label', null, tt('Reason')), reason)), (close) => [h('button', { class: 'danger', on: { click: async () => { close(); try { await api('POST', `api/inbox/${id}/reject`, { reason: reason.value }); toast('Rejected', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Reject')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Reject')));
     } else if (it.status === 'VALIDATED') { if (it.documentType !== 'CREDIT_NOTE') act.appendChild(h('button', { class: 'primary', on: { click: go('to-pay', {}, 'Marked to pay') } }, tt('Mark to pay'))); act.appendChild(h('button', { on: { click: go('reopen', {}, 'Reopened') } }, tt('Reopen for correction'))); }
     else if (it.status === 'TO_PAY') {
-      act.appendChild(h('button', { class: 'primary', on: { click: () => { const idem = (globalThis.crypto?.randomUUID?.() ?? ('sp-' + Date.now() + '-' + Math.random().toString(36).slice(2))); const amt = h('input', { inputmode: 'decimal', value: centsToInput(it.remainingCents ?? it.grossCents) }); const date = h('input', { type: 'date', value: civilToday(state.timeZone) }); const ref = h('input', { placeholder: tr('Bank reference (optional)') }); modal('Record the payment', h('div', null, h('p', { class: 'muted' }, tt('Still to pay: {0} {1}', fmtMoney(it.remainingCents ?? it.grossCents, it.currency), '')), h('div', { class: 'field' }, h('label', null, tt('Amount')), amt), h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, tt('Date paid')), date), h('div', { class: 'field' }, h('label', null, tt('Reference')), ref))), (close) => [h('button', { class: 'primary', on: { click: async () => { close(); try { await api('POST', `/api/inbox/${id}/pay`, { paidOn: date.value, amount: amt.value, reference: ref.value || undefined, idempotencyKey: idem }); toast('Payment recorded', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Record payment')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Mark as paid')));
+      act.appendChild(h('button', { class: 'primary', on: { click: () => { const idem = (globalThis.crypto?.randomUUID?.() ?? ('sp-' + Date.now() + '-' + Math.random().toString(36).slice(2))); const amt = h('input', { inputmode: 'decimal', value: centsToInput(it.remainingCents ?? it.grossCents) }); const date = h('input', { type: 'date', value: civilToday(state.timeZone) }); const ref = h('input', { placeholder: tr('Bank reference (optional)') }); modal('Record the payment', h('div', null, h('p', { class: 'muted' }, tt('Still to pay: {0} {1}', fmtMoney(it.remainingCents ?? it.grossCents, it.currency), '')), h('div', { class: 'field' }, h('label', null, tt('Amount')), amt), h('div', { class: 'row r2' }, h('div', { class: 'field' }, h('label', null, tt('Date paid')), date), h('div', { class: 'field' }, h('label', null, tt('Reference')), ref))), (close) => [h('button', { class: 'primary', on: { click: async () => { close(); try { await api('POST', `api/inbox/${id}/pay`, { paidOn: date.value, amount: amt.value, reference: ref.value || undefined, idempotencyKey: idem }); toast('Payment recorded', 'ok'); draw(); onChange(); } catch (e) { fail(e, err); } } } }, tt('Record payment')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Mark as paid')));
       act.appendChild(h('button', { on: { click: go('reopen', {}, 'Reopened') } }, tt('Reopen for correction')));
     } else if (it.status === 'PAID') act.appendChild(h('span', { class: 'muted' }, tt('Paid on {0}', it.paidAt || '')));
     body.appendChild(act);
@@ -311,7 +311,7 @@ async function viewTodo() {
   const box = h('div', { style: 'display:grid;gap:18px' }); shell.appendChild(box);
   box.appendChild(h('div', { class: 'metric-grid' }, [1, 2, 3, 4].map(() => h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:22px;width:30%' })))));
   try {
-    const [ac, o] = await Promise.all([api('GET', '/api/actions'), api('GET', '/api/overview')]);
+    const [ac, o] = await Promise.all([api('GET', 'api/actions'), api('GET', 'api/overview')]);
     clear(box);
     const actions = ac.actions;
     const counts = { bad: actions.filter((a) => a.tone === 'bad').length, warn: actions.filter((a) => a.tone === 'warn').length, info: actions.filter((a) => a.tone === 'info').length, ok: actions.filter((a) => a.tone === 'ok').length };
@@ -448,7 +448,7 @@ async function viewSales(q) {
   }
   async function loadMetrics() {
     try {
-      const [rec, o] = await Promise.all([api('GET', '/api/receivables'), api('GET', '/api/overview')]);
+      const [rec, o] = await Promise.all([api('GET', 'api/receivables'), api('GET', 'api/overview')]);
       const cur = o.currency;
       clear(metricRow);
       const metric = (icon, label, value, note) => h('div', { class: 'metric' }, h('span', { class: 'metric-icon' }, svgIcon(icon, 17)), h('div', null, h('div', { class: 'metric-title' }, label), h('div', { class: 'metric-value' }, value), h('div', { class: 'metric-note' }, note)));
@@ -463,7 +463,7 @@ async function viewSales(q) {
     clear(wsMain); clear(wsSide);
     if (tab === 'analytics') {
       wsSide.style.display = 'none'; workspace.style.gridTemplateColumns = '1fr';
-      wsMain.appendChild(analyticsPanel({ endpoint: '/api/sales/analytics', currency: state.settings.defaults.currency, productDrilldown: (p) => openProductDrilldown(p, state.settings.defaults.currency) }));
+      wsMain.appendChild(analyticsPanel({ endpoint: 'api/sales/analytics', currency: state.settings.defaults.currency, productDrilldown: (p) => openProductDrilldown(p, state.settings.defaults.currency) }));
       return;
     }
     workspace.style.gridTemplateColumns = ''; wsSide.style.display = '';
@@ -505,10 +505,10 @@ async function viewSales(q) {
       // decorative.
       const quickActions = h('div', { class: 'actions', style: 'padding:14px 0;border-bottom:1px solid var(--line)' });
       if (r.type === 'invoice' && r.remainingCents > 0 && ['ISSUED', 'SENT', 'PARTIALLY_PAID', 'OVERDUE'].includes(r.effectiveStatus)) {
-        quickActions.appendChild(h('button', { class: 'primary', on: { click: () => paymentModal(r, () => { api('GET', `/api/documents?type=${kind}`).then((res) => { rows = res.rows; drawTable(); const upd = rows.find((x) => x.id === r.id); if (upd) { selected = upd; drawSide(); } }); }) } }, tt('Collect payment')));
+        quickActions.appendChild(h('button', { class: 'primary', on: { click: () => paymentModal(r, () => { api('GET', `api/documents?type=${kind}`).then((res) => { rows = res.rows; drawTable(); const upd = rows.find((x) => x.id === r.id); if (upd) { selected = upd; drawSide(); } }); }) } }, tt('Collect payment')));
       }
       if (r.type === 'invoice' && ['ISSUED', 'SENT', 'PARTIALLY_PAID', 'OVERDUE'].includes(r.effectiveStatus)) {
-        quickActions.appendChild(h('button', { on: { click: async () => { try { const d = await api('GET', `/api/documents/${r.id}`); creditModal(d); } catch (e) { fail(e); } } } }, tt('Create a credit note')));
+        quickActions.appendChild(h('button', { on: { click: async () => { try { const d = await api('GET', `api/documents/${r.id}`); creditModal(d); } catch (e) { fail(e); } } } }, tt('Create a credit note')));
       }
       if (quickActions.children.length) wsSide.appendChild(quickActions);
     }
@@ -523,7 +523,7 @@ async function viewSales(q) {
         shown.map((r) => h('tr', { class: 'click', on: { click: () => { selected = r; drawSide(); } } }, h('td', { 'data-label': tr('Document') }, h('strong', null, r.number || tt('(draft)')), h('small', null, tt(TYPE[r.type] || r.type))), h('td', { 'data-label': tr('Customer') }, r.customer || '—'), h('td', { 'data-label': tr('Issued') }, r.issueDate || '—'), h('td', { 'data-label': tr('Due') }, r.dueDate || '—'), h('td', { class: 'num', 'data-label': tr('Amount') }, r.gross || ''), h('td', { 'data-label': tr('Status') }, badge(r.effectiveStatus))))));
     }
     search.addEventListener('input', () => { text = search.value; drawTable(); });
-    api('GET', `/api/documents?type=${kind}`).then((r) => {
+    api('GET', `api/documents?type=${kind}`).then((r) => {
       rows = r.rows;
       // Real distinct customer names from this list only - never a separate/fabricated client directory.
       [...new Set(rows.map((x) => x.customer).filter(Boolean))].sort().forEach((name) => clientSel.appendChild(h('option', { value: name }, name)));
@@ -556,7 +556,7 @@ function importDocumentsModal(done) {
       const openExisting = (existingId) => h('button', { type: 'button', class: 'linkish', on: { click: () => openInboxItem(existingId, done) } }, tt('Open the existing document'));
       const pending = h('div', { class: 'muted doc-analysing', role: 'status' }, tt('{0}: analysing the document…', file.name)); status.appendChild(pending);
       try {
-        const r = await api('POST', '/api/inbox/upload', { fileName: file.name, dataBase64: await toB64(file) }); pending.remove();
+        const r = await api('POST', 'api/inbox/upload', { fileName: file.name, dataBase64: await toB64(file) }); pending.remove();
         const scan = !r.duplicate && r.item.extraction && (r.item.extraction.warnings || []).includes('SCAN_REQUIRES_OCR');
         const review = h('button', { type: 'button', class: 'linkish', on: { click: () => openInboxItem(r.item.id, done) } }, tt('Review'));
         status.appendChild(h('div', null, r.duplicate ? tt('{0}: this file was already imported.', file.name) : scan ? tt('{0}: scanned document, fill in the fields by hand.', file.name) : tt('{0} received', file.name), ' ', r.duplicate ? openExisting(r.item.id) : review));
@@ -599,7 +599,7 @@ async function viewPurchasesWorkspace(q) {
 
   async function loadMetrics() {
     try {
-      const [purchases, c] = await Promise.all([api('GET', '/api/inbox?scope=purchases'), api('GET', '/api/inbox/status')]);
+      const [purchases, c] = await Promise.all([api('GET', 'api/inbox?scope=purchases'), api('GET', 'api/inbox/status')]);
       // EUR-only: the To-pay amount and its count come from the server (foreign-currency documents are never added)
       const cur = (state.settings && state.settings.defaults && state.settings.defaults.currency) || 'EUR';
       const paidCount = purchases.rows.filter((r) => r.status === 'PAID').length;
@@ -620,7 +620,7 @@ async function viewPurchasesWorkspace(q) {
   // with a link to open the real file, rather than pretending to render it inline.
   function docPreviewNode(it) {
     if (!it.hasFile) return h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('doc', 24)), h('div', { class: 'muted small' }, tt('This entry has no source document.')));
-    const url = `/api/inbox/${it.id}/file`;
+    const url = `api/inbox/${it.id}/file`;
     if ((it.contentType || '').startsWith('image/')) return h('img', { src: url, alt: it.fileName || '', style: 'max-width:100%;max-height:100%;border-radius:8px;box-shadow:var(--shadow);object-fit:contain' });
     if (it.contentType === 'application/pdf') return h('iframe', { src: url, title: it.fileName || 'PDF', style: 'width:100%;height:100%;min-height:520px;border:0;border-radius:8px;background:#fff' });
     return h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('doc', 24)), h('div', null, h('strong', null, it.fileName || tt('Source file')), h('div', { class: 'muted small' }, tt('Preview is not available for this file type.'))), h('a', { class: 'btn', href: url, target: '_blank', rel: 'noopener' }, tt('Open the source document')));
@@ -629,7 +629,7 @@ async function viewPurchasesWorkspace(q) {
     clear(workspace);
     if (tab === 'analytics') {
       workspace.className = 'card';
-      workspace.appendChild(analyticsPanel({ endpoint: '/api/purchases/analytics', currency: state.settings.defaults.currency, productDrilldown: () => {} }));
+      workspace.appendChild(analyticsPanel({ endpoint: 'api/purchases/analytics', currency: state.settings.defaults.currency, productDrilldown: () => {} }));
       return;
     }
     // Persistent 3-pane workspace (queue / document preview / validation form), replacing the previous
@@ -664,7 +664,7 @@ async function viewPurchasesWorkspace(q) {
     }
     function loadRows() {
       const view = PURCHASE_TABS[tab];
-      api('GET', `/api/inbox?scope=${view.scope}`).then((r) => {
+      api('GET', `api/inbox?scope=${view.scope}`).then((r) => {
         // Avoirs: a credit note never becomes TO_PAY; Validées: a validated invoice stays visible until it is marked to pay.
         rows = r.rows.filter(view.keep);
         drawQueue();
@@ -683,7 +683,7 @@ async function viewInbox() {
     h('div', { class: 'actions' }, h('button', { on: { click: () => manualEntry(() => viewInbox()) } }, tt('+ Add manually')))));
   const box = h('div'); main.appendChild(box);
   // sources
-  const st = await api('GET', '/api/inbox/status');
+  const st = await api('GET', 'api/inbox/status');
   const SRC = { upload: 'File upload', email: 'Dedicated finance mailbox', peppol: 'Peppol invoices received' };
   await peppolInboundCard(box);
   box.appendChild(h('div', { class: 'sources' }, st.adapters.map((a) => h('div', { class: `source ${a.configured ? 'on' : ''}` }, h('span', { class: 'dot2' }), h('span', null, tt(SRC[a.name] || a.name)), h('span', { class: 'chip mute' }, tt(a.configured ? 'Active' : 'NOT CONFIGURED'))))));
@@ -696,7 +696,7 @@ async function viewInbox() {
   const toB64 = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(',')[1] || ''); r.onerror = rej; r.readAsDataURL(file); });
   async function send(files) {
     for (const file of files) {
-      try { const r = await api('POST', '/api/inbox/upload', { fileName: file.name, dataBase64: await toB64(file) }); toast(r.duplicate ? tt('{0} was already received', file.name) : tt('{0} received', file.name), r.duplicate ? '' : 'ok'); } catch (e) { fail(e); }
+      try { const r = await api('POST', 'api/inbox/upload', { fileName: file.name, dataBase64: await toB64(file) }); toast(r.duplicate ? tt('{0} was already received', file.name) : tt('{0} received', file.name), r.duplicate ? '' : 'ok'); } catch (e) { fail(e); }
     }
     draw();
   }
@@ -704,7 +704,7 @@ async function viewInbox() {
   box.appendChild(drop); box.appendChild(input); box.appendChild(list);
   async function draw() {
     clear(list);
-    let rows; try { rows = (await api('GET', '/api/inbox?scope=inbox')).rows; } catch (e) { return fail(e, list); }
+    let rows; try { rows = (await api('GET', 'api/inbox?scope=inbox')).rows; } catch (e) { return fail(e, list); }
     if (!rows.length) return list.appendChild(h('div', { class: 'empty big' }, h('span', { class: 'eicon' }, svgIcon('doc', 26)), h('div', null, h('strong', null, tt('The inbox is empty')), h('div', { class: 'muted small' }, tt('Documents you receive will appear here for review.')))));
     rows.forEach((r) => list.appendChild(h('a', { class: 'docrow', href: '#', on: { click: (e) => { e.preventDefault(); openInboxItem(r.id, draw); } } },
       avatar(r.supplierName || r.fileName || '?'),
@@ -718,7 +718,7 @@ function manualEntry(done) {
   const f = {}; const err = h('div');
   const inp = (k, label, ph) => { f[k] = ''; return h('div', { class: 'field' }, h('label', null, label), h('input', { placeholder: ph || '', on: { input: (e) => { f[k] = e.target.value; } } })); };
   modal('Add a supplier invoice manually', h('div', null, err, h('div', { class: 'row r2' }, inp('supplierName', tr('Supplier')), inp('supplierVatNumber', tr('Supplier VAT number'), 'BE0123456789')), h('div', { class: 'row r3' }, inp('invoiceNumber', tr('Invoice number')), inp('issueDate', tr('Invoice date'), 'YYYY-MM-DD'), inp('dueDate', tr('Due date'), 'YYYY-MM-DD')), h('div', { class: 'row r4' }, inp('net', tr('Excl. VAT')), inp('vat', tr('VAT')), inp('gross', tr('Incl. VAT')), inp('currency', tr('Currency'), 'EUR'))),
-    (close) => [h('button', { class: 'primary', on: { click: async () => { try { await api('POST', '/api/inbox/manual', f); close(); toast('Saved', 'ok'); done(); } catch (e) { fail(e, err); } } } }, tt('Save')), h('button', { on: { click: close } }, tt('Cancel'))]);
+    (close) => [h('button', { class: 'primary', on: { click: async () => { try { await api('POST', 'api/inbox/manual', f); close(); toast('Saved', 'ok'); done(); } catch (e) { fail(e, err); } } } }, tt('Save')), h('button', { on: { click: close } }, tt('Cancel'))]);
 }
 
 // ---------- Purchases ----------
@@ -738,7 +738,7 @@ async function viewPurchases() {
       h('div', { class: 'pc-d', 'data-label': tr('Date') }, r.issueDate), h('div', { class: 'pc-d', 'data-label': tr('Due') }, r.dueDate || '-', dueListChip(r) ? h('div', null, dueListChip(r)) : null), h('div', { class: 'right', 'data-label': tr('Excl. VAT') }, fmtMoney(r.netCents, r.currency)), h('div', { class: 'right', 'data-label': tr('VAT') }, fmtMoney(r.vatCents, r.currency)), h('div', { class: 'right', 'data-label': tr('Total') }, h('strong', null, fmtMoney(r.grossCents, r.currency))),
       h('div', { 'data-label': tr('Status') }, inboxBadge(r.status)), h('div', { 'data-label': tr('Source') }, sourceBadge(r.source)))));
   }
-  async function load() { try { rows = (await api('GET', '/api/inbox?scope=purchases')).rows; const c = await api('GET', '/api/inbox/status'); clear(kpi); const cur = (rows[0] && rows[0].currency) || 'EUR'; const toPay = rows.filter((r) => r.status === 'TO_PAY'); const sum = toPay.reduce((a, r) => a + (r.grossCents || 0), 0);
+  async function load() { try { rows = (await api('GET', 'api/inbox?scope=purchases')).rows; const c = await api('GET', 'api/inbox/status'); clear(kpi); const cur = (rows[0] && rows[0].currency) || 'EUR'; const toPay = rows.filter((r) => r.status === 'TO_PAY'); const sum = toPay.reduce((a, r) => a + (r.grossCents || 0), 0);
       kpi.appendChild(h('div', { class: 'kpi' }, h('div', { class: 'kl' }, tt('To pay')), h('div', { class: 'kbig' }, fmtMoney(sum, cur)), h('div', { class: 'ks' }, tt('{0} invoice(s)', toPay.length))));
       kpi.appendChild(h('div', { class: 'kpi' }, h('div', { class: 'kl' }, tt('Validated, not yet to pay')), h('div', { class: 'kbig' }, String(c.counts.VALIDATED)), h('div', { class: 'ks' }, tt('to schedule'))));
       kpi.appendChild(h('div', { class: 'kpi ok' }, h('div', { class: 'kl' }, tt('Paid')), h('div', { class: 'kbig' }, String(c.counts.PAID)), h('div', { class: 'ks' }, tt('supplier invoice(s)'))));
@@ -751,7 +751,7 @@ async function viewPurchases() {
 async function workspaceSettingsCards() {
   const s = state.settings; const wrap = h('div');
   const cardOf = (title, hint, ...body) => h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'cardhead' }, h('h2', null, title), hint ? h('span', { class: 'muted small' }, hint) : null), ...body);
-  const save = (label, patchFn) => h('button', { class: 'primary', style: 'margin-top:8px', on: { click: async () => { try { await api('PUT', '/api/settings', patchFn()); await loadSettings(); toast('Settings saved', 'ok'); } catch (e) { fail(e); } } } }, tt(label));
+  const save = (label, patchFn) => h('button', { class: 'primary', style: 'margin-top:8px', on: { click: async () => { try { await api('PUT', 'api/settings', patchFn()); await loadSettings(); toast('Settings saved', 'ok'); } catch (e) { fail(e); } } } }, tt(label));
   const text = (obj, key, label, ph) => h('div', { class: 'field' }, h('label', null, label), h('input', { value: obj[key] || '', placeholder: ph || '', on: { input: (e) => { obj[key] = e.target.value; } } }));
   const sel = (obj, key, label, opts) => h('div', { class: 'field' }, h('label', null, label), h('select', { on: { change: (e) => { obj[key] = e.target.value; } } }, opts.map(([v, l]) => h('option', { value: v, selected: v === obj[key] }, tt(l)))));
 
@@ -759,7 +759,7 @@ async function workspaceSettingsCards() {
   wrap.appendChild(cardOf(tt('Accountant'), tt('Stored on this computer only'), h('div', { class: 'row r2' }, text(acc, 'name', tr('Name / company')), text(acc, 'email', tr('Email'), 'accountant@example.com')),
     h('div', { class: 'row r3' }, sel(acc, 'preferredFormat', tr('Preferred export format'), [['zip', 'ZIP package'], ['xlsx', 'Excel (XLSX)'], ['csv', 'CSV'], ['pdf', 'PDF']]), text(acc, 'software', tr('Accounting software / provider')), text(acc, 'packageName', tr('Name used in file names'), 'HABB')), save('Save', () => ({ accountant: acc }))));
 
-  let stock = null; try { stock = await api('GET', '/api/stock/status'); } catch (e) { /* not available */ }
+  let stock = null; try { stock = await api('GET', 'api/stock/status'); } catch (e) { /* not available */ }
   if (stock) {
     const cfg = { mode: (s.stock && s.stock.mode) || 'off', locationId: (s.stock && s.stock.locationId) || '' };
     const c = stock.counts; const status = h('div', { class: 'stockstat' }, ['PENDING', 'APPLIED', 'FAILED', 'UNCERTAIN', 'SKIPPED'].map((k) => h('div', { class: `sbox ${(k === 'FAILED' || k === 'UNCERTAIN') && c[k] ? 'bad' : ''}` }, h('div', { class: 'sn' }, String(c[k] || 0)), h('div', { class: 'sl' }, tt({ PENDING: 'Pending', APPLIED: 'Applied', FAILED: 'Failed', UNCERTAIN: 'Uncertain', SKIPPED: 'Skipped' }[k])))));
@@ -772,8 +772,8 @@ async function workspaceSettingsCards() {
       connectorBanner,
       h('div', { class: 'row r2' }, sel(cfg, 'mode', tr('Mode'), [['off', 'Off'], ['dry_run', 'Dry run (report only)'], ['live', 'Live']]),
         h('div', { class: 'field' }, h('label', null, tt('Stock location')), h('select', { on: { change: (e) => { cfg.locationId = e.target.value; } } }, h('option', { value: '' }, tt('Automatic if there is a single location')), stock.locations.map((l) => h('option', { value: l.id, selected: l.id === cfg.locationId }, l.name))))),
-      status, h('div', { class: 'actions' }, save('Save', () => ({ stock: cfg })), h('button', { style: 'margin-top:8px', on: { click: async () => { try { const r = await api('POST', '/api/stock/apply', {}); toast(r.blocked ? tt('Blocked: {0}', r.blocked) : tt('{0} movement(s) applied', r.applied), r.blocked ? 'bad' : 'ok'); } catch (e) { fail(e); } } } }, tt('Apply pending movements')),
-        h('button', { style: 'margin-top:8px', on: { click: async () => { try { const r = await api('POST', '/api/stock/reconcile', {}); toast(tt('{0} missing movement(s) created', r.created), 'ok'); } catch (e) { fail(e); } } } }, tt('Reconcile')))));
+      status, h('div', { class: 'actions' }, save('Save', () => ({ stock: cfg })), h('button', { style: 'margin-top:8px', on: { click: async () => { try { const r = await api('POST', 'api/stock/apply', {}); toast(r.blocked ? tt('Blocked: {0}', r.blocked) : tt('{0} movement(s) applied', r.applied), r.blocked ? 'bad' : 'ok'); } catch (e) { fail(e); } } } }, tt('Apply pending movements')),
+        h('button', { style: 'margin-top:8px', on: { click: async () => { try { const r = await api('POST', 'api/stock/reconcile', {}); toast(tt('{0} missing movement(s) created', r.created), 'ok'); } catch (e) { fail(e); } } } }, tt('Reconcile')))));
   }
 
   const inbox = { financeAddress: (s.inbox && s.inbox.financeAddress) || '', allowedSenders: ((s.inbox && s.inbox.allowedSenders) || []).join(', ') };
@@ -781,7 +781,7 @@ async function workspaceSettingsCards() {
     h('div', { class: 'row r2' }, text(inbox, 'financeAddress', tr('Dedicated finance address'), 'finance@example.com'), text(inbox, 'allowedSenders', tr('Allowed senders (comma separated)'), 'invoices@supplier.example')),
     save('Save', () => ({ inbox: { financeAddress: inbox.financeAddress, allowedSenders: inbox.allowedSenders.split(',').map((x) => x.trim()).filter(Boolean) } }))));
 
-  let pp = null; try { pp = await api('GET', '/api/peppol/status'); } catch (e) { /* ignore */ }
+  let pp = null; try { pp = await api('GET', 'api/peppol/status'); } catch (e) { /* ignore */ }
   if (pp) {
     const t = { ...pp.topology };
     wrap.appendChild(cardOf(tt('Peppol'), tt('Provider-neutral until the topology is confirmed'), h('div', { class: 'banner warn small' }, tt('Do not register a second receiving Access Point before the topology is confirmed with your accountant / provider.')),
@@ -790,7 +790,7 @@ async function workspaceSettingsCards() {
       h('div', { class: 'row r2' }, text(t, 'confirmedOn', tr('Confirmed on'), 'YYYY-MM-DD'), text(t, 'note', tr('Note'))),
       h('div', { class: 'chips' }, h('span', { class: 'chip mute' }, tt('Sending: {0}', tt(pp.outgoing.configured ? 'Active' : 'NOT CONFIGURED'))), h('span', { class: 'chip mute' }, tt('Receiving: {0}', tt('NOT CONFIGURED')))), save('Save', () => ({ peppol: { topology: t } }))));
   }
-  let cn = null; try { cn = (await api('GET', '/api/connectors')).connectors; } catch (e) { /* ignore */ }
+  let cn = null; try { cn = (await api('GET', 'api/connectors')).connectors; } catch (e) { /* ignore */ }
   if (cn) wrap.appendChild(cardOf(tt('Connectors'), tt('Replaceable: nothing is hard-wired to one provider'), h('div', { class: 'connlist' }, cn.map((c) => h('div', { class: 'conn' }, h('span', { class: `dot2 ${c.configured ? 'on' : ''}` }), h('span', { class: 'cl' }, tr(c.label)), h('span', { class: 'chip mute' }, tt(c.configured ? 'Active' : 'NOT CONFIGURED')))))));
   return wrap;
 }
@@ -816,26 +816,26 @@ function peppolCard(d, reload) {
     p.note ? h('p', { class: 'muted small' }, tt(p.note)) : null,
     !p.topologyConfirmed && p.configured ? h('p', { class: 'muted small' }, tt('Confirm the Peppol topology in Settings before sending.')) : null,
     compliance,
-    h('div', { class: 'actions' }, h('button', { class: 'primary', disabled: !p.canSend || p.transmitted || ['QUEUED', 'SUBMITTING'].includes(p.status), on: { click: () => modal('Send via Peppol', h('p', null, tt('This sends the structured invoice through your Peppol provider. It cannot be recalled.')), (close) => [h('button', { class: 'primary', on: { click: async () => { close(); try { const r = await api('POST', `/api/documents/${d.id}/peppol/send`, { approve: true }); toast(r.state === 'DELIVERED' ? tt('Delivered') : tt('Accepted by the Peppol provider (not yet delivered)'), 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('APPROVE and send')), h('button', { on: { click: close } }, tt('Cancel'))]) } }, tt('Send via Peppol')),
-      p.transmitted ? h('button', { on: { click: async () => { try { await api('POST', `/api/documents/${d.id}/peppol/refresh`, {}); reload(); } catch (e) { fail(e); } } } }, tt('Refresh status')) : null));
+    h('div', { class: 'actions' }, h('button', { class: 'primary', disabled: !p.canSend || p.transmitted || ['QUEUED', 'SUBMITTING'].includes(p.status), on: { click: () => modal('Send via Peppol', h('p', null, tt('This sends the structured invoice through your Peppol provider. It cannot be recalled.')), (close) => [h('button', { class: 'primary', on: { click: async () => { close(); try { const r = await api('POST', `api/documents/${d.id}/peppol/send`, { approve: true }); toast(r.state === 'DELIVERED' ? tt('Delivered') : tt('Accepted by the Peppol provider (not yet delivered)'), 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('APPROVE and send')), h('button', { on: { click: close } }, tt('Cancel'))]) } }, tt('Send via Peppol')),
+      p.transmitted ? h('button', { on: { click: async () => { try { await api('POST', `api/documents/${d.id}/peppol/refresh`, {}); reload(); } catch (e) { fail(e); } } } }, tt('Refresh status')) : null));
 }
 // Belgian compliance of an issued document: the route decision (with its reason), the payment reference, the archived originals (exact bytes, hash) and the official validation result.
 const ROUTE_TEXT = { PEPPOL_REQUIRED: 'Structured invoice required (Peppol)', PEPPOL_PREFERRED: 'Peppol possible (voluntary)', B2G_STRUCTURED: 'Public authority: structured invoice', NON_STRUCTURED_ALLOWED: 'No structured invoice required', ALTERNATIVE_EN16931_AGREED: 'Alternative format agreed with the customer', MANUAL_REVIEW_REQUIRED: 'To review: facts are missing', COMPLIANCE_BLOCKED: 'Blocked: facts are missing' };
 const ARCHIVE_TEXT = { ORIGINAL: 'Original archived', REGENERATED: 'Regenerated copy (not the original)' };
 function loadCompliance(d, box, reload) {
-  api('GET', `/api/documents/${d.id}/compliance`).then((c) => {
+  api('GET', `api/documents/${d.id}/compliance`).then((c) => {
     clear(box); const kv = (k, v) => h('div', { class: 'kv' }, h('span', null, k), h('strong', null, v));
     if (c.routing) box.appendChild(kv(tt('Invoicing route'), tt(ROUTE_TEXT[c.routing.route] || c.routing.route)));
     if (c.paymentReference) box.appendChild(kv(tt('Payment reference'), (() => { const x = c.paymentReference; return `+++${x.slice(0, 3)}/${x.slice(3, 7)}/${x.slice(7)}+++`; })()));
-    if (c.pdf) box.appendChild(h('div', { class: 'kv' }, h('span', null, tt('PDF')), h('span', null, h('span', { class: `chip ${c.pdf.classification === 'ORIGINAL' ? 'ok' : 'warn'}` }, tt(ARCHIVE_TEXT[c.pdf.classification])), ' ', h('a', { href: `/api/documents/${d.id}/original-pdf` }, tt('Download')))));
-    if (c.structured) box.appendChild(h('div', { class: 'kv' }, h('span', null, tt('Structured invoice')), h('span', null, h('span', { class: 'chip ok' }, tt('Original archived')), ' ', h('span', { class: 'muted small' }, c.structured.fileName), ' ', h('a', { href: `/api/documents/${d.id}/structured-original` }, tt('Download')))));
+    if (c.pdf) box.appendChild(h('div', { class: 'kv' }, h('span', null, tt('PDF')), h('span', null, h('span', { class: `chip ${c.pdf.classification === 'ORIGINAL' ? 'ok' : 'warn'}` }, tt(ARCHIVE_TEXT[c.pdf.classification])), ' ', h('a', { href: `api/documents/${d.id}/original-pdf` }, tt('Download')))));
+    if (c.structured) box.appendChild(h('div', { class: 'kv' }, h('span', null, tt('Structured invoice')), h('span', null, h('span', { class: 'chip ok' }, tt('Original archived')), ' ', h('span', { class: 'muted small' }, c.structured.fileName), ' ', h('a', { href: `api/documents/${d.id}/structured-original` }, tt('Download')))));
     if (c.validation && c.validation.ok === false) box.appendChild(h('div', { class: 'banner warn small' }, h('strong', null, tt('The structured invoice did not pass the official checks')), h('ul', { class: 'plain' }, (c.validation.findings || c.validation.errors || []).slice(0, 5).map((f) => h('li', null, typeof f === 'string' ? f : `${f.ruleId}: ${f.message}`)))));
-    if (!c.archived) box.appendChild(h('div', { class: 'actions' }, h('span', { class: 'muted small' }, tt('No original is archived for this document.')), h('button', { on: { click: async () => { try { await api('POST', `/api/documents/${d.id}/archive`, {}); toast(tt('Archived (regenerated copy)'), 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('Archive now'))));
+    if (!c.archived) box.appendChild(h('div', { class: 'actions' }, h('span', { class: 'muted small' }, tt('No original is archived for this document.')), h('button', { on: { click: async () => { try { await api('POST', `api/documents/${d.id}/archive`, {}); toast(tt('Archived (regenerated copy)'), 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('Archive now'))));
   }).catch(() => {});
 }
 // Invoices received through Peppol: archived original, validation, duplicate status, review state. Receiving never validates anything: a person accepts or rejects.
 async function peppolInboundCard(box) {
-  let r; try { r = await api('GET', '/api/peppol/inbound'); } catch (e) { return; }
+  let r; try { r = await api('GET', 'api/peppol/inbound'); } catch (e) { return; }
   if (!r.rows.length) return;
   const STATE = { RECEIVED: 'Received', TO_REVIEW: 'To review', ACCEPTED: 'Accepted', REJECTED: 'Rejected', VALIDATION_FAILED: 'Failed the official checks', DUPLICATE: 'Duplicate (ignored)' };
   const card = h('div', { class: 'card', style: 'margin-top:14px;padding:16px 18px' }, h('h2', { class: 'section-title' }, tt('Invoices received through Peppol')));
@@ -844,9 +844,9 @@ async function peppolInboundCard(box) {
     h('span', null, [m.supplier || m.sender || '—', m.number, m.date].filter(Boolean).join(' · ')), h('strong', null, m.grossCents == null ? '' : fmtMoney(m.grossCents, m.currency)),
     h('span', { class: `chip ${m.state === 'ACCEPTED' ? 'ok' : ['VALIDATION_FAILED', 'REJECTED'].includes(m.state) ? 'bad' : 'warn'}` }, tt(STATE[m.state] || m.state)),
     m.state === 'VALIDATION_FAILED' && m.validation ? h('span', { class: 'muted small' }, (m.validation.findings || []).slice(0, 2).map((f) => f.ruleId).join(', ')) : null,
-    m.state === 'TO_REVIEW' ? h('span', { class: 'actions' }, h('button', { class: 'primary', on: { click: async () => { try { await api('POST', `/api/peppol/inbound/${m.id}/accept`, {}); toast(tt('Accepted'), 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('Accept')),
-      h('button', { on: { click: () => { const reason = h('input', { placeholder: tr('Reason') }); modal(tt('Reject'), h('div', { class: 'field' }, h('label', null, tt('Reason')), reason), (close) => [h('button', { class: 'danger', on: { click: async () => { try { await api('POST', `/api/peppol/inbound/${m.id}/reject`, { reason: reason.value.trim() }); close(); reload(); } catch (e) { fail(e); } } } }, tt('Reject')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Reject'))) : null,
-    m.state === 'VALIDATION_FAILED' ? h('button', { on: { click: async () => { try { await api('POST', `/api/peppol/inbound/${m.id}/review`, {}); reload(); } catch (e) { fail(e); } } } }, tt('Send to review anyway')) : null)));
+    m.state === 'TO_REVIEW' ? h('span', { class: 'actions' }, h('button', { class: 'primary', on: { click: async () => { try { await api('POST', `api/peppol/inbound/${m.id}/accept`, {}); toast(tt('Accepted'), 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('Accept')),
+      h('button', { on: { click: () => { const reason = h('input', { placeholder: tr('Reason') }); modal(tt('Reject'), h('div', { class: 'field' }, h('label', null, tt('Reason')), reason), (close) => [h('button', { class: 'danger', on: { click: async () => { try { await api('POST', `api/peppol/inbound/${m.id}/reject`, { reason: reason.value.trim() }); close(); reload(); } catch (e) { fail(e); } } } }, tt('Reject')), h('button', { on: { click: close } }, tt('Cancel'))]); } } }, tt('Reject'))) : null,
+    m.state === 'VALIDATION_FAILED' ? h('button', { on: { click: async () => { try { await api('POST', `api/peppol/inbound/${m.id}/review`, {}); reload(); } catch (e) { fail(e); } } } }, tt('Send to review anyway')) : null)));
   box.appendChild(card);
 }
 
@@ -884,7 +884,7 @@ const MATCH_STATUS_TEXT = { EXACT: 'Exact match', PROBABLE: 'Probable match', PA
 function matchActions(s, reload) {
   const t = s.transaction;
   const acts = h('div', { class: 'actions' });
-  const confirmWith = async (body) => { try { await api('POST', `/api/bank/transactions/${s.transactionId}/confirm`, body); toast(tt('Justified'), 'ok'); reload(); } catch (e) { fail(e); } };
+  const confirmWith = async (body) => { try { await api('POST', `api/bank/transactions/${s.transactionId}/confirm`, body); toast(tt('Justified'), 'ok'); reload(); } catch (e) { fail(e); } };
   if (s.candidates.length) {
     if (s.candidates.length === 1 && s.status !== 'AMBIGUOUS') acts.appendChild(h('button', { class: 'primary', on: { click: () => confirmWith(t.amountCents >= 0 ? { documentId: s.candidates[0].documentId } : { itemId: s.candidates[0].itemId }) } }, tt('Justify')));
     else acts.appendChild(h('select', { on: { change: (e) => { if (e.target.value) confirmWith(t.amountCents >= 0 ? { documentId: e.target.value } : { itemId: e.target.value }); } } },
@@ -893,7 +893,7 @@ function matchActions(s, reload) {
   // Kept as "Ignore" (not the reference's "Choisir autre chose"): the real action behind this button
   // dismisses the suggestion - it does not let the merchant pick a different match, so labelling it as a
   // choice would promise something it does not do.
-  acts.appendChild(h('button', { on: { click: async () => { try { await api('POST', `/api/bank/transactions/${s.transactionId}/ignore`, {}); toast('Ignored', 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('Ignore')));
+  acts.appendChild(h('button', { on: { click: async () => { try { await api('POST', `api/bank/transactions/${s.transactionId}/ignore`, {}); toast('Ignored', 'ok'); reload(); } catch (e) { fail(e); } } } }, tt('Ignore')));
   return acts;
 }
 /** Reconciliation panel of one transaction: derived amounts, the linked payments (with Unreconcile), and the two explicit commands. A suggestion never reconciles. */
@@ -902,14 +902,14 @@ function reconBlock(t, reload) {
     h('div', { class: 'kv' }, h('span', null, tt('Reconciled amount')), h('strong', null, fmtMoney(t.reconciledCents || 0, t.currency))),
     h('div', { class: 'kv' }, h('span', null, tt('Remaining to reconcile')), h('strong', null, fmtMoney(t.remainingCents ?? Math.abs(t.amountCents), t.currency))));
   const list = h('div', { class: 'recon-list' }); box.appendChild(list);
-  api('GET', `/api/bank/transactions/${t.id}`).then((r) => {
+  api('GET', `api/bank/transactions/${t.id}`).then((r) => {
     const recs = r.transaction.reconciliations || []; const left = (x) => x.amountCents + recs.filter((y) => y.reversesId === x.id).reduce((a, y) => a + y.amountCents, 0);
     recs.filter((x) => x.amountCents > 0 && left(x) > 0).forEach((x) => list.appendChild(h('div', { class: 'kv' }, h('span', null, x.kind === 'IGNORE' ? tt('Set aside on purpose') : tt('Reconciled with a payment')), h('strong', null, fmtMoney(left(x), t.currency)),
-      h('button', { class: 'small', on: { click: () => reasonModal(tt('Unreconcile'), tt('Only an explicit action reconciles: a suggestion never does.'), {}, async (v) => { if (!v.reason) throw Object.assign(new Error('REQUIRED'), { code: 'REQUIRED' }); await api('POST', `/api/bank/transactions/${t.id}/unreconcile`, { reconciliationIds: [x.id], reason: v.reason, idempotencyKey: v.key }); toast(tt('Reconciliation cancelled.'), 'ok'); reload(); }) } }, tt('Unreconcile')))));
+      h('button', { class: 'small', on: { click: () => reasonModal(tt('Unreconcile'), tt('Only an explicit action reconciles: a suggestion never does.'), {}, async (v) => { if (!v.reason) throw Object.assign(new Error('REQUIRED'), { code: 'REQUIRED' }); await api('POST', `api/bank/transactions/${t.id}/unreconcile`, { reconciliationIds: [x.id], reason: v.reason, idempotencyKey: v.key }); toast(tt('Reconciliation cancelled.'), 'ok'); reload(); }) } }, tt('Unreconcile')))));
   }).catch(() => {});
   if ((t.remainingCents ?? 0) > 0) box.appendChild(h('div', { class: 'actions' },
-    h('button', { class: 'primary', on: { click: () => reasonModal(tt('Record the payment and reconcile'), tt('The payment is created and linked in one step. Nothing is allocated to an invoice here.'), { withAmount: t.remainingCents, needReason: false }, async (v) => { await api('POST', `/api/bank/transactions/${t.id}/reconcile`, { create: { amount: v.amount, allocations: [] }, idempotencyKey: v.key }); toast(tt('Reconciled.'), 'ok'); reload(); }) } }, tt('Reconcile')),
-    h('button', { on: { click: () => reasonModal(tt('Set aside'), tt('Only an explicit action reconciles: a suggestion never does.'), {}, async (v) => { await api('POST', `/api/bank/transactions/${t.id}/ignore`, { reason: v.reason || undefined, idempotencyKey: v.key }); toast(tt('Set aside.'), 'ok'); reload(); }) } }, tt('Set aside'))));
+    h('button', { class: 'primary', on: { click: () => reasonModal(tt('Record the payment and reconcile'), tt('The payment is created and linked in one step. Nothing is allocated to an invoice here.'), { withAmount: t.remainingCents, needReason: false }, async (v) => { await api('POST', `api/bank/transactions/${t.id}/reconcile`, { create: { amount: v.amount, allocations: [] }, idempotencyKey: v.key }); toast(tt('Reconciled.'), 'ok'); reload(); }) } }, tt('Reconcile')),
+    h('button', { on: { click: () => reasonModal(tt('Set aside'), tt('Only an explicit action reconciles: a suggestion never does.'), {}, async (v) => { await api('POST', `api/bank/transactions/${t.id}/ignore`, { reason: v.reason || undefined, idempotencyKey: v.key }); toast(tt('Set aside.'), 'ok'); reload(); }) } }, tt('Set aside'))));
   return box;
 }
 /** "Connect a bank": always opens a real workflow - the automatic connection when a provider is configured, the CSV statement import otherwise. Never simulates a connection. */
@@ -927,7 +927,7 @@ function openBankConnectModal(st, getCsvImporter) {
     plan.automatic ? h('button', { class: 'primary', type: 'button', on: { click: async (ev) => {
       ev.target.disabled = true; err.style.display = 'none';
       try {
-        const r = await api('POST', '/api/bank/connect', {});
+        const r = await api('POST', 'api/bank/connect', {});
         const url = safeAuthorizationUrl(r && r.authorizationUrl);
         if (!url) throw new Error('INVALID_AUTHORIZATION_URL');
         try { sessionStorage.setItem(BANK_STATE_KEY, String(r.state || '')); } catch (e) { /* the return will then be refused, never guessed */ }
@@ -960,7 +960,7 @@ function bankCsvImporter(onImported) {
   async function run(text, sourceLabel) {
     const bad = csvTextProblem(text); if (bad) return problem(bad);
     clear(out); out.appendChild(h('div', { class: 'muted small' }, tt('Reading the statement...')));
-    let pv; try { pv = await api('POST', '/api/bank/import-csv/preview', { csv: text }); } catch (e) { return fail(e, out); }
+    let pv; try { pv = await api('POST', 'api/bank/import-csv/preview', { csv: text }); } catch (e) { return fail(e, out); }
     render(pv, text, sourceLabel);
   }
 
@@ -992,7 +992,7 @@ function bankCsvImporter(onImported) {
         h('button', { type: 'button', class: 'primary csv-confirm', disabled: plan.canImport ? null : 'disabled', on: { click: async (ev) => {
           ev.target.disabled = true; clear(errBox);
           try {
-            const r = await api('POST', '/api/bank/import-csv', { csv: text });
+            const r = await api('POST', 'api/bank/import-csv', { csv: text });
             reset(); paste.value = '';
             toast(r.duplicates ? tt('{0} transaction(s) imported, {1} already present', r.created, r.duplicates) : tt('{0} transaction(s) imported', r.created), 'ok');
             onImported();
@@ -1023,7 +1023,7 @@ async function processBankReturn(ret) {
   if (ret.kind === 'error') { toast(tt('The bank connection failed. Nothing was connected.'), 'bad'); return; }
   let saved = null; try { saved = sessionStorage.getItem(BANK_STATE_KEY); sessionStorage.removeItem(BANK_STATE_KEY); } catch (e) { saved = null; }
   if (!bankStateMatches(saved, ret.state)) { toast(tt('The bank connection failed. Nothing was connected.'), 'bad'); return; }
-  try { const r = await api('POST', '/api/bank/consent', { code: ret.code, state: ret.state }); toast(r && r.connected ? tt('Bank connected (read-only).') : tt('The bank connection failed. Nothing was connected.'), r && r.connected ? 'ok' : 'bad'); }
+  try { const r = await api('POST', 'api/bank/consent', { code: ret.code, state: ret.state }); toast(r && r.connected ? tt('Bank connected (read-only).') : tt('The bank connection failed. Nothing was connected.'), r && r.connected ? 'ok' : 'bad'); }
   catch (e) { toast(tt('The bank connection failed. Nothing was connected.'), 'bad'); }
 }
 
@@ -1035,7 +1035,7 @@ async function viewBank() {
   const box = h('div', { style: 'display:grid;gap:14px' }); shell.appendChild(box);
   async function draw() {
     clear(box);
-    let st, treasury; try { st = await api('GET', '/api/bank/status'); treasury = await api('GET', '/api/treasury'); } catch (e) { return fail(e, box); }
+    let st, treasury; try { st = await api('GET', 'api/bank/status'); treasury = await api('GET', 'api/treasury'); } catch (e) { return fail(e, box); }
     box.appendChild(h('div', { class: 'accounts-grid' },
       h('div', { class: 'account-card' }, h('span', null, tt('Bank')), h('strong', null, treasury.display.bank ?? '—'), h('small', null, tt(st.state === 'ACTIVE' ? 'Connected' : 'Not connected'))),
       h('div', { class: 'account-card' }, h('span', null, tt('Cash')), h('strong', null, treasury.display.cash ?? '—'), h('small', null, tt('Confirmed count only'))),
@@ -1046,8 +1046,8 @@ async function viewBank() {
     if (st.state === 'ACTIVE') {
       connCard.appendChild(h('div', { class: 'kv' }, h('div', null, tt('Provider')), h('div', null, st.provider), h('div', null, tt('Scopes')), h('div', null, st.scopes.join(', ')), h('div', null, tt('Connected since')), h('div', null, (st.grantedAt ? civilDateIn(st.grantedAt, state.timeZone) : ''))));
       connCard.appendChild(h('div', { class: 'actions', style: 'margin-top:10px' },
-        h('button', { on: { click: async () => { try { const r = await api('POST', '/api/bank/sync', {}); toast(tt('{0} new transaction(s)', r.created), 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Sync now')),
-        h('button', { class: 'danger', on: { click: () => modal('Disconnect bank', h('p', null, tt('This revokes local and, where supported, remote access. No transactions are deleted.')), (close) => [h('button', { class: 'danger', on: { click: async () => { close(); try { await api('POST', '/api/bank/disconnect', {}); toast('Disconnected', 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Disconnect')), h('button', { on: { click: close } }, tt('Cancel'))]) } }, tt('Disconnect bank'))));
+        h('button', { on: { click: async () => { try { const r = await api('POST', 'api/bank/sync', {}); toast(tt('{0} new transaction(s)', r.created), 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Sync now')),
+        h('button', { class: 'danger', on: { click: () => modal('Disconnect bank', h('p', null, tt('This revokes local and, where supported, remote access. No transactions are deleted.')), (close) => [h('button', { class: 'danger', on: { click: async () => { close(); try { await api('POST', 'api/bank/disconnect', {}); toast('Disconnected', 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Disconnect')), h('button', { on: { click: close } }, tt('Cancel'))]) } }, tt('Disconnect bank'))));
     } else {
       const importer = bankCsvImporter(() => draw());
       connCard.appendChild(h('div', { class: 'actions', style: 'margin-top:10px' }, h('button', { class: 'primary', type: 'button', on: { click: () => openBankConnectModal(st, () => importer) } }, tt('Connect a bank'))));
@@ -1057,13 +1057,13 @@ async function viewBank() {
     const cashCard = h('div', { class: 'card', style: 'padding:16px 18px' }, h('h2', { class: 'section-title' }, 'Physical cash'), h('p', { class: 'muted small' }, tt('Only confirmed counts are used: cash sales are never assumed to stay in the till.')));
     const amt = h('input', { inputmode: 'decimal', placeholder: '0.00' }); const date = h('input', { type: 'date', value: civilToday(state.timeZone) });
     cashCard.appendChild(h('div', { class: 'row r3', style: 'align-items:end' }, h('div', { class: 'field' }, h('label', null, tt('Amount counted')), amt), h('div', { class: 'field' }, h('label', null, tt('Date')), date),
-      h('button', { on: { click: async () => { try { await api('POST', '/api/cash/counts', { amount: amt.value, countedOn: date.value }); toast('Saved', 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Confirm cash count'))));
+      h('button', { on: { click: async () => { try { await api('POST', 'api/cash/counts', { amount: amt.value, countedOn: date.value }); toast('Saved', 'ok'); draw(); } catch (e) { fail(e); } } } }, tt('Confirm cash count'))));
     box.appendChild(cashCard);
     // Real transaction ledger (index(4).html alignment) - shown regardless of a live bank connection (a CSV
     // import needs no connection at all, and its transactions still need reconciling). Replaces the previous
     // flat "suggestions only" list: every real transaction is browsable here, not only the unresolved ones.
     const accountsCard = h('div', { class: 'card', style: 'padding:16px 18px;display:none' }); box.appendChild(accountsCard);
-    api('GET', '/api/bank/accounts').then((r) => { if (!r.rows.length) return; accountsCard.style.display = ''; accountsCard.appendChild(h('h2', { class: 'section-title' }, tt('Bank accounts')));
+    api('GET', 'api/bank/accounts').then((r) => { if (!r.rows.length) return; accountsCard.style.display = ''; accountsCard.appendChild(h('h2', { class: 'section-title' }, tt('Bank accounts')));
       r.rows.forEach((a) => accountsCard.appendChild(h('div', { class: 'kv', style: 'flex-wrap:wrap;gap:6px' }, h('span', null, `${a.displayName || a.externalId}${a.ibanMasked ? ' · ' + a.ibanMasked : ''}`),
         h('strong', null, a.balance ? fmtMoney(a.balance.amountCents, a.balance.currency) : tt('No balance observed')),
         a.balance ? h('span', { class: `chip ${a.balance.freshness === 'FRESH' ? 'ok' : 'warn'}` }, `${tt('Balance observed {0}', a.balance.observedAt ? civilDateIn(a.balance.observedAt, state.timeZone) : tt('Unknown date'))} · ${tt(FRESHNESS_TEXT[a.balance.freshness])}`) : null,
@@ -1130,7 +1130,7 @@ async function viewBank() {
       });
     }
     function loadLedger() {
-      Promise.all([api('GET', '/api/bank/transactions'), api('GET', '/api/bank/suggestions')]).then(([tx, sug]) => {
+      Promise.all([api('GET', 'api/bank/transactions'), api('GET', 'api/bank/suggestions')]).then(([tx, sug]) => {
         allTx = tx.rows.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
         suggestionsById = new Map(sug.rows.map((s) => [s.transactionId, s]));
         drawLedgerTabs(); drawList();
@@ -1156,7 +1156,7 @@ const T_SOURCE = { CUSTOMER_INVOICE: 'Customer invoice', SUPPLIER_INVOICE: 'Supp
 const tchip = (kind, text) => h('span', { class: 'chip t-' + kind.toLowerCase() + ' ' + (kind === 'OBSERVED' ? 'ok' : kind === 'CALCULATED' ? 'mute' : kind === 'SCENARIO' ? 'warn' : '') }, text);
 const centsOfInput = (v) => { const n = Number(String(v).trim().replace(',', '.')); return Number.isFinite(n) ? Math.round(n * 100) : NaN; };
 function explainModal(id) {
-  api('GET', '/api/treasury/explain?id=' + encodeURIComponent(id)).then((x) => {
+  api('GET', 'api/treasury/explain?id=' + encodeURIComponent(id)).then((x) => {
     const ev = x.evidence; const cur = x.currency;
     const rows = [[tt('Source'), tt(T_SOURCE[x.source.type] || x.source.type) + (x.source.label ? ' ' + x.source.label : '')], [tt('Counterparty'), x.source.counterparty || '—'], [tt('Due date'), x.dueDate || '—'], [tt('Amount'), fmtMoney(x.direction === 'OUT' ? -x.amountCents : x.amountCents, cur)]];
     if (ev) { if (ev.grossCents != null) rows.push([tt('Document total'), fmtMoney(ev.grossCents, cur)]); if (ev.creditedCents) rows.push([tt('Credited'), fmtMoney(ev.creditedCents, cur)]); if (ev.paidCents) rows.push([tt('Already paid'), fmtMoney(ev.paidCents, cur)]); rows.push([tt('Remaining due'), fmtMoney(ev.remainingCents, cur)]); }
@@ -1166,7 +1166,7 @@ function explainModal(id) {
 }
 async function drawTreasuryV1(root) {
   clear(root); root.appendChild(h('div', { class: 'card skel-card' }, h('div', { class: 'skl', style: 'height:20px;width:50%' })));
-  let f; try { f = await api('GET', '/api/treasury/forecast'); } catch (e) { return fail(e, root); }
+  let f; try { f = await api('GET', 'api/treasury/forecast'); } catch (e) { return fail(e, root); }
   clear(root);
   const warn = (w) => ({ STALE_BANK_BALANCE: 'Starting position is not fresh: the figures below rely on an old balance.', STARTING_POSITION_NOT_FRESH: null, STALE_CASH_COUNT: 'The last cash count is old.', NO_OBSERVED_CASH: 'No bank balance or cash count: there is no starting position, only flows.', ACCOUNT_WITHOUT_BALANCE: 'A bank account has no observed balance.', SAME_DAY_TRANSACTIONS_NOT_COUNTED: 'Transactions dated the day of the balance are not added (they may already be in it).', UNRECONCILED_LATER_TRANSACTIONS: 'Some recent bank transactions are not reconciled: a matching invoice may still look open.', CURRENCIES_NOT_CONSOLIDATED: 'Currencies are shown separately: no exchange rate is applied.', BANK_BALANCE_TIME_UNKNOWN: 'A bank balance has no observation time.' })[w.code];
   const seen = new Set(); const notes = f.warnings.map((w) => warn(w)).filter((x) => x && !seen.has(x) && seen.add(x));
@@ -1218,7 +1218,7 @@ function scenarioPanel(f) {
     else if (t === 'REDUCE_INFLOW') hyp = { type: t, percentBp: Math.round(Number(pct.value) * 100) };
     else hyp = { type: t, id: pick.value, days: Number(days.value) };
     try {
-      const r = await api('POST', '/api/treasury/scenario', { hypotheses: [hyp] }); clear(out);
+      const r = await api('POST', 'api/treasury/scenario', { hypotheses: [hyp] }); clear(out);
       f.currencies.forEach((cur) => { const b = r.baseline.forecast[cur]; const s = r.scenario.forecast[cur]; const d = r.delta[cur];
         out.appendChild(h('div', { class: 'card', style: 'padding:12px 14px;margin-top:8px' }, f.currencies.length > 1 ? h('strong', null, cur) : null,
           [7, 30, 90].map((n) => h('div', { class: 'kv' }, h('span', null, tt('In {0} days', n)), h('span', null, b.horizons[n].projectedCents === null ? '—' : fmtMoney(b.horizons[n].projectedCents, cur), ' → ', s.horizons[n].projectedCents === null ? '—' : fmtMoney(s.horizons[n].projectedCents, cur)), h('strong', null, d.horizons[n].projectedDeltaCents === null ? '' : (d.horizons[n].projectedDeltaCents > 0 ? '+ ' : '') + fmtMoney(d.horizons[n].projectedDeltaCents, cur)))),
@@ -1247,7 +1247,7 @@ async function viewTreasury() {
   // same real, already-closed months (from /api/overview/cashflow), never a projection - so it is fetched
   // once here and never re-fetched when the horizon selector changes.
   try {
-    const cf = await api('GET', '/api/overview/cashflow?months=12');
+    const cf = await api('GET', 'api/overview/cashflow?months=12');
     mount(chartWrap, foreignNote(foreignCount(cf.excluded)));
     if (!cf.hasActivity) chartWrap.appendChild(h('div', { class: 'empty' }, h('span', { class: 'eicon' }, NordlaIcon.semantic('tresorerie', 'md')), h('div', { class: 'muted small' }, tt('Not enough history yet.'))));
     else {

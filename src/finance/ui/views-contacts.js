@@ -107,7 +107,7 @@ async function viewContacts(q) {
     clear(wsMain); wsMain.appendChild(h('div', { style: 'padding:12px' }, [1, 2, 3, 4, 5].map(() => h('div', { class: 'skl', style: 'height:14px;width:60%;margin-bottom:10px' }))));
     try {
       const query = encodeURIComponent(search.value.trim());
-      const [main, archived] = await Promise.all([api('GET', `/api/contacts?q=${query}`), api('GET', `/api/contacts?role=archived&q=${query}`)]);
+      const [main, archived] = await Promise.all([api('GET', `api/contacts?q=${query}`), api('GET', `api/contacts?role=archived&q=${query}`)]);
       all = main.rows; archivedRows = archived.rows;
       drawMetrics(); drawTabs(); drawRows();
     } catch (e) {
@@ -140,16 +140,16 @@ function openContactDrawer(id, onClose) {
   const goToNew = (kind) => { back.remove(); if (onClose) onClose(); location.hash = `#/new/${kind}?companyId=${id}`; };
   async function draw() {
     clear(body); clear(err);
-    let c; try { c = await api('GET', `/api/contacts/${id}`); } catch (e) { return fail(e, body); }
+    let c; try { c = await api('GET', `api/contacts/${id}`); } catch (e) { return fail(e, body); }
     const cur = state.settings.defaults.currency;
     body.appendChild(h('div', { class: 'detail-head' },
       h('div', null, h('h2', null, c.displayName), h('p', null, [tt(CONTACT_TYPE_TEXT[c.kind] || c.kind), c.vatNumber].filter(Boolean).join(' · ')), h('p', null, relationBadge(c))),
-      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', on: { click: () => goToNew('invoice') } }, tt('+ Create')), h('button', { class: 'btn', type: 'button', on: { click: async () => { try { const r = await api('GET', `/api/companies/${id}`); back.remove(); companyModal(r.company, c); } catch (e) { fail(e, err); } } } }, tt('Edit')),
+      h('div', { class: 'actions' }, h('button', { class: 'btn', type: 'button', on: { click: () => goToNew('invoice') } }, tt('+ Create')), h('button', { class: 'btn', type: 'button', on: { click: async () => { try { const r = await api('GET', `api/companies/${id}`); back.remove(); companyModal(r.company, c); } catch (e) { fail(e, err); } } } }, tt('Edit')),
         // Real archive/restore (index(4).html alignment) - the backend has supported this since Phase 1 but
         // had no UI control anywhere. Never a delete: the contact and its documents are untouched either way.
         c.archived
-          ? h('button', { class: 'btn', type: 'button', on: { click: async () => { try { await api('POST', `/api/companies/${id}/restore`, {}); toast(tt('Contact restored'), 'ok'); draw(); if (onClose) onClose(); } catch (e) { fail(e, err); } } } }, tt('Restore'))
-          : h('button', { class: 'btn', type: 'button', on: { click: async () => { try { await api('POST', `/api/companies/${id}/archive`, {}); toast(tt('Contact archived'), 'ok'); draw(); if (onClose) onClose(); } catch (e) { fail(e, err); } } } }, tt('Archive')))));
+          ? h('button', { class: 'btn', type: 'button', on: { click: async () => { try { await api('POST', `api/companies/${id}/restore`, {}); toast(tt('Contact restored'), 'ok'); draw(); if (onClose) onClose(); } catch (e) { fail(e, err); } } } }, tt('Restore'))
+          : h('button', { class: 'btn', type: 'button', on: { click: async () => { try { await api('POST', `api/companies/${id}/archive`, {}); toast(tt('Contact archived'), 'ok'); draw(); if (onClose) onClose(); } catch (e) { fail(e, err); } } } }, tt('Archive')))));
     // Contact details: only what is really stored (nothing is shown for an empty field).
     const a = c.address || {};
     // A country code alone (the form's default) is not an address: shown only with a street, a postal code or a city.

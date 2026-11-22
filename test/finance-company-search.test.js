@@ -276,8 +276,8 @@ test('UI: ONE shared search component is used by Add company, New invoice and Ne
   assert.match(ui, /function viewForm\(kind, editId\)/); // the same form serves invoices AND quotes
   assert.ok(ui.includes("'Search company name or VAT / enterprise number'"));
   assert.ok(ui.includes("'Search'"));
-  assert.match(ui, /\/api\/companies\/search/);
-  assert.match(ui, /\/api\/companies\/resolve/);
+  assert.match(ui, /(?:\/)?api\/companies\/search/);
+  assert.match(ui, /(?:\/)?api\/companies\/resolve/);
   assert.ok(!/\/api\/companies\/lookup/.test(ui)); // the old VAT-only lookup button is gone
   assert.match(ui, /function fillFromResult\(/); // one mapping fills the form; nothing is guessed in the browser
   assert.match(ui, /sourceText\(/); // the source of the data is always shown

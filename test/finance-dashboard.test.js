@@ -527,7 +527,7 @@ test('the UI never calculates money: no arithmetic on amount fields, only displa
   assert.ok(!/parseFloat|parseInt\(.*(price|amount|total|vat)/i.test(ui));
   assert.ok(!/(unitPrice|quantity|price)\s*\*\s*/i.test(ui));
   assert.ok(!/Math\.round\(.*(price|total|vat|amount)/i.test(ui));
-  assert.match(ui, /\/api\/calc/); // totals are requested from the server
+  assert.match(ui, /(?:\/)?api\/calc/); // totals are requested from the server
 });
 
 // ---------- audit ----------

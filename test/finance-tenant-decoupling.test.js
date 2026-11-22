@@ -152,19 +152,21 @@ for (const [withConnector, reason] of [[false, 'NO_SALES_SOURCE'], [true, 'SALES
   const dir = mkdtempSync(join(tmpdir(), 'nordla-finance-boot-')); const cwd = process.cwd(); process.chdir(dir); // settings / sessions go to a temp dir
   const port = await freePort(); const token = 'synthetic-dashboard-token-0123456789';
   const t = trap(); const realFetch = globalThis.fetch; const hits = [];
-  globalThis.fetch = async (u, o) => (String(u).startsWith(`http://127.0.0.1:${port}`) ? realFetch(u, o) : (hits.push(String(u)), Promise.reject(new Error('network forbidden'))));
+  const PROXY = 'synthetic-proxy-secret-0123456789'; // hosted Finance refuses calls without the Nordla proxy secret; the test plays the gateway
+  globalThis.fetch = async (u, o) => (String(u).startsWith(`http://127.0.0.1:${port}`) ? realFetch(u, { ...o, headers: { ...(o?.headers ?? {}), 'x-nordla-proxy-secret': PROXY } }) : (hits.push(String(u)), Promise.reject(new Error('network forbidden'))));
+  const rf = (u, o) => realFetch(u, { ...o, headers: { ...(o?.headers ?? {}), 'x-nordla-proxy-secret': PROXY } }); // every call to this service goes through the Nordla gateway (proxy secret)
   let server;
   try {
     ({ server } = await startFinanceServer({
-      env: { FINANCE_HOSTED: 'true', PORT: String(port), FINANCE_ALLOWED_HOSTS: `127.0.0.1:${port}`, FINANCE_TRUST_PROXY_HOPS: '0', FINANCE_DASHBOARD_TOKEN: token, NORDLA_MERCHANT_ID: A.id, SUPABASE_URL: 'https://synthetic.invalid', SUPABASE_SERVICE_ROLE_KEY: 'synthetic' },
+      env: { FINANCE_HOSTED: 'true', PORT: String(port), FINANCE_ALLOWED_HOSTS: `127.0.0.1:${port}`, FINANCE_TRUST_PROXY_HOPS: '0', FINANCE_DASHBOARD_TOKEN: token, FINANCE_PROXY_SECRET: PROXY, NORDLA_MERCHANT_ID: A.id, SUPABASE_URL: 'https://synthetic.invalid', SUPABASE_SERVICE_ROLE_KEY: 'synthetic' },
       runtimeDeps: { supabase: withSyncRun(db({ withConnector })), createShopifyClient: t.factory }, log: quiet,
     }));
     const base = `http://127.0.0.1:${port}`;
-    assert.equal((await realFetch(`${base}/api/session`)).status, 200, 'the port is open and serving');
-    const login = await realFetch(`${base}/api/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
+    assert.equal((await rf(`${base}/api/session`, { headers: { 'x-nordla-proxy-secret': PROXY } })).status, 200, 'the port is open and serving');
+    const login = await rf(`${base}/api/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
     assert.equal(login.status, 200);
     const cookie = login.headers.get('set-cookie').split(';')[0];
-    const get = async (p) => (await realFetch(base + p, { headers: { cookie } })).json();
+    const get = async (p) => (await rf(base + p, { headers: { cookie } })).json();
     assert.deepEqual((await get('/api/sync-status')).sync, { available: false, reason });
     assert.equal((await get('/api/stock/status')).connector, 'NOT_CONFIGURED');
     assert.equal(t.calls.created, 0, 'no Shopify client was ever built'); assert.deepEqual(hits, [], 'no outbound request');

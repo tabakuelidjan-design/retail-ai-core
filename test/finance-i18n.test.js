@@ -79,7 +79,7 @@ test('UI language is separate from the document language: the language switch ne
 });
 test('scripts are served and loaded in the right order', () => {
   const html = read('index.html');
-  const order = ['/lang-fr.js', '/lang-nl.js', '/i18n.js', '/app.js', '/views-workspace.js'].map((s) => html.indexOf(s));
+  const order = ['"lang-fr.js"', '"lang-nl.js"', '"i18n.js"', '"app.js"', '"views-workspace.js"'].map((s) => html.indexOf(s));
   assert.ok(order.every((n) => n > 0) && [...order].sort((x, y) => x - y).join() === order.join());
   const server = readFileSync(new URL('../src/finance/server/app.js', import.meta.url), 'utf8');
   for (const f of ['/i18n.js', '/lang-fr.js', '/lang-nl.js', '/views-workspace.js', '/views-pack.js']) assert.ok(server.includes(`'${f}'`), f);

@@ -81,7 +81,7 @@ test('the review pane renders fields and actions for a UBL invoice, an imported 
     assert.equal((await c.post(`/api/inbox/${cn.id}/validate`, {})).status, 200);
     const items = new Map();
     for (const it of [ubl, pdf, manual, capture, cn]) items.set(it.id, (await c.get(`/api/inbox/${it.id}`)).data);
-    ui = loadUi(async (method, path) => { const id = path.split('/')[3]; if (method === 'GET' && items.has(id)) return items.get(id); throw new Error(`unexpected ${method} ${path}`); });
+    ui = loadUi(async (method, path) => { const id = path.replace(/^\/+/, '').split('/')[2]; if (method === 'GET' && items.has(id)) return items.get(id); throw new Error(`unexpected ${method} ${path}`); });
 
     const expectFull = (r, label) => {
       assert.ok(r.head, `${label}: header`);
@@ -125,7 +125,7 @@ test('Achats views: every purchase document appears in exactly one view (To hand
     assert.equal(T.validated.label, 'Validated documents'); assert.equal(T.credit_notes.label, 'Credit notes');
     // the validated invoice still offers the normal next step; the validated credit note never does
     const items = new Map(); for (const id of [validated, credit]) items.set(id, (await c.get(`/api/inbox/${id}`)).data);
-    ui.restore(); ui = loadUi(async (m, path) => items.get(path.split('/')[3]));
+    ui.restore(); ui = loadUi(async (m, path) => items.get(path.replace(/^\/+/, '').split('/')[2]));
     assert.deepEqual((await render(ui, validated)).buttons, ['Mark to pay', 'Reopen for correction']);
     assert.deepEqual((await render(ui, credit)).buttons, ['Reopen for correction']);
   } finally { ui?.restore(); await a.close(); }
@@ -149,7 +149,7 @@ test('review pane (phase 2): the Supplier and Duplicates blocks show recognised 
     const unknown = await man({ supplierName: 'Nouveau Fournisseur SA', invoiceNumber: 'U-1' });
     const possible = await man({ supplierName: 'Fournisseur UI SRL', supplierVatNumber: 'BE0000000097', invoiceNumber: 'R-2', issueDate: '2026-09-03' });
     const items = new Map(); for (const id of [recognised, byName, unknown, possible]) items.set(id, (await c.get(`/api/inbox/${id}`)).data);
-    ui = loadUi(async (m, path) => { const it = items.get(path.split('/')[3]); if (it) return it; throw new Error(`unexpected ${m} ${path}`); });
+    ui = loadUi(async (m, path) => { const it = items.get(path.replace(/^\/+/, '').split('/')[2]); if (it) return it; throw new Error(`unexpected ${m} ${path}`); });
     const blocks = async (id) => { const r = await render(ui, id); const one = (cls) => byClass(r.body, cls)[0];
       const text = (el) => (el ? el.textContent : null); const btns = (el) => (el ? byTag(el, 'button').map((b) => b.textContent) : []);
       return { supplier: text(one('doc-supplier')), supplierButtons: btns(one('doc-supplier')), dups: text(one('doc-dups')), dupButtons: btns(one('doc-dups')), linked: items.get(id).supplierCompanyId }; };
@@ -174,7 +174,7 @@ test('review pane (phase 3): a PDF shows where each value was read (page) or tha
     const up = async (name, buf) => (await c.post('/api/inbox/upload', { fileName: name, dataBase64: buf.toString('base64') })).data.item.id;
     const text = await up('facture.pdf', await CASES.frSimple()); const scan = await up('scan.pdf', await CASES.scanned(PNG)); const amb = await up('ambigu.pdf', await CASES.manyAmounts());
     const items = new Map(); for (const id of [text, scan, amb]) items.set(id, (await c.get(`/api/inbox/${id}`)).data);
-    ui = loadUi(async (m, path) => items.get(path.split('/')[3]));
+    ui = loadUi(async (m, path) => items.get(path.replace(/^\/+/, '').split('/')[2]));
     const labels = (r) => all(r.body, (e) => e.tagName === 'LABEL').map((l) => l.textContent);
     let r = await render(ui, text);
     assert.ok(labels(r).includes('Invoice number · PDF p. 1')); assert.ok(labels(r).includes('Incl. VAT · PDF p. 1'));
@@ -202,7 +202,7 @@ test('the review pane shows where the due date comes from, the supplier\'s wordi
     const unknown = await up('c.xml', withTerms('F-DUE-3', '<cac:PaymentTerms><cbc:Note>Selon contrat</cbc:Note></cac:PaymentTerms>'));
     const none = await up('d.xml', UBL('Invoice', 'F-DUE-4').toString('utf8'));
     const items = new Map(); for (const it of [computed, diverging, unknown, none]) items.set(it.id, (await c.get(`/api/inbox/${it.id}`)).data);
-    ui = loadUi(async (method, path) => { const id = path.split('/')[3]; if (method === 'GET' && items.has(id)) return items.get(id); throw new Error(`unexpected ${method} ${path}`); });
+    ui = loadUi(async (method, path) => { const id = path.replace(/^\/+/, '').split('/')[2]; if (method === 'GET' && items.has(id)) return items.get(id); throw new Error(`unexpected ${method} ${path}`); });
     const text = async (id) => (await render(ui, id)).body.textContent;
 
     let t = await text(computed.id);

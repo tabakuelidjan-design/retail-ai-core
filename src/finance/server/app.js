@@ -11,6 +11,7 @@
 //   * strict response headers (CSP without inline script, no sniffing, no caching of API data)
 
 import { clientIpOf } from './hosting.js';
+import { proxySecretOk } from '../../shared/proxy-secret.js';
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { readNordlaShared } from '../../shared/nordla-static.js';
@@ -99,7 +100,7 @@ export function createFinanceApp(deps) {
 
   // ---------- plumbing ----------
   const headers = (extra = {}) => ({
-    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://cdn.shopify.com; frame-src 'self'; object-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+    'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://cdn.shopify.com; frame-src 'self'; object-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
     'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', 'Cross-Origin-Resource-Policy': 'same-origin', ...(deps.secureCookie ? { 'Strict-Transport-Security': 'max-age=31536000' } : {}), ...extra,
   });
   const send = (res, status, body, extra = {}) => { res.writeHead(status, headers(extra)); res.end(body); };
@@ -1442,6 +1443,8 @@ export function createFinanceApp(deps) {
   async function handleRequest(req, res) {
     try {
       const host = req.headers.host ?? '';
+      // Behind the Nordla Core gateway: only the gateway may reach this service (shared secret, constant-time check).
+      if (deps.proxySecret && !proxySecretOk(req, deps.proxySecret)) throw new HttpError(403, 'PROXY_SECRET_REQUIRED');
       if (!(deps.allowedHosts ? deps.allowedHosts.includes(host.toLowerCase()) : LOCAL_HOST.test(host))) throw new HttpError(403, 'HOST_NOT_ALLOWED');
       const url = new URL(req.url, `http://${host}`);
       // Static files (shared Nordla files first, then Finance's own): compressed, validated, versioned - see static-assets.js.

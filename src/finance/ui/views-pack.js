@@ -53,7 +53,7 @@
   // ---------- attach a supporting document to an existing record ----------
   function attachFor(id, reload) {
     pickFile('image/jpeg,image/png,application/pdf', async (f) => {
-      try { await api('POST', `/api/inbox/${id}/attach`, { fileName: f.name, dataBase64: await readB64(f) }); toast(tt('Supporting document added'), 'ok'); reload(); } catch (e) { fail(e); }
+      try { await api('POST', `api/inbox/${id}/attach`, { fileName: f.name, dataBase64: await readB64(f) }); toast(tt('Supporting document added'), 'ok'); reload(); } catch (e) { fail(e); }
     });
   }
   function attachButton(id, reload) { return h('button', { class: 'btn', type: 'button', on: { click: () => attachFor(id, reload) } }, tt('Add the supporting document')); }
@@ -74,7 +74,7 @@
     return h('div', { class: 'pk-capinfo' },
       h('div', { class: 'pk-capinfo-h' }, h('strong', null, c ? tt('Captured expense') : tt('Attached document')), o.pdfGenerated ? h('span', { class: 'chip' }, tt('PDF generated from the image')) : null),
       h('div', { class: 'kv' }, rows.map(([k, v]) => [h('div', null, k), h('div', null, v)])),
-      o.hasOriginal ? h('a', { class: 'btn', href: `/api/inbox/${it.id}/original`, target: '_blank', rel: 'noopener' }, tt('Open the original file')) : null);
+      o.hasOriginal ? h('a', { class: 'btn', href: `api/inbox/${it.id}/original`, target: '_blank', rel: 'noopener' }, tt('Open the original file')) : null);
   }
 
   // ---------- expense capture ----------
@@ -132,10 +132,10 @@
       if (f.gross) fields.gross = normAmount(f.gross);
       if (f.vat) { fields.vat = normAmount(f.vat); if (f.gross) fields.net = fromCentsClient(Math.max(0, toCentsClient(f.gross) - toCentsClient(f.vat))); }
       try {
-        const r = await api('POST', '/api/inbox/capture', { fileName: file.name, dataBase64: b64 || await readB64(file), origin, fields, capture: { category: f.category, paymentMethod: f.paymentMethod, note: f.note, eur: f.eur ? normAmount(f.eur) : '', vatRate: f.vatRate ? normAmount(f.vatRate) : '' } });
+        const r = await api('POST', 'api/inbox/capture', { fileName: file.name, dataBase64: b64 || await readB64(file), origin, fields, capture: { category: f.category, paymentMethod: f.paymentMethod, note: f.note, eur: f.eur ? normAmount(f.eur) : '', vatRate: f.vatRate ? normAmount(f.vatRate) : '' } });
         if (r.duplicate) { toast(tt('This file was already imported.'), 'ok'); box.remove(); done(); return; }
         if (validate) {
-          try { await api('POST', `/api/inbox/${r.item.id}/validate`, {}); toast(tt('Expense saved and validated'), 'ok'); } catch (e) { toast(tt('Expense saved: complete the missing fields to validate it.'), 'ok'); }
+          try { await api('POST', `api/inbox/${r.item.id}/validate`, {}); toast(tt('Expense saved and validated'), 'ok'); } catch (e) { toast(tt('Expense saved: complete the missing fields to validate it.'), 'ok'); }
         } else toast(tt('Expense saved for review'), 'ok');
         box.remove(); done();
       } catch (e) { fail(e, err); }
@@ -150,7 +150,7 @@
   // ---------- send to accountant (existing approval-gated step) ----------
   function openSendToAccountant(p, after) {
     const ok = h('input', { type: 'checkbox' }); const err = h('div');
-    const go = h('button', { class: 'primary', disabled: true, on: { click: async () => { try { await api('POST', `/api/accountant/package/${p.id}/send`, { approve: true, recipient: p.recipient.email }); go.closest('.modal-back').remove(); toast(tt('Sent to the accountant'), 'ok'); p.sent = true; if (after) after(); } catch (e) { fail(e, err); } } } }, tt('APPROVE and send'));
+    const go = h('button', { class: 'primary', disabled: true, on: { click: async () => { try { await api('POST', `api/accountant/package/${p.id}/send`, { approve: true, recipient: p.recipient.email }); go.closest('.modal-back').remove(); toast(tt('Sent to the accountant'), 'ok'); p.sent = true; if (after) after(); } catch (e) { fail(e, err); } } } }, tt('APPROVE and send'));
     ok.addEventListener('change', () => { go.disabled = !ok.checked; });
     modal(tt('Send to accountant'), h('div', null, err, h('p', null, tt('You are about to send {0} to:', p.fileName)), h('div', { class: 'banner info' }, h('strong', null, p.recipient.email), p.recipient.name ? ` (${p.recipient.name})` : ''), h('p', { class: 'muted small' }, tt('Sending goes through: {0}.', p.sendChannel)),
       h('label', { style: 'color:var(--ink)' }, ok, tt('I approve sending this package to this recipient.'))), (close) => [go, h('button', { on: { click: close } }, tt('Cancel'))]);
@@ -171,11 +171,11 @@
     async function load() {
       for (const k of Object.keys(S)) { if (k !== 'period') { clear(S[k]); S[k].appendChild(h('div', { class: 'skl', style: 'height:64px' })); } }
       drawPeriod();
-      try { data = await api('POST', '/api/pack-comptable/status', specBody(spec)); } catch (e) { for (const k of Object.keys(S)) if (k !== 'period') clear(S[k]); fail(e, S.verdict); return; }
+      try { data = await api('POST', 'api/pack-comptable/status', specBody(spec)); } catch (e) { for (const k of Object.keys(S)) if (k !== 'period') clear(S[k]); fail(e, S.verdict); return; }
       drawPeriod(); drawAll(); refreshPreview();
     }
     async function refreshPreview() {
-      try { preview = await api('POST', '/api/pack-comptable/preview', { period: specBody(spec), include }); } catch (e) { preview = null; }
+      try { preview = await api('POST', 'api/pack-comptable/preview', { period: specBody(spec), include }); } catch (e) { preview = null; }
       drawPreview();
     }
     function drawAll() { drawVerdict(); drawIssues(); drawControls(); drawVat(); drawWinbooks(); drawContent(); drawPreview(); drawHistory(); drawDataExport(); }
@@ -193,8 +193,8 @@
         out.appendChild(h('div', { class: 'muted small' }, tt('Missing artifacts: {0}', r.missingArtifacts.count)));
         if (generated) out.appendChild(h('div', { class: 'actions' }, h('a', { class: 'btn primary warm', href: r.downloadUrl }, tt('Download the package')), h('span', { class: 'muted small' }, ['SHA', '256'].join('-') + ' ' + r.sha256.slice(0, 16), '… · ', r.verified ? tt('Checksums verified') : tt('Verification failed'))));
       };
-      const preview = h('button', { on: { click: async () => { try { show(await api('GET', '/api/accountant-export/preview?' + qs()), false); } catch (e) { fail(e, out); } } } }, tt('Preview'));
-      const gen = h('button', { class: 'primary', on: { click: async () => { try { show(await api('POST', '/api/accountant-export/generate', { ...specBody(spec), includeDocuments: docs.checked }), true); } catch (e) { fail(e, out); } } } }, tt('Generate the package'));
+      const preview = h('button', { on: { click: async () => { try { show(await api('GET', 'api/accountant-export/preview?' + qs()), false); } catch (e) { fail(e, out); } } } }, tt('Preview'));
+      const gen = h('button', { class: 'primary', on: { click: async () => { try { show(await api('POST', 'api/accountant-export/generate', { ...specBody(spec), includeDocuments: docs.checked }), true); } catch (e) { fail(e, out); } } } }, tt('Generate the package'));
       s.appendChild(h('div', { class: 'actions' }, h('label', { style: 'color:var(--ink)' }, docs, ' ', tt('Include the documents')), preview, gen)); s.appendChild(out);
     }
 
@@ -289,7 +289,7 @@
       put(S.winbooks, head(tt('Documents ready for WinBooks'), tt('Download each category separately, then upload it in WinBooks.')),
         h('div', { class: 'pk-cats' }, m.categories.map((c) => {
           const issues = m.issues.filter((i) => i.category === c.id).length;
-          const dl = c.downloadable ? h('a', { class: 'btn primary warm', href: `/api/pack-comptable/category?${specQuery(spec)}&category=${c.id}` }, tt('Download')) : h('button', { class: 'btn', type: 'button', disabled: true }, tt('Download'));
+          const dl = c.downloadable ? h('a', { class: 'btn primary warm', href: `api/pack-comptable/category?${specQuery(spec)}&category=${c.id}` }, tt('Download')) : h('button', { class: 'btn', type: 'button', disabled: true }, tt('Download'));
           return h('div', { class: `pk-cat ${c.status}` }, h('span', { class: 'pk-ico' }, catIcon(c.id)),
             h('div', { class: 'pk-cat-main' }, h('div', { class: 'pk-cat-title' }, h('strong', null, tt(CAT_LABEL[c.id])), statusChip(c.status)), h('div', { class: 'muted small' }, c.count ? tt('{0} document(s)', c.count) : tt('No document in this period'), issues ? ` · ${tt('{0} item(s) to check', issues)}` : '', c.note === 'CASH_RECONCILIATION_NOT_SUPPORTED' ? ` · ${tt('Cash reconciliation is not supported yet.')}` : '')),
             h('div', { class: 'pk-cat-act' }, dl));
@@ -334,7 +334,7 @@
     }
     async function generate(ack) {
       clear(S.preview); S.preview.appendChild(h('div', { class: 'skl', style: 'height:80px' }));
-      try { generated = await api('POST', '/api/pack-comptable/generate', { period: specBody(spec), include, acknowledgeWarnings: ack }); toast(tt('Pack generated'), 'ok'); data = await api('POST', '/api/pack-comptable/status', specBody(spec)); drawAll(); jump('preview'); } catch (e) { drawPreview(); fail(e, S.preview.appendChild(h('div'))); }
+      try { generated = await api('POST', 'api/pack-comptable/generate', { period: specBody(spec), include, acknowledgeWarnings: ack }); toast(tt('Pack generated'), 'ok'); data = await api('POST', 'api/pack-comptable/status', specBody(spec)); drawAll(); jump('preview'); } catch (e) { drawPreview(); fail(e, S.preview.appendChild(h('div'))); }
     }
 
     // 9. history + soft versioning

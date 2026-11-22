@@ -131,8 +131,8 @@ test('UI: the connect window opens the real file picker; the page offers a file 
   assert.match(imp, /pickFile: \(\) => \{ el\.scrollIntoView\(\{ block: 'center' \}\); fileInput\.click\(\); \}/);
   assert.match(imp, /h\('textarea'/, 'the paste box is kept');
   assert.match(imp, /run\(paste\.value, tt\('Pasted data'\)\)/); assert.match(imp, /run\(text, f\.name\)/, 'file and paste end in the same run()');
-  assert.equal((imp.match(/\/api\/bank\/import-csv\/preview/g) || []).length, 1, 'one preview call for both methods');
-  assert.equal((imp.match(/'\/api\/bank\/import-csv'/g) || []).length, 1, 'one import call for both methods');
+  assert.equal((imp.match(/(?:\/)?api\/bank\/import-csv\/preview/g) || []).length, 1, 'one preview call for both methods');
+  assert.equal((imp.match(/'(?:\/)?api\/bank\/import-csv'/g) || []).length, 1, 'one import call for both methods');
   assert.match(imp, /fileName\.textContent = f\.name/, 'the chosen file name is shown');
   assert.match(imp, /disabled: plan\.canImport \? null : 'disabled'/, 'no import button while the preview forbids it');
   assert.match(imp, /h\('button', \{ type: 'button', class: 'csv-cancel', on: \{ click: reset \} \}, tt\('Cancel'\)\)/, 'the merchant can cancel');
@@ -140,7 +140,7 @@ test('UI: the connect window opens the real file picker; the page offers a file 
 
 test('UI: no false success - the success toast and the list refresh only happen after the import call returned', () => {
   const imp = ws.slice(ws.indexOf('function bankCsvImporter'), ws.indexOf('/** The user is back from the bank'));
-  const i = imp.indexOf("await api('POST', '/api/bank/import-csv'"); const toastAt = imp.indexOf("toast(r.duplicates"); const refresh = imp.indexOf('onImported();');
+  const i = imp.indexOf("await api('POST', 'api/bank/import-csv'"); const toastAt = imp.indexOf("toast(r.duplicates"); const refresh = imp.indexOf('onImported();');
   assert.ok(i > 0 && toastAt > i && refresh > toastAt, 'toast and refresh come after the awaited API call');
   assert.match(imp, /catch \(e\) \{ ev\.target\.disabled = false; fail\(e, errBox\); \}/, 'an API error is shown inside the preview (which stays), the button comes back, no toast');
   assert.match(ws, /const importer = bankCsvImporter\(\(\) => draw\(\)\)/, 'a successful import redraws the bank page (list included)');
@@ -148,7 +148,7 @@ test('UI: no false success - the success toast and the list refresh only happen 
 });
 
 test('the helper script is served and loaded before the workspace views', () => {
-  assert.ok(html.indexOf('/bank-csv.js') > 0 && html.indexOf('/bank-csv.js') < html.indexOf('/views-workspace.js'));
+  assert.ok(html.indexOf('"bank-csv.js"') > 0 && html.indexOf('"bank-csv.js"') < html.indexOf('"views-workspace.js"'));
 });
 
 test('mobile: the bank ledger never widens the page on a long unbreakable reference (the freshly imported row is selected)', () => {

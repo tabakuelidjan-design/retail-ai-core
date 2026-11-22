@@ -4,6 +4,7 @@
 // the browser except as what you type into the login box). No Peppol/external sending exists.
 
 import { randomBytes } from 'node:crypto';
+import { requiredProxySecret } from '../../shared/proxy-secret.js';
 import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import http from 'node:http';
@@ -61,7 +62,7 @@ export async function startFinanceServer({ env = process.env, runtimeDeps = {}, 
       if (source === 'NOT_CONFIGURED') return { available: false, reason: 'SALES_SOURCE_NOT_CONFIGURED' }; // never an old sync run shown as live
       return latestSyncStatus(rt.supabase, rt.merchant.id, { staleAfterMinutes: Number(env.SYNC_STALE_AFTER_MINUTES || 60) });
     },
-    allowedHosts: hosting.allowedHosts ?? undefined, secureCookie: hosting.secureCookie, trustProxyHops: hosting.trustProxyHops,
+    proxySecret: hosting.hosted ? requiredProxySecret(env, 'FINANCE_PROXY_SECRET') : undefined, allowedHosts: hosting.allowedHosts ?? undefined, secureCookie: hosting.secureCookie, trustProxyHops: hosting.trustProxyHops,
     ssoOnly: hosting.hosted && env.NORDLA_SSO_ONLY === '1',
     homeUrl: (() => { try { const u = new URL(String(env.NORDLA_HOME_URL ?? '').trim()); return u.protocol === 'https:' && !u.username && !u.password ? u.origin : null; } catch { return null; } })(), // "Retour à Nordla": the Nordla home address (https only); none = no link
     sso: financeSsoOptions({ hosted: hosting.hosted, enabled: env.FINANCE_SSO_ENABLED === '1', env, dashboardToken: token, supabase: rt.supabase, merchantId: rt.merchant.id }), // /sso: Nordla single sign-on, hosted and explicitly enabled only
