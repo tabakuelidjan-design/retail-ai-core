@@ -191,7 +191,7 @@ test('clients route: served by the app, reachable from the navigation, with its 
   assert.ok(app.includes("['customers', 'clients', 'nav.customers', '#/customers']"));
   assert.match(app, /customers: \{ key: 'customers', load: loadCustomersIfNeeded, render: renderCustomersPage \}/);
   const html = await readFile(new URL('index.html', UI), 'utf8');
-  assert.ok(html.includes('/customers.js') && html.includes('/customers.css'));
+  assert.ok(html.includes('"customers.js"') && html.includes('"customers.css"'));
 });
 
 test('clients ui: every cl.* string exists in FR, NL and EN, and no unsupported customer concept is labelled', async () => {

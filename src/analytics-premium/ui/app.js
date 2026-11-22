@@ -151,6 +151,7 @@ const NAV_ITEMS = [
 function sidebar(activeRoute) {
   return h('div', { class: 'sidebar' },
     h('div', { class: 'brand' }, h('div', { class: 'brand-mark' }), h('div', { class: 'brand-name' }, t('brand.name'))),
+    h('a', { class: 'back-core', href: '../' }, t('nav.backCore')), // back to the Nordla home (under the Core origin the page is /analytics/)
     h('div', { class: 'nav' }, NAV_ITEMS.map(([route, ic, key, href]) => (href
       ? h('a', { class: `nav-item ${activeRoute === route ? 'active' : ''}`, href }, h('span', { class: 'ico' }, NordlaIcon.semantic(ic, 'md')), t(key))
       : h('span', { class: 'nav-item inert' }, h('span', { class: 'ico' }, NordlaIcon.semantic(ic, 'md')), t(key))))),
@@ -174,7 +175,7 @@ async function refreshSyncPill() {
   const el = document.querySelector('[data-sync-pill]');
   if (!el) return;
   try {
-    const r = await fetch('/api/sync-status');
+    const r = await fetch('api/sync-status');
     if (!r.ok) return;
     const s = (await r.json()).sync;
     cachedSync = s;
@@ -420,7 +421,7 @@ let cachedWhatChanged = null;
 async function loadWhatChangedIfNeeded() {
   if (cachedWhatChanged) return;
   try {
-    const res = await fetch('/api/what-changed');
+    const res = await fetch('api/what-changed');
     if (res.ok) cachedWhatChanged = await res.json();
   } catch (e) { /* network error surfaces as the empty state below */ }
 }
@@ -459,7 +460,7 @@ function renderBriefPage(main) {
 async function loadBriefIfNeeded() {
   if (cachedBrief) return;
   try {
-    const res = await fetch('/api/brief');
+    const res = await fetch('api/brief');
     if (res.ok) cachedBrief = await res.json();
   } catch (e) { /* network error surfaces as the empty state in renderBriefPage() */ }
 }

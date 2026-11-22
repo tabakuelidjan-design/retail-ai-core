@@ -164,11 +164,11 @@ test('both "Parle à Nordla" buttons now have a handler (the bug: they were plai
   assert.equal((appSrc.match(/askButton\(\)/g) ?? []).length, 2);
   assert.match(askSrc, /class: 'cta-primary', type: 'button', on: \{ click: openAsk \}/);
   assert.match(askSrc, /metaKey \|\| e\.ctrlKey\) && String\(e\.key\)\.toLowerCase\(\) === 'k'/, '⌘K / Ctrl+K opens it');
-  assert.ok(html.indexOf('/ask.js') > 0 && html.indexOf('/ask.js') < html.indexOf('/app.js'));
+  assert.ok(html.indexOf('"ask.js"') > 0 && html.indexOf('"ask.js"') < html.indexOf('"app.js"'));
 });
 
 test('the question is POSTed to /api/ask as JSON, every failure is shown, and nothing is rendered with innerHTML', () => {
-  assert.match(askSrc, /fetch\('\/api\/ask', \{ method: 'POST', headers: \{ 'Content-Type': 'application\/json' \}, body: JSON\.stringify\(\{ question, lang:/);
+  assert.match(askSrc, /fetch\('api\/ask', \{ method: 'POST', headers: \{ 'Content-Type': 'application\/json', \.\.\.\(coreCsrf \? \{ 'x-nordla-csrf': coreCsrf \} : \{\}\) \}, body: JSON\.stringify\(\{ question, lang:/, 'relative request; the Core CSRF token is added when under Core');
   assert.match(askSrc, /AbortController/); assert.match(askSrc, /ask\.err\.TIMEOUT/); assert.match(askSrc, /ask\.err\.GENERIC/);
   assert.match(askSrc, /askErrorKey\(data && data\.error && data\.error\.code\)/);
   assert.doesNotMatch(askSrc, /innerHTML|html:/);

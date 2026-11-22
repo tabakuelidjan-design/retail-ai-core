@@ -280,11 +280,11 @@ test('an explicit reset puts the period and every filter back', () => {
 
 test('UI wiring: the three workspaces send the period, details use it, errors are shown, and Brief / What changed stay locked', () => {
   const ui = (f) => readFileSync(new URL(`../src/analytics-premium/ui/${f}`, import.meta.url), 'utf8');
-  assert.match(ui('explorer.js'), /fetch\(`\/api\/explorer\?\$\{periodQuery\(\)\}`\)/); assert.match(ui('products.js'), /fetch\(`\/api\/products\?\$\{periodQuery\(\)\}`\)/); assert.match(ui('customers.js'), /fetch\(`\/api\/customers\?\$\{periodQuery\(\)\}`\)/);
+  assert.match(ui('explorer.js'), /fetch\(`api\/explorer\?\$\{periodQuery\(\)\}`\)/); assert.match(ui('products.js'), /fetch\(`api\/products\?\$\{periodQuery\(\)\}`\)/); assert.match(ui('customers.js'), /fetch\(`api\/customers\?\$\{periodQuery\(\)\}`\)/);
   assert.match(ui('products.js'), /detail\?id=\$\{encodeURIComponent\(id\)\}&\$\{periodQuery\(\)\}/); assert.match(ui('customers.js'), /detail\?id=\$\{encodeURIComponent\(id\)\}&\$\{periodQuery\(\)\}/);
   for (const f of ['explorer.js', 'products.js', 'customers.js']) { assert.match(ui(f), /periodPicker: \(\) => route\(\)/); assert.match(ui(f), /periodErrorKey\(d\.periodError\)/); assert.doesNotMatch(ui(f), /periodLocked: true/); }
   assert.match(ui('app.js'), /opts\.periodPicker\s*\?\s*periodPicker\(opts\.periodPicker\)/); assert.match(ui('app.js'), /period-pill locked/);
-  assert.ok(ui('index.html').indexOf('/period.js') < ui('index.html').indexOf('/app.js'));
+  assert.ok(ui('index.html').indexOf('"period.js"') < ui('index.html').indexOf('"app.js"'));
   const menu = ui('period.js'); for (const k of ['last_7_days', 'last_30_days', 'last_90_days', 'this_week', 'this_month', 'previous_month', 'this_year']) assert.ok(menu.includes(`'${k}'`), k);
   assert.match(menu, /period\.p\.custom/); assert.match(menu, /type: 'date'/); assert.doesNotMatch(menu, /innerHTML/);
   for (const lang of ['fr', 'nl', 'en']) { const src = ui(`lang-${lang}.js`); for (const k of ['period.p.last_90_days', 'period.p.custom', 'period.from', 'period.to', 'period.err.PERIOD_ORDER', 'period.err.INVALID_DATE', 'period.empty', 'cmp.insufficientHistory']) assert.match(src, new RegExp(`'${k.replace(/\./g, '\\.')}'`), `${lang} ${k}`); }
