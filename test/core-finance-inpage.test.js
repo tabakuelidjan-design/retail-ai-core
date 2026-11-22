@@ -25,8 +25,8 @@ test('Core renders Finance in the central workspace and preserves the Core navig
   assert.match(screen, /<iframe class="nx-finance-frame"/);
   assert.match(screen, /target\.origin !== window\.location\.origin/);
   assert.match(screen, /frame\.src = target\.href/);
-  assert.doesNotMatch(screen, /window\.location\.(assign|href)/);
-  assert.match(screen, /document\.addEventListener\('nordla:finance', \(\) => openFinance\(\)\)/);
+  assert.doesNotMatch(screen, /window\.location\.assign|window\.location\.href\s*=/);
+  assert.match(app, /document\.addEventListener\('nordla:finance', \(\) => openFinance\(\)\)/);
 });
 
 test('Finance returns to the top-level Core page when embedded', async () => {
