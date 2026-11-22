@@ -720,3 +720,22 @@ button { font-family: inherit; }
 .ask-premise p { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); overflow-wrap: anywhere; }
 .ask-premise.contradicted { border-left: 3px solid var(--warn); padding-left: 12px; }
 .ask-suggest { justify-self: start; }
+/* Analyses module head: the sections of the module in a horizontal bar (Finance's layout); the Core menu stays on the left */
+.module-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 14px 24px 0; border-bottom: 1px solid var(--border); background: #fff; position: sticky; top: 0; z-index: 5; }
+.module-head .back-core { font-size: 13px; color: var(--muted, #6B7280); text-decoration: none; }
+.module-tabs { display: flex; gap: 4px; flex: 1 1 auto; overflow-x: auto; scrollbar-width: none; }
+.module-tabs::-webkit-scrollbar { display: none; }
+.module-tab { display: inline-flex; align-items: center; gap: 8px; padding: 12px 14px 11px; color: var(--ink, #0F1B2D); text-decoration: none; font-weight: 600; font-size: 14px; white-space: nowrap; border-bottom: 3px solid transparent; }
+.module-tab:hover { color: #7842B8; }
+.module-tab.active { color: #7842B8; border-bottom-color: #7842B8; }
+.module-ask { white-space: nowrap; }
+.core-rail-missing { width: 232px; }
+@media (max-width: 900px) { .module-head { padding: 10px 16px 0; } .module-ask { display: none; } }
+.shell.nordla-frame > .mainarea { box-sizing: border-box; width: auto; }
+.module-head { flex-wrap: nowrap; }
+.module-tabs { min-width: 0; }
+.module-head { padding: 12px 16px 0; gap: 12px; }
+.module-head .back-core { display: none; } /* the Core menu on the left is the way back to the dashboard */
+.module-tab { padding: 12px 10px 11px; font-size: 13px; gap: 6px; }
+@media (max-width: 900px) { .module-ask { display: inline-flex; padding: 8px 10px; font-size: 12px; } .module-tab { padding: 10px 8px 9px; } }
+@media (max-width: 900px) { .module-head { flex-wrap: wrap; } .module-tabs { flex: 1 0 100%; order: 3; } }
