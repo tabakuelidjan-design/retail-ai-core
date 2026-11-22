@@ -94,3 +94,14 @@ test('the first Finance session answer is handed to the embed and used once; wit
   assert.match(fin, /finPrefetchedSession \? \(finPrefetchedSession\.authenticated \? finPrefetchedSession : await api\('GET', 'api\/session\?include=settings'\)\) : await api\('GET', 'api\/session\?include=settings'\)/);
   assert.match(fin, /finPrefetchedSession = null;/);
 });
+
+test('the ticket answer is not followed in the background (the Finance page is not downloaded to open the session)', async () => {
+  const app = await read('../src/sourcing/ui/app.js');
+  assert.match(app, /const res = await fetch\(target\.href, \{ credentials: 'same-origin', cache: 'no-store', redirect: 'manual' \}\);/);
+  assert.match(app, /if \(!\(res\.type === 'opaqueredirect' \|\| res\.ok\)\) throw new Error\('finance session'\);/);
+});
+
+test('the per-request access re-check is timed in Server-Timing (it is kept, not cached)', async () => {
+  const fin = await read('../src/finance/server/app.js');
+  assert.match(fin, /await timed\(res, 'access', \(\) => deps\.sso\.checkAccess\(/);
+});

@@ -1463,7 +1463,7 @@ export function createFinanceApp(deps) {
       if (deps.ssoOnly && openedSid && !sessions.get(openedSid)?.sso) sessions.delete(openedSid);
       if (openedSid && sessions.get(openedSid)?.sso) {
         const sso = sessions.get(openedSid).sso;
-        const again = deps.sso?.checkAccess ? await deps.sso.checkAccess({ merchantId, userId: sso.userId, role: sso.role, module: 'finance', ...(sso.authSessionId ? {authSessionId:sso.authSessionId} : {}) }).catch(() => null) : null;
+        const again = deps.sso?.checkAccess ? await timed(res, 'access', () => deps.sso.checkAccess({ merchantId, userId: sso.userId, role: sso.role, module: 'finance', ...(sso.authSessionId ? {authSessionId:sso.authSessionId} : {}) }).catch(() => null)) : null;
         if (!again?.ok) sessions.delete(openedSid);
       }
       const route = routes.map((r) => ({ r, m: r.method === req.method ? r.re.exec(url.pathname) : null })).find((x) => x.m);

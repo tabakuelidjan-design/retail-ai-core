@@ -526,8 +526,9 @@ function prepareFinance() {
     const target = new URL(r.url, window.location.href);
     if (target.origin !== window.location.origin || !target.pathname.startsWith('/finance/sso')) throw new Error('Finance URL is not on the Core origin');
     // the module session is opened in the background (same origin, no navigation); the browser address does not change
-    const res = await fetch(target.href, { credentials: 'same-origin', cache: 'no-store' }); await res.body?.cancel();
-    if (!res.ok) throw new Error('finance session');
+    // the ticket answer is a redirect that sets the session cookie: it is not followed (the Finance page is not needed here)
+    const res = await fetch(target.href, { credentials: 'same-origin', cache: 'no-store', redirect: 'manual' });
+    if (!(res.type === 'opaqueredirect' || res.ok)) throw new Error('finance session');
     // no session call on interest: the session stays unconfirmed (it reads no data) until the explicit start on click
     return null;
   })();
