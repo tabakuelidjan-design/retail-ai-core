@@ -60,11 +60,11 @@ control('UPGRADE: rows that predate accounts are linked by the migration (accoun
 control('RECONCILE 1->1, 1->N, N->1, partial with the exact remainder, later completion, nothing beyond the transaction', withDb(async (d) => {
   const c = await d.open(); const out = [];
   try {
-    const t1 = await bankTx(c, A, { tag: 't1', amount: 10000 }); const p1 = await record(c, A, 'p1', { amount: 10000 }); await bankReconcile(c, A, 'k1', t1.id, [{ paymentId: p1.payment.id, amountCents: 10000 }]); out.push(st(await bankAmounts(c, A, t1.id)));
-    const t2 = await bankTx(c, A, { tag: 't2', amount: 30000 }); const p2a = await record(c, A, 'p2a', { amount: 10000 }); const p2b = await record(c, A, 'p2b', { amount: 20000 }); await bankReconcile(c, A, 'k2', t2.id, [{ paymentId: p2a.payment.id, amountCents: 10000 }, { paymentId: p2b.payment.id, amountCents: 20000 }]); out.push(st(await bankAmounts(c, A, t2.id)));
-    const p3 = await record(c, A, 'p3', { amount: 30000 }); const legs = []; for (const [i, x] of [10000, 5000, 15000].entries()) { const t = await bankTx(c, A, { tag: `t3${i}`, amount: x }); await bankReconcile(c, A, `k3${i}`, t.id, [{ paymentId: p3.payment.id, amountCents: x }]); legs.push(t.id); }
+    const t1 = await bankTx(c, A, { tag: 't1', ref: 'VIREMENT CLIENT LEROY', amount: 10000 }); const p1 = await record(c, A, 'p1', { amount: 10000 }); await bankReconcile(c, A, 'k1', t1.id, [{ paymentId: p1.payment.id, amountCents: 10000 }]); out.push(st(await bankAmounts(c, A, t1.id)));
+    const t2 = await bankTx(c, A, { tag: 't2', ref: 'VIREMENT CLIENT PETIT', amount: 30000 }); const p2a = await record(c, A, 'p2a', { amount: 10000 }); const p2b = await record(c, A, 'p2b', { amount: 20000 }); await bankReconcile(c, A, 'k2', t2.id, [{ paymentId: p2a.payment.id, amountCents: 10000 }, { paymentId: p2b.payment.id, amountCents: 20000 }]); out.push(st(await bankAmounts(c, A, t2.id)));
+    const p3 = await record(c, A, 'p3', { amount: 30000 }); const legs = []; for (const [i, x] of [10000, 5000, 15000].entries()) { const t = await bankTx(c, A, { tag: `t3${i}`, ref: `VIREMENT CLIENT ${i}`, amount: x }); await bankReconcile(c, A, `k3${i}`, t.id, [{ paymentId: p3.payment.id, amountCents: x }]); legs.push(t.id); }
     out.push(`payment funded by 3 movements: ${await num(c, 'select coalesce(sum(amount_cents),0) s from fin_bank_reconciliations where payment_id=$1', [p3.payment.id])}`);
-    const t4 = await bankTx(c, A, { tag: 't4', amount: 50000 }); const p4 = await record(c, A, 'p4', { amount: 30000 }); await bankReconcile(c, A, 'k4', t4.id, [{ paymentId: p4.payment.id, amountCents: 30000 }]); const part = await bankAmounts(c, A, t4.id); out.push(st(part));
+    const t4 = await bankTx(c, A, { tag: 't4', ref: 'VIREMENT CLIENT NOIR', amount: 50000 }); const p4 = await record(c, A, 'p4', { amount: 30000 }); await bankReconcile(c, A, 'k4', t4.id, [{ paymentId: p4.payment.id, amountCents: 30000 }]); const part = await bankAmounts(c, A, t4.id); out.push(st(part));
     const row = (await c.query('select status, matched_amount_cents from fin_bank_transactions where id=$1', [t4.id])).rows[0]; out.push(`mirror ${row.status}/${row.matched_amount_cents}`);
     const p4b = await record(c, A, 'p4b', { amount: 20000 }); await bankReconcile(c, A, 'k4b', t4.id, [{ paymentId: p4b.payment.id, amountCents: 20000 }]); out.push(st(await bankAmounts(c, A, t4.id)));
     const over = await attempt(c, recSql, recArgs(A, 'k4c', t4.id, [{ paymentId: p4.payment.id, amountCents: 1 }])); out.push(over.code);
@@ -112,7 +112,7 @@ control('ATOMICITY under injected failure: a crash raised AFTER the payment was 
 }));
 
 control('NETWORK AMBIGUITY: the connection dies after COMMIT, the retry with the same key returns the committed payment and reconciliation; the same key on another transaction is refused', withDb(async (d) => {
-  const s = await d.open(); const inv = await issuedInvoice(s, A, 5000); const t = await bankTx(s, A, { tag: 'net1', amount: 5000 }); const t2 = await bankTx(s, A, { tag: 'net2', amount: 5000 }); await s.end();
+  const s = await d.open(); const inv = await issuedInvoice(s, A, 5000); const t = await bankTx(s, A, { tag: 'net1', ref: 'VIREMENT CLIENT DUPONT FACT 1', amount: 5000 }); const t2 = await bankTx(s, A, { tag: 'net2', ref: 'VIREMENT CLIENT MARTIN FACT 2', amount: 5000 }); await s.end();
   const { clients, closeAll } = await openMany(d.name, 3); const [first, retry, admin] = clients;
   try {
     const pid = (await first.query('select pg_backend_pid() p')).rows[0].p; const a = await bankReconcileAndPay(first, A, 'net-key', t.id, { amountCents: 5000, allocations: [alloc(inv.id, 5000)] }); await admin.query('select pg_terminate_backend($1)', [pid]).catch(() => {});
@@ -139,7 +139,7 @@ control('CONCURRENT: two documents at once through the atomic path (700 each on 
 }));
 
 control('CONCURRENT partial: eight reconciliations of 300 on a 1000 transaction -> exactly three, remaining 100; the same key from eight connections is ONE effect', withDb(async (d) => {
-  const s = await d.open(); const t = await bankTx(s, A, { tag: 'race3', amount: 1000 }); const t2 = await bankTx(s, A, { tag: 'race3b', amount: 1000 }); const ps = []; for (let i = 0; i < 8; i++) ps.push(await record(s, A, `r3p${i}`, { amount: 300 })); const pk = await record(s, A, 'r3same', { amount: 300 }); await s.end();
+  const s = await d.open(); const t = await bankTx(s, A, { tag: 'race3', ref: 'VIREMENT CLIENT DUPONT', amount: 1000 }); const t2 = await bankTx(s, A, { tag: 'race3b', ref: 'VIREMENT CLIENT MARTIN', amount: 1000 }); const ps = []; for (let i = 0; i < 8; i++) ps.push(await record(s, A, `r3p${i}`, { amount: 300 })); const pk = await record(s, A, 'r3same', { amount: 300 }); await s.end();
   const { clients, closeAll } = await openMany(d.name, 8);
   try {
     const res = await race(clients, (c, i) => c.query(recSql, recArgs(A, `r3-${i}`, t.id, [{ paymentId: ps[i].payment.id, amountCents: 300 }]))); const a = await bankAmounts(clients[0], A, t.id);
@@ -151,7 +151,7 @@ control('CONCURRENT partial: eight reconciliations of 300 on a 1000 transaction 
 control('CONCURRENT reconcile vs unreconcile: the amounts stay coherent whoever wins (10 rounds); never negative, never above the transaction', withDb(async (d) => {
   let bad = 0; const seen = new Set();
   for (let round = 0; round < 10; round++) {
-    const s = await d.open(); const t = await bankTx(s, A, { tag: `ru${round}`, amount: 1000 }); const p = await record(s, A, `rup${round}`, { amount: 1000 }); const q = await record(s, A, `ruq${round}`, { amount: 1000 }); const r = await bankReconcile(s, A, `rur${round}`, t.id, [{ paymentId: p.payment.id, amountCents: 1000 }]); await s.end();
+    const s = await d.open(); const t = await bankTx(s, A, { tag: `ru${round}`, ref: `VIREMENT CLIENT RUN ${round}`, amount: 1000 }); const p = await record(s, A, `rup${round}`, { amount: 1000 }); const q = await record(s, A, `ruq${round}`, { amount: 1000 }); const r = await bankReconcile(s, A, `rur${round}`, t.id, [{ paymentId: p.payment.id, amountCents: 1000 }]); await s.end();
     const { clients, closeAll } = await openMany(d.name, 2);
     try {
       const res = await race(clients, (c, i) => (i === 0 ? c.query(unSql, unArgs(A, `ru-un-${round}`, [{ reconciliationId: r.reconciliations[0].id, amountCents: null }])) : c.query(recSql, recArgs(A, `ru-rec-${round}`, t.id, [{ paymentId: q.payment.id, amountCents: 1000 }]))));
