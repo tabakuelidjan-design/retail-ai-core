@@ -196,7 +196,7 @@ export function createSourcingApp({ financeGateway = null, redirect = null, rele
       if (req.method === 'GET' && String(req.url).split('?')[0] === '/healthz/backup') { const h = backupHealth(backupStatus?.() ?? null, now().getTime()); return json(res, h.ok ? 200 : 503, h, { 'cache-control': 'no-store' }); }
       const url = new URL(req.url, 'http://local');
       if (url.pathname === '/shell-manifest.json' && req.method === 'GET') return json(res, 200, await shellManifest(), { 'cache-control': 'no-cache' });
-      if (financeGateway && await financeGateway.handle(req, res, url)) return; // Finance under the Core origin (/finance/*): Core session + CSRF checked by the gateway, then proxied
+      if (financeGateway && await financeGateway(req, res, url)) return; // Finance under the Core origin (/finance/*): Core session + CSRF checked by the gateway, then proxied
       if (gate && url.pathname.startsWith('/api/auth/') && await gate.handle(req, res, url.pathname)) return;
       if (!gate && url.pathname === '/api/auth/session' && req.method === 'GET') return json(res, 200, { mode: 'token' }); // the page asks which sign-in: no data, no token check (would count as a failed attempt)
       if (creator && await creator.handle(req, res, url)) return; // the Creator (staging module, only when built): its own paths, its own failures
