@@ -49,15 +49,18 @@ export function createAccessChecker({ supabase, merchantId, requireCoreSession =
   // No cache here: removing a factor or enabling the rule must affect an already open service session on its next request.
   const mfaRule = typeof supabase?.rpc === 'function' ? createMfaRule({ supabase, ttlMs: 0 }) : null;
   const assurance = createSessionAssurance({ supabase });
-  return async function checkAccess({ merchantId: claimed, userId, role, module, authSessionId = null }) {
+  return async function checkAccess({ merchantId: claimed, userId, role, module, authSessionId = null, trace = null }) {
     if (String(claimed ?? '').toLowerCase() !== merchant) return { ok: false, code: 'SSO_WRONG_MERCHANT' };
     if (!SSO_CONTRACT.modules.includes(module) || !MODULE_CODES.includes(module)) return { ok: false, code: 'MODULE_UNKNOWN' };
     if (typeof userId !== 'string' || !userId) return { ok: false, code: 'NOT_MEMBER' };
+    // Optional trace (timings only, never a value): each read's start and duration, relative to the start of this check, so overlaps are visible.
+    const started = performance.now();
+    const step = (name, p) => { const s = performance.now(); return Promise.resolve(p).finally(() => { if (trace) trace.push(`${name};start=${(s - started).toFixed(1)};dur=${(performance.now() - s).toFixed(1)}`); }); };
     try {
       // the membership and the module entitlement are independent reads: they run together (same answers, one round trip less)
       const [rows, ent] = await Promise.all([
-        supabase.select(MEMBERS, { select: 'role,status,removed_at', merchant_id: `eq.${merchant}`, user_id: `eq.${userId}`, limit: '1' }),
-        supabase.select(ENTITLEMENTS, { select: 'merchant_id,module_code,status', merchant_id: `eq.${merchant}`, module_code: `eq.${module}`, limit: '1' }).then((x) => x ?? []),
+        step('members', supabase.select(MEMBERS, { select: 'role,status,removed_at', merchant_id: `eq.${merchant}`, user_id: `eq.${userId}`, limit: '1' })),
+        step('entitlement', supabase.select(ENTITLEMENTS, { select: 'merchant_id,module_code,status', merchant_id: `eq.${merchant}`, module_code: `eq.${module}`, limit: '1' }).then((x) => x ?? [])),
       ]);
       const m = (rows ?? [])[0];
       if (!m || String(m.merchant_id ?? merchant).toLowerCase() !== merchant) return { ok: false, code: 'NOT_MEMBER' };
@@ -71,8 +74,8 @@ export function createAccessChecker({ supabase, merchantId, requireCoreSession =
       if (!mfaRule) return { ok: false, code: 'MFA_POLICY_UNAVAILABLE' };
       // the session assurance and the MFA rule are independent: both are checked on every request, together (the first refusal in the same order wins)
       const [source, blocked] = await Promise.all([
-        (authSessionId || requireCoreSession) ? assurance.check({merchantId:merchant,userId,sessionId:authSessionId,module:'sourcing'}) : Promise.resolve({ ok: true }),
-        mfaRule.blocked({ merchantId: merchant, userId, sessionId:authSessionId, module:'sourcing' }),
+        (authSessionId || requireCoreSession) ? step('assurance', assurance.check({merchantId:merchant,userId,sessionId:authSessionId,module:'sourcing'})) : Promise.resolve({ ok: true }),
+        step('mfa', mfaRule.blocked({ merchantId: merchant, userId, sessionId:authSessionId, module:'sourcing' })),
       ]);
       if (!source.ok) return {ok:false,code:source.code};
       if (blocked) return { ok: false, code: 'MFA_REQUIRED_FOR_ROLE' };

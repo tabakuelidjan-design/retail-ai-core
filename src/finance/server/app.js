@@ -1467,8 +1467,10 @@ export function createFinanceApp(deps) {
       if (deps.ssoOnly && openedSid && !sessions.get(openedSid)?.sso) sessions.delete(openedSid);
       if (openedSid && sessions.get(openedSid)?.sso) {
         const sso = sessions.get(openedSid).sso;
+        const accessTrace = []; // per-step timings of this check (durations only), shown in Server-Timing
         const accessKey = createHash('sha256').update(`${openedSid}|${merchantId}|finance`).digest('hex'); // the key is a hash: no session value is kept in clear
-        const again = deps.sso?.checkAccess ? await timed(res, 'access', () => sharedAccess(accessKey, () => deps.sso.checkAccess({ merchantId, userId: sso.userId, role: sso.role, module: 'finance', ...(sso.authSessionId ? {authSessionId:sso.authSessionId} : {}) }).catch(() => null))) : null;
+        const again = deps.sso?.checkAccess ? await timed(res, 'access', () => sharedAccess(accessKey, () => deps.sso.checkAccess({ trace: accessTrace, merchantId, userId: sso.userId, role: sso.role, module: 'finance', ...(sso.authSessionId ? {authSessionId:sso.authSessionId} : {}) }).catch(() => null))) : null;
+        for (const x of accessTrace) res.__timings.push(`access-${x}`);
         if (!again?.ok) sessions.delete(openedSid);
       }
       const route = routes.map((r) => ({ r, m: r.method === req.method ? r.re.exec(url.pathname) : null })).find((x) => x.m);
