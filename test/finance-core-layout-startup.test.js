@@ -65,3 +65,8 @@ test('the Finance embed is up to date with its sources after these changes', asy
   const out = execFileSync(process.execPath, [fileURLToPath(new URL('../tools/build-finance-embed.mjs', import.meta.url)), '--check'], { encoding: 'utf8' });
   assert.match(out, /up to date/);
 });
+
+test('inside Core the Accueil Nordla link is removed from Finance header (the Core menu is the way back); standalone keeps it', async () => {
+  const fin = await read('../src/finance/ui/app.js');
+  assert.match(fin, /state\.nordlaHome && !embedded \? h\('a', \{ class: 'back-nordla'/, 'the link is drawn only outside the embedded layout');
+});
