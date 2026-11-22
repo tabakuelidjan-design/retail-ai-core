@@ -98,13 +98,6 @@ export function createGateway({ publicOrigin, services, authorize, modules = MOD
       if (out.location) out.location = rewriteLocation(String(out.location), up.origin, route.prefix);
       if (out['set-cookie']) out['set-cookie'] = modules[route.key].cookies ? [].concat(out['set-cookie']).map((c) => rewriteSetCookie(c, route.prefix)) : undefined;
       if (out['set-cookie'] === undefined) delete out['set-cookie'];
-      // Finance is rendered inside Core's central page. The upstream still denies embedding directly; only this authenticated Core route permits its own origin.
-      if (route.key === 'finance') {
-        const policy = String(out['content-security-policy'] ?? '');
-        const withoutAncestors = policy.replace(/(?:^|;)\s*frame-ancestors\s+[^;]*/i, '').replace(/;\s*$/, '');
-        out['content-security-policy'] = `${withoutAncestors ? withoutAncestors + '; ' : ''}frame-ancestors 'self'`;
-        out['x-frame-options'] = 'SAMEORIGIN';
-      }
       res.writeHead(ur.statusCode, out);
       ur.pipe(res);
     });

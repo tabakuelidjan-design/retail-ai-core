@@ -74,7 +74,7 @@
     return h('div', { class: 'pk-capinfo' },
       h('div', { class: 'pk-capinfo-h' }, h('strong', null, c ? tt('Captured expense') : tt('Attached document')), o.pdfGenerated ? h('span', { class: 'chip' }, tt('PDF generated from the image')) : null),
       h('div', { class: 'kv' }, rows.map(([k, v]) => [h('div', null, k), h('div', null, v)])),
-      o.hasOriginal ? h('a', { class: 'btn', href: `api/inbox/${it.id}/original`, target: '_blank', rel: 'noopener' }, tt('Open the original file')) : null);
+      o.hasOriginal ? h('a', { class: 'btn', href: `${(typeof FIN_API_BASE === 'string' ? FIN_API_BASE : '')}api/inbox/${it.id}/original`, download: it.fileName || 'original' }, tt('Download the original file')) : null);
   }
 
   // ---------- expense capture ----------
@@ -289,7 +289,7 @@
       put(S.winbooks, head(tt('Documents ready for WinBooks'), tt('Download each category separately, then upload it in WinBooks.')),
         h('div', { class: 'pk-cats' }, m.categories.map((c) => {
           const issues = m.issues.filter((i) => i.category === c.id).length;
-          const dl = c.downloadable ? h('a', { class: 'btn primary warm', href: `api/pack-comptable/category?${specQuery(spec)}&category=${c.id}` }, tt('Download')) : h('button', { class: 'btn', type: 'button', disabled: true }, tt('Download'));
+          const dl = c.downloadable ? h('a', { class: 'btn primary warm', href: `${FIN_API_BASE}api/pack-comptable/category?${specQuery(spec)}&category=${c.id}` }, tt('Download')) : h('button', { class: 'btn', type: 'button', disabled: true }, tt('Download'));
           return h('div', { class: `pk-cat ${c.status}` }, h('span', { class: 'pk-ico' }, catIcon(c.id)),
             h('div', { class: 'pk-cat-main' }, h('div', { class: 'pk-cat-title' }, h('strong', null, tt(CAT_LABEL[c.id])), statusChip(c.status)), h('div', { class: 'muted small' }, c.count ? tt('{0} document(s)', c.count) : tt('No document in this period'), issues ? ` · ${tt('{0} item(s) to check', issues)}` : '', c.note === 'CASH_RECONCILIATION_NOT_SUPPORTED' ? ` · ${tt('Cash reconciliation is not supported yet.')}` : '')),
             h('div', { class: 'pk-cat-act' }, dl));

@@ -178,14 +178,13 @@ test('finance: redirects stay under /finance and its session cookie is scoped to
   } finally { await f.close(); }
 });
 
-test('Finance can be framed by the same Core origin only; direct upstream frame policy is replaced at the gateway', async () => {
+test('Finance keeps its own frame policy at the gateway: it is mounted in the Core page, never framed', async () => {
   const f = await gatewayFixture();
   try {
     const r = await f.call({ path: '/finance/', headers: f.session });
     assert.equal(r.status, 200);
-    assert.equal(r.headers['x-frame-options'], 'SAMEORIGIN');
-    assert.match(r.headers['content-security-policy'], /frame-ancestors 'self'/);
-    assert.doesNotMatch(r.headers['content-security-policy'], /frame-ancestors 'none'/);
+    assert.equal(r.headers['x-frame-options'], 'DENY');
+    assert.match(r.headers['content-security-policy'], /frame-ancestors 'none'/);
     const analytics = await f.call({ path: '/analytics/', headers: f.session });
     assert.equal(analytics.headers['x-frame-options'], 'DENY', 'other modules keep their own frame policy');
     assert.match(analytics.headers['content-security-policy'], /frame-ancestors 'none'/);

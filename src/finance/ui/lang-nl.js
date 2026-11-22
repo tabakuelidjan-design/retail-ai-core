@@ -260,6 +260,7 @@
     'Rejected: {0}': 'Geweigerd: {0}',
     'The extracted totals do not add up: check them.': 'De geëxtraheerde totalen kloppen niet: controleer ze.',
     'This looks like a supplier credit note: review it manually.': 'Dit lijkt op een creditnota van een leverancier: bekijk ze handmatig.',
+    'Download the source document': 'Brondocument downloaden', 'Download the original file': 'Origineel bestand downloaden', 'Loading preview…': 'Voorbeeld laden…', 'This PDF has no pages.': 'Deze pdf heeft geen pagina\'s.', 'Preview is not available for this file.': 'Voorbeeld niet beschikbaar voor dit bestand.',
     'Open the source document': 'Brondocument openen',
     'Supplier': 'Leverancier',
     'Supplier VAT number': 'Btw-nummer leverancier',

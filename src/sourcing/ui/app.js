@@ -499,7 +499,20 @@ function openParle(question) {
   } else o.innerHTML = corePanel.page(menuCase());
   o.scrollTop = 0;
 }
-/** Finance stays inside the Core page: the Core shell and address remain in place. Its ticketed service page is mounted in the central workspace. */
+/** Finance inside Core's central page, like Parle à Nordla: no iframe, no new tab, the address stays on Core.
+ *  The module's own UI is one script served by the Finance gateway (/finance/finance-embed.js); it mounts into a Shadow DOM root here. */
+let financeEmbedLoad = null;
+function loadFinanceEmbed() {
+  if (window.__nordlaFinanceEmbed) return Promise.resolve();
+  if (!financeEmbedLoad) financeEmbedLoad = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = '/finance/finance-embed.js'; s.async = true;
+    s.onload = () => resolve();
+    s.onerror = () => { financeEmbedLoad = null; s.remove(); reject(new Error('finance-embed')); };
+    document.head.appendChild(s);
+  });
+  return financeEmbedLoad;
+}
 async function openFinance() {
   S.parlePage = false;
   const o = $('#overlay'); o.hidden = false; o.className = 'show nxa-overlay';
@@ -508,19 +521,23 @@ async function openFinance() {
   const aside = side.cloneNode(true);
   aside.querySelectorAll('.nx-h-cur').forEach((n) => n.classList.remove('nx-h-cur'));
   aside.querySelector('[data-act="nx-open-finance"]')?.closest('li')?.classList.add('nx-h-cur');
-  const home = aside.querySelector('ul > li'); if (home) { home.dataset.act = 'close-overlay'; home.style.cursor = 'pointer'; }
-  o.innerHTML = '<div class="nx-home nxp-shell nx-finance-core">' + top.outerHTML + aside.outerHTML + '<div class="nx-h-main"><div class="nx-finance-panel"><p class="nx-finance-loading" role="status">Ouverture de Finance…</p><iframe class="nx-finance-frame" title="Finance" referrerpolicy="same-origin"></iframe></div></div></div>';
-  const frame = o.querySelector('.nx-finance-frame');
-  const loading = o.querySelector('.nx-finance-loading');
-  frame.addEventListener('load', () => { if (loading) loading.hidden = true; });
+  const home = aside.querySelector('ul > li'); if (home) { home.dataset.act = 'close-overlay'; home.style.cursor = 'pointer'; } // "Tableau de bord" leaves the page
+  o.innerHTML = `<div class="nx-home nxp-shell nx-finance-core">${top.outerHTML}${aside.outerHTML}<div class="nx-h-main"><div class="nx-finance-panel" data-nx-finance><p class="nx-finance-loading" role="status">Ouverture de Finance…</p></div></div></div>`;
+  const panel = o.querySelector('[data-nx-finance]');
+  const fail = () => { const loading = panel.querySelector('.nx-finance-loading'); if (loading) { loading.textContent = 'Finance n’a pas pu s’ouvrir. Revenez à l’accueil et réessayez.'; loading.setAttribute('role', 'alert'); } };
   try {
     const r = await api('/api/core/finance/open', { method: 'POST', body: '{}' });
     const target = new URL(r.url, window.location.href);
     if (target.origin !== window.location.origin || !target.pathname.startsWith('/finance/sso')) throw new Error('Finance URL is not on the Core origin');
-    frame.src = target.href; // the browser address stays on Core; /finance is only the internal same-origin module transport
-  } catch {
-    if (loading) { loading.textContent = 'Finance n’a pas pu s’ouvrir. Revenez à l’accueil et réessayez.'; loading.setAttribute('role', 'alert'); }
-  }
+    // the module session is opened in the background (same origin, no navigation); the browser address does not change
+    const res = await fetch(target.href, { credentials: 'same-origin', cache: 'no-store' }); await res.body?.cancel();
+    if (!res.ok) throw new Error('finance session');
+    await loadFinanceEmbed();
+    if (!panel.isConnected) return; // the person left Finance meanwhile
+    const host = document.createElement('div'); host.className = 'nxf-host';
+    panel.replaceChildren(host);
+    window.__nordlaFinanceEmbed(host.attachShadow({ mode: 'open' }), { apiBase: '/finance/' });
+  } catch { fail(); }
   o.scrollTop = 0;
 }
 function openMenu() {

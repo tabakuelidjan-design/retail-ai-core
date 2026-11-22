@@ -233,7 +233,7 @@ function renderInboxDetail(host, id, opts = {}) {
     if (it.checks && it.checks.length) body.appendChild(h('div', { class: 'banner warn small doc-checks' }, h('strong', null, tt('To check:')), h('ul', { class: 'plain' }, it.checks.map((c) => h('li', null, checkText(c))))));
     let focusContactSearch = () => {};
     mount(body, supplierBlock(it, () => { draw(); onChange(); }, err, () => focusContactSearch())); mount(body, duplicatesBlock(it, () => { draw(); onChange(); }, err));
-    if (it.hasFile) body.appendChild(h('div', { style: 'margin:8px 0' }, h('a', { class: 'btn', href: `api/inbox/${id}/file`, target: '_blank', rel: 'noopener' }, tt('Open the source document'))));
+    if (it.hasFile) body.appendChild(h('div', { style: 'margin:8px 0' }, h('a', { class: 'btn', href: `${(typeof FIN_API_BASE === 'string' ? FIN_API_BASE : '')}api/inbox/${id}/file`, download: it.fileName || 'source' }, tt('Download the source document'))));
     else if (it.status !== 'REJECTED') body.appendChild(h('div', { style: 'margin:8px 0' }, attachButton(id, () => { draw(); onChange(); })));
     const capInfo = captureInfoNode(it); if (capInfo) body.appendChild(capInfo); // null for a document that is neither a capture nor an attached receipt
     const typeSel = h('select', { disabled: !editable, 'data-field': 'documentType', on: { change: (e) => { f.documentType = e.target.value; } } }, Object.keys(DOC_TYPE).map((k) => h('option', { value: k, selected: k === it.documentType }, tt(DOC_TYPE[k]))));
@@ -622,8 +622,8 @@ async function viewPurchasesWorkspace(q) {
     if (!it.hasFile) return h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('doc', 24)), h('div', { class: 'muted small' }, tt('This entry has no source document.')));
     const url = `api/inbox/${it.id}/file`;
     if ((it.contentType || '').startsWith('image/')) return h('img', { src: url, alt: it.fileName || '', style: 'max-width:100%;max-height:100%;border-radius:8px;box-shadow:var(--shadow);object-fit:contain' });
-    if (it.contentType === 'application/pdf') return h('iframe', { src: url, title: it.fileName || 'PDF', style: 'width:100%;height:100%;min-height:520px;border:0;border-radius:8px;background:#fff' });
-    return h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('doc', 24)), h('div', null, h('strong', null, it.fileName || tt('Source file')), h('div', { class: 'muted small' }, tt('Preview is not available for this file type.'))), h('a', { class: 'btn', href: url, target: '_blank', rel: 'noopener' }, tt('Open the source document')));
+    if (it.contentType === 'application/pdf') { const holder = h('div', { class: 'pdf-preview', style: 'min-height:520px' }); queueMicrotask(() => renderPdfPreview(holder, (typeof FIN_API_BASE === 'string' ? FIN_API_BASE : '') + url)); return holder; }
+    return h('div', { class: 'empty' }, h('span', { class: 'eicon' }, svgIcon('doc', 24)), h('div', null, h('strong', null, it.fileName || tt('Source file')), h('div', { class: 'muted small' }, tt('Preview is not available for this file type.'))), h('a', { class: 'btn', href: (typeof FIN_API_BASE === 'string' ? FIN_API_BASE : '') + url, download: it.fileName || 'source' }, tt('Download the source document')));
   }
   function drawBody() {
     clear(workspace);

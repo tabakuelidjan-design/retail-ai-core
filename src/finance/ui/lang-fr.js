@@ -282,6 +282,7 @@
     'Rejected: {0}': 'Refusée : {0}',
     'The extracted totals do not add up: check them.': 'Les totaux extraits ne concordent pas : vérifiez-les.',
     'This looks like a supplier credit note: review it manually.': 'Cela ressemble à une note de crédit fournisseur : vérifiez-la à la main.',
+    'Download the source document': 'Télécharger le document source', 'Download the original file': 'Télécharger le fichier original', 'Loading preview…': 'Chargement de l’aperçu…', 'This PDF has no pages.': 'Ce PDF ne contient aucune page.', 'Preview is not available for this file.': 'Aperçu indisponible pour ce fichier.',
     'Open the source document': 'Ouvrir le document source',
     'Supplier': 'Fournisseur',
     'Supplier VAT number': 'Numéro de TVA du fournisseur',

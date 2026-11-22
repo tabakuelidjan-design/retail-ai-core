@@ -4,6 +4,8 @@
 // finance engine) returns; (3) every action is a server call that re-validates.
 
 const state = { csrf: null, settings: null, missing: [] };
+// API prefix: '' standalone; the Core page embeds Finance with '/finance/' so calls reach the module through the Nordla gateway (never the Core API).
+const FIN_API_BASE = typeof finApiBase === 'string' ? finApiBase : '';
 const app = document.getElementById('app');
 
 // ---------- tiny DOM helper ----------
@@ -103,7 +105,7 @@ async function api(method, path, body) {
   // Under the Nordla Core gateway every change also carries the Core CSRF token (the Core cookie, checked by Core on each change).
   // Finance keeps its own token (X-CSRF-Token) on top: both are required. Standalone (no Core cookie) the header is simply absent.
   const core = method !== 'GET' ? coreCsrf() : '';
-  const res = await fetch(path, { method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': state.csrf || '', ...(core ? { 'x-nordla-csrf': core } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const res = await fetch(FIN_API_BASE + path, { method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': state.csrf || '', ...(core ? { 'x-nordla-csrf': core } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
   const ct = res.headers.get('content-type') || '';
   const data = ct.includes('application/json') ? await res.json() : null;
   // session expired: back to the Nordla sign-in when Finance runs under Core (never a Finance token form inside Core)
@@ -209,6 +211,8 @@ const NAV = [
   { href: '#/treasury', label: 'Treasury', icon: 'clock', nordla: 'tresorerie', primary: false },
   { href: '#/pack', label: 'Accountant pack', icon: 'book', nordla: 'packComptable', primary: false },
 ];
+// Inside Nordla Core: the same nine screens as a horizontal menu under Finance's header (Core keeps the only vertical menu).
+const FIN_HNAV = [['#/', 'Home'], ['#/todo', 'To do'], ['#/sales', 'Sales'], ['#/receivables', 'Payments and receivables'], ['#/purchases', 'Purchases'], ['#/bank', 'Bank & Cash'], ['#/contacts', 'Contacts'], ['#/treasury', 'Treasury'], ['#/pack', 'Accountant pack']];
 /** Official Nordla icon for a NAV entry (Home has no official asset yet -> generic svgIcon, flagged in the report). */
 function navIcon(n, size) { return n.nordla ? NordlaIcon.semantic(n.nordla, size) : svgIcon(n.icon, size === 'lg' ? 20 : 18); }
 /** "Nous contacter": reuses the merchant's own configured finance email (Settings) - there is no support
@@ -285,7 +289,9 @@ async function refreshSyncPill() {
 function layout(active, ...content) {
   const seller = (state.settings && state.settings.seller && state.settings.seller.name) || 'Finance';
   const initial = seller.trim().charAt(0).toUpperCase() || 'F';
-  const rail = h('nav', { class: 'rail', 'aria-label': 'Finance navigation' },
+  const embedded = typeof finApiBase === 'string' && finApiBase !== '';
+  const hnav = embedded ? h('nav', { class: 'fin-hnav', 'aria-label': 'Finance navigation' }, FIN_HNAV.map(([href, label]) => h('a', { href, class: href === active ? 'active' : '', 'aria-current': href === active ? 'page' : null }, tr(label)))) : null;
+  const rail = embedded ? null : h('nav', { class: 'rail', 'aria-label': 'Finance navigation' },
     h('a', { class: 'rail-mark', href: '#/', title: seller }, initial),
     h('div', { class: 'rail-nav' }, NAV.map((n) => h('a', { href: n.href, class: `railitem ${n.href === active ? 'active' : ''}`, ...(n.primary ? {} : { 'data-more': '1' }), title: tr(n.label), 'aria-label': tr(n.label) }, h('span', { class: n.nordla ? 'rail-ico official' : 'rail-ico' }, navIcon(n, 'md')), h('span', { class: 'rlabel' }, tr(n.label))))),
     h('button', { class: 'railitem rail-more', type: 'button', title: tt('More'), 'aria-label': tt('More'), on: { click: openMoreSheet } }, svgIcon('chevron', 18), h('span', { class: 'rlabel' }, tt('More'))),
@@ -298,7 +304,7 @@ function layout(active, ...content) {
   setTimeout(refreshSyncPill, 0);
   const main = h('main', { class: 'main premium' }, content);
   const support = h('button', { class: 'contact-support', type: 'button', on: { click: openContactSupport } }, svgIcon('inbox', 16), h('span', null, tt('Contact us')));
-  show(h('div', { class: 'shell' }, rail, h('div', { class: 'mainarea' }, topbar2, main, support)));
+  show(h('div', { class: embedded ? 'shell shell-embedded' : 'shell' }, rail, h('div', { class: 'mainarea' }, topbar2, hnav, main, support)));
   return main;
 }
 function applyAccent() { const a = state.settings && state.settings.branding && state.settings.branding.accent; if (/^#[0-9a-fA-F]{6}$/.test(a || '')) document.documentElement.style.setProperty('--accent', a); }
@@ -1064,8 +1070,8 @@ async function viewDoc(id) {
       has('credit_note') ? h('button', { on: { click: () => creditModal(d) } }, 'Create credit note') : null,
       has('refund') ? h('button', { class: 'primary', on: { click: () => refundModal(d, reload) } }, 'Record a refund') : null,
       has('cancel') ? h('button', { class: 'danger', on: { click: () => confirmModal('Cancel draft', 'This draft will be cancelled. No number is used.', 'Cancel draft', call('cancel', {}, 'Draft cancelled')) } }, 'Cancel draft') : null,
-      h('a', { class: 'btn', href: `api/documents/${id}/pdf?download=1` }, 'Download PDF'),
-      has('ubl') ? h('a', { class: 'btn', href: `api/documents/${id}/ubl` }, 'Peppol/UBL file') : null));
+      h('a', { class: 'btn', href: `${FIN_API_BASE}api/documents/${id}/pdf?download=1` }, 'Download PDF'),
+      has('ubl') ? h('a', { class: 'btn', href: `${FIN_API_BASE}api/documents/${id}/ubl` }, 'Peppol/UBL file') : null));
   box.appendChild(top);
   const FLOW = isQ ? [['DRAFT', 'Draft'], ['SENT', 'Sent'], ['ACCEPTED', 'Accepted'], ['CONVERTED', 'Converted']] : [['DRAFT', 'Draft'], ['READY_FOR_APPROVAL', 'Ready'], ['ISSUED', 'Issued'], ['SENT', 'Sent'], ['PAID', 'Paid']];
   const flowKey = { OVERDUE: 'SENT', PARTIALLY_PAID: 'SENT', CREDITED: 'PAID', REJECTED: 'DRAFT', CANCELLED: 'DRAFT' }[d.effectiveStatus] || d.effectiveStatus;
@@ -1134,7 +1140,7 @@ async function viewDoc(id) {
   if (d.payments.length) box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Payments'), h('table', null, h('tr', null, ['Date', 'Amount', 'Method', 'Reference', ''].map((x) => h('th', null, x))), d.payments.map((p) => h('tr', null, h('td', null, p.paidOn), h('td', null, `${p.amount} ${cur}`), h('td', null, p.method), h('td', null, p.reference || ''), h('td', null, p.amountCents > 0 && p.allocationId ? h('button', { class: 'small', on: { click: () => reverseModal(p.allocationId, reload) } }, 'Reverse') : null))))));
   if (d.refund && d.refund.payments.length) box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Refunds made for this credit note'), h('table', null, h('tr', null, ['Date', 'Amount', 'Method', 'Reference', ''].map((x) => h('th', null, x))), d.refund.payments.map((p) => h('tr', null, h('td', null, p.paidOn), h('td', null, `${p.amount} ${cur}`), h('td', null, p.method), h('td', null, p.reference || ''), h('td', null, p.amountCents > 0 && p.allocationId ? h('button', { class: 'small', on: { click: () => reverseModal(p.allocationId, reload) } }, 'Reverse') : null))))));
   if (d.creditNotes.length) box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Credit notes'), d.creditNotes.map((cn) => h('div', null, h('a', { href: `#/doc/${cn.id}` }, `${cn.number || '(draft)'} - ${cn.gross} ${cn.currency}`), ' ', badge(cn.status)))));
-  const pdfWrap = h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'topbar' }, h('h2', null, tt('PDF preview') + (d.doc.lockedAt ? '' : ' ' + tt('(draft watermark)'))), h('button', { on: { click: (ev) => { ev.target.remove(); pdfWrap.appendChild(h('iframe', { class: 'pdf', src: `api/documents/${id}/pdf`, title: 'PDF preview' })); } } }, 'Show preview')));
+  const pdfWrap = h('div', { class: 'card', style: 'margin-top:16px' }, h('div', { class: 'topbar' }, h('h2', null, tt('PDF preview') + (d.doc.lockedAt ? '' : ' ' + tt('(draft watermark)'))), h('button', { on: { click: (ev) => { ev.target.remove(); const holder = h('div', { class: 'pdf-preview' }); pdfWrap.appendChild(holder); renderPdfPreview(holder, `${FIN_API_BASE}api/documents/${id}/pdf`); } } }, 'Show preview')));
   box.appendChild(pdfWrap);
   mount(box, stockMovementsCard(d)); mount(box, peppolCard(d, reload));
   box.appendChild(h('div', { class: 'card', style: 'margin-top:16px' }, h('h2', null, 'Audit trail'), h('table', null, h('tr', null, ['When', 'Action', 'Status', 'By'].map((x) => h('th', null, x))), d.events.map((e) => h('tr', null, h('td', { class: 'nowrap small' }, String(e.at).replace('T', ' ').slice(0, 19)), h('td', null, human(e.action)), h('td', null, `${e.fromStatus ? STATUS[e.fromStatus] || e.fromStatus : ''} ${e.toStatus ? `-> ${STATUS[e.toStatus] || e.toStatus}` : ''}`), h('td', { class: 'small' }, e.actor ? `${e.actor.type}` : ''))))));

@@ -97,7 +97,7 @@ test('the review pane renders fields and actions for a UBL invoice, an imported 
     const n = await render(ui, cn.id); expectFull(n, 'credit note');
     assert.deepEqual(n.buttons, ['Reopen for correction'], 'a validated credit note never offers "Mark to pay"');
     assert.ok(n.head.textContent.includes('Validated') && n.head.textContent.includes('Credit note'));
-    assert.ok(n.body.textContent.includes('Open the source document'), 'the original document stays available');
+    assert.ok(n.body.textContent.includes('Download the source document'), 'the original document stays available (a download in the same tab)');
   } finally { ui?.restore(); await a.close(); }
 });
 

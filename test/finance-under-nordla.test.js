@@ -32,8 +32,8 @@ test('no Finance script builds a root-absolute address: every API call and link 
 test('the API client is the only fetch site and takes the relative path', () => {
   const app = read('src/finance/ui/app.js');
   const fetches = uiScripts.flatMap((f) => [...read(`src/finance/ui/${f}`).matchAll(/\bfetch\(([^,)]*)/g)].map((m) => `${f}: ${m[1]}`));
-  assert.deepEqual(fetches, ['app.js: path'], 'every request goes through api(path)');
-  assert.match(app, /async function api\(method, path, body\) \{[\s\S]*?const res = await fetch\(path,/);
+  assert.deepEqual(fetches, ['app.js: FIN_API_BASE + path'], 'every request goes through api(path), under the module prefix');
+  assert.match(app, /async function api\(method, path, body\) \{[\s\S]*?const res = await fetch\(FIN_API_BASE \+ path,/);
   assert.match(app, /function coreCsrf\(\) \{[^}]*__Host-nordla_sourcing_csrf=/, 'the Core CSRF token is read from the Core cookie, never stored or invented');
   assert.match(app, /'x-nordla-csrf': core/, 'every change carries the Core CSRF token; Finance keeps its own X-CSRF-Token');
   assert.ok(app.includes("path !== 'api/login'"), 'the login check uses the relative path');
