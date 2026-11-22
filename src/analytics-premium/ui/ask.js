@@ -265,4 +265,5 @@ function openAsk() {
 function askButton() {
   return h('button', { class: 'cta-primary', type: 'button', on: { click: openAsk } }, NordlaIcon.parle('onTerracotta', 'md'), t('nav.askNordla'), h('kbd', null, '⌘K'));
 }
+(typeof window !== 'undefined' ? window : globalThis).nordlaAskOpen = openAsk;
 document.addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && String(e.key).toLowerCase() === 'k') { e.preventDefault(); openAsk(); } });
