@@ -54,23 +54,28 @@ export function createAccessChecker({ supabase, merchantId, requireCoreSession =
     if (!SSO_CONTRACT.modules.includes(module) || !MODULE_CODES.includes(module)) return { ok: false, code: 'MODULE_UNKNOWN' };
     if (typeof userId !== 'string' || !userId) return { ok: false, code: 'NOT_MEMBER' };
     try {
-      const rows = await supabase.select(MEMBERS, { select: 'role,status,removed_at', merchant_id: `eq.${merchant}`, user_id: `eq.${userId}`, limit: '1' });
+      // the membership and the module entitlement are independent reads: they run together (same answers, one round trip less)
+      const [rows, ent] = await Promise.all([
+        supabase.select(MEMBERS, { select: 'role,status,removed_at', merchant_id: `eq.${merchant}`, user_id: `eq.${userId}`, limit: '1' }),
+        supabase.select(ENTITLEMENTS, { select: 'merchant_id,module_code,status', merchant_id: `eq.${merchant}`, module_code: `eq.${module}`, limit: '1' }).then((x) => x ?? []),
+      ]);
       const m = (rows ?? [])[0];
       if (!m || String(m.merchant_id ?? merchant).toLowerCase() !== merchant) return { ok: false, code: 'NOT_MEMBER' };
       if (m.removed_at) return { ok: false, code: 'NOT_MEMBER' };
       if (m.status !== 'ACTIVE') return { ok: false, code: 'MEMBER_SUSPENDED' };
       if (m.role !== role) return { ok: false, code: 'ROLE_CHANGED' };
-      const ent = (await supabase.select(ENTITLEMENTS, { select: 'merchant_id,module_code,status', merchant_id: `eq.${merchant}`, module_code: `eq.${module}`, limit: '1' })) ?? [];
       const e = ent[0];
       if (!e || e.status !== 'ACTIVE' || String(e.merchant_id ?? merchant).toLowerCase() !== merchant) return { ok: false, code: 'MODULE_NOT_ENABLED' };
       const d = decideModuleOpen({ key: module, role, activeCodes: new Set([module]) });
       if (!d.ok) return { ok: false, code: d.code === 'FORBIDDEN' ? 'MODULE_ROLE_FORBIDDEN' : d.code };
-      if (authSessionId || requireCoreSession) {
-        const source = await assurance.check({merchantId:merchant,userId,sessionId:authSessionId,module:'sourcing'});
-        if (!source.ok) return {ok:false,code:source.code};
-      }
       if (!mfaRule) return { ok: false, code: 'MFA_POLICY_UNAVAILABLE' };
-      if (await mfaRule.blocked({ merchantId: merchant, userId, sessionId:authSessionId, module:'sourcing' })) return { ok: false, code: 'MFA_REQUIRED_FOR_ROLE' };
+      // the session assurance and the MFA rule are independent: both are checked on every request, together (the first refusal in the same order wins)
+      const [source, blocked] = await Promise.all([
+        (authSessionId || requireCoreSession) ? assurance.check({merchantId:merchant,userId,sessionId:authSessionId,module:'sourcing'}) : Promise.resolve({ ok: true }),
+        mfaRule.blocked({ merchantId: merchant, userId, sessionId:authSessionId, module:'sourcing' }),
+      ]);
+      if (!source.ok) return {ok:false,code:source.code};
+      if (blocked) return { ok: false, code: 'MFA_REQUIRED_FOR_ROLE' };
       return { ok: true, role };
     } catch (error) {
       if (error?.code === 'MFA_POLICY_UNAVAILABLE') return { ok: false, code: 'MFA_POLICY_UNAVAILABLE' };
