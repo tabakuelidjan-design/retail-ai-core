@@ -107,7 +107,7 @@ async function api(method, path, body) {
   const ct = res.headers.get('content-type') || '';
   const data = ct.includes('application/json') ? await res.json() : null;
   // session expired: back to the Nordla sign-in when Finance runs under Core (never a Finance token form inside Core)
-  if (res.status === 401 && path !== 'api/login' && state.nordlaHome) { state.csrf = null; window.location.assign(state.nordlaHome); throw new ApiError(401, data); }
+  if (res.status === 401 && path !== 'api/login' && state.nordlaHome) { state.csrf = null; window.top.location.assign(state.nordlaHome); throw new ApiError(401, data); }
   if (res.status === 401 && path !== 'api/login') { state.csrf = null; renderLogin(); throw new ApiError(401, data); }
   if (!res.ok) throw new ApiError(res.status, data);
   return data;
@@ -294,7 +294,7 @@ function layout(active, ...content) {
   // The merchant's own name, not a hardcoded brand string - this Finance shell is generic/multi-tenant
   // under the hood (see tenant-isolation tests), so the context label must reflect whoever is actually
   // signed in rather than one fixed name.
-  const topbar2 = h('div', { class: 'topbar2' }, globalSearch(), h('div', { class: 'tb-right' }, state.nordlaHome ? h('a', { class: 'back-nordla', href: state.nordlaHome, title: 'Retour à l’accueil Nordla' }, '← Accueil Nordla') : null, h('span', { class: 'sync-pill', 'data-sync-pill': '' }, h('span', { class: 'sync-dot warn' }), h('span', { class: 'sync-label' }, tt('Sales source sync unknown'))), langSwitch(), accountMenu(seller)));
+  const topbar2 = h('div', { class: 'topbar2' }, globalSearch(), h('div', { class: 'tb-right' }, state.nordlaHome ? h('a', { class: 'back-nordla', href: state.nordlaHome, target: '_top', title: 'Retour à l’accueil Nordla' }, '← Accueil Nordla') : null, h('span', { class: 'sync-pill', 'data-sync-pill': '' }, h('span', { class: 'sync-dot warn' }), h('span', { class: 'sync-label' }, tt('Sales source sync unknown'))), langSwitch(), accountMenu(seller)));
   setTimeout(refreshSyncPill, 0);
   const main = h('main', { class: 'main premium' }, content);
   const support = h('button', { class: 'contact-support', type: 'button', on: { click: openContactSupport } }, svgIcon('inbox', 16), h('span', null, tt('Contact us')));
