@@ -16,16 +16,29 @@ const call = async (core, actor, body = {}) => {
   return { status, body: chunks.join('') ? JSON.parse(chunks.join('')) : null };
 };
 
-test('the ticket is issued for the signed-in person of THIS merchant, to any role (read-only included), for an allow-listed destination, and carries no role or secret', async () => {
+test('the ticket is issued for the signed-in person of THIS merchant, to the owner and the administrators only (the Croissance rule), for an allow-listed destination, and carries no role or secret', async () => {
   const core = createCoreHttp({ runtime: null, store: {}, merchantId: M, entitlements: async () => new Set(['growth']), env: ENV });
-  for (const role of ['OWNER', 'VIEWER', 'COLLABORATOR']) {
+  for (const role of ['OWNER', 'ADMIN']) {
     const r = await call(core, { role, userId: U }, { to: 'opportunities' }); assert.equal(r.status, 200, role);
     const u = new URL(r.body.url); assert.equal(u.origin, 'https://growth.example.app'); assert.equal(u.pathname, '/sso'); assert.equal(u.searchParams.get('to'), 'opportunities');
     assert.ok(!r.body.url.includes(SECRET)); const payload = JSON.parse(Buffer.from(u.searchParams.get('t').split('.')[0], 'base64url').toString());
     assert.deepEqual(Object.keys(payload).sort(), ['aud', 'exp', 'iat', 'jti', 'm', 'u', 'v']); assert.equal(payload.u, U); assert.equal(payload.m, M); assert.ok(!JSON.stringify(payload).includes(role));
     assert.deepEqual(createHandoffVerifier({ secret: SECRET, merchantId: M }).verify(u.searchParams.get('t')), { ok: true, userId: U });
   }
-  assert.equal(new URL((await call(core, { role: 'VIEWER', userId: U })).body.url).searchParams.get('to'), 'dropoff', 'default destination');
+  assert.equal(new URL((await call(core, { role: 'OWNER', userId: U })).body.url).searchParams.get('to'), 'dropoff', 'default destination');
+  for (const role of ['VIEWER', 'COLLABORATOR', 'ACCOUNTANT']) assert.equal((await call(core, { role, userId: U }, { to: 'opportunities' })).status, 403, `${role}: no Croissance right`);
+});
+
+test('under the Core origin (gateway): the link opens Croissance in the same tab with the Core session, no ticket; the rights are checked the same way', async () => {
+  const GW = { NORDLA_CORE_ORIGIN: 'https://core.example.app', NORDLA_GROWTH_ORIGIN: 'https://growth.example.app' };
+  const core = createCoreHttp({ runtime: null, store: {}, merchantId: M, entitlements: async () => new Set(['growth']), env: GW });
+  const r = await call(core, { role: 'OWNER', userId: U }, { to: 'opportunities' }); assert.equal(r.status, 200);
+  assert.equal(r.body.url, 'https://core.example.app/growth/#/opportunities');
+  assert.equal((await call(core, { role: 'OWNER', userId: U })).body.url, 'https://core.example.app/growth/#/dropoff', 'default destination');
+  assert.equal((await call(core, { role: 'COLLABORATOR', userId: U })).status, 403, 'a collaborator is refused');
+  assert.equal((await call(core, { role: 'OWNER', userId: U }, { to: 'https://evil.example' })).status, 400, 'a free destination is refused');
+  const noEnt = createCoreHttp({ runtime: null, store: {}, merchantId: M, entitlements: async () => new Set(['finance']), env: GW });
+  assert.equal((await call(noEnt, { role: 'OWNER', userId: U })).status, 403, 'the module is not enabled for the merchant');
 });
 
 test('refusals: no secret or no https address (503), no Nordla account behind the call (409), a free destination (400); nothing is issued', async () => {

@@ -3,6 +3,7 @@
 window.NORDLA_DICTS = window.NORDLA_DICTS || {};
 window.NORDLA_DICTS.nl = Object.assign(window.NORDLA_DICTS.nl || {}, {
   'gr.brand': 'Nordla AI',
+  'gr.backCore': 'Terug naar Nordla',
   'gr.dash': '—',
   'gr.src.unavailable': 'Gegevens niet beschikbaar',
   'gr.vsPrevious': 'vs vorige periode',

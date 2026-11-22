@@ -79,7 +79,13 @@ export async function growthDom(hash, { products = potentialPayload(), productsS
   const ctx = {
     document: doc, location: { hash }, console: { error: (...a) => errors.push(a.join(' ')), log() {} },
     localStorage: { getItem: () => lang, setItem() {} }, Intl, Math, Date, JSON, Object, Array, Set, Number, String, Error, Promise, setTimeout,
-    fetch: async (u) => ((u === '/api/growth/products' && productsStatus !== 200) || (u === '/api/growth/audience' && audienceStatus !== 200) || (u === '/api/growth/content' && contentStatus !== 200) || (u === '/api/growth/store' && storeStatus !== 200) ? { ok: false, status: productsStatus, json: async () => ({ error: { code: 'TENANT_NOT_CONFIGURED' } }) } : { ok: true, json: async () => JSON.parse(JSON.stringify(payloads[u])) }),
+    // A browser resolves each request against the page base (/growth/ behind Core). A root-absolute address would reach Core: refused here.
+    fetch: async (u) => {
+      if (String(u).startsWith('/')) return { ok: false, status: 404, json: async () => ({ error: { code: 'ROOT_REQUEST_REFUSED' } }) };
+      const key = new URL(u, 'https://nordla.test/growth/').pathname.replace(/^\/growth(?=\/)/, '');
+      const failed = (key === '/api/growth/products' && productsStatus !== 200) || (key === '/api/growth/audience' && audienceStatus !== 200) || (key === '/api/growth/content' && contentStatus !== 200) || (key === '/api/growth/store' && storeStatus !== 200);
+      return failed ? { ok: false, status: productsStatus, json: async () => ({ error: { code: 'TENANT_NOT_CONFIGURED' } }) } : { ok: true, json: async () => JSON.parse(JSON.stringify(payloads[key])) };
+    },
     NordlaIcon: { semantic: (n) => Object.assign(new Node('img'), { className: `nordla-icon official ${n}` }), parle: () => new Node('img') },
     NordlaCharts: { head: el, trendLines: el, trendLine: el, sparkline: el, insufficient: el, donut: el, comparison: el },
   };

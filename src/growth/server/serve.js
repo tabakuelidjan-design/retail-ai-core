@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // Launcher (local preview only): npm run growth -> http://127.0.0.1:4413
-// Binds to the loopback interface; there is no hosted/staging mode for Growth yet (no access token layer),
-// so it must not be exposed. Optional: GROWTH_PORT.
+// Local: binds to the loopback interface only (GROWTH_PORT). Hosted (Railway): binds to every interface on PORT, and only for the
+// exact host names in GROWTH_ALLOWED_HOSTS, with NORDLA_PROXY_SECRET required (see hosting.js). Nothing else is exposed.
 // Tenant (ADR 0003): when NORDLA_MERCHANT_ID is set, it is resolved at startup through the shared resolver (unknown or invalid ->
 // refused, nothing served) and Potentiel produits reads that merchant's synced data. Without it, the demonstration pages still
 // work and Produits Potentiels / Audience / Contenu / Croissance magasin say TENANT_NOT_CONFIGURED - no merchant is ever guessed.
 
-import http from 'node:http';
 import { createGrowthApp } from './app.js';
+import { listenGrowth } from './hosting.js';
 import { createProductPotentialSource } from './products.js';
 import { createAudienceSource } from './audience.js';
 import { createContentSource } from './content.js';
@@ -17,7 +17,6 @@ import { resolveToolTenant } from '../../tenant/tool-context.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/client.js';
 import { resolveBusinessProfile, liveTimeZone } from '../../metrics/profile.js';
 
-const port = Number(process.env.GROWTH_PORT || 4413);
 try {
   let productPotential = null; let audience = null; let content = null; let store = null;
   if (readMerchantIdFromEnv(process.env)) {
@@ -31,10 +30,9 @@ try {
     content = createContentSource({ supabase, merchantId: tenant.merchantId, timeZone });
     store = createStoreSource({ supabase, merchantId: tenant.merchantId, timeZone });
   }
-  const handler = createGrowthApp({ productPotential, audience, content, store });
-  http.createServer(handler).listen(port, '127.0.0.1', () => {
-    console.log(`Nordla Growth running at http://127.0.0.1:${port}${productPotential ? '' : ' (no NORDLA_MERCHANT_ID: Produits Potentiels, Audience, Contenu and Croissance magasin not configured)'}`);
-  });
+  // local: loopback only; hosted (Railway): every interface, with the host check and the proxy secret (src/growth/server/hosting.js)
+  await listenGrowth({ env: process.env, log: console.log, createHandler: (plan) => createGrowthApp({ productPotential, audience, content, store, proxySecret: plan.proxySecret, basePath: process.env.NORDLA_MODULE_BASE || '/' }) });
+  console.log(`Nordla Growth started${productPotential ? '' : ' (no NORDLA_MERCHANT_ID: Produits Potentiels, Audience, Contenu and Croissance magasin not configured)'}`);
 } catch (e) {
   console.error(`growth failed to start${e.code ? ` (${e.code})` : ''}: ${e.message}`);
   process.exitCode = 1;

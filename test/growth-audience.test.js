@@ -279,7 +279,7 @@ test('audience UI: no customer key, empty data and missing tenant are explicit s
 });
 
 test('audience UI: every icon used exists in the official set or the Growth pack, none is a defective asset', async () => {
-  const ctx = { window: {}, document: { createElement: () => ({ setAttribute() {} }) } };
+  const ctx = { window: {}, URL, document: { baseURI: 'http://127.0.0.1/', createElement: () => ({ setAttribute() {} }) } }; // a browser page: URL and its base (standalone: root)
   vm.runInNewContext(await readFile(new URL('../src/shared/nordla-icon.js', import.meta.url), 'utf8'), ctx);
   const NI = ctx.window.NordlaIcon ?? ctx.NordlaIcon;
   const app = await readFile(new URL('app.js', UI), 'utf8');

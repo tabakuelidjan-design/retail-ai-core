@@ -15,6 +15,7 @@
 import { readFile } from 'node:fs/promises';
 import { readNordlaShared } from '../../shared/nordla-static.js';
 import { buildOverview } from './overview.js';
+import { proxySecretOk } from '../../shared/proxy-secret.js';
 import { createPrioritiesSource } from './priorities.js';
 
 const UI = new URL('../ui/', import.meta.url);
@@ -56,17 +57,20 @@ const IMG = { svg: 'image/svg+xml', png: 'image/png', webp: 'image/webp' };
 // productPotential: the tenant's Potentiel produits source (server/products.js), created from the Growth server's context
 // (NORDLA_MERCHANT_ID). Nothing in a request can choose or change the merchant: the route reads no parameter at all.
 // audience / content / store: the tenant's Audience, Contenu and Croissance magasin sources (server/*.js), same contract.
-export function createGrowthApp({ now = () => new Date(), productPotential = null, audience = null, content = null, store = null } = {}) {
+export function createGrowthApp({ now = () => new Date(), productPotential = null, audience = null, content = null, store = null, proxySecret = null, basePath = '/' } = {}) {
   const priorities = createPrioritiesSource({ productPotential, audience, content, store, now });
   const send = (res, status, type, body) => { res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', ...SECURITY_HEADERS }); res.end(body); };
   const json = (res, status, obj) => send(res, status, 'application/json', JSON.stringify(obj));
   return async function handle(req, res) {
     try {
+      if (!proxySecretOk(req, proxySecret)) return json(res, 403, { error: { code: 'PROXY_SECRET_REQUIRED' } }); // behind the Nordla gateway only
       const url = new URL(req.url, 'http://localhost');
       if (req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { error: { code: 'METHOD_NOT_ALLOWED' } });
       if (STATIC[url.pathname]) {
         const [base, file, type] = STATIC[url.pathname];
-        return send(res, 200, type, await readFile(new URL(file, base)));
+        const body = await readFile(new URL(file, base));
+        // index.html carries <base href="/growth/">: the deployment's base is written here (standalone '/', behind Core the module prefix)
+        return send(res, 200, type, url.pathname === '/' ? body.toString('utf8').replace('<base href="/growth/">', `<base href="${basePath}">`) : body);
       }
       const shared = await readNordlaShared(url.pathname);
       if (shared) return send(res, 200, shared.type, shared.body);

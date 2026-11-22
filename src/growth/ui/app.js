@@ -46,7 +46,7 @@ const GROWTH_PACK = {
 const ICON_PX = { sm: 16, md: 20, lg: 28 };
 function packIcon(file, size) {
   const img = document.createElement('img');
-  img.src = `/growth-assets/icons/${file}.png`;
+  img.src = `growth-assets/icons/${file}.png`;
   img.width = img.height = ICON_PX[size] || ICON_PX.md;
   img.className = `nordla-icon nordla-icon-${ICON_PX[size] ? size : 'md'} gr-pack-icon`;
   img.alt = ''; img.setAttribute('aria-hidden', 'true');
@@ -158,6 +158,7 @@ if (typeof document !== 'undefined' && document.addEventListener) {
 function sidebar(active) {
   return h('nav', { class: 'sidebar', 'aria-label': t('gr.nav.aria') },
     h('div', { class: 'brand' }, h('div', { class: 'brand-mark' }), h('div', { class: 'brand-name' }, t('gr.brand'))),
+    h('a', { class: 'gr-back-core', href: '../' }, t('gr.backCore')), // back to the Nordla home
     h('div', { class: 'nav' }, GROWTH_NAV.map((n) => navItem(n, active)), moreButton(active)),
     h('div', { class: 'nav gr-nav-foot' }, GROWTH_NAV_FOOT.map((n) => navItem(n, active))));
 }
@@ -258,12 +259,12 @@ const loadState = {};
 const ERROR_CODES = ['TENANT_NOT_CONFIGURED', 'DATA_UNAVAILABLE', 'NETWORK', 'UNKNOWN'];
 // `period` = the window the page's engines really use (the top bar shows it in every state).
 const PAGES = {
-  overview: { title: 'gr.title', subtitle: 'gr.subtitle', url: '/api/growth/overview', period: { weeks: 8 }, get: () => data, set: (v) => { data = v; }, render: renderOverview },
-  opportunities: { title: 'gr.op.title', subtitle: 'gr.op.subtitle', url: '/api/growth/opportunities', period: { weeks: 8 }, get: () => oppData, set: (v) => { oppData = v; }, render: renderOpportunities },
-  potential: { title: 'gr.pp.title', subtitle: 'gr.pp.subtitle', url: '/api/growth/products', period: { weeks: 8 }, get: () => potData, set: (v) => { potData = v; }, render: renderPotential },
-  audience: { title: 'gr.au.title', subtitle: 'gr.au.subtitle', url: '/api/growth/audience', period: { days: 90 }, get: () => audData, set: (v) => { audData = v; }, render: renderAudience },
-  content: { title: 'gr.ct.title', subtitle: 'gr.ct.subtitle', url: '/api/growth/content', period: { weeks: 8 }, get: () => ctData, set: (v) => { ctData = v; }, render: renderContent },
-  storeGrowth: { title: 'gr.st.title', subtitle: 'gr.st.subtitle', url: '/api/growth/store', period: { weeks: 8 }, get: () => stData, set: (v) => { stData = v; }, render: renderStore },
+  overview: { title: 'gr.title', subtitle: 'gr.subtitle', url: 'api/growth/overview', period: { weeks: 8 }, get: () => data, set: (v) => { data = v; }, render: renderOverview },
+  opportunities: { title: 'gr.op.title', subtitle: 'gr.op.subtitle', url: 'api/growth/opportunities', period: { weeks: 8 }, get: () => oppData, set: (v) => { oppData = v; }, render: renderOpportunities },
+  potential: { title: 'gr.pp.title', subtitle: 'gr.pp.subtitle', url: 'api/growth/products', period: { weeks: 8 }, get: () => potData, set: (v) => { potData = v; }, render: renderPotential },
+  audience: { title: 'gr.au.title', subtitle: 'gr.au.subtitle', url: 'api/growth/audience', period: { days: 90 }, get: () => audData, set: (v) => { audData = v; }, render: renderAudience },
+  content: { title: 'gr.ct.title', subtitle: 'gr.ct.subtitle', url: 'api/growth/content', period: { weeks: 8 }, get: () => ctData, set: (v) => { ctData = v; }, render: renderContent },
+  storeGrowth: { title: 'gr.st.title', subtitle: 'gr.st.subtitle', url: 'api/growth/store', period: { weeks: 8 }, get: () => stData, set: (v) => { stData = v; }, render: renderStore },
 };
 function currentPage() { const p = location.hash.replace(/^#\/?/, ''); return PAGES[p] && p !== 'overview' ? p : 'overview'; }
 

@@ -185,7 +185,7 @@ test('growth UI: FR, NL and EN dictionaries have exactly the same keys, and ever
 });
 
 test('growth UI: every icon it asks for is a Growth pack file on disk or a valid (non-defective) official Nordla icon', async () => {
-  const ctx = { window: {}, document: { createElement: () => ({ setAttribute() {} }) } };
+  const ctx = { window: {}, URL, document: { baseURI: 'http://127.0.0.1/', createElement: () => ({ setAttribute() {} }) } }; // a browser page: URL and its base (standalone: root)
   vm.runInNewContext(await readFile(new URL('nordla-icon.js', SHARED), 'utf8'), ctx);
   const { ICONS, DEFECTIVE } = ctx.window.NordlaIcon;
   const src = await readFile(new URL('app.js', UI), 'utf8');
