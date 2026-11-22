@@ -51,7 +51,7 @@ function opFixRow(g) {
       h('div', { class: 'gr-att-meta' }, facts, opLink(g.sourcePage), h('a', { class: 'gr-op-link gr-op-export', href: opDossierHref(cost ? 'purchaseCost' : g.problem), download: '', 'data-export': cost ? 'purchaseCost' : g.problem }, t('gr.op.fix.dossier.one')))));
 }
 // The correction file: a plain download link to the server (read only). No script, no merchant parameter.
-const opDossierHref = (category) => `/api/growth/corrections?category=${encodeURIComponent(category)}`;
+const opDossierHref = (category) => `api/growth/corrections?category=${encodeURIComponent(category)}`;
 function opFixCard(d) {
   const groups = d.sections.fix; const n = groups.length; const corr = d.counts.fixCorrections;
   const plural = (k, count) => t(`gr.op.fix.${k}.${count === 1 ? 'one' : 'other'}`, num(count));
@@ -667,7 +667,7 @@ function opFollowUp(scope, snapshot, view = {}) {
   function ensureCompare(evidence, plan, applied, events) {
     const ref = evidence.code === 'socialTest' ? (applied && applied.post ? { type: 'post', id: applied.post.id } : null) : evidence.code === 'inquiryTest' ? (applied && applied.post ? { type: 'inbox', id: applied.post.id } : null) : evidence.targetRef; if (!ref || !plan || !applied || typeof fetch !== 'function') return;
     const extra = ref.type === 'inbox' ? `&network=${encodeURIComponent(evidence.network ?? '')}&account=${encodeURIComponent(evidence.accountId ?? '')}&days=${encodeURIComponent(evidence.observationDays ?? 7)}&from=${encodeURIComponent(applied.date)}&requestType=${encodeURIComponent(plan.requestType ?? evidence.requestType ?? 'quote')}${inqQuery(inqQualification(events, applied.post.id))}` : ref.type === 'post' ? `&network=${encodeURIComponent(evidence.network ?? '')}&account=${encodeURIComponent(evidence.accountId ?? '')}&days=${encodeURIComponent(evidence.observationDays ?? 7)}` : '';
-    const url = `/api/growth/review?type=${encodeURIComponent(ref.type)}&id=${encodeURIComponent(ref.id)}&applied=${encodeURIComponent(applied.date)}&review=${encodeURIComponent(plan.reviewDate)}${extra}`;
+    const url = `api/growth/review?type=${encodeURIComponent(ref.type)}&id=${encodeURIComponent(ref.id)}&applied=${encodeURIComponent(applied.date)}&review=${encodeURIComponent(plan.reviewDate)}${extra}`;
     if (cmp.key === url) return;
     cmp.key = url; cmp.status = 'loading'; cmp.data = null;
     Promise.resolve().then(() => fetch(url)).then((r) => (r && r.ok ? r.json() : Promise.reject(new Error('review unavailable'))))

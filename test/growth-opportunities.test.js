@@ -58,7 +58,7 @@ test('opportunities UI: links open the source page (navigation only); no button 
   const links = all(root, (n) => n.tagName === 'A' && hasClass(n, 'gr-op-link') && !n.getAttribute('data-export'));
   assert.ok(links.length >= 4);
   // the correction-file download links are the only others: plain links to the read-only export route, never a script
-  assert.ok(all(root, (n) => n.tagName === 'A' && n.getAttribute('data-export')).every((a) => /^\/api\/growth\/corrections\?category=[A-Za-z]+$/.test(a.getAttribute('href'))));
+  assert.ok(all(root, (n) => n.tagName === 'A' && n.getAttribute('data-export')).every((a) => /^(\/)?api\/growth\/corrections\?category=[A-Za-z]+$/.test(a.getAttribute('href'))));
   assert.ok(links.every((a) => ['#/potential', '#/content', '#/storeGrowth', '#/audience'].includes(a.getAttribute('href'))));
   const buttons = all(root, (n) => n.tagName === 'BUTTON');
   assert.ok(buttons.every((b) => hasClass(b.parent || {}, 'langswitch') || /^(FR|NL|EN|Plus)$/.test(text(b)) || hasClass(b, 'gr-more-btn') || hasClass(b, 'gv-guide-go')), `unexpected button(s): ${buttons.map(text).join(', ')}`);

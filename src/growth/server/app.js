@@ -14,11 +14,18 @@
 
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { proxySecretOk } from '../../shared/proxy-secret.js';
 import { readNordlaShared } from '../../shared/nordla-static.js';
 import { buildOverview } from './overview.js';
 import { createPrioritiesSource } from './priorities.js';
 
 const UI = new URL('../ui/', import.meta.url);
+/** The index page as served: the module base, and (hosted) the session bar script before app.js. */
+function servedPage(text, { hosted, basePath }) {
+  let page = text.replace('<base href="/growth/">', `<base href="${basePath}">`);
+  if (hosted) page = page.replace('<script src="app.js"></script>', '<script src="session.js"></script>\n<script src="app.js"></script>');
+  return page;
+}
 // Reused as-is from Analytics Premium (same design system; see header note).
 const ANALYTICS_UI = new URL('../../analytics-premium/ui/', import.meta.url);
 const JS = 'text/javascript; charset=utf-8';
@@ -61,13 +68,14 @@ const IMG = { svg: 'image/svg+xml', png: 'image/png', webp: 'image/webp' };
 // productPotential: the tenant's Potentiel produits source (server/products.js), created from the Growth server's context
 // (NORDLA_MERCHANT_ID). Nothing in a request can choose or change the merchant: the route reads no parameter at all.
 // audience / content / store: the tenant's Audience, Contenu and Croissance magasin sources (server/*.js), same contract.
-export function createGrowthApp({ now = () => new Date(), generalContext = null, productPotential = null, audience = null, content = null, store = null, merchantId = null, review = null, corrections = null, ads = null, site = null, siteReview = null, social = null, socialReview = null, inbox = null, inboxReview = null, dropoff = null, guide = null, hosted = false } = {}) {
+export function createGrowthApp({ proxySecret = null, basePath = '/', now = () => new Date(), generalContext = null, productPotential = null, audience = null, content = null, store = null, merchantId = null, review = null, corrections = null, ads = null, site = null, siteReview = null, social = null, socialReview = null, inbox = null, inboxReview = null, dropoff = null, guide = null, hosted = false } = {}) {
   const historyScope = merchantId ? createHash('sha256').update(String(merchantId)).digest('hex') : null;
   const priorities = createPrioritiesSource({ productPotential, audience, content, store, ads, site, social, inbox, general: generalContext, now });
   const send = (res, status, type, body) => { res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', ...SECURITY_HEADERS }); res.end(body); };
   const json = (res, status, obj) => send(res, status, 'application/json', JSON.stringify(obj));
   return async function handle(req, res) {
     try {
+      if (!proxySecretOk(req, proxySecret)) return json(res, 403, { error: { code: 'PROXY_SECRET_REQUIRED' } }); // behind the Nordla gateway only
       const url = new URL(req.url, 'http://localhost');
       if (req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { error: { code: 'METHOD_NOT_ALLOWED' } });
       // HOSTED (hosted.js): the sign-in and server-side follow-up script is in the page and served only then
@@ -75,7 +83,7 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
       if (STATIC[url.pathname]) {
         const [base, file, type] = STATIC[url.pathname];
         const body = await readFile(new URL(file, base));
-        return send(res, 200, type, hosted && url.pathname === '/' ? String(body).replace('<script src="/app.js"></script>', '<script src="/session.js"></script>\n<script src="/app.js"></script>') : body);
+        return send(res, 200, type, url.pathname === '/' ? servedPage(String(body), { hosted, basePath }) : body);
       }
       const shared = await readNordlaShared(url.pathname);
       if (shared) return send(res, 200, shared.type, shared.body);

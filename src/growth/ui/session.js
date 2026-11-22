@@ -56,7 +56,7 @@ var growthHosted = (() => {
     const run = (store.chain.get(key) ?? Promise.resolve()).then(async () => {
       let value; try { value = JSON.parse(raw); } catch { return; }
       const cur = store.entries.get(key);
-      const r = await api('/api/growth/follow-up', { method: 'PUT', body: JSON.stringify({ key, value, expected_version: before?.version ?? 0 }) }).catch(() => ({ ok: false, status: 0, body: null }));
+      const r = await api('api/growth/follow-up', { method: 'PUT', body: JSON.stringify({ key, value, expected_version: before?.version ?? 0 }) }).catch(() => ({ ok: false, status: 0, body: null }));
       if (r.ok) { const e = store.entries.get(key); if (e) e.version = r.body.version; renderBar(); return; }
       // refused: the screen must not pretend it is saved
       if (r.status === 409) { state.message = t('gr.session.conflict'); await hydrate(); }
@@ -68,7 +68,7 @@ var growthHosted = (() => {
   };
 
   async function hydrate() {
-    const r = await api('/api/growth/follow-up');
+    const r = await api('api/growth/follow-up');
     if (!r.ok) throw Object.assign(new Error('follow-up'), { status: r.status });
     state.scope = r.body.merchant_scope;
     store.entries = new Map(r.body.entries.map((e) => [e.key, { raw: JSON.stringify(e.value), version: e.version }]));
@@ -92,7 +92,7 @@ var growthHosted = (() => {
     let ok = 0;
     for (const key of [...state.importable]) {
       let value; try { value = JSON.parse(localStorage.getItem(key)); } catch { continue; }
-      const r = await api('/api/growth/follow-up', { method: 'PUT', body: JSON.stringify({ key, value, expected_version: 0 }) }).catch(() => ({ ok: false }));
+      const r = await api('api/growth/follow-up', { method: 'PUT', body: JSON.stringify({ key, value, expected_version: 0 }) }).catch(() => ({ ok: false }));
       if (r.ok) { store.entries.set(key, { raw: JSON.stringify(value), version: r.body.version }); ok += 1; }
     }
     state.done = ok; findImportable(); renderBar();
@@ -105,7 +105,7 @@ var growthHosted = (() => {
     if (!email.trim() || !password) { state.loginError = t('gr.session.missing'); return showLogin(); }
     state.busy = true; state.loginError = ''; showLogin();
     try {
-      const r = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: email.trim(), password }) });
+      const r = await api('api/auth/login', { method: 'POST', body: JSON.stringify({ email: email.trim(), password }) });
       if (r.ok && r.body && r.body.ok) { state.busy = false; return boot(state.route); }
       state.loginError = (r.body && r.body.message) || t('gr.session.failed');
     } catch { state.loginError = t('gr.session.network'); }
@@ -130,18 +130,18 @@ var growthHosted = (() => {
     if (state.bar) state.bar.replaceChildren();
   }
   async function logout() {
-    try { await api('/api/auth/logout', { method: 'POST', body: '{}' }); } catch { /* the cookies are cleared server-side; the page goes to the sign-in anyway */ }
+    try { await api('api/auth/logout', { method: 'POST', body: '{}' }); } catch { /* the cookies are cleared server-side; the page goes to the sign-in anyway */ }
     state.role = null; state.message = null; state.importable = []; state.done = null; showLogin();
   }
 
   /** Called by app.js instead of route(): sign in if needed, load the merchant's follow-up, then show the screen. */
   async function boot(route) {
     state.route = route; applyServerText();
-    let s = null; try { s = (await api('/api/auth/session')).body; } catch { s = null; }
+    let s = null; try { s = (await api('api/auth/session')).body; } catch { s = null; }
     if (!s || s.mode !== 'session') { state.loginError = t('gr.session.network'); return showLogin(); }
     if (!s.authenticated) return showLogin();
     state.role = s.role ?? null;
-    try { const hm = (await api('/api/growth/home')).body; state.home = hm && typeof hm.url === 'string' && /^https:\/\//.test(hm.url) ? hm.url : null; } catch { state.home = null; } // a missing link never blocks the screen
+    try { const hm = (await api('api/growth/home')).body; state.home = hm && typeof hm.url === 'string' && /^https:\/\//.test(hm.url) ? hm.url : null; } catch { state.home = null; } // a missing link never blocks the screen
     try { await hydrate(); } catch (e) { if (e.status === 401) return showLogin(); return showBlocked(e.status === 403 ? 'gr.session.denied' : 'gr.session.unavailable', e.status !== 403); } // never open the screen on a follow-up that failed to load: a later save would hide what the server holds
     renderBar(); route();
   }

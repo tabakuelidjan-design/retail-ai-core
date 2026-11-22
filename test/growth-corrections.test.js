@@ -91,7 +91,7 @@ test('DC-6 screen: one primary download, one discreet link per category, plain r
     const ui = await growthDom(hash, { opportunities }); assert.deepEqual(ui.errors, []);
     const links = all(ui.root, (n) => n.tagName === 'A' && n.getAttribute('data-export'));
     assert.deepEqual(links.map((a) => a.getAttribute('data-export')), ['all', 'missingSku', 'noType']);
-    assert.deepEqual(links.map((a) => a.getAttribute('href')), ['/api/growth/corrections?category=all', '/api/growth/corrections?category=missingSku', '/api/growth/corrections?category=noType']);
+    assert.deepEqual(links.map((a) => a.getAttribute('href')), ['api/growth/corrections?category=all', 'api/growth/corrections?category=missingSku', 'api/growth/corrections?category=noType']);
     assert.ok(hasClass(links[0], 'gv-primary') && !hasClass(links[1], 'gv-primary'));
     assert.match(text(links[0]), /Télécharger le dossier de correction/); assert.match(text(links[1]), /Exporter cette catégorie/);
   }

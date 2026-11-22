@@ -26,6 +26,7 @@ import { createHandoffVerifier, openSessionForHandoff, HANDOFF_MIN_SECRET_LENGTH
 import { createIdentityService, loadIdentityServiceEnv } from '../../identity/service.js';
 import { createHttpSecurity } from '../../security/index.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/client.js';
+import { proxySecretOk, requiredProxySecret } from '../../shared/proxy-secret.js';
 
 /** The hosted configuration of Growth: the Sourcing checks with Growth's names (the Sourcing merchant-profile requirement does not apply). */
 export function growthHostedConfig(env = process.env) {
@@ -52,12 +53,14 @@ export function buildGrowthGate(env, hosted, services = null) {
 
 export async function startGrowthHosted({ env = process.env, log = console.log, port = Number(env.GROWTH_PORT || env.PORT || 8788), services = null, fetchImpl } = {}) {
   const hosted = growthHostedConfig(env);
+  const proxySecret = requiredProxySecret(env); // the Core gateway's secret: nothing starts without it
+  const basePath = env.NORDLA_MODULE_BASE || '/';
   if (hosted.supabaseRef) log(`Supabase project check (${hosted.supabaseRef}): ${await verifyPinnedProject(env, hosted, fetchImpl ? { fetchImpl } : {})}`);
   const sources = services?.sources ?? await buildGrowthSources(env, { log });
   if (sources.merchantId !== hosted.merchantId) throw Object.assign(new Error('the resolved merchant is not NORDLA_MERCHANT_ID'), { code: 'HOSTED_MERCHANT_MISMATCH' });
   const gate = buildGrowthGate(env, hosted, services);
   const { guide, ...rest } = sources;
-  const app = createGrowthApp({ ...rest, guide: { previewUrl: null, isPreview: false, hosted: true }, hosted: true });
+  const app = createGrowthApp({ ...rest, guide: { previewUrl: null, isPreview: false, hosted: true }, hosted: true, proxySecret, basePath });
   const store = services?.store ?? createSupabaseFollowUpStore(sources.supabase ?? createSupabaseClient(loadSupabaseConfigFromEnv(env)));
   const historyScope = createHash('sha256').update(hosted.merchantId).digest('hex');
   const collectOrigins = String(env.GROWTH_COLLECT_ORIGINS ?? 'https://habb.be').split(',').map((s) => s.trim()).filter(Boolean); // the shop origins allowed to send personalizer events
@@ -66,7 +69,11 @@ export async function startGrowthHosted({ env = process.env, log = console.log, 
   const ssoOnly = env.NORDLA_SSO_ONLY === '1';
   if (ssoOnly && !sso) throw new Error('SSO-only Growth requires a configured Nordla handoff');
   const handler = createHostedGrowth({ gate, merchantId: hosted.merchantId, historyScope, app, store, collect, sso, ssoOnly, homeUrl: (() => { try { const u = new URL(String(env.NORDLA_HOME_URL ?? '').trim()); return u.protocol === 'https:' && !u.username && !u.password ? u.origin : null; } catch { return null; } })() });
-  const server = http.createServer(handler);
+  const guarded = (req, res) => { // a request without the Core gateway's secret is refused before anything else
+    if (!proxySecretOk(req, proxySecret)) { res.writeHead(403, { 'content-type': 'application/json', 'cache-control': 'no-store' }); return res.end(JSON.stringify({ error: { code: 'PROXY_SECRET_REQUIRED' } })); }
+    return handler(req, res);
+  };
+  const server = http.createServer(guarded);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, hosted.host, resolve); });
   log(`Nordla Growth HOSTED for ${hosted.origin}: Core identity sign-in (module growth, merchant ${hosted.merchantId}), follow-up on the server, port ${server.address().port}.`);
   return { server, port: server.address().port };

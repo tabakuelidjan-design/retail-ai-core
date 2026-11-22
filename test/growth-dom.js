@@ -87,6 +87,7 @@ export async function growthDom(hash, { products = potentialPayload(), productsS
   };
   ctx.window = ctx; ctx.window.addEventListener = (e, f) => { listeners[e] = f; }; ctx.window.scrollTo = () => {};
   vm.createContext(ctx);
+  { const stubFetch = ctx.fetch; ctx.fetch = (u) => stubFetch(String(u).replace(/^api\//, '/api/')); } // the page calls relative 'api/…' (served under /growth/ behind Core)
   for (const f of [new URL('i18n.js', ANALYTICS_UI), new URL('lang-fr.js', UI), new URL('lang-nl.js', UI), new URL('lang-en.js', UI), new URL('persist.js', UI), new URL('guide.js', UI), new URL('pipeline.js', UI), new URL('inbox.js', UI), new URL('opportunities.js', UI), new URL('potential.js', UI), new URL('audience.js', UI), new URL('content.js', UI), new URL('store.js', UI), new URL('dropoff.js', UI), new URL('app.js', UI)]) vm.runInContext(await readFile(f, 'utf8'), ctx, { filename: f.pathname });
   await new Promise((r) => setTimeout(r, 20));
   const navigate = async (h) => { ctx.location.hash = h; await listeners.hashchange(); };

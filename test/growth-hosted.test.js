@@ -66,7 +66,7 @@ const put = (srv, token, key, value, expected = 0, extra = {}) => srv.req('/api/
 test('HOS-1 the page and its scripts need no session; every API route needs one; the hosted script is served only to the hosted app', async () => {
   const srv = await boot();
   try {
-    const page = await srv.req('/'); assert.equal(page.status, 200); assert.ok(page.raw.includes('<script src="/session.js"></script>') && page.raw.includes('/persist.js'), 'the hosted page loads the sign-in script');
+    const page = await srv.req('/'); assert.equal(page.status, 200); assert.ok(page.raw.includes('<script src="session.js"></script>') && page.raw.includes('persist.js'), 'the hosted page loads the sign-in script');
     assert.equal((await srv.req('/session.js')).status, 200); assert.equal((await srv.req('/persist.js')).status, 200); assert.equal((await srv.req('/nordla-ds.css')).status, 200);
     assert.equal((await srv.req('/healthz')).status, 200);
     for (const p of ['/api/growth/overview', '/api/growth/opportunities', '/api/growth/corrections', '/api/growth/review', '/api/growth/follow-up', '/api/growth/store']) assert.equal((await srv.req(p)).status, 401, `${p} without a session`);
@@ -178,7 +178,7 @@ async function browser(srv, { local = {}, lang = 'fr' } = {}) {
   const jar = new Map(); const ls = new Map(Object.entries(local)); const errors = [];
   const cookieHeader = () => [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
   const realFetch = async (path, init = {}) => {
-    const r = await fetch(srv.base + path, { ...init, headers: { ...(init.headers ?? {}), cookie: cookieHeader() } });
+    const r = await fetch(srv.base + (path.startsWith('api/') ? '/' + path : path), { ...init, headers: { ...(init.headers ?? {}), cookie: cookieHeader() } });
     for (const sc of r.headers.getSetCookie()) { const kv = sc.split(';')[0]; const i = kv.indexOf('='); const k = kv.slice(0, i); const v = kv.slice(i + 1); if (v === '') jar.delete(k); else jar.set(k, v); }
     return r;
   };
