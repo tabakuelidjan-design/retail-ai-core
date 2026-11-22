@@ -526,13 +526,15 @@ async function openFinance() {
   const panel = o.querySelector('[data-nx-finance]');
   const fail = () => { const loading = panel.querySelector('.nx-finance-loading'); if (loading) { loading.textContent = 'Finance n’a pas pu s’ouvrir. Revenez à l’accueil et réessayez.'; loading.setAttribute('role', 'alert'); } };
   try {
+    // the UI script downloads while the module session is opened: both wait on the same click, not one after the other
+    const embed = loadFinanceEmbed(); embed.catch(() => {}); // a failure is reported where the embed is awaited
     const r = await api('/api/core/finance/open', { method: 'POST', body: '{}' });
     const target = new URL(r.url, window.location.href);
     if (target.origin !== window.location.origin || !target.pathname.startsWith('/finance/sso')) throw new Error('Finance URL is not on the Core origin');
     // the module session is opened in the background (same origin, no navigation); the browser address does not change
     const res = await fetch(target.href, { credentials: 'same-origin', cache: 'no-store' }); await res.body?.cancel();
     if (!res.ok) throw new Error('finance session');
-    await loadFinanceEmbed();
+    await embed;
     if (!panel.isConnected) return; // the person left Finance meanwhile
     const host = document.createElement('div'); host.className = 'nxf-host';
     panel.replaceChildren(host);

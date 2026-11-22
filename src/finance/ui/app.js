@@ -1354,6 +1354,10 @@ try {
 } catch (e) { pendingBankReturn = null; }
 
 async function route() {
+  // Inside Core: the Finance frame (header and horizontal menu) appears at once, before the session answer; the screen follows.
+  if (!state.csrf && typeof finApiBase === 'string' && finApiBase) {
+    show(h('div', { class: 'shell shell-embedded' }, h('div', { class: 'mainarea' }, h('nav', { class: 'fin-hnav', 'aria-label': 'Finance navigation' }, FIN_HNAV.map(([href, label]) => h('a', { href }, tr(label)))), h('main', { class: 'main premium' }, h('p', { class: 'muted', role: 'status' }, tt('Loading...'))))));
+  }
   // One request instead of two at startup: the session answer carries the settings when signed in.
   if (!state.csrf) { try { const s = await api('GET', 'api/session?include=settings'); if (s.authenticated) { state.csrf = s.csrf; state.nordlaHome = s.nordlaHome || null; await loadSettings(s.settings); } else return renderLogin(); } catch (e) { return renderLogin(); } }
   if (pendingBankReturn) { const ret = pendingBankReturn; pendingBankReturn = null; await processBankReturn(ret); }

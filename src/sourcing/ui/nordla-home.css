@@ -524,8 +524,11 @@ body.sl-mode main:has(.nx-home) { max-width: none; width: 100%; margin: 0; paddi
 
 /* Finance occupies Core's central workspace; its own page scrolls inside the panel while Core navigation stays visible. */
 .nx-finance-core .nx-h-main { min-width: 0; }
-.nx-finance-panel { height: calc(100vh - 42px); min-height: 520px; overflow: hidden; border: 1px solid var(--nx-line); border-radius: 12px; background: #F5F7FA; position: relative; }
-.nxf-host { display: block; width: 100%; height: 100%; min-height: 0; overflow: auto; background: #F5F7FA; } /* the Finance UI mounts here (Shadow DOM): its own styles stay inside */
+.nx-finance-panel { height: auto; min-height: 520px; overflow: visible; border: 0; border-radius: 12px; background: #F5F7FA; position: relative; }
+.nxf-host { display: block; width: 100%; height: auto; min-height: 0; overflow: visible; background: #F5F7FA; } /* the Finance UI mounts here (Shadow DOM): its own styles stay inside */
+/* One vertical scrollbar only: the overlay page scrolls; Core's menu column and the document do not scroll on their own while Finance is open. */
+@media (min-width: 900px) { .nx-finance-core .nx-home-side { position: static; height: auto; overflow: visible; } }
+html:has(.nx-finance-core) { overflow: hidden; }
 .nx-finance-loading { position: absolute; z-index: 1; left: 16px; top: 12px; margin: 0; padding: 8px 12px; border-radius: 8px; background: #FFFFFF; color: var(--nx-muted); }
 .nx-finance-loading[hidden] { display: none; }
 @media (max-width: 899px) {
