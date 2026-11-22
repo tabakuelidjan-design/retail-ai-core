@@ -107,6 +107,10 @@ export function createFinanceApp(deps) {
     'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', 'Cross-Origin-Resource-Policy': 'same-origin', ...(deps.secureCookie ? { 'Strict-Transport-Security': 'max-age=31536000' } : {}), ...extra,
   });
   // Server-Timing (safe: durations only, no ticket, no secret): the total time the application spent on this request, and its named steps.
+  // Simultaneous access re-checks for the SAME session, merchant and module share one check while it runs; it is removed when it ends
+  // (success or failure). No authorisation result is kept after its answer; an error means refused (the caller treats null as refused).
+  const inFlightAccess = new Map();
+  const sharedAccess = (key, fn) => { const running = inFlightAccess.get(key); if (running) return running; const p = (async () => { try { return await fn(); } finally { inFlightAccess.delete(key); } })(); inFlightAccess.set(key, p); return p; };
   const timed = async (res, name, fn) => { const t = performance.now(); try { return await fn(); } finally { res.__timings?.push(`${name};dur=${(performance.now() - t).toFixed(1)}`); } };
   const send = (res, status, body, extra = {}) => { const now = performance.now(); const timing = res.__t0 !== undefined ? [`app;dur=${(now - res.__t0).toFixed(1)}`, ...(res.__route ? [`route;desc="${res.__route.path}";dur=${(now - res.__route.t).toFixed(1)}`] : []), ...(res.__timings ?? [])].join(', ') : null; res.writeHead(status, headers(timing ? { ...extra, 'Server-Timing': timing } : extra)); res.end(body); };
   const staticAssets = createStaticAssets({ resolve: async (pathname) => (await readNordlaShared(pathname)) ?? (STATIC[pathname] ? { body: await readFile(new URL(STATIC[pathname][0], UI)), type: STATIC[pathname][1] } : null) });
@@ -1463,7 +1467,8 @@ export function createFinanceApp(deps) {
       if (deps.ssoOnly && openedSid && !sessions.get(openedSid)?.sso) sessions.delete(openedSid);
       if (openedSid && sessions.get(openedSid)?.sso) {
         const sso = sessions.get(openedSid).sso;
-        const again = deps.sso?.checkAccess ? await timed(res, 'access', () => deps.sso.checkAccess({ merchantId, userId: sso.userId, role: sso.role, module: 'finance', ...(sso.authSessionId ? {authSessionId:sso.authSessionId} : {}) }).catch(() => null)) : null;
+        const accessKey = createHash('sha256').update(`${openedSid}|${merchantId}|finance`).digest('hex'); // the key is a hash: no session value is kept in clear
+        const again = deps.sso?.checkAccess ? await timed(res, 'access', () => sharedAccess(accessKey, () => deps.sso.checkAccess({ merchantId, userId: sso.userId, role: sso.role, module: 'finance', ...(sso.authSessionId ? {authSessionId:sso.authSessionId} : {}) }).catch(() => null))) : null;
         if (!again?.ok) sessions.delete(openedSid);
       }
       const route = routes.map((r) => ({ r, m: r.method === req.method ? r.re.exec(url.pathname) : null })).find((x) => x.m);
