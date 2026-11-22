@@ -36,7 +36,7 @@ test('Finance starts promptly: the UI script loads in parallel with the module s
   assert.match(app, /await embed;/);
   // the session checks are unchanged
   assert.match(app, /target\.origin !== window\.location\.origin \|\| !target\.pathname\.startsWith\('\/finance\/sso'\)/);
-  assert.match(app, /if \(!res\.ok\) throw new Error\('finance session'\)/);
+  assert.match(app, /if \(!\(res\.type === 'opaqueredirect' \|\| res\.ok\)\) throw new Error\('finance session'\)/);
 });
 
 test('Finance draws its frame (header and horizontal menu) before the session answer when embedded', async () => {
