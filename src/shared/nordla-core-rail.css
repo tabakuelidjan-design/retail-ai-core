@@ -20,3 +20,9 @@
   .shell.nordla-frame.menu-open .corerail { transform: translateX(0); }
   .menu-toggle { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 10px; border: 1px solid #E6E9EF; background: #fff; color: #0F1B2D; font-size: 20px; cursor: pointer; flex: 0 0 auto; }
 }
+/* Computer: the Core column stays fixed at the left edge while the page scrolls (the page content starts after it). */
+@media (min-width: 901px) {
+  .shell.nordla-frame { display: block; min-height: 0; }
+  .corerail { position: fixed; top: 0; left: 0; bottom: 0; width: 232px; height: auto; z-index: 40; }
+  .shell.nordla-frame > .mainarea { margin-left: 232px; min-width: 0; }
+}
