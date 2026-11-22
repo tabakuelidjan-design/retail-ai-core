@@ -8,10 +8,16 @@
 <title>Nordla Achats</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/nordla-core-rail.css">
 <link rel="stylesheet" href="app.css">
+<script src="/nordla-core-rail.js" defer></script>
 </head>
 <body>
+<div class="shell">
+<div data-nordla-core-rail="procurement"></div>
+<div class="mainarea">
 <header class="top">
+  <span data-nordla-core-toggle></span>
   <button id="back" class="ghost" aria-label="Retour" hidden>‹</button>
   <div class="title"><strong id="title">Achats</strong><span id="subtitle" class="muted"></span></div>
   <a id="nordla-home" class="homelink" hidden>Accueil Nordla</a><span id="net" class="badge b-live">En ligne</span>
@@ -26,6 +32,8 @@
   <button data-tab="orders">Achats</button>
   <button data-tab="stock">Stock</button>
 </nav>
+</div>
+</div>
 <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -2,6 +2,7 @@
 // alone - cases kept on disk, the Safety Gate cache, PDF text, optional ECB rates and an optional AI provider. Every /api route needs the token.
 import { procurementUserFor } from '../../procurement/server/hosted.js';
 import { redirectTarget } from './canonical.js';
+import { readNordlaShared } from '../../shared/nordla-static.js';
 import { WRITER_ROLES, READ_ONLY_POSTS as READ_ONLY_POSTS_LIST } from '../../identity/permissions.js';
 import { randomUUID } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
@@ -208,6 +209,7 @@ export function createSourcingApp({ redirect = null, release = { sha: 'unknown',
       if (videos && await videos.handle(req, res, url)) return; // the video drafts (staging module, only when built): /videos, /video-assets/*, /api/videos*
       if (url.pathname.startsWith('/api/')) return await api(req, res, url);
       if (req.method !== 'GET') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
+      if (url.pathname === '/nordla-core-rail.js' || url.pathname === '/nordla-core-rail.css') { const shared = await readNordlaShared(url.pathname); if (shared) { res.writeHead(200, { 'content-type': shared.type, 'cache-control': 'no-cache' }); return res.end(shared.body); } } // Core menu of the shared Nordla frame (src/shared/nordla-core-rail.js)
       if (procurement && (url.pathname === '/procurement' || url.pathname.startsWith('/procurement/'))) return await procurement.handleStatic(req, res, url); // Stock / Achats phone screens (static files only; its data stays behind /api/procurement/*)
       if (voice && await voice.handle(req, res, url.pathname)) return;
       if (STATIC[url.pathname]) return await serveStatic(res, STATIC[url.pathname], uiDir);

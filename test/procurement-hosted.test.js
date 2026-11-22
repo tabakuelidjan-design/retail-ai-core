@@ -51,7 +51,7 @@ test('the phone screens are served under /procurement/ (static only), with relat
   const m = await mount(mkdtempSync(join(tmpdir(), 'nordla-h-'))); t.after(() => m.close());
   const bare = await m.call('GET', '/procurement', { as: null }); assert.equal(bare.status, 301); assert.equal(bare.headers.get('location'), '/procurement/');
   const idx = await m.call('GET', '/procurement/', { as: null }); assert.equal(idx.status, 200); assert.match(idx.headers.get('content-type'), /text\/html/); assert.match(idx.headers.get('content-security-policy'), /script-src 'self'/); assert.equal(idx.headers.get('x-frame-options'), 'DENY');
-  assert.doesNotMatch(idx.text, /(?:src|href)="\//, 'no absolute asset URL: the page works from /procurement/ as well as from /'); assert.match(idx.text, /src="app\.js"/);
+  assert.doesNotMatch(idx.text, /(?:src|href)="\/(?!nordla-core-rail\.(?:js|css)")/, 'no absolute asset URL, except the shared Core frame (served by Core): the page works from /procurement/ as well as from /'); assert.match(idx.text, /src="app\.js"/);
   for (const f of ['app.js', 'api.js', 'logic.js', 'screens-v1.js', 'outbox.js', 'app.css', 'sw.js', 'manifest.webmanifest', 'icon.svg']) assert.equal((await m.call('GET', `/procurement/${f}`, { as: null })).status, 200, f);
   const man = JSON.parse((await m.call('GET', '/procurement/manifest.webmanifest', { as: null })).text); assert.equal(man.start_url, '.'); assert.equal(man.scope, '.');
   for (const bad of ['/procurement/../package.json', '/procurement/%2e%2e/package.json', '/procurement/data.json', '/procurement/..%5Cx.js', '/procurement/a/b.js']) assert.equal((await m.call('GET', bad, { as: null })).status, 404, bad);
