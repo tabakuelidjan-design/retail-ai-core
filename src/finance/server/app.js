@@ -68,6 +68,9 @@ const ID = /^[A-Za-z0-9_-]{1,64}$/;
 const MERCHANT_ACTOR = { type: 'merchant', id: 'dashboard' };
 const LOCAL_HOST = /^(127\.0\.0\.1|localhost|\[::1\])(:\d+)?$/;
 const SESSION_MS = 8 * 3600 * 1000;
+// A session opened by Core before anyone clicks (a preparation on hover) is UNCONFIRMED: it expires quickly and reads no data.
+// The first explicit start of the Finance screen (GET /api/session?include=settings) confirms it and gives it the normal lifetime.
+const UNCONFIRMED_SESSION_MS = 2 * 60 * 1000;
 const NOT_FOUND_CODES = ['BANK_TRANSACTION_NOT_FOUND', 'DOCUMENT_NOT_FOUND', 'COMPANY_NOT_FOUND', 'INBOX_ITEM_NOT_FOUND', 'STOCK_MOVEMENT_NOT_FOUND', 'ATTACHMENT_NOT_FOUND', 'DUPLICATE_NOT_FOUND', 'TARGET_NOT_FOUND', 'PAYMENT_NOT_FOUND', 'ALLOCATION_NOT_FOUND'];
 const UNPROCESSABLE = ['INPUT_INVALID', 'DUPLICATE_DECISION_INVALID', 'NOT_READY_FOR_APPROVAL', 'NOT_READY_TO_ISSUE', 'QUOTE_NOT_READY', 'CREDIT_EXCEEDS_INVOICE', 'PAYMENT_AMOUNT_INVALID', 'PAYMENT_DATE_INVALID', 'PAYMENT_EXCEEDS_REMAINING', 'CORRECTION_REQUIRES_A_REFERENCE', 'CREDIT_NOTE_INVALID', 'BANK_CSV_EMPTY', 'BANK_CSV_COLUMNS_NOT_FOUND', 'BANK_CSV_ROWS_INVALID', 'BANK_CSV_ENCODING_INVALID', 'CASH_AMOUNT_INVALID', 'CASH_DATE_INVALID', 'CASH_KIND_INVALID', 'ATTACHMENT_EMPTY', 'ATTACHMENT_TOO_LARGE', 'ATTACHMENT_TYPE_NOT_ALLOWED', 'SOURCE_INVALID', 'PAID_ON_INVALID', 'AMOUNT_INVALID', 'REASON_REQUIRED', 'PAYMENT_OVER_ALLOCATED', 'REVERSAL_EXCEEDS_ALLOCATION', 'REVERSAL_EXCEEDS_PAYMENT', 'CORRECTION_EXCEEDS_PAID', 'CURRENCY_MISSING', 'CREDIT_CURRENCY_MISMATCH', 'PAYMENT_METHOD_INVALID', 'PAYMENT_SOURCE_INVALID', 'IDEMPOTENCY_KEY_INVALID', 'REFUND_EXCEEDS_CREDIT_NOTE', 'REFUND_EXCEEDS_REFUNDABLE', 'REFUND_EXCEEDS_PAYMENT', 'REFUND_REQUIRES_AN_ISSUED_CREDIT_NOTE', 'ALLOCATION_DUPLICATE_TARGET', 'CURRENCY_MISMATCH'];
 
@@ -385,6 +388,7 @@ export function createFinanceApp(deps) {
     // ?include=settings (startup): a signed-in browser also receives exactly what GET /api/settings returns, saving one round trip.
     // Never included for an anonymous caller.
     const withSettings = s && ctx.url.searchParams.get('include') === 'settings';
+    if (withSettings && s.unconfirmed) { s.expires = Date.now() + SESSION_MS; delete s.unconfirmed; sessions.set(cookies(ctx.req)[COOKIE], s); } // the explicit start confirms the session
     json(ctx.res, 200, s ? { authenticated: true, csrf: s.csrf, ...(deps.homeUrl ? { nordlaHome: deps.homeUrl } : {}), ...(withSettings ? { settings: await settingsPayload() } : {}) } : { authenticated: false });
   }, { public: true });
 
@@ -1433,7 +1437,7 @@ export function createFinanceApp(deps) {
     }
     failures.delete(ip);
     const sid = randomBytes(32).toString('hex');
-    sessions.set(sid, { csrf: randomBytes(24).toString('hex'), expires: Date.now() + SESSION_MS, ...(r.claims ? { sso: { userId: r.claims.userId, role: r.access?.role ?? r.claims.role, ...(r.claims.authSessionId ? {authSessionId:r.claims.authSessionId} : {}) } } : {}) });
+    sessions.set(sid, { csrf: randomBytes(24).toString('hex'), expires: Date.now() + UNCONFIRMED_SESSION_MS, unconfirmed: true, ...(r.claims ? { sso: { userId: r.claims.userId, role: r.access?.role ?? r.claims.role, ...(r.claims.authSessionId ? {authSessionId:r.claims.authSessionId} : {}) } } : {}) });
     await audit({ at: clock.now(), action: 'LOGIN_SSO' });
     const openId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(url.searchParams.get('open') ?? '') ? url.searchParams.get('open').toLowerCase() : null; // a landing hint (which supplier-invoice file to show): it is not a credential, the page reads it under the session
     send(res, 302, '', { Location: openId ? `/#/purchases?open=${openId}` : '/', 'Cache-Control': 'no-store', 'Set-Cookie': `${COOKIE}=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${cookieFlags}` });
@@ -1467,6 +1471,7 @@ export function createFinanceApp(deps) {
       if (!route.r.public) {
         session = sessionOf(req);
         if (!session) throw new HttpError(401, 'AUTHENTICATION_REQUIRED');
+        if (session.unconfirmed && url.pathname !== '/api/logout') throw new HttpError(401, 'SESSION_UNCONFIRMED'); // a preparation without a click reads nothing (it can still end itself)
       }
       if (mutating) {
         const origin = req.headers.origin;

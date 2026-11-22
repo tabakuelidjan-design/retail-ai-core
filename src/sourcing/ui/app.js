@@ -528,8 +528,8 @@ function prepareFinance() {
     // the module session is opened in the background (same origin, no navigation); the browser address does not change
     const res = await fetch(target.href, { credentials: 'same-origin', cache: 'no-store' }); await res.body?.cancel();
     if (!res.ok) throw new Error('finance session');
-    // the first session answer, fetched now and handed to Finance (the server still checks every request)
-    return fetch('/finance/api/session?include=settings', { credentials: 'same-origin', cache: 'no-store' }).then((s) => (s.ok ? s.json() : null)).catch(() => null);
+    // no session call on interest: the session stays unconfirmed (it reads no data) until the explicit start on click
+    return null;
   })();
   ready.catch(() => {});
   financePrepared = { at: Date.now(), embed, ready };
@@ -540,6 +540,19 @@ const onFinanceInterest = (e) => { if (e.target && e.target.closest && e.target.
 document.addEventListener('pointerover', onFinanceInterest, { passive: true });
 document.addEventListener('focusin', onFinanceInterest);
 document.addEventListener('touchstart', onFinanceInterest, { passive: true });
+// The explicit start of the Finance screen: confirms the session and returns the first answer (settings). A preparation that expired
+// (two minutes without a click) is prepared again, once.
+async function fetchFinanceStart() {
+  return fetch('/finance/api/session?include=settings', { credentials: 'same-origin', cache: 'no-store' }).then((x) => (x.ok ? x.json() : null)).catch(() => null);
+}
+async function startFinanceSession() {
+  const first = await fetchFinanceStart();
+  if (first && first.authenticated) return first;
+  financePrepared = null; await prepareFinance().ready;
+  const again = await fetchFinanceStart();
+  if (!again || !again.authenticated) throw new Error('finance session');
+  return again;
+}
 async function openFinance() {
   S.parlePage = false;
   const o = $('#overlay'); o.hidden = false; o.className = 'show nxa-overlay';
@@ -556,7 +569,8 @@ async function openFinance() {
     // the handshake and the UI script were prepared when the person showed interest (hover or focus); the click only waits for what is left
     const prepared = financePrepared && Date.now() - financePrepared.at < FINANCE_TICKET_WINDOW_MS ? financePrepared : prepareFinance();
     const { embed, ready } = prepared;
-    const session = await ready.catch(() => { financePrepared = null; return prepareFinance().ready; }); // a ticket is one-time: a stale preparation is redone once
+    await ready.catch(() => { financePrepared = null; return prepareFinance().ready; }); // a ticket is one-time: a stale preparation is redone once
+    const session = await startFinanceSession();
     await embed;
     if (!panel.isConnected) return; // the person left Finance meanwhile
     const host = document.createElement('div'); host.className = 'nxf-host';

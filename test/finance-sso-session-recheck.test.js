@@ -29,7 +29,10 @@ async function openedSession(a, role = 'OWNER') {
   const t = issueTicket({ secret: SECRET, merchantId: M, person: { userId: U, role, module: 'finance' } });
   const r = await fetch(`${a.base}/sso?t=${encodeURIComponent(t)}`, { redirect: 'manual' });
   assert.equal(r.status, 302, 'the Core ticket opens the session');
-  return r.headers.get('set-cookie').split(';')[0];
+  const cookie = r.headers.get('set-cookie').split(';')[0];
+  // the explicit start of the Finance screen confirms the session (an opened session reads no data until then)
+  assert.equal((await fetch(`${a.base}/api/session?include=settings`, { headers: { Cookie: cookie } })).status, 200, 'the explicit start confirms');
+  return cookie;
 }
 const session = (a, cookie) => fetch(`${a.base}/api/session`, { headers: cookie ? { Cookie: cookie } : {} }).then((r) => r.json());
 const overview = (a, cookie) => fetch(`${a.base}/api/overview`, { headers: cookie ? { Cookie: cookie } : {} });
