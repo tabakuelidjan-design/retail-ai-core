@@ -101,7 +101,7 @@ export function createGateway({ publicOrigin, services, authorize, modules = MOD
       // Finance is rendered inside Core's central page. The upstream still denies embedding directly; only this authenticated Core route permits its own origin.
       if (route.key === 'finance') {
         const policy = String(out['content-security-policy'] ?? '');
-        const withoutAncestors = policy.replace(/(?:^|;)\\s*frame-ancestors\\s+[^;]*/i, '').replace(/;\\s*$/, '');
+        const withoutAncestors = policy.replace(/(?:^|;)\s*frame-ancestors\s+[^;]*/i, '').replace(/;\s*$/, '');
         out['content-security-policy'] = `${withoutAncestors ? withoutAncestors + '; ' : ''}frame-ancestors 'self'`;
         out['x-frame-options'] = 'SAMEORIGIN';
       }
