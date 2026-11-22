@@ -1359,7 +1359,7 @@ async function route() {
     show(h('div', { class: 'shell shell-embedded' }, h('div', { class: 'mainarea' }, h('nav', { class: 'fin-hnav', 'aria-label': 'Finance navigation' }, FIN_HNAV.map(([href, label]) => h('a', { href }, tr(label)))), h('main', { class: 'main premium' }, h('p', { class: 'muted', role: 'status' }, tt('Loading...'))))));
   }
   // One request instead of two at startup: the session answer carries the settings when signed in.
-  if (!state.csrf) { try { const s = await api('GET', 'api/session?include=settings'); if (s.authenticated) { state.csrf = s.csrf; state.nordlaHome = s.nordlaHome || null; await loadSettings(s.settings); } else return renderLogin(); } catch (e) { return renderLogin(); } }
+  if (!state.csrf) { try { const s = finPrefetchedSession ? (finPrefetchedSession.authenticated ? finPrefetchedSession : await api('GET', 'api/session?include=settings')) : await api('GET', 'api/session?include=settings'); finPrefetchedSession = null; if (s.authenticated) { state.csrf = s.csrf; state.nordlaHome = s.nordlaHome || null; await loadSettings(s.settings); } else return renderLogin(); } catch (e) { return renderLogin(); } }
   if (pendingBankReturn) { const ret = pendingBankReturn; pendingBankReturn = null; await processBankReturn(ret); }
   const [path, qs] = (location.hash.slice(1) || '/').split('?'); const q = new URLSearchParams(qs || ''); const parts = path.split('/').filter(Boolean);
   try {

@@ -513,6 +513,33 @@ function loadFinanceEmbed() {
   });
   return financeEmbedLoad;
 }
+// Finance preparation, started when the person hovers or focuses the Finance menu item (Core session already in place):
+// the UI script, the one-time ticket exchange (a 60 s ticket, so it is redone when stale) and the first Finance session answer.
+// Every step is the same request the click used to make: entitlements, the ticket and the session checks run unchanged on the server.
+const FINANCE_TICKET_WINDOW_MS = 40000;
+let financePrepared = null;
+function prepareFinance() {
+  if (financePrepared && Date.now() - financePrepared.at < FINANCE_TICKET_WINDOW_MS) return financePrepared;
+  const embed = loadFinanceEmbed(); embed.catch(() => {});
+  const ready = (async () => {
+    const r = await api('/api/core/finance/open', { method: 'POST', body: '{}' });
+    const target = new URL(r.url, window.location.href);
+    if (target.origin !== window.location.origin || !target.pathname.startsWith('/finance/sso')) throw new Error('Finance URL is not on the Core origin');
+    // the module session is opened in the background (same origin, no navigation); the browser address does not change
+    const res = await fetch(target.href, { credentials: 'same-origin', cache: 'no-store' }); await res.body?.cancel();
+    if (!res.ok) throw new Error('finance session');
+    // the first session answer, fetched now and handed to Finance (the server still checks every request)
+    return fetch('/finance/api/session?include=settings', { credentials: 'same-origin', cache: 'no-store' }).then((s) => (s.ok ? s.json() : null)).catch(() => null);
+  })();
+  ready.catch(() => {});
+  financePrepared = { at: Date.now(), embed, ready };
+  return financePrepared;
+}
+// pointer, keyboard or touch interest in the Finance item prepares it (delegated: the menu is redrawn often)
+const onFinanceInterest = (e) => { if (e.target && e.target.closest && e.target.closest('[data-act="nx-open-finance"]')) prepareFinance(); };
+document.addEventListener('pointerover', onFinanceInterest, { passive: true });
+document.addEventListener('focusin', onFinanceInterest);
+document.addEventListener('touchstart', onFinanceInterest, { passive: true });
 async function openFinance() {
   S.parlePage = false;
   const o = $('#overlay'); o.hidden = false; o.className = 'show nxa-overlay';
@@ -526,19 +553,16 @@ async function openFinance() {
   const panel = o.querySelector('[data-nx-finance]');
   const fail = () => { const loading = panel.querySelector('.nx-finance-loading'); if (loading) { loading.textContent = 'Finance n’a pas pu s’ouvrir. Revenez à l’accueil et réessayez.'; loading.setAttribute('role', 'alert'); } };
   try {
-    // the UI script downloads while the module session is opened: both wait on the same click, not one after the other
-    const embed = loadFinanceEmbed(); embed.catch(() => {}); // a failure is reported where the embed is awaited
-    const r = await api('/api/core/finance/open', { method: 'POST', body: '{}' });
-    const target = new URL(r.url, window.location.href);
-    if (target.origin !== window.location.origin || !target.pathname.startsWith('/finance/sso')) throw new Error('Finance URL is not on the Core origin');
-    // the module session is opened in the background (same origin, no navigation); the browser address does not change
-    const res = await fetch(target.href, { credentials: 'same-origin', cache: 'no-store' }); await res.body?.cancel();
-    if (!res.ok) throw new Error('finance session');
+    // the handshake and the UI script were prepared when the person showed interest (hover or focus); the click only waits for what is left
+    const prepared = financePrepared && Date.now() - financePrepared.at < FINANCE_TICKET_WINDOW_MS ? financePrepared : prepareFinance();
+    const { embed, ready } = prepared;
+    const session = await ready.catch(() => { financePrepared = null; return prepareFinance().ready; }); // a ticket is one-time: a stale preparation is redone once
     await embed;
     if (!panel.isConnected) return; // the person left Finance meanwhile
     const host = document.createElement('div'); host.className = 'nxf-host';
     panel.replaceChildren(host);
-    window.__nordlaFinanceEmbed(host.attachShadow({ mode: 'open' }), { apiBase: '/finance/' });
+    window.__nordlaFinanceEmbed(host.attachShadow({ mode: 'open' }), { apiBase: '/finance/', session });
+    financePrepared = null; // the session answer is used once; later opens prepare again
   } catch { fail(); }
   o.scrollTop = 0;
 }

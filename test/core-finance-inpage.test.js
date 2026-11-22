@@ -32,8 +32,8 @@ test('Core mounts Finance in its central workspace: no iframe, no new window, th
   assert.match(screen, /window\.__nordlaFinanceEmbed\(host\.attachShadow/);
   assert.match(screen, /apiBase: '\/finance\/'/);
   // the module session is opened in the background, same origin, with the target checked first
-  assert.match(screen, /target\.origin !== window\.location\.origin/);
-  assert.match(screen, /startsWith\('\/finance\/sso'\)/);
+  assert.match(app, /target\.origin !== window\.location\.origin/);
+  assert.match(app, /startsWith\('\/finance\/sso'\)/);
   assert.doesNotMatch(screen, /window\.open|target="_blank"|window\.location\.assign|window\.location\.href\s*=/);
   assert.match(app, /document\.addEventListener\('nordla:finance', \(\) => openFinance\(\)\)/);
 });

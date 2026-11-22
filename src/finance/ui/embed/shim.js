@@ -93,5 +93,5 @@ function createFinanceEnv(root, options) {
     loc.hash = a.getAttribute('href');
   });
 
-  return { document: doc, location: loc, history, window: win, apiBase: options.apiBase };
+  return { document: doc, location: loc, history, window: win, apiBase: options.apiBase, prefetchedSession: options.session || null };
 }

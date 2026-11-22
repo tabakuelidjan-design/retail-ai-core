@@ -26,7 +26,7 @@ test('the mobile drawer is not changed: the menu column keeps its drawer positio
 
 test('Finance starts promptly: the UI script loads in parallel with the module session, not after it', async () => {
   const app = await read('../src/sourcing/ui/app.js');
-  const start = app.indexOf('async function openFinance()');
+  const start = app.indexOf('function prepareFinance()');
   const embedAt = app.indexOf('const embed = loadFinanceEmbed();', start);
   const openAt = app.indexOf("api('/api/core/finance/open'", start);
   const sessionAt = app.indexOf('await fetch(target.href', start);
@@ -69,4 +69,28 @@ test('the Finance embed is up to date with its sources after these changes', asy
 test('inside Core the Accueil Nordla link is removed from Finance header (the Core menu is the way back); standalone keeps it', async () => {
   const fin = await read('../src/finance/ui/app.js');
   assert.match(fin, /state\.nordlaHome && !embedded \? h\('a', \{ class: 'back-nordla'/, 'the link is drawn only outside the embedded layout');
+});
+
+test('Finance is prepared on interest (hover, focus, touch) and the click reuses it; the ticket window is bounded', async () => {
+  const app = await read('../src/sourcing/ui/app.js');
+  assert.match(app, /document\.addEventListener\('pointerover', onFinanceInterest, \{ passive: true \}\)/);
+  assert.match(app, /document\.addEventListener\('focusin', onFinanceInterest\)/);
+  assert.match(app, /document\.addEventListener\('touchstart', onFinanceInterest, \{ passive: true \}\)/);
+  assert.match(app, /const FINANCE_TICKET_WINDOW_MS = 40000;/, 'a 60 s ticket is reused for at most 40 s, then prepared again');
+  assert.match(app, /financePrepared && Date\.now\(\) - financePrepared\.at < FINANCE_TICKET_WINDOW_MS \? financePrepared : prepareFinance\(\)/);
+  // the ticket exchange stays one-time: a failed preparation is redone once, never reused
+  assert.match(app, /ready\.catch\(\(\) => \{ financePrepared = null; return prepareFinance\(\)\.ready; \}\)/);
+  // the server still validates the ticket and the session: the same endpoints, the same checks
+  assert.match(app, /fetch\('\/finance\/api\/session\?include=settings'/);
+  assert.match(app, /if \(target\.origin !== window\.location\.origin \|\| !target\.pathname\.startsWith\('\/finance\/sso'\)\)/);
+});
+
+test('the first Finance session answer is handed to the embed and used once; without it Finance asks as before', async () => {
+  const fin = await read('../src/finance/ui/app.js');
+  const shim = await read('../src/finance/ui/embed/shim.js');
+  const build = await read('../tools/build-finance-embed.mjs');
+  assert.match(shim, /prefetchedSession: options\.session \|\| null/);
+  assert.match(build, /let finPrefetchedSession = env\.prefetchedSession;/);
+  assert.match(fin, /finPrefetchedSession \? \(finPrefetchedSession\.authenticated \? finPrefetchedSession : await api\('GET', 'api\/session\?include=settings'\)\) : await api\('GET', 'api\/session\?include=settings'\)/);
+  assert.match(fin, /finPrefetchedSession = null;/);
 });
