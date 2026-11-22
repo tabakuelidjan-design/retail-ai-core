@@ -3,6 +3,7 @@
 window.NORDLA_DICTS = window.NORDLA_DICTS || {};
 window.NORDLA_DICTS.nl = {
   'brand.name': 'Nordla AI',
+  'nav.backCore': 'Terug naar Nordla',
 
   'nav.brief': 'Overzicht',
   'nav.changed': 'Wat is veranderd',

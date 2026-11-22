@@ -9,7 +9,7 @@ let cachedCustomers = null;
 async function loadCustomersIfNeeded() {
   if (cachedCustomers) return;
   try {
-    const res = await fetch(`/api/customers?${periodQuery()}`);
+    const res = await fetch(`api/customers?${periodQuery()}`);
     if (res.ok) cachedCustomers = await res.json();
     else { let code = null; try { code = (await res.json()).error.code; } catch (e) { code = null; } cachedCustomers = { available: false, periodError: code || 'GENERIC' }; }
   } catch (e) { /* surfaces as the empty state */ }
@@ -226,7 +226,7 @@ async function clOpen(id) {
   if (!clEscHandler) { clEscHandler = (e) => { if (e.key === 'Escape') clClose(); }; document.addEventListener('keydown', clEscHandler); }
   panel.querySelector('.cl-close')?.focus();
   if (!clDetails.has(id)) {
-    try { const res = await fetch(`/api/customers/detail?id=${encodeURIComponent(id)}&${periodQuery()}`); if (res.ok) clDetails.set(id, await res.json()); } catch (e) { /* shown below */ }
+    try { const res = await fetch(`api/customers/detail?id=${encodeURIComponent(id)}&${periodQuery()}`); if (res.ok) clDetails.set(id, await res.json()); } catch (e) { /* shown below */ }
   }
   if (clState.selected !== id || !panel.isConnected) return;
   const data = clDetails.get(id);

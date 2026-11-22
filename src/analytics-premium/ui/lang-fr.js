@@ -3,6 +3,7 @@
 window.NORDLA_DICTS = window.NORDLA_DICTS || {};
 window.NORDLA_DICTS.fr = {
   'brand.name': 'Nordla AI',
+  'nav.backCore': 'Retour à Nordla',
 
   'nav.brief': 'Point du matin',
   'nav.changed': 'Ce qui a changé',

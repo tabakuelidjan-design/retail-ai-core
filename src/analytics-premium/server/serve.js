@@ -12,6 +12,7 @@ import { pathToFileURL } from 'node:url';
 import { createAnalyticsPremiumApp } from './app.js';
 import { createAssistant, loadAssistantProvider } from './assistant.js';
 import { HostingConfigError, createGuard, resolveHosting } from './hosting.js';
+import { requiredProxySecret } from '../../shared/proxy-secret.js';
 import { reportRefreshState, runReportOnce, startSyncAwareRefresh } from './report-refresh.js';
 import { bindReportsTenant, datasetOwnedBy, resolveAnalyticsTenant, salesSourceOf } from './tenant.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/client.js';
@@ -48,7 +49,10 @@ export async function startAnalyticsServer({ env = process.env, supabase: inject
   const { status: providerStatus, provider } = loadAssistantProvider(env);
   const ask = createAssistant({ reportsDir, provider, providerStatus });
   let refresher = null;
-  const handler = createAnalyticsPremiumApp({ release: releaseOf(env), reportsDir, guard, syncStatus, reportStatus: () => ({ ...reportRefreshState }), ask, onDatasetMissing: () => { if (refresher) refresher.tick(); } });
+  // hosted: the Core gateway's proxy secret is required (a missing one stops the start); local: no gateway, no check
+  const proxySecret = hosting.hosted ? requiredProxySecret(env) : null;
+  const basePath = env.NORDLA_MODULE_BASE || '/'; // '/analyses/' behind the Core gateway
+  const handler = createAnalyticsPremiumApp({ release: releaseOf(env), reportsDir, guard, syncStatus, reportStatus: () => ({ ...reportRefreshState }), ask, onDatasetMissing: () => { if (refresher) refresher.tick(); }, proxySecret, basePath });
   const server = http.createServer(handler);
   await new Promise((resolve) => server.listen(hosting.port, hosting.host, resolve));
   if (hosting.hosted) log(`Analytics Premium (hosted): listening on ${hosting.host}:${hosting.port}, serving ${hosting.allowedHosts.join(', ')} only, access token required.`);

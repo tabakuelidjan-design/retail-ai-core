@@ -79,7 +79,7 @@ test('account menu: the header uses the control, the page loads it, FR/NL/EN cop
   assert.ok(!/class: 'avatar-group' \}/.test(app)); // the old inert span is gone
   assert.ok(app.includes('langSwitch(onLangChange),'));
   const html = await readFile(new URL('index.html', UI), 'utf8');
-  assert.ok(html.indexOf('/account-menu.js') > 0 && html.indexOf('/account-menu.js') < html.indexOf('/app.js'));
+  assert.ok(html.indexOf('"account-menu.js"') > 0 && html.indexOf('"account-menu.js"') < html.indexOf('"app.js"'));
   const menu = await readFile(new URL('account-menu.js', UI), 'utf8');
   assert.ok(!/location\.(href|assign|replace)/.test(menu)); // logout never fakes itself with a redirect
   for (const l of ['fr', 'nl', 'en']) {
