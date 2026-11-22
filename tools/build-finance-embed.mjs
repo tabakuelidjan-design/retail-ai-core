@@ -48,7 +48,7 @@ export function buildEmbed() {
 ${shim.replace(/\r\n/g, '\n').split('\n').map((l) => (l ? `  ${l}` : l)).join('\n')}
   var FIN_CSS = ${JSON.stringify(embedCss())};
   window.__nordlaFinanceEmbed = function (shadowRoot, options) {
-    const env = createFinanceEnv(shadowRoot, { apiBase: (options && options.apiBase) || '', css: FIN_CSS });
+    const env = createFinanceEnv(shadowRoot, { apiBase: (options && options.apiBase) || '', css: FIN_CSS, session: (options && options.session) || null });
     const document = env.document, location = env.location, history = env.history, window = env.window, finApiBase = env.apiBase;
     let finPrefetchedSession = env.prefetchedSession; // the first session answer, prepared by Core: used once
 ${body}
