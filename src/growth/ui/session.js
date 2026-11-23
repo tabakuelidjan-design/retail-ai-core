@@ -38,7 +38,8 @@ var growthHosted = (() => {
   };
   function renderBar() {
     const bar = barEl(); const kids = [];
-    if (state.home) kids.push(h('p', { class: 'gr-session-home' }, h('a', { class: 'gv-link gr-session-home-link', href: state.home }, t('gr.session.home'))));
+    // Inside Nordla the Core rail (Tableau de bord) is the way back: the link would sit under the rail.
+    if (state.home && !/^\/growth(\/|$)/.test(location.pathname)) kids.push(h('p', { class: 'gr-session-home' }, h('a', { class: 'gv-link gr-session-home-link', href: state.home }, t('gr.session.home'))));
     if (state.message) kids.push(h('p', { class: 'gr-session-msg', role: 'alert' }, state.message, ' ', h('button', { type: 'button', class: 'gv-link', on: { click: () => { window.location.reload(); } } }, t('gr.session.reload'))));
     if (state.role && !GROWTH_WRITE_ROLES.includes(state.role)) kids.push(h('p', { class: 'gr-session-msg' }, t('gr.session.readOnly')));
     if (state.importable.length) kids.push(h('p', { class: 'gr-session-msg' }, t('gr.session.importTitle', String(state.importable.length)), ' ', h('button', { type: 'button', class: 'gv-link gr-session-import', on: { click: importLocal } }, t('gr.session.importGo'))));
