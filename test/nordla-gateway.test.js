@@ -43,6 +43,7 @@ async function fakeService(name) {
     if (p === '/redir') { res.writeHead(302, { location: `http://127.0.0.1:${svc.server.address().port}/after?k=1` }); return res.end(); }
     if (p === '/redir-rel') { res.writeHead(302, { location: '/after' }); return res.end(); }
     if (p === '/login') { res.writeHead(302, { location: '/after', 'set-cookie': ['fin_sid=abc; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800', 'other=1; Path=/'] }); return res.end(); }
+    if (p === '/sso-login') { res.writeHead(302, { location: '/', 'set-cookie': ['an_sid=s1; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800', 'fin_sid=x; Path=/'] }); return res.end(); }
     if (p === '/basic') { res.writeHead(401, { 'www-authenticate': 'Basic realm="x"', 'content-type': 'application/json' }); return res.end('{}'); }
     if (p === '/pdf') { res.writeHead(200, { 'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="facture.pdf"', 'content-length': String(PDF.length) }); return res.end(PDF); }
     res.writeHead(200, { 'content-type': 'text/html', 'content-security-policy': "default-src 'self'; frame-ancestors 'none'", 'x-frame-options': 'DENY' }); res.end('<html>' + name + '</html>');
@@ -233,3 +234,23 @@ test('Core paths are not touched by the gateway; an unreachable module answers 5
   } finally { await f.close().catch(() => {}); }
 });
 
+test('analytics: only its own session cookie (an_sid) reaches the browser, scoped to /analyses; other module cookies are dropped', async () => {
+  const f = await gatewayFixture();
+  try {
+    const r = await f.call({ path: '/analyses/sso-login', headers: f.session });
+    const sc = [].concat(r.headers['set-cookie'] ?? []);
+    assert.equal(sc.length, 1, 'exactly one cookie: an_sid');
+    assert.match(sc[0], /^an_sid=s1;/);
+    assert.ok(sc[0].includes('Path=/analyses'), 'scoped to /analyses');
+    assert.equal(r.headers.location, '/analyses/', 'redirect stays under /analyses');
+  } finally { await f.close(); }
+});
+
+test('analytics: an_sid is sent to Analyses only; the Core and Finance cookies are not', async () => {
+  const f = await gatewayFixture();
+  try {
+    await f.call({ path: '/analyses/echo', headers: { ...f.session, cookie: 'nordla_core_session=1; an_sid=s1; fin_sid=abc' } });
+    const got = f.ana.seen[0];
+    assert.equal(got.headers.cookie, 'an_sid=s1');
+  } finally { await f.close(); }
+});
