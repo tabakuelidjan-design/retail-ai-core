@@ -6,7 +6,8 @@ export function openFromLink(api) {
   if (!want) return;
   if (want === 'parle') { history.replaceState(null, '', '/'); document.dispatchEvent(new CustomEvent('nordla:parle')); return; }
   // Finance from the rail: the same server action as the Finance button (the server decides the access), in the same tab. No Finance screen is changed.
-  if (want === 'finance' && typeof api === 'function') { history.replaceState(null, '', '/'); api('/api/core/finance/open', { method: 'POST', body: '{}' }).then((r) => { if (typeof r?.url === 'string') window.location.href = r.url; }, () => {}); return; }
+  // The session is set up after this script runs: retry a few times (the parameter is removed only once the action has been answered).
+  if (want === 'finance' && typeof api === 'function') { const tryOpen = (n) => api('/api/core/finance/open', { method: 'POST', body: '{}' }).then((r) => { history.replaceState(null, '', '/'); if (typeof r?.url === 'string') window.location.href = r.url; }, () => { if (n < 12) setTimeout(() => tryOpen(n + 1), 1000); else history.replaceState(null, '', '/'); }); tryOpen(1); return; }
   const act = { analyses: 'nx-open-analytics', finance: 'nx-open-finance', growth: 'nx-open-growth-here' }[want];
   if (!act) return;
   history.replaceState(null, '', '/');
