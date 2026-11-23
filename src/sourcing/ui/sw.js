@@ -1,5 +1,5 @@
 // Cache only the explicitly precached public shell. Private pages, tickets, documents and arbitrary URLs never enter this cache.
-const CACHE = 'nordla-sourcing-terrain-v3-security';
+const CACHE = 'nordla-sourcing-terrain-v4-finance-rail';
 const PREFIX = 'nordla-sourcing-terrain-';
 const publicAsset = (raw) => {const u=new URL(raw,self.location.origin);return u.origin===self.location.origin&&!u.search&&!u.hash&&!u.pathname.startsWith('/api/')&&!u.pathname.startsWith('/voice/')&&(u.pathname==='/'||/\.(js|css|svg|png|ico|webmanifest|woff2?)$/.test(u.pathname));};
 self.addEventListener('install',e=>e.waitUntil((async()=>{const manifest=await(await fetch('/shell-manifest.json',{cache:'no-store'})).json();const paths=[...new Set(['/',...manifest.files.filter(publicAsset)])];const c=await caches.open(CACHE);await c.addAll(paths);await self.skipWaiting();})()));
