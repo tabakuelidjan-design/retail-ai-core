@@ -42,7 +42,7 @@ export function homeCards(modules, { online = true } = {}) {
 
 function actionOf(m) {
   if (m.key === 'finance' && m.dashboard === true) return { type: 'nx', act: 'nx-open-finance', label: 'Ouvrir Finance' };
-  if (m.key === 'analytics' && m.analytics_inframe === true) return { type: 'link', href: '/analyses/', label: 'Ouvrir Analyses' };
+  if (m.key === 'analytics' && m.analytics_inframe === true) return { type: 'nx', act: 'nx-open-analytics-here', label: 'Ouvrir Analyses' };
   if (m.key === 'growth' && m.growth_inframe === true) return { type: 'link', href: '/growth/#/dropoff', label: 'Ouvrir Développement des ventes' };
   if (m.key === 'analytics' && m.dashboard === true) return { type: 'nx', act: 'nx-open-analytics', label: 'Ouvrir Analyses' };
   if (m.key === 'growth' && m.growth_sso === true && typeof m.growth_url === 'string' && SAFE_HTTPS.test(m.growth_url)) return { type: 'nx', act: 'nx-open-growth', to: 'dropoff', href: `${m.growth_url}/#/dropoff`, label: 'Ouvrir Développement des ventes' };

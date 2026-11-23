@@ -312,8 +312,9 @@ export function buildFinanceSso(env, merchantId) {
 export function buildAnalyticsSso(env, merchantId) {
   try {
     const u = new URL(String(env.ANALYTICS_PUBLIC_URL ?? '').trim()); const secret = String(env.ANALYTICS_SSO_SECRET ?? '');
-    if (u.protocol !== 'https:' || u.pathname !== '/' || u.search || u.hash || u.username || u.password || !parseSsoKey(secret).ok) return null; // canonical base64url, 32 random bytes
-    return { publicUrl: u.origin, secret, merchantId };
+    const path = u.pathname.endsWith('/') ? u.pathname.slice(0, -1) : u.pathname; // '' (own domain) or '/analyses' (Analyses under the Nordla origin)
+    if (u.protocol !== 'https:' || (path !== '' && path !== '/analyses') || u.search || u.hash || u.username || u.password || !parseSsoKey(secret).ok) return null; // canonical base64url, 32 random bytes
+    return { publicUrl: u.origin + path, secret, merchantId };
   } catch { return null; }
 }
 
