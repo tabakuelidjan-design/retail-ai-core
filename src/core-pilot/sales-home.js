@@ -57,11 +57,12 @@ export async function loadSalesHome({ publicUrl = '', ticket = '', fetchImpl = g
   if (base.protocol !== 'https:' && base.hostname !== 'localhost') return { status: 'UNAVAILABLE', source: 'Analytics' }; // the ticket is never sent in clear
   try {
     const signal = AbortSignal.timeout(TIMEOUT_MS);
-    const sso = await fetchImpl(new URL(`/sso?t=${encodeURIComponent(ticket)}`, base).href, { redirect: 'manual', signal });
+    const at = (p) => new URL((base.pathname.endsWith('/') ? base.pathname.slice(0, -1) : base.pathname) + p, base.origin).href; // keeps a gateway prefix such as /analyses
+    const sso = await fetchImpl(at(`/sso?t=${encodeURIComponent(ticket)}`), { redirect: 'manual', signal });
     const cookie = (sso.headers.getSetCookie?.() ?? []).find((c) => c.startsWith('an_sid='));
     if (sso.status !== 302 || !cookie) return { status: 'UNAVAILABLE', source: 'Analytics', reason: `SSO_HTTP_${sso.status}${cookie ? '' : '_NO_COOKIE'}` };
     const sid = cookie.split(';')[0];
-    const res = await fetchImpl(new URL('/api/brief', base).href, { headers: { cookie: sid, accept: 'application/json' }, signal });
+    const res = await fetchImpl(at('/api/brief'), { headers: { cookie: sid, accept: 'application/json' }, signal });
     if (res.status === 404) return { status: 'NOT_CONNECTED', source: 'Analytics' }; // no report for this merchant yet
     if (!res.ok) return { status: 'UNAVAILABLE', source: 'Analytics', reason: `BRIEF_HTTP_${res.status}` };
     return salesHomeFromBrief(await res.json());
