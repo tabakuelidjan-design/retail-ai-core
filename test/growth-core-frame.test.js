@@ -17,3 +17,14 @@ test('the browser shim never sends Core endpoints or the rail registry under the
   assert.match(body, /indexOf\('\/api\/core\/'\) !== 0/);
   assert.match(body, /indexOf\('\/nordla-'\) !== 0/);
 });
+
+// The Nordla interface never links to Growth's own Railway address; Growth is opened in the same tab, with its two screens.
+import { readFileSync } from 'node:fs';
+const panel = readFileSync(new URL('../src/sourcing/ui/modules-panel.js', import.meta.url), 'utf8');
+const coreHttp = readFileSync(new URL('../src/core-pilot/http.js', import.meta.url), 'utf8');
+test('no Growth address leaves Core when the gateway is on: growth_url is null, the two screens open in the same tab', () => {
+  assert.match(coreHttp, /growth_url: active\.has\('growth'\) && !String\(env\?\.GROWTH_UPSTREAM_URL \?\? ''\)\.trim\(\) \? growthOrigin\(env\) : null/);
+  assert.match(panel, /data-act="nx-open-growth-here" data-to="dropoff">Où les visiteurs abandonnent<\/button>/);
+  assert.match(panel, /data-act="nx-open-growth-here" data-to="opportunities">Opportunités<\/button>/);
+  assert.doesNotMatch(panel, /up\.railway\.app/);
+});
