@@ -11,6 +11,7 @@
 // the only thing it writes is the merchant's own follow-up (growth_follow_up). Fictitious data and scenarios stay in the local preview.
 import http from 'node:http';
 import { createHash } from 'node:crypto';
+import { proxySecretGuard } from './proxy-guard.js';
 import { pathToFileURL } from 'node:url';
 import { createGrowthApp } from './app.js';
 import { buildGrowthSources } from './sources.js';
@@ -66,7 +67,8 @@ export async function startGrowthHosted({ env = process.env, log = console.log, 
   const ssoOnly = env.NORDLA_SSO_ONLY === '1';
   if (ssoOnly && !sso) throw new Error('SSO-only Growth requires a configured Nordla handoff');
   const handler = createHostedGrowth({ gate, merchantId: hosted.merchantId, historyScope, app, store, collect, sso, ssoOnly, homeUrl: (() => { try { const u = new URL(String(env.NORDLA_HOME_URL ?? '').trim()); return u.protocol === 'https:' && !u.username && !u.password ? u.origin : null; } catch { return null; } })() });
-  const server = http.createServer(handler);
+  // Behind the Core gateway only: with GROWTH_PROXY_SECRET set, a request without the Core secret is refused (direct calls to the module address fail).
+  const server = http.createServer(proxySecretGuard(handler, env.GROWTH_PROXY_SECRET));
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, hosted.host, resolve); });
   log(`Nordla Growth HOSTED for ${hosted.origin}: Core identity sign-in (module growth, merchant ${hosted.merchantId}), follow-up on the server, port ${server.address().port}.`);
   return { server, port: server.address().port };
