@@ -170,7 +170,8 @@ function render() {
   document.body.classList.toggle('fm-mode', fm); document.body.classList.toggle('sl-mode', sl);
   if (sl) { // Field V1 salon: its own screens and bottom bar; the drafts the owner typed survive a re-render exactly like everywhere else
     // The Nordla home (Core) has no China Sourcing bottom bar: that bar belongs to the Sourcing module's own screens.
-    $('#tabs').innerHTML = salon().state().view.name === 'nordla' ? '' : salon().nav(); try { paintHeader(); } catch { /* ignore */ }
+    const onNordla = salon().state().view.name === 'nordla';
+    $('#tabs').innerHTML = onNordla ? '' : salon().nav(); $('#tabs').style.display = onNordla ? 'none' : ''; try { paintHeader(); } catch { /* ignore */ }
     const main = $('#screen'); const key = `salon|${salon().state().view.name}|${salon().state().view.caseId ?? ''}|${salon().state().view.offerId ?? ''}`; const keep = !discardDrafts && lastRenderKey === key; discardDrafts = false; lastRenderKey = key;
     const drafts = keep ? captureDrafts(main) : {}; const ae = document.activeElement; const focus = keep && ae?.form && main.contains(ae) && ae.name ? { form: formKey(ae.form), name: ae.name, pos: ae.selectionStart ?? null } : null;
     main.innerHTML = salon().render(); salon().paint(); if (keep) restoreDrafts(main, drafts, focus); return;
