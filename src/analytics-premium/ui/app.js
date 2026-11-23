@@ -148,9 +148,24 @@ const NAV_ITEMS = [
   ['customers', 'clients', 'nav.customers', '#/customers'],
   ['products', 'produits', 'nav.products', '#/products'],
 ];
+/** The Core menu (the one menu on the left, shared by every module) with Analyses selected. */
+function coreMenu() {
+  if (!window.NordlaCoreRail) return h('div', { class: 'core-rail-missing' });
+  return window.NordlaCoreRail.create({ current: 'analytics', base: location.origin });
+}
+/** The module's sections in a horizontal bar above the central area, with the Ask Nordla action in the header. */
+function moduleTabs(activeRoute) {
+  const standalone = location.pathname.split('/')[1] !== 'analyses';
+  return h('div', { class: 'module-head' },
+    window.NordlaCoreRail ? window.NordlaCoreRail.toggle() : null, // the phone's ☰ opens the Core menu
+    standalone ? h('a', { class: 'back-core', href: '../' }, t('nav.backCore')) : null,
+    h('nav', { class: 'module-tabs', 'aria-label': 'Analyses' }, NAV_ITEMS.map(([route, ic, key, href]) => h('a', { class: 'module-tab' + (activeRoute === route ? ' active' : ''), href, 'aria-current': activeRoute === route ? 'page' : null }, NordlaIcon.semantic(ic, 'sm'), t(key)))),
+    h('button', { class: 'cta-primary module-ask', type: 'button', on: { click: () => { if (window.nordlaAskOpen) window.nordlaAskOpen(); } } }, NordlaIcon.parle('onTerracotta', 'md'), t('nav.askNordla')));
+}
 function sidebar(activeRoute) {
   return h('div', { class: 'sidebar' },
     h('div', { class: 'brand' }, h('div', { class: 'brand-mark' }), h('div', { class: 'brand-name' }, t('brand.name'))),
+    h('a', { class: 'back-core', href: '../' }, t('nav.backCore')), // back to the Nordla home (under the Core origin the page is /analytics/)
     h('div', { class: 'nav' }, NAV_ITEMS.map(([route, ic, key, href]) => (href
       ? h('a', { class: `nav-item ${activeRoute === route ? 'active' : ''}`, href }, h('span', { class: 'ico' }, NordlaIcon.semantic(ic, 'md')), t(key))
       : h('span', { class: 'nav-item inert' }, h('span', { class: 'ico' }, NordlaIcon.semantic(ic, 'md')), t(key))))),
@@ -174,7 +189,7 @@ async function refreshSyncPill() {
   const el = document.querySelector('[data-sync-pill]');
   if (!el) return;
   try {
-    const r = await fetch('/api/sync-status');
+    const r = await fetch('api/sync-status');
     if (!r.ok) return;
     const s = (await r.json()).sync;
     cachedSync = s;
@@ -420,7 +435,7 @@ let cachedWhatChanged = null;
 async function loadWhatChangedIfNeeded() {
   if (cachedWhatChanged) return;
   try {
-    const res = await fetch('/api/what-changed');
+    const res = await fetch('api/what-changed');
     if (res.ok) cachedWhatChanged = await res.json();
   } catch (e) { /* network error surfaces as the empty state below */ }
 }
@@ -459,7 +474,7 @@ function renderBriefPage(main) {
 async function loadBriefIfNeeded() {
   if (cachedBrief) return;
   try {
-    const res = await fetch('/api/brief');
+    const res = await fetch('api/brief');
     if (res.ok) cachedBrief = await res.json();
   } catch (e) { /* network error surfaces as the empty state in renderBriefPage() */ }
 }
@@ -489,10 +504,11 @@ async function route() {
   const app = document.getElementById('app');
   document.documentElement.lang = NORDLA_I18N.getLang();
   app.innerHTML = '';
-  const main = h('div', { class: 'main' });
-  app.appendChild(h('div', { class: 'shell' }, sidebar(r.key), main));
+  const main = h('div', { class: 'main mainarea' });
+  app.appendChild(h('div', { class: 'shell nordla-frame' }, coreMenu(), main));
   await r.load();
   main.innerHTML = '';
+  main.appendChild(moduleTabs(r.key));
   r.render(main);
 }
 

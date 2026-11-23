@@ -16,7 +16,7 @@ const FINANCE_COOKIE = /^fin_(?:demo_)?sid=/;
 /** The module table. `cookies` = the only cookies a module may receive (null: none). `upstreamToken` is only ever sent upstream. */
 export const MODULES = Object.freeze({
   finance: { prefix: '/finance', cookies: FINANCE_COOKIE },
-  analytics: { prefix: '/analytics', cookies: null },
+  analytics: { prefix: '/analyses', cookies: null },
   growth: { prefix: '/growth', cookies: null },
 });
 

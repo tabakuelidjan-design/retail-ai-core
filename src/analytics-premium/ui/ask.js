@@ -201,7 +201,9 @@ async function askSubmit(input, box, btn) {
   const ac = new AbortController(); const timer = setTimeout(() => ac.abort(), ASK_TIMEOUT_MS);
   let entry = null; let failed = null;
   try {
-    const res = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question, lang: NORDLA_I18N.getLang(), period: askSelectedPeriod(), history: askHistory() }), signal: ac.signal });
+    // Under the Nordla Core gateway the question is a change: it carries the Core CSRF token (the Core cookie, validated by Core); absent standalone.
+    const coreCsrf = (String((typeof document !== 'undefined' && document.cookie) || '').match(/(?:^|;\s*)__Host-nordla_sourcing_csrf=([A-Za-z0-9_-]{43})(?:;|$)/) || [])[1] || '';
+    const res = await fetch('api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(coreCsrf ? { 'x-nordla-csrf': coreCsrf } : {}) }, body: JSON.stringify({ question, lang: NORDLA_I18N.getLang(), period: askSelectedPeriod(), history: askHistory() }), signal: ac.signal });
     let data = null; try { data = await res.json(); } catch (e) { data = null; }
     if (res.ok && data && data.mode === 'ai') entry = askAiEntry(data);
     else if (res.ok && data && Array.isArray(data.figures) && data.figures.length) { const body = h('div', { class: 'ask-turn-body' }); askRenderAnswer(body, data); entry = { node: body, text: `${t(`ask.f.${data.figures[0].id}`)} : ${askFigureValue(data.figures[0], data.currency || 'EUR')}` }; }
@@ -217,7 +219,7 @@ async function askSubmit(input, box, btn) {
 
 /** The Nordla microphone icon (ui/assets, 96 px + 192 px for dense screens). Decorative: the button's text says what it does. */
 function askMicIcon() {
-  return h('img', { class: 'ask-mic-icon', src: '/assets/nordla-mic.png', srcset: '/assets/nordla-mic.png 1x, /assets/nordla-mic-2x.png 2x', width: '22', height: '22', alt: '', 'aria-hidden': 'true', draggable: 'false' });
+  return h('img', { class: 'ask-mic-icon', src: 'assets/nordla-mic.png', srcset: 'assets/nordla-mic.png 1x, /assets/nordla-mic-2x.png 2x', width: '22', height: '22', alt: '', 'aria-hidden': 'true', draggable: 'false' });
 }
 
 function closeAsk() { askThread = []; askAsk = null; /* the conversation lives only while the box is open */ if (askSpeech) { askSpeech.stop(); askSpeech = null; } if (askOpen) { askOpen.remove(); askOpen = null; document.removeEventListener('keydown', askEsc, true); } }
@@ -263,4 +265,5 @@ function openAsk() {
 function askButton() {
   return h('button', { class: 'cta-primary', type: 'button', on: { click: openAsk } }, NordlaIcon.parle('onTerracotta', 'md'), t('nav.askNordla'), h('kbd', null, '⌘K'));
 }
+(typeof window !== 'undefined' ? window : globalThis).nordlaAskOpen = openAsk;
 document.addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && String(e.key).toLowerCase() === 'k') { e.preventDefault(); openAsk(); } });

@@ -52,7 +52,7 @@ test('H5. app.js does not assert freshness or verification: the card uses health
   assert.match(app, /NordlaHealth\.healthState/);
   const card = app.slice(app.indexOf('function healthCard'), app.indexOf('// ---------- "Ce qui a changé"'));
   assert.ok(!/viewSources/.test(card), 'a button with no handler is a placeholder that looks like a feature');
-  assert.ok(/\/health-state\.js/.test(ui('index.html')), 'the module is loaded by the page');
+  assert.ok(/"health-state\.js"/.test(ui('index.html')), 'the module is loaded by the page (relative: standalone and under /analytics/)');
 });
 
 test('H6. the brief carries the report\'s exclusion counters (nothing is hidden from the page)', async () => {

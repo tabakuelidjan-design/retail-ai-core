@@ -126,7 +126,7 @@ test('the question box shows the microphone button, ready, with the privacy note
   assert.ok(d.find('ask-voice-note') && /ask\.voice\.privacy/.test(d.find('ask-voice-note')._text), 'the privacy line is shown');
   assert.equal(fp.calls.start, 0, 'opening the box does not start listening');
   const input = d.find('ask-input'); input.value = 'Combien de commandes ?'; d.find('ask-send').fire('click'); await new Promise((r) => setTimeout(r, 10));
-  assert.equal(d.fetches.length, 1); assert.equal(d.fetches[0].url, '/api/ask'); assert.equal(JSON.parse(d.fetches[0].opts.body).question, 'Combien de commandes ?');
+  assert.equal(d.fetches.length, 1); assert.equal(d.fetches[0].url, 'api/ask'); assert.equal(JSON.parse(d.fetches[0].opts.body).question, 'Combien de commandes ?');
 });
 
 test('click on the microphone: "listening" is shown; transcription appears in the field; NOTHING is sent until the user sends', async () => {
@@ -147,7 +147,7 @@ test('manual correction, then send: the CORRECTED text goes through the same POS
   const input = d.find('ask-input'); input.value = 'Quel est mon chiffre d’affaires des 30 derniers jours ?'; // the user fixes the transcription
   d.find('ask-send').fire('click'); await new Promise((r) => setTimeout(r, 10));
   assert.equal(d.fetches.length, 1);
-  const { url, opts } = d.fetches[0]; assert.equal(url, '/api/ask'); assert.equal(opts.method, 'POST'); assert.equal(opts.headers['Content-Type'], 'application/json');
+  const { url, opts } = d.fetches[0]; assert.equal(url, 'api/ask'); assert.equal(opts.method, 'POST'); assert.equal(opts.headers['Content-Type'], 'application/json');
   const sent = JSON.parse(opts.body); assert.equal(sent.question, 'Quel est mon chiffre d’affaires des 30 derniers jours ?');
   assert.deepEqual(Object.keys(sent).sort(), ['history', 'lang', 'period', 'question'], 'exactly the typed-question payload (+ the short text history of this open box): no audio, no transcript metadata');
   assert.deepEqual(sent.history, [], 'the first question of a conversation carries no history');
@@ -214,7 +214,7 @@ test('icon: the microphone button shows the new Nordla microphone icon, never th
   assert.doesNotMatch(askSrc, /\uD83C\uDFA4|🎤/, 'the emoji is gone from ask.js');
   const fp = fakeProvider(); const d = loadAsk({ providers: [() => fp.provider] });
   const mic = d.find('ask-mic'); const icon = () => mic.children.find((c) => c.className === 'ask-mic-icon');
-  assert.equal(icon().tag, 'img'); assert.equal(icon().attrs.src, '/assets/nordla-mic.png'); assert.match(icon().attrs.srcset, /nordla-mic-2x\.png 2x/);
+  assert.equal(icon().tag, 'img'); assert.equal(icon().attrs.src, 'assets/nordla-mic.png'); assert.match(icon().attrs.srcset, /nordla-mic-2x\.png 2x/);
   assert.equal(icon().attrs.alt, ''); assert.equal(icon().attrs['aria-hidden'], 'true', 'decorative: the button text says what it does');
   assert.equal(icon().attrs.width, icon().attrs.height, 'square: the proportions are kept');
   assert.match(d.deep(mic), /ask\.voice\.start/);

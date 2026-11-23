@@ -10,6 +10,7 @@ import { loadExplorer } from './explorer.js';
 import { loadCustomers, loadCustomerDetail } from './customers.js';
 import { loadProducts, loadProductDetail } from './products.js';
 import { readNordlaShared } from '../../shared/nordla-static.js';
+import { proxySecretOk } from '../../shared/proxy-secret.js';
 import { periodReport } from './period-engine.js';
 
 const UI = new URL('../ui/', import.meta.url);
@@ -36,7 +37,7 @@ const STATIC = {
   '/lang-en.js': ['lang-en.js', 'text/javascript; charset=utf-8'],
 };
 
-export function createAnalyticsPremiumApp({ reportsDir, guard, syncStatus, reportStatus, ask, now = () => new Date(), onDatasetMissing = null }) {
+export function createAnalyticsPremiumApp({ release = { sha: 'unknown', branch: 'unknown', source: 'none' }, reportsDir, guard, syncStatus, reportStatus, ask, now = () => new Date(), onDatasetMissing = null, proxySecret = null, basePath = '/' }) {
   /** Explorer / Produits / Clients accept ?period=<preset>|custom&from=&to=. With no period parameter the fixed-30-day report is served as before. */
   async function periodGiven(url) {
     const period = url.searchParams.get('period'); const from = url.searchParams.get('from'); const to = url.searchParams.get('to');
@@ -50,12 +51,17 @@ export function createAnalyticsPremiumApp({ reportsDir, guard, syncStatus, repor
   }
   return async function handle(req, res) {
     try {
+      // Behind the Nordla gateway: a direct call without the shared proxy secret is refused, before anything else.
+      if (!proxySecretOk(req, proxySecret)) { res.writeHead(403, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify({ error: { code: 'PROXY_SECRET_REQUIRED' } })); return; }
+      // Phase 4: which code runs (commit and branch only, no data). Answered before the access guard, like the Core health route.
+      if (req.method === 'GET' && String(req.url).split('?')[0] === '/version') { res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); return res.end(JSON.stringify({ service: 'analytics', ...release })); }
       // Hosted staging: host allow-list + access token, before anything (pages, static files, api) is served.
       if (guard && !(await guard(req, res))) return;
       const url = new URL(req.url, 'http://localhost');
       if (req.method === 'GET' && STATIC[url.pathname]) {
         const [file, type] = STATIC[url.pathname];
-        const body = await readFile(new URL(file, UI));
+        // index.html carries <base href="/analyses/">: replaced by the deployment's base (standalone '/', behind Core the module prefix)
+        const body = url.pathname === '/' ? Buffer.from((await readFile(new URL(file, UI))).toString('utf8').replace('<base href="/analyses/">', `<base href="${basePath}">`), 'utf8') : await readFile(new URL(file, UI));
         res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-store' });
         res.end(body);
         return;

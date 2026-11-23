@@ -10,7 +10,7 @@
 // NOT invent one - flag it as "UNRESOLVED ICON - official Nordla asset missing".
 // Assets live in src/shared/assets/nordla/official-icons/ and are served under /nordla-assets/ by each module's server.
 window.NordlaIcon = (function () {
-  const BASE = '/nordla-assets/';
+  const BASE = new URL('nordla-assets/', document.baseURI).pathname; // relative to the page's base: /nordla-assets/ at the root, /analyses/nordla-assets/ under the Core origin
   // Shared size tokens (px): sm = small utility, md = standard navigation, lg = semantic/process icon.
   const SIZES = { sm: 16, md: 20, lg: 28 };
   const PARLE = { onTerracotta: 'parle-a-nordla/white.webp', default: 'parle-a-nordla/terracotta.webp' };

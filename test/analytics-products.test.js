@@ -187,7 +187,7 @@ test('produits route: served by the app and reachable from the navigation', asyn
   assert.ok(app.includes("['products', 'produits', 'nav.products', '#/products']"));
   assert.match(app, /products: \{ key: 'products', load: loadProductsIfNeeded, render: renderProductsPage \}/);
   const html = await readFile(new URL('index.html', UI), 'utf8');
-  assert.ok(html.includes('/products.js') && html.includes('/products.css'));
+  assert.ok(html.includes('"products.js"') && html.includes('"products.css"'));
 });
 
 test('produits ui: sort/filter vocabulary is factual, every pr.* string exists in FR/NL/EN, no unsupported concept or icon', async () => {
