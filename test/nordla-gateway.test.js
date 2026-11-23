@@ -78,7 +78,7 @@ test('routes: a module prefix is matched on a path boundary only; its root maps 
   assert.deepEqual(routeFor('/finance'), { key: 'finance', prefix: '/finance', upstreamPath: '/' });
   assert.equal(routeFor('/financeX'), null, 'a longer word is not the module');
   assert.equal(routeFor('/sourcing'), null, 'Core paths are not gateway paths');
-  assert.equal(routeFor('/analytics/api/ask')?.key, 'analytics');
+  assert.equal(routeFor('/analyses/api/ask')?.key, 'analytics');
   assert.equal(routeFor('/growth/')?.key, 'growth');
 });
 
@@ -94,7 +94,7 @@ test('redirects and cookies are rewritten under the module prefix', () => {
   assert.equal(rewriteLocation('http://f.internal/#/todo', 'http://f.internal', '/finance'), '/finance/#/todo');
   assert.equal(rewriteLocation('https://elsewhere.example/', 'http://f.internal', '/finance'), 'https://elsewhere.example/');
   assert.equal(rewriteSetCookie('fin_sid=abc; HttpOnly; Path=/; Max-Age=28800', '/finance'), 'fin_sid=abc; HttpOnly; Path=/finance; Max-Age=28800');
-  assert.equal(rewriteLocation('/x', 'http://a.internal', '/analytics'), '/analytics/x');
+  assert.equal(rewriteLocation('/x', 'http://a.internal', '/analyses'), '/analyses/x');
 });
 
 test('proxy secret: missing or wrong refuses; the expected one passes; a hosted module must have one', () => {
@@ -119,7 +119,7 @@ test('a closed module (Growth) is refused before anything is sent upstream, even
 test('no Core session: 401 and nothing reaches the module (no anonymous access)', async () => {
   const f = await gatewayFixture();
   try {
-    for (const p of ['/finance/echo', '/analytics/echo']) {
+    for (const p of ['/finance/echo', '/analyses/echo']) {
       const r = await f.call({ path: p });
       assert.equal(r.status, 401); assert.equal(JSON.parse(r.text).error, 'SESSION_REQUIRED');
     }
@@ -144,7 +144,7 @@ test('forwarding: the module gets its prefix-free path, the proxy secret, its ow
 test('analytics: its access token is added by the gateway only, never sent to the browser, and no Core cookie leaks', async () => {
   const f = await gatewayFixture();
   try {
-    const r = await f.call({ path: '/analytics/echo', headers: { ...f.session, cookie: 'nordla_core_session=1; fin_sid=abc' } });
+    const r = await f.call({ path: '/analyses/echo', headers: { ...f.session, cookie: 'nordla_core_session=1; fin_sid=abc' } });
     assert.equal(r.status, 200);
     const got = f.ana.seen[0];
     assert.equal(got.headers.authorization, `Basic ${Buffer.from(`nordla:${TOKEN}`).toString('base64')}`);
@@ -157,9 +157,9 @@ test('analytics: its access token is added by the gateway only, never sent to th
 test('a service Basic prompt (WWW-Authenticate) never reaches the browser; a service cookie for analytics is dropped', async () => {
   const f = await gatewayFixture();
   try {
-    const basic = await f.call({ path: '/analytics/basic', headers: f.session });
+    const basic = await f.call({ path: '/analyses/basic', headers: f.session });
     assert.equal(basic.status, 401); assert.equal(basic.headers['www-authenticate'], undefined);
-    const login = await f.call({ path: '/analytics/login', headers: f.session });
+    const login = await f.call({ path: '/analyses/login', headers: f.session });
     assert.equal(login.headers['set-cookie'], undefined);
   } finally { await f.close(); }
 });
@@ -185,7 +185,7 @@ test('Finance keeps its own frame policy at the gateway: it is mounted in the Co
     assert.equal(r.status, 200);
     assert.equal(r.headers['x-frame-options'], 'DENY');
     assert.match(r.headers['content-security-policy'], /frame-ancestors 'none'/);
-    const analytics = await f.call({ path: '/analytics/', headers: f.session });
+    const analytics = await f.call({ path: '/analyses/', headers: f.session });
     assert.equal(analytics.headers['x-frame-options'], 'DENY', 'other modules keep their own frame policy');
     assert.match(analytics.headers['content-security-policy'], /frame-ancestors 'none'/);
   } finally { await f.close(); }
@@ -194,8 +194,8 @@ test('Finance keeps its own frame policy at the gateway: it is mounted in the Co
 test('a module root without a slash goes to its slash address', async () => {
   const f = await gatewayFixture();
   try {
-    const r = await f.call({ path: '/analytics?period=x', headers: f.session });
-    assert.equal(r.status, 301); assert.equal(r.headers.location, '/analytics/?period=x');
+    const r = await f.call({ path: '/analyses?period=x', headers: f.session });
+    assert.equal(r.status, 301); assert.equal(r.headers.location, '/analyses/?period=x');
   } finally { await f.close(); }
 });
 
