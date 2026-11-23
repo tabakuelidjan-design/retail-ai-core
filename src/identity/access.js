@@ -115,11 +115,13 @@ export function createAccessService({ supabase, merchantId, moduleCode, verifier
     try { v = await sessions.validate(rawToken, { merchantId: merchant, module: moduleCode }); } catch { return SESSION_UNAVAILABLE; }
     if (!v.ok) return SESSION_REFUSED;
     const s = v.session; // merchant, user and module come ONLY from the session row
-    let membership;
-    try { membership = await members.requireActiveMembership(s.userId); } catch { return SESSION_UNAVAILABLE; }
+    // Membership and module entitlement depend only on the session row: both are read at once (both checks still run, in the same order of refusal).
+    const [membershipRead, entitlementRead] = await Promise.allSettled([members.requireActiveMembership(s.userId), supabase.select(ENTITLEMENTS, { select: 'merchant_id,module_code,status', merchant_id: `eq.${s.merchantId}`, module_code: `eq.${s.module}`, limit: '1' })]);
+    if (membershipRead.status !== 'fulfilled') return SESSION_UNAVAILABLE;
+    const membership = membershipRead.value;
     if (!membership.ok) { await closeLostAccess(s, 'SESSION_ACCESS_DENIED', membership.code === 'SUSPENDED' ? 'MEMBER_SUSPENDED' : 'NOT_MEMBER'); return SESSION_REFUSED; }
-    let rows;
-    try { rows = await supabase.select(ENTITLEMENTS, { select: 'merchant_id,module_code,status', merchant_id: `eq.${s.merchantId}`, module_code: `eq.${s.module}`, limit: '1' }); } catch { return SESSION_UNAVAILABLE; }
+    if (entitlementRead.status !== 'fulfilled') return SESSION_UNAVAILABLE;
+    const rows = entitlementRead.value;
     const ent = (rows ?? []).find((r) => String(r.merchant_id).toLowerCase() === s.merchantId && r.module_code === s.module);
     if (!ent || ent.status !== 'ACTIVE') { await closeLostAccess(s, 'MODULE_ACCESS_DENIED', ent ? 'MODULE_SUSPENDED' : 'MODULE_NOT_ENABLED'); return SESSION_REFUSED; }
     return Object.freeze({ ok: true, merchantId: s.merchantId, userId: s.userId, role: membership.role, module: s.module, sessionId:s.id });

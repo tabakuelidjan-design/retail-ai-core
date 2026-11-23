@@ -54,13 +54,14 @@ export function createSessionGate({ identity, security, moduleCode = 'sourcing',
   async function authorize(req) {
     const result = await authorizeBase(req);
     if (!result.ok) return result;
-    if (sessionAssurance) { const source = await sessionAssurance.check({...result.access,module:moduleCode}); if (!source.ok) return {ok:false,status:source.code==='SESSION_ASSURANCE_UNAVAILABLE'?503:401,body:{error:{code:source.code}}}; }
-    if (!mfaRule) return result;
-    try {
-      if (await mfaRule.blocked(result.access)) return { ok: false, status: 403, body: { error: { code: 'MFA_REQUIRED_FOR_ROLE', message: 'Activez la double authentification depuis Nordla.' } } };
-    } catch {
-      return { ok: false, status: 503, body: { error: { code: 'MFA_POLICY_UNAVAILABLE', message: 'La vérification de sécurité est temporairement indisponible.' } } };
-    }
+    // The two checks depend only on the resolved access, so they run in parallel; the refusals keep the same order (assurance first, then MFA).
+    const assurance = sessionAssurance ? sessionAssurance.check({...result.access,module:moduleCode}) : null;
+    const mfa = mfaRule ? Promise.resolve().then(() => mfaRule.blocked(result.access)).then((blocked) => ({ blocked }), () => ({ failed: true })) : null;
+    if (assurance) { const source = await assurance; if (!source.ok) return {ok:false,status:source.code==='SESSION_ASSURANCE_UNAVAILABLE'?503:401,body:{error:{code:source.code}}}; }
+    if (!mfa) return result;
+    const policy = await mfa;
+    if (policy.failed) return { ok: false, status: 503, body: { error: { code: 'MFA_POLICY_UNAVAILABLE', message: 'La vérification de sécurité est temporairement indisponible.' } } };
+    if (policy.blocked) return { ok: false, status: 403, body: { error: { code: 'MFA_REQUIRED_FOR_ROLE', message: 'Activez la double authentification depuis Nordla.' } } };
     return result;
   }
   async function authorizeBase(req) {
