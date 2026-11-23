@@ -41,6 +41,7 @@
   var railSlot = document.querySelector('[data-nordla-core-rail-slot]');
   var toggleSlot = document.querySelector('[data-nordla-core-toggle-slot]');
   if (/^\/sourcing\/?$/.test(window.location.pathname)) {
+    document.body.classList.add('nordla-hosted');
     if (railSlot) railSlot.setAttribute('data-nordla-core-rail', 'sourcing');
     if (toggleSlot) toggleSlot.setAttribute('data-nordla-core-toggle', '');
   }
