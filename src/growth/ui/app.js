@@ -46,7 +46,7 @@ const GROWTH_PACK = {
 const ICON_PX = { sm: 16, md: 20, lg: 28 };
 function packIcon(file, size) {
   const img = document.createElement('img');
-  img.src = `/growth-assets/icons/${file}.png`;
+  img.src = `growth-assets/icons/${file}.png`; // relative: resolves under /growth/ behind the Core gateway and at the root standalone
   img.width = img.height = ICON_PX[size] || ICON_PX.md;
   img.className = `nordla-icon nordla-icon-${ICON_PX[size] ? size : 'md'} gr-pack-icon`;
   img.alt = ''; img.setAttribute('aria-hidden', 'true');
@@ -325,12 +325,16 @@ function loadStateCard(key) {
   return h('div', { class: 'ex-card gr-state gr-state-loading', role: 'status', 'aria-live': 'polite' },
     h('span', { class: 'gr-spinner', 'aria-hidden': 'true' }), h('span', { class: 'gr-state-text' }, t('gr.state.loading')));
 }
+// The current page's request, started during the sign-in check (session.js boot) so it runs in parallel with the follow-up load. Used once, by loadPage.
+let preloaded = null;
+function prefetchCurrentPage() { const key = currentPage(); const page = PAGES[key]; if (!page || page.get()) return; preloaded = { key, res: fetch(page.url) }; }
 async function loadPage(key) {
   const page = PAGES[key];
   loadState[key] = 'loading';
   if (currentPage() === key) render();
   try {
-    const r = await fetch(page.url);
+    const early = preloaded && preloaded.key === key ? preloaded.res : null; preloaded = null;
+    const r = early ? await early : await fetch(page.url);
     if (r.status === 401 && typeof growthHosted !== 'undefined') { delete loadState[key]; growthHosted.expired(); return; } // the hosted session ended: back to the sign-in
     if (r.ok) { page.set(await r.json()); delete loadState[key]; }
     else {
@@ -395,4 +399,4 @@ if (FRAMED) {
 }
 window.addEventListener('hashchange', route);
 // HOSTED (session.js is in the page only then): sign in and load the merchant's follow-up first. The local preview goes straight to the screen.
-if (typeof growthHosted !== 'undefined') growthHosted.boot(route); else route();
+if (typeof growthHosted !== 'undefined') growthHosted.boot(route, prefetchCurrentPage); else route();

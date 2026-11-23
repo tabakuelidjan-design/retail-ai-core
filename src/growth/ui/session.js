@@ -135,14 +135,20 @@ var growthHosted = (() => {
   }
 
   /** Called by app.js instead of route(): sign in if needed, load the merchant's follow-up, then show the screen. */
-  async function boot(route) {
+  async function boot(route, prefetch) {
     state.route = route; applyServerText();
     let s = null; try { s = (await api('/api/auth/session')).body; } catch { s = null; }
     if (!s || s.mode !== 'session') { state.loginError = t('gr.session.network'); return showLogin(); }
     if (!s.authenticated) return showLogin();
     state.role = s.role ?? null;
-    try { const hm = (await api('/api/growth/home')).body; state.home = hm && typeof hm.url === 'string' && /^https:\/\//.test(hm.url) ? hm.url : null; } catch { state.home = null; } // a missing link never blocks the screen
-    try { await hydrate(); } catch (e) { if (e.status === 401) return showLogin(); return showBlocked(e.status === 403 ? 'gr.session.denied' : 'gr.session.unavailable', e.status !== 403); } // never open the screen on a follow-up that failed to load: a later save would hide what the server holds
+    // The page's own data is requested now, in parallel with the follow-up (it does not depend on it); the screen still opens only after the follow-up loads.
+    if (typeof prefetch === 'function') prefetch();
+    // The Nordla home link and the follow-up load in parallel. A missing link never blocks the screen.
+    const homeLink = (async () => { try { const hm = (await api('/api/growth/home')).body; return hm && typeof hm.url === 'string' && /^https:\/\//.test(hm.url) ? hm.url : null; } catch { return null; } })();
+    const loaded = hydrate().then(() => null, (e) => e);
+    const [home, failure] = await Promise.all([homeLink, loaded]);
+    state.home = home;
+    if (failure) { if (failure.status === 401) return showLogin(); return showBlocked(failure.status === 403 ? 'gr.session.denied' : 'gr.session.unavailable', failure.status !== 403); } // never open the screen on a follow-up that failed to load: a later save would hide what the server holds
     renderBar(); route();
   }
   /** A data request answered 401 (the session ended): back to the sign-in, nothing else is lost. */

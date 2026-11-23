@@ -255,7 +255,7 @@ test('HOS-9 history already stored in this browser: offered, never deleted or ov
     const B = await browser(srv, { local }); await B.boot(); await B.login('owner@nordla-test.example');
     assert.ok(B.bar().includes('2 suivi(s) de ce navigateur ne sont pas encore sur le serveur'), 'op-2 and the pipeline are offered; op-1 exists on the server; the other scope is ignored: ' + B.bar());
     assert.equal(JSON.parse(B.get(OPKEY)).events.length, 2, 'the server version wins on screen: nothing local overwrote it');
-    const go = all(B.ctx.growthHosted.state.bar, (n) => /gr-session-import/.test(n.className))[0]; go.listeners.click[0](); await new Promise((r) => setTimeout(r, 60));
+    const go = all(B.ctx.growthHosted.state.bar, (n) => /gr-session-import/.test(n.className))[0]; go.listeners.click[0](); for (let i = 0; i < 80 && !B.bar().includes('enregistré(s) sur le serveur'); i++) await new Promise((r) => setTimeout(r, 25)); // wait for the save, up to 2 s
     assert.ok(B.bar().includes('2 suivi(s) enregistré(s) sur le serveur'), B.bar());
     assert.deepEqual((await srv.store.list(M)).map((r) => r.key).sort(), [OPKEY, `nordla.growth.follow-up.v1:${S}:op-2`, PIPEKEY].sort());
     assert.equal((await srv.store.list(M)).find((r) => r.key === OPKEY).value.events.length, 2, 'the server entry was not replaced by the older local copy');
