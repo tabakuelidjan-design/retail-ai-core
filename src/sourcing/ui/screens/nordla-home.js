@@ -31,6 +31,8 @@ export function homeCards(modules, { online = true } = {}) {
 function actionOf(m) {
   if (m.key === 'finance' && m.dashboard === true) return { type: 'nx', act: 'nx-open-finance', label: 'Ouvrir Finance' };
   if (m.key === 'analytics' && m.dashboard === true) return { type: 'nx', act: 'nx-open-analytics', label: 'Ouvrir Analyses' };
+  // Behind the Nordla gateway the Growth address is not sent to the browser: the same tab, with the Core ticket (no second sign-in).
+  if (m.key === 'growth' && m.growth_sso === true && (m.growth_url === null || m.growth_url === undefined)) return { type: 'nx', act: 'nx-open-growth-here', to: 'dropoff', label: 'Ouvrir Développement des ventes' };
   if (m.key === 'growth' && m.growth_sso === true && typeof m.growth_url === 'string' && SAFE_HTTPS.test(m.growth_url)) return { type: 'nx', act: 'nx-open-growth', to: 'dropoff', href: `${m.growth_url}/#/dropoff`, label: 'Ouvrir Développement des ventes' };
   if (m.key === 'creative' && m.creator_screen === true) return { type: 'link', href: '/creator', label: 'Ouvrir le Créateur' };
   if (m.key === 'marketing' && m.video_screen === true) return { type: 'link', href: '/videos', label: 'Ajouter une vidéo' };
