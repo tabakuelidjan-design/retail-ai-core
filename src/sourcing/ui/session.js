@@ -38,6 +38,17 @@ export function loginScreen(S) {
   <button class="btn sec" data-act="gate-offline" style="margin-top:8px">Travailler sur ce téléphone seulement (hors ligne)</button></div>`;
 }
 
+/** Sign-in on the Nordla home (/): the Core identity, nothing of Sourcing (no folders, no offline choice). Same sign-in request as loginScreen. */
+export function coreLoginScreen(S) {
+  return `<div class="card core-login" style="max-width:420px;margin:24px auto"><img src="/assets/nordla-logo.png" alt="Nordla" width="120" height="34" style="display:block;margin:0 0 14px"><h2>Connexion à Nordla</h2><p class="small muted">Connectez-vous avec votre compte Nordla.</p>
+  ${S.loginError ? `<p class="warn">${esc(S.loginError)}</p>` : ''}
+  <label>Adresse e-mail<input id="login-email" type="email" autocomplete="username" inputmode="email"></label>
+  <label>Mot de passe<input id="login-password" type="password" autocomplete="current-password"></label>
+  ${S.loginMfa ? '<label>Code de votre application d’authentification (ou code de récupération)<input id="login-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="20" autofocus></label>' : ''}
+  <button class="btn" data-act="login-go" style="margin-top:10px;width:100%" ${S.loginBusy ? 'disabled' : ''}>${S.loginBusy ? 'Connexion…' : 'Se connecter'}</button>
+  <p class="small" style="margin:12px 0 0"><a href="/reset-password">Mot de passe oublié ?</a></p></div>`;
+}
+
 /** Wires the sign-in button. `after` re-renders and checks the server once signed in. */
 export function installSignIn({ S, after }) {
   if (typeof document === 'undefined') return;

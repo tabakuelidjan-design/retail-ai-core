@@ -30,3 +30,11 @@ test('Parle cards: one column on phones (≤480 px), two on tablets (≤760 px),
   assert.match(ask, /@media \(max-width:760px\)\{\.nxa-cards\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)\}\}/);
   assert.match(ask, /@media \(max-width:480px\)\{\.nxa-cards\{grid-template-columns:1fr\}/);
 });
+
+test('the mobile ☰ opens and closes the drawer of the page the button is in (Finance and Parle copies included)', async () => {
+  const panel = await read('../src/sourcing/ui/modules-panel.js');
+  assert.match(panel, /if \(a === 'nx-menu'\) \{ \(t\.closest\('\.nx-home'\) \?\? document\.querySelector\('\.nx-home'\)\)\?\.classList\.toggle\('nx-menu-open'\); return; \}/);
+  assert.match(panel, /if \(a === 'nx-open-finance'\) \{ \(t\.closest\('\.nx-home'\)/);
+  assert.match(panel, /if \(a === 'nx-open-parle'\) \{ \(t\.closest\('\.nx-home'\)/);
+  assert.doesNotMatch(panel, /document\.querySelector\('\.nx-home'\)\?\.classList\.toggle\('nx-menu-open'\)/);
+});

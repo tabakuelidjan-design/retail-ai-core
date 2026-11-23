@@ -10,7 +10,7 @@ import { MARKETPLACES } from '/core/amazon.js';
 import { DOC_TYPES } from '/core/docinspect.js';
 import { capabilityMatrix } from '/core/capabilities.js';
 import { headerStatus } from '/core/status.js';
-import { ls, initStorage, getBlob, putBlob, storageEstimate } from './storage.js'; import { backupSection, createBackup, fetchCasePhotos } from './backup.js'; import { csrfToken, detectAuth, installSignIn, loginScreen } from './session.js'; import { createCorePanel } from './core-panel.js'; import { createModulesPanel } from './modules-panel.js';
+import { ls, initStorage, getBlob, putBlob, storageEstimate } from './storage.js'; import { backupSection, createBackup, fetchCasePhotos } from './backup.js'; import { csrfToken, detectAuth, installSignIn, loginScreen, coreLoginScreen } from './session.js'; import { createCorePanel } from './core-panel.js'; import { createModulesPanel } from './modules-panel.js';
 import { $, esc, chip, money, list, field, selectOf, seg, quoteOf, VERDICT_TEXT } from './dom.js';
 import { S, cur, LEGACY_UI } from './state.js';
 import { formKey, captureDrafts, restoreDrafts } from './draft.js';
@@ -166,7 +166,9 @@ let lastRenderKey = null; let discardDrafts = false;
 function finishBoot() { document.body.classList.remove('ui-booting'); }
 function render() {
   ensureCase(); const c = cur();
-  if ((!S.token && !S.offlineChoice) || S.authFailed) { $('#tabs').innerHTML = ''; $('#screen').innerHTML = S.authMode === 'session' ? loginScreen(S) : gate(); $('#case-name').textContent = 'Nordla - Sourcing'; finishBoot(); return; }
+  // Signed out: on the Nordla home (/) the Core sign-in; the Sourcing entry (/sourcing) keeps its own sign-in, folders and offline choice.
+  const onSourcing = location.pathname === '/sourcing';
+  if ((!S.token && (!S.offlineChoice || !onSourcing)) || S.authFailed) { $('#tabs').innerHTML = ''; $('#screen').innerHTML = S.authMode === 'session' ? (onSourcing ? loginScreen(S) : coreLoginScreen(S)) : gate(); $('#case-name').textContent = onSourcing || S.authMode !== 'session' ? 'Nordla - Sourcing' : 'Nordla'; if (!onSourcing) document.title = 'Nordla'; finishBoot(); return; }
   const fm = S.mode === 'field'; const sl = S.mode === 'salon';
   document.body.classList.toggle('fm-mode', fm); document.body.classList.toggle('sl-mode', sl);
   if (sl) { // Field V1 salon: its own screens and bottom bar; the drafts the owner typed survive a re-render exactly like everywhere else
