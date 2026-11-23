@@ -33,6 +33,8 @@ import { activeEntitlementsOf } from '../../identity/entitlements.js';
 import { createAccessJournal } from './access-journal.js';
 import { releaseOf } from './release.js';
 import { parseSsoKey, ssoKeyReuseOf } from '../../identity/sso-keys.js';
+import { createGateway, MODULES } from '../../shared/nordla-gateway.js';
+import { requiredProxySecret } from '../../shared/proxy-secret.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const DATA_DIR = 'data/local/sourcing';
@@ -365,7 +367,17 @@ export async function startSourcingServer({ env = process.env, log = console.log
   const marketingContext = generalService ? () => generalService.contextFor({ tenant: { merchantId: merchantKey }, module: 'marketing' }) : null;
   const videos = await buildVideos({ env, gate, hosted, log, contextOf: marketingContext }); // optional, isolated: null unless NORDLA_VIDEO_DRAFTS_MODULE=1
   const gbp = await buildGbp({ env, gate, hosted, log, contextOf: marketingContext }); // optional, isolated: null unless NORDLA_GBP_DRAFTS_MODULE=1
-  const app = createSourcingApp({ release: releaseOf(env), accessJournal: createAccessJournal({ file: join(dir, 'core', 'access-journal.jsonl') }), backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, videos, connections, general, security, team, notifications, preferences, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
+  // Croissance only, under the Core origin (/growth/*): one module, one session (the Core sign-in), the server checks the rights on every request.
+  // Finance and Analyses are NOT routed here: their own paths keep their current behaviour.
+  const growthGatewayOn = Boolean(String(env.GROWTH_UPSTREAM_URL ?? '').trim() && String(env.GROWTH_PROXY_SECRET ?? '').trim());
+  const moduleGateway = gate && hosted && growthGatewayOn ? createGateway({ publicOrigin: hosted.origin, modules: { growth: MODULES.growth }, publicRoutes: [
+    { method: 'POST', path: '/growth/api/auth/login' }, // the module sign-in (its own credential check, rate limit and origin check)
+    { method: 'GET', path: '/growth/api/auth/session' }, // says only whether a session exists: no data
+    { method: 'GET', path: '/growth/' }, // the sign-in page itself
+    { method: 'GET', pattern: /^\/growth\/[A-Za-z0-9._\/-]+\.(?:js|css|png|svg|webp|jpe?g|ico|woff2?|json)$/ }, // its static assets: no data
+  ], services: { growth: { enabled: true, upstream: env.GROWTH_UPSTREAM_URL, secret: requiredProxySecret(env, 'GROWTH_PROXY_SECRET') } },
+  authorize: async (req) => { const a = await gate.authorize(req); return a.ok ? { ok: true } : { ok: false, status: a.status, code: a.body?.error ?? 'SESSION_REQUIRED' }; } }) : null;
+  const app = createSourcingApp({ moduleGateway, release: releaseOf(env), accessJournal: createAccessJournal({ file: join(dir, 'core', 'access-journal.jsonl') }), backupStatus: () => backups?.status() ?? null, gate, core: core.core, procurement: proc.handler, creator, gbp, videos, connections, general, security, team, notifications, preferences, workspace: createFileWorkspaceStore(join(dir, 'cases')), merchantProfile, voiceDir: env.SOURCING_VOICE_DIR || join(HERE, '..', '..', '..', 'data', 'local', 'voice-bench'), token, store, photos: createFilePhotoStore(join(dir, 'photos')), safety, ecb, ai: env.SOURCING_VISION_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY ? createVisionProvider({ apiKey: env.ANTHROPIC_API_KEY }) : createDisabledProvider(), allowedHosts: (() => { for (const h of (env.SOURCING_ALLOWED_HOSTS ?? '').split(',').map((x) => x.trim()).filter(Boolean)) if (!allowedHosts.includes(h)) allowedHosts.push(h); return allowedHosts; })(), uiDir: join(HERE, '..', 'ui'), coreDir: join(HERE, '..', 'core') });
   const server = http.createServer(app.handler);
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, host, resolve); });
   const addr = server.address();

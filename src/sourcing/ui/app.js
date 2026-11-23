@@ -9,6 +9,7 @@ import { MARKETPLACES } from '/core/amazon.js';
 import { DOC_TYPES } from '/core/docinspect.js';
 import { capabilityMatrix } from '/core/capabilities.js';
 import { headerStatus } from '/core/status.js';
+import { openFromLink } from './core-link.js';
 import { ls, initStorage, getBlob, putBlob, storageEstimate } from './storage.js'; import { backupSection, createBackup, fetchCasePhotos } from './backup.js'; import { csrfToken, detectAuth, installSignIn, loginScreen } from './session.js'; import { createCorePanel } from './core-panel.js'; import { createModulesPanel } from './modules-panel.js';
 import { $, esc, chip, money, list, field, selectOf, seg, quoteOf, VERDICT_TEXT } from './dom.js';
 import { S, cur, LEGACY_UI } from './state.js';
@@ -516,3 +517,4 @@ setInterval(() => { if (S.token) ping(); }, 30000); // notice a lost or recovere
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').then(() => { S.sw = 'registered'; }).catch((e) => { S.sw = `not registered (${e.message})`; });
 window.nordlaSourcing = { state: () => ({ sw: S.sw, online: S.online, token: !!S.token, server: status().server.state, safety: status().safety.state }) };
 initStorage().then(async () => { await detectAuth(S); installSignIn({ S, after: () => { render(); if (S.token) ping(); } }); render(); ping(); });
+openFromLink(); // ?ouvrir=… from the other Nordla modules (see core-link.js)

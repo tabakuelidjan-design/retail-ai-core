@@ -1,6 +1,8 @@
 // HTTP app for China Sourcing field mode. The decision logic lives in src/sourcing/core and runs IN THE BROWSER too (offline): this server only adds what a phone cannot do
 // alone - cases kept on disk, the Safety Gate cache, PDF text, optional ECB rates and an optional AI provider. Every /api route needs the token.
+import { MODULE_REGISTRY } from '../../shared/module-registry.js';
 import { procurementUserFor } from '../../procurement/server/hosted.js';
+import { readNordlaShared } from '../../shared/nordla-static.js';
 import { WRITER_ROLES, READ_ONLY_POSTS as READ_ONLY_POSTS_LIST } from '../../identity/permissions.js';
 import { randomUUID } from 'node:crypto';
 import { readFile, readdir } from 'node:fs/promises';
@@ -55,7 +57,7 @@ export function backupHealth(st, nowMs, { maxAgeH = 26, firstRunGraceMin = 30 } 
 export const SOURCING_WRITERS = new Set(WRITER_ROLES); // src/identity/permissions.js is the source of these rules
 /** POST routes that only compute or read (no stored change): open to every member. */
 export const READ_ONLY_POSTS = new Set(READ_ONLY_POSTS_LIST);
-export function createSourcingApp({ release = { sha: 'unknown', branch: 'unknown', source: 'none' }, accessJournal = null, backupStatus = null, token, gate = null, core = null, procurement = null, creator = null, gbp = null, videos = null, connections = null, general = null, security = null, team = null, notifications = null, preferences = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
+export function createSourcingApp({ moduleGateway = null, release = { sha: 'unknown', branch: 'unknown', source: 'none' }, accessJournal = null, backupStatus = null, token, gate = null, core = null, procurement = null, creator = null, gbp = null, videos = null, connections = null, general = null, security = null, team = null, notifications = null, preferences = null, store, photos = null, workspace = null, merchantProfile = null, safety = null, ecb = null, ai = null, uiDir, coreDir, voiceDir = null, allowedHosts = null, now = () => new Date() }) {
   if (!gate && (!token || String(token).length < 24)) throw new Error('a token of at least 24 characters is required'); // hosted: the session gate (Core identity) replaces the token
   // Host header allow-list (blocks DNS-rebinding on the loopback server). A tunnel's public host name must be added by the owner (SOURCING_ALLOWED_HOSTS).
   // `allowedHosts` may be a live array: the phone launcher adds the tunnel host name once it is known
@@ -190,6 +192,9 @@ export function createSourcingApp({ release = { sha: 'unknown', branch: 'unknown
       if (req.method === 'GET' && String(req.url).split('?')[0] === '/healthz/backup') { const h = backupHealth(backupStatus?.() ?? null, now().getTime()); return json(res, h.ok ? 200 : 503, h, { 'cache-control': 'no-store' }); }
       const url = new URL(req.url, 'http://local');
       if (url.pathname === '/shell-manifest.json' && req.method === 'GET') return json(res, 200, await shellManifest(), { 'cache-control': 'no-cache' });
+      // Presentation only (labels, Nordla paths, scripts, tabs): no secret and no access decision. Access comes from /api/core/modules.
+      if (url.pathname === '/nordla-module-registry.json' && req.method === 'GET') return json(res, 200, { modules: MODULE_REGISTRY.map((m) => ({ key: m.key, title: m.title, prefix: m.prefix, embed: m.embed, tabs: [...m.tabs] })) }, { 'cache-control': 'no-cache' });
+      if (moduleGateway && await moduleGateway(req, res, url)) return; // Croissance under the Core origin (/growth/*): Core session checked by the gateway, then proxied
       if (gate && url.pathname.startsWith('/api/auth/') && await gate.handle(req, res, url.pathname)) return;
       if (!gate && url.pathname === '/api/auth/session' && req.method === 'GET') return json(res, 200, { mode: 'token' }); // the page asks which sign-in: no data, no token check (would count as a failed attempt)
       if (creator && await creator.handle(req, res, url)) return; // the Creator (staging module, only when built): its own paths, its own failures
@@ -203,6 +208,7 @@ export function createSourcingApp({ release = { sha: 'unknown', branch: 'unknown
       if (videos && await videos.handle(req, res, url)) return; // the video drafts (staging module, only when built): /videos, /video-assets/*, /api/videos*
       if (url.pathname.startsWith('/api/')) return await api(req, res, url);
       if (req.method !== 'GET') return json(res, 405, { error: 'METHOD_NOT_ALLOWED' });
+      if (url.pathname === '/nordla-core-rail.js' || url.pathname === '/nordla-core-rail.css') { const shared = await readNordlaShared(url.pathname); if (shared) { res.writeHead(200, { 'content-type': shared.type, 'cache-control': 'no-cache' }); return res.end(shared.body); } } // Core menu of the shared Nordla frame
       if (procurement && (url.pathname === '/procurement' || url.pathname.startsWith('/procurement/'))) return await procurement.handleStatic(req, res, url); // Stock / Achats phone screens (static files only; its data stays behind /api/procurement/*)
       if (voice && await voice.handle(req, res, url.pathname)) return;
       if (STATIC[url.pathname]) return await serveStatic(res, STATIC[url.pathname], uiDir);

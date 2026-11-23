@@ -127,7 +127,9 @@ export function createCoreHttp({ runtime, configError = null, store, externals =
         const b = await body(req); const to = b.to === undefined ? 'dropoff' : String(b.to);
         if (!Object.hasOwn(HANDOFF_DESTINATIONS, to)) { json(res, 400, { error: 'INVALID_DESTINATION' }); return true; }
         const ticket = issueHandoff({ secret: sso.secret, merchantId: sso.merchantId, userId: actor.userId, authSessionId: actor.sessionId, ttlSeconds: 60 });
-        json(res, 200, { url: `${sso.origin}/sso?t=${ticket}&to=${to}`, expiresInSeconds: 60 }); return true;
+        // Growth behind the Core gateway (GROWTH_UPSTREAM_URL): the ticket goes to /growth/sso (same tab, under the Nordla address). Otherwise the module's own origin.
+        const target = String(env?.GROWTH_UPSTREAM_URL ?? '').trim() ? `/growth/sso?t=${ticket}&to=${to}` : `${sso.origin}/sso?t=${ticket}&to=${to}`;
+        json(res, 200, { url: target, expiresInSeconds: 60 }); return true;
       }
       if (p === '/api/core/finance/inbox' && m === 'GET') { // read-only list of the Finance supplier-invoice inbox of THIS server's merchant; owner, administrator and accountant only
         if (!finance?.inbox) { json(res, 503, { error: 'NOT_CONNECTED' }); return true; }
