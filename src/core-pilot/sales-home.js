@@ -50,7 +50,7 @@ function weeklyOf(series) {
  * Reads the Analytics brief for the signed-in person. `publicUrl` and `ticket` come from the Core server (ANALYTICS_PUBLIC_URL
  * and a ticket signed just now for this person). Nothing is stored; the session cookie lives for this one read.
  */
-export async function loadSalesHome({ publicUrl = '', ticket = '', fetchImpl = globalThis.fetch } = {}) {
+export async function loadSalesHome({ publicUrl = '', ticket = '', headers = {}, fetchImpl = globalThis.fetch } = {}) {
   if (!publicUrl || !ticket) return { status: 'NOT_CONNECTED', source: 'Analytics' };
   let base;
   try { base = new URL(publicUrl); } catch { return { status: 'UNAVAILABLE', source: 'Analytics' }; }
@@ -58,11 +58,11 @@ export async function loadSalesHome({ publicUrl = '', ticket = '', fetchImpl = g
   try {
     const signal = AbortSignal.timeout(TIMEOUT_MS);
     const at = (p) => new URL((base.pathname.endsWith('/') ? base.pathname.slice(0, -1) : base.pathname) + p, base.origin).href; // keeps a gateway prefix such as /analyses
-    const sso = await fetchImpl(at(`/sso?t=${encodeURIComponent(ticket)}`), { redirect: 'manual', signal });
+    const sso = await fetchImpl(at(`/sso?t=${encodeURIComponent(ticket)}`), { redirect: 'manual', signal, headers });
     const cookie = (sso.headers.getSetCookie?.() ?? []).find((c) => c.startsWith('an_sid='));
     if (sso.status !== 302 || !cookie) return { status: 'UNAVAILABLE', source: 'Analytics', reason: `SSO_HTTP_${sso.status}${cookie ? '' : '_NO_COOKIE'}` };
     const sid = cookie.split(';')[0];
-    const res = await fetchImpl(at('/api/brief'), { headers: { cookie: sid, accept: 'application/json' }, signal });
+    const res = await fetchImpl(at('/api/brief'), { headers: { ...headers, cookie: sid, accept: 'application/json' }, signal });
     if (res.status === 404) return { status: 'NOT_CONNECTED', source: 'Analytics' }; // no report for this merchant yet
     if (!res.ok) return { status: 'UNAVAILABLE', source: 'Analytics', reason: `BRIEF_HTTP_${res.status}` };
     return salesHomeFromBrief(await res.json());

@@ -23,3 +23,15 @@ test('Core sales home still works with Analytics on its own domain (no prefix)',
   assert.ok(seen[0].startsWith('https://analytics.example.app/sso?t=tk.2'), seen[0]);
   assert.equal(seen[1], 'https://analytics.example.app/api/brief');
 });
+
+test('Core sales home sends the proxy secret to the Analytics upstream on both calls', async () => {
+  const calls = [];
+  const fetchImpl = async (url, opts = {}) => {
+    calls.push({ url: String(url), h: opts.headers ?? {} });
+    return String(url).includes('/sso?t=') ? new Response(null, { status: 302, headers: { 'set-cookie': 'an_sid=abc; Path=/' } }) : new Response('{}', { status: 404 });
+  };
+  await loadSalesHome({ publicUrl: 'https://analytics-up.example.app', ticket: 'tk.3', headers: { 'x-nordla-proxy-secret': 'S'.repeat(24) }, fetchImpl });
+  assert.equal(calls[0].h['x-nordla-proxy-secret'], 'S'.repeat(24));
+  assert.equal(calls[1].h['x-nordla-proxy-secret'], 'S'.repeat(24));
+  assert.equal(calls[1].h.cookie, 'an_sid=abc');
+});

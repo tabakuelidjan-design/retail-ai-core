@@ -314,7 +314,10 @@ export function buildAnalyticsSso(env, merchantId) {
     const u = new URL(String(env.ANALYTICS_PUBLIC_URL ?? '').trim()); const secret = String(env.ANALYTICS_SSO_SECRET ?? '');
     const path = u.pathname.endsWith('/') ? u.pathname.slice(0, -1) : u.pathname; // '' (own domain) or '/analyses' (Analyses under the Nordla origin)
     if (u.protocol !== 'https:' || (path !== '' && path !== '/analyses') || u.search || u.hash || u.username || u.password || !parseSsoKey(secret).ok) return null; // canonical base64url, 32 random bytes
-    return { publicUrl: u.origin + path, secret, merchantId };
+    // the server-side sales tiles call the Analytics service directly (the gateway needs a browser session), with the proxy secret
+    const upstreamUrl = String(env.ANALYTICS_UPSTREAM_URL ?? '').trim(); const proxySecret = String(env.ANALYTICS_PROXY_SECRET ?? '').trim();
+    const upstream = (() => { try { const v = new URL(upstreamUrl); return v.protocol === 'https:' && !v.search && !v.hash && !v.username && proxySecret.length >= 24 ? { url: v.origin, secret: proxySecret } : null; } catch { return null; } })();
+    return { publicUrl: u.origin + path, secret, merchantId, ...(upstream ? { upstream } : {}) };
   } catch { return null; }
 }
 
