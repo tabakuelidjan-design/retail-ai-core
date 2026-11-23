@@ -746,3 +746,9 @@ body.gr-pp-lock { overflow: hidden; }
   .gr-do-events tr { padding: 10px 0; border-top: 1px solid var(--nd-border); }
   .gr-do-events th, .gr-do-events td { padding: 2px 0; border: 0; text-align: left; overflow-wrap: anywhere; }
 }
+/* Inside Nordla (the Core rail is on the left): Croissance rubriques as one horizontal bar. Standalone pages never render these. */
+.gr-framed { min-width: 0; }
+.gr-tabs { display: flex; align-items: center; gap: 4px; overflow-x: auto; padding: 10px 16px; border-bottom: var(--nd-line); background: #fff; -webkit-overflow-scrolling: touch; }
+.gr-tabs .nav-item { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; padding: 8px 12px; border-radius: 10px; text-decoration: none; color: inherit; background: none; border: 0; font: inherit; cursor: pointer; }
+.gr-tabs .nav-item.active { font-weight: 700; }
+.gr-tabs .nav-item.inert { opacity: .55; cursor: default; }

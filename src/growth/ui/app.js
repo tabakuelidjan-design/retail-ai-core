@@ -156,6 +156,12 @@ function morePanel(active) {
 if (typeof document !== 'undefined' && document.addEventListener) {
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && navMoreOpen) setMoreOpen(false, true); });
 }
+// True when the page is served under Nordla's own address (/growth/...), i.e. inside the Core frame (index.html removes the frame otherwise).
+const FRAMED = /^\/growth(\/|$)/.test(location.pathname);
+/** The same rubriques as the sidebar, as one horizontal bar (inside Nordla). */
+function tabsBar(active) {
+  return h('nav', { class: 'gr-tabs', 'aria-label': t('gr.nav.aria') }, GROWTH_NAV.map((n) => navItem(n, active)), moreButton(active));
+}
 function sidebar(active) {
   return h('nav', { class: 'sidebar', 'aria-label': t('gr.nav.aria') },
     h('div', { class: 'brand' }, h('div', { class: 'brand-mark' }), h('div', { class: 'brand-name' }, t('gr.brand'))),
@@ -296,7 +302,8 @@ function render() {
   document.documentElement.lang = NORDLA_I18N.getLang();
   const app = document.getElementById('app');
   const main = h('main', { class: 'main gr-main' });
-  app.replaceChildren(h('div', { class: 'shell' }, sidebar(key), main, morePanel(key)));
+  // Inside Nordla (/growth/...): the Core rail stays on the left and Croissance's rubriques are a horizontal bar on top.
+  app.replaceChildren(FRAMED ? h('div', { class: 'gr-framed' }, tabsBar(key), main, morePanel(key)) : h('div', { class: 'shell' }, sidebar(key), main, morePanel(key)));
   main.appendChild(topbar(page));
   main.appendChild(h('div', { class: 'ex-head' }, h('div', null, h('h1', { class: 'ex-title' }, t(page.title)), h('p', { class: 'ex-sub' }, t(page.subtitle)))));
   if (!d) { main.appendChild(loadStateCard(key)); applyDialogFocus(); return; }
@@ -375,6 +382,16 @@ async function route() {
   if (!page.get() && loadState[key] !== 'loading') await loadPage(key);
   else render();
   window.scrollTo(0, 0);
+}
+// Inside Nordla only (/growth/...): the Core rail (its own file, served by Core) goes on the left, the page keeps its own container on the right.
+// Standalone pages are not touched: no extra markup, no rail.
+if (FRAMED) {
+  const app = document.getElementById('app');
+  const frame = document.createElement('div'); frame.className = 'shell';
+  const rail = document.createElement('div'); rail.setAttribute('data-nordla-core-rail', 'growth');
+  app.parentNode.insertBefore(frame, app); frame.appendChild(rail); frame.appendChild(app); app.className = 'mainarea';
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/nordla-core-rail.css'; document.head.appendChild(css);
+  const js = document.createElement('script'); js.src = '/nordla-core-rail.js'; document.body.appendChild(js);
 }
 window.addEventListener('hashchange', route);
 // HOSTED (session.js is in the page only then): sign in and load the merchant's follow-up first. The local preview goes straight to the screen.
