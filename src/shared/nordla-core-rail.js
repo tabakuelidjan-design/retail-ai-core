@@ -26,7 +26,7 @@
     { key: 'parle', label: 'Parle à Nordla', path: '/?ouvrir=parle', icon: 'chat', colour: '#0F1B2D' },
     { key: 'finance', label: 'Finance', path: '/?ouvrir=finance', icon: 'card', colour: '#46778D' },
     { key: 'analytics', label: 'Analyses', path: '/?ouvrir=analyses', icon: 'chart', colour: '#7842B8' },
-    { key: 'procurement', label: 'Stock & Achats', path: '/procurement/', icon: 'box', colour: '#E87924' },
+    { key: 'procurement', label: 'Stock & Achats', path: '/procurement/?tab=stock', icon: 'box', colour: '#E87924' },
     { key: 'sourcing', label: 'Sourcing', path: '/sourcing', icon: 'globe', colour: '#B92335' },
     { key: 'growth', label: 'Croissance', icon: 'chart', colour: '#D1A44F', note: 'Écran pas encore accessible' },
     { key: 'marketing', label: 'Marketing', path: '/videos', icon: 'megaphone', colour: '#F17821' },

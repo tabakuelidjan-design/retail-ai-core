@@ -41,7 +41,7 @@ test('Parle à Nordla, Analyses and Finance open their own action on Core, never
   assert.equal(byLabel['Parle à Nordla'], '/?ouvrir=parle');
   assert.equal(byLabel['Analyses'], '/?ouvrir=analyses');
   assert.equal(byLabel['Finance'], '/?ouvrir=finance');
-  assert.equal(byLabel['Stock & Achats'], '/procurement/');
+  assert.equal(byLabel['Stock & Achats'], '/procurement/?tab=stock'); // Stock is the arrival section from the Core menu
   assert.equal(byLabel['Sourcing'], '/sourcing');
   assert.equal(byLabel['Paramètres'], '/settings');
 });
@@ -72,14 +72,15 @@ test('the frame is isolated: its layout is scoped to .nordla-frame and it adds n
   }
 });
 
-test('Stock & Achats shows the Core menu on a computer (left) and in a drawer on a phone, with its own tabs kept clear of it', () => {
+test('Stock & Achats shows the Core menu on a computer (left) and in a drawer on a phone, with its sections in a top bar', () => {
   assert.match(procIndex, /<div class="shell">\s*<div data-nordla-core-rail="procurement"><\/div>\s*<div class="mainarea">/, 'two columns only once the script adds .nordla-frame');
   assert.match(procIndex, /<span data-nordla-core-toggle><\/span>/);
   assert.match(procIndex, /<script src="\/nordla-core-rail\.js" defer><\/script>/);
   assert.match(procIndex, /<link rel="stylesheet" href="\/nordla-core-rail\.css">/);
-  assert.match(procCss, /@media \(min-width:901px\)\{\.nordla-frame \.tabs\{left:232px\}\}/);
+  assert.match(procCss, /\.tabs\{display:flex;gap:4px;overflow-x:auto/, 'the sections are a horizontal bar, not a bottom bar');
+  assert.doesNotMatch(procCss, /\.tabs\{position:fixed/);
 });
 
-test('Stock & Achats keeps its own bottom navigation and its Nordla home link', () => {
+test('Stock & Achats keeps its sections (top bar) and its Nordla home link', () => {
   for (const id of ['data-tab="visits"', 'data-tab="items"', 'data-tab="compare"', 'data-tab="orders"', 'data-tab="stock"', 'id="nordla-home"']) assert.ok(procIndex.includes(id), id);
 });

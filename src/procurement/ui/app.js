@@ -31,7 +31,10 @@ const put = (el, ...kids) => el.append(...kids.flat(Infinity).filter((k) => k !=
 const swap = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter((k) => k != null && k !== false));
 
 // ------------------------------------------------------------------ state, navigation
-const S = { me: null, tab: 'visits', stack: [], online: true, lastError: null, prefs: false, openView: null, skipDefault: false };
+// Opened from the Core menu (?tab=stock) the page lands on the stock inventory; standalone it still lands on Visites.
+const TAB_IDS = ['visits', 'items', 'compare', 'orders', 'stock'];
+const START_TAB = new URLSearchParams(location.search).get('tab');
+const S = { me: null, tab: TAB_IDS.includes(START_TAB) ? START_TAB : 'visits', stack: [], online: true, lastError: null, prefs: false, openView: null, skipDefault: false };
 
 function banner(text, kind = '') { const b = $('banner'); b.textContent = text ?? ''; b.hidden = !text; b.className = `banner ${kind}`; if (text && kind !== 'err') setTimeout(() => { if (b.textContent === text) b.hidden = true; }, 6000); }
 function setHead(title, subtitle = '', back = false) { const home = $('nordla-home'); if (HOSTED) home.setAttribute('href', '/'); home.hidden = !HOSTED; // the link to the Nordla home exists only when the page is served by Nordla (no absolute URL in the static page)
@@ -354,19 +357,47 @@ async function screenImport() {
     h('button', { class: 'btn sec', onclick: async () => { const qty = parseInteger(prompt('Quantité du bon brouillon :')); if (!qty) return; const exp = prompt('Livraison souhaitée (AAAA-MM-JJ) :', new Date(Date.now() + 60 * 864e5).toISOString().slice(0, 10)); if (!exp) return; const fxr = prompt('Taux de change vers EUR si le prix n’est pas en euros (ex. 0,92), sinon laisser vide :'); const body = { caseId: c.id, qty, expectedDate: exp }; lastTry = body; if (fxr && parseDecimal(fxr)) body.fxRate = parseDecimal(fxr); const r = await request('POST', '/api/sourcing/import', { key: uid('impo'), body }); if (r.status === 200) show(r.json); else banner(errText(r), 'err'); } }, 'Importer + brouillon de commande')))) : empty('Aucun dossier China Sourcing trouvé.'), out);
 }
 
+/** Stock state of one product, with the existing reorder rule (queries.js reorderAlerts): no threshold = not classed. */
+function stockState(i) {
+  if (i.reorderPoint == null) return { key: 'nothreshold', label: 'Seuil à définir', tone: '' };
+  if (i.available <= 0) return { key: 'out', label: 'Rupture', tone: 'r' };
+  if (i.available + (i.incoming?.qty ?? 0) <= i.reorderPoint) return { key: 'low', label: 'Stock faible', tone: 'a' };
+  return { key: 'ok', label: 'En stock', tone: 'g' };
+}
 async function screenStock() {
-  setHead('Stock', 'Quantités, emplacements, entrant');
+  setHead('Stock', 'Inventaire du commerce connecté');
   const box = h('div', {}); swap(main, box);
   const res = await getJson('/api/stock'); if (!res.data) return put(box, fail(res));
   const d = res.data; const v = d.valuation;
+  const rows = d.items.map((i) => ({ i, st: stockState(i) }));
+  const n = (k) => rows.filter((r) => r.st.key === k).length;
+  const units = d.items.reduce((sum, i) => sum + (i.physical ?? 0), 0);
+  const low = n('low') + n('out');
+  const search = h('input', { type: 'search', placeholder: 'Rechercher un produit', 'aria-label': 'Rechercher un produit' });
+  const filter = h('select', { 'aria-label': 'Filtrer par état' }, [['all', 'Tous les produits'], ['ok', 'En stock'], ['low', 'Stock faible'], ['out', 'Rupture'], ['nothreshold', 'Seuil à définir']].map(([k, l]) => h('option', { value: k }, l)));
+  const tbody = h('tbody', {});
+  const draw = () => {
+    const q = search.value.trim().toLowerCase(); const f = filter.value;
+    const shown = rows.filter(({ i, st }) => (f === 'all' || st.key === f) && (!q || `${i.name} ${i.sku}`.toLowerCase().includes(q)));
+    swap(tbody, shown.length ? shown.map(({ i, st }) => h('tr', {}, h('td', {}, h('button', { class: 'linkbtn', onclick: () => go('stockItem', { item: i, locations: d.locations }) }, i.name)), h('td', {}, i.sku), h('td', { class: 'n' }, String(i.available)), h('td', {}, chip(st.label, st.tone)))) : h('tr', {}, h('td', { colspan: 4 }, empty('Aucun produit ne correspond à cette recherche ou à ce filtre.'))));
+  };
+  search.oninput = draw; filter.onchange = draw;
   put(box, stale(res),
+    h('div', { class: 'rc-grid' },
+      h('div', { class: 'card' }, h('div', { class: 'small muted' }, 'Références'), h('div', { class: 'big' }, String(rows.length))),
+      h('div', { class: 'card' }, h('div', { class: 'small muted' }, 'Unités en stock'), h('div', { class: 'big' }, String(units))),
+      h('div', { class: 'card' }, h('div', { class: 'small muted' }, 'Stock faible'), h('div', { class: 'big' }, String(low)), h('div', { class: 'small muted' }, n('out') ? `dont ${n('out')} en rupture` : 'aucune rupture'))),
+    n('nothreshold') ? h('div', { class: 'note' }, `${n('nothreshold')} produit(s) sans seuil de réapprovisionnement : ils ne sont pas classés en stock faible tant que le seuil n’est pas défini.`) : null,
+    h('div', { class: 'card' }, h('h2', {}, 'Stock disponible'), h('div', { class: 'row' }, search, filter),
+      h('div', { style: 'overflow-x:auto' }, h('table', {}, h('thead', {}, h('tr', {}, h('th', {}, 'Produit'), h('th', {}, 'Référence'), h('th', { class: 'n' }, 'Disponible'), h('th', {}, 'État'))), tbody)),
+      !rows.length ? empty('Aucun produit en stock pour l’instant. Les marchandises apparaissent après leur réception.') : null),
+    S.me.canReceive || S.me.canAdjust ? h('div', { class: 'row' }, h('button', { class: 'btn sec', onclick: () => go('count') }, 'Faire un inventaire'), h('button', { class: 'btn sec', onclick: () => go('requests') }, 'Demandes en attente')) : h('button', { class: 'btn sec', onclick: () => go('requests') }, 'Demandes en attente'),
+    S.me.canSelfApprove ? h('button', { class: 'btn sec', onclick: () => go('newLocation') }, 'Ajouter un emplacement') : null,
     h('div', { class: 'card' }, h('h2', {}, 'Valeur du stock (moyenne pondérée mobile)'),
       h('div', { class: 'big' }, fmtMoney(v.confirmedEurMinor + v.estimatedEurMinor, 'EUR')),
       h('p', { class: 'small muted' }, `${fmtMoney(v.confirmedEurMinor, 'EUR')} confirmé · ${fmtMoney(v.estimatedEurMinor, 'EUR')} estimé (prix des marchandises seul, sans transport ni droits)${v.itemsWithUnknownCost ? ` · ${v.unknownUnits} unité(s) de ${v.itemsWithUnknownCost} produit(s) SANS coût connu, non valorisées` : ''}.`)),
-    S.me.canReceive || S.me.canAdjust ? h('div', { class: 'row' }, h('button', { class: 'btn sec', onclick: () => go('count') }, 'Faire un inventaire'), h('button', { class: 'btn sec', onclick: () => go('requests') }, 'Demandes en attente')) : h('button', { class: 'btn sec', onclick: () => go('requests') }, 'Demandes en attente'),
-    S.me.canSelfApprove ? h('button', { class: 'btn sec', onclick: () => go('newLocation') }, 'Ajouter un emplacement') : null,
-    d.items.length ? h('ul', { class: 'list' }, d.items.map((i) => h('li', {}, h('button', { class: 'tap', onclick: () => go('stockItem', { item: i, locations: d.locations }) }, i.photo ? thumb(i.photo) : h('div', { class: 'thumb' }), h('div', { class: 'grow' }, h('div', { class: 'nm' }, i.name), h('div', { class: 'sub' }, `${i.sku} · à vendre ${i.available}${i.incoming.qty ? ` · attendu ${i.incoming.qty}` : ''}${i.quarantine ? ` · quarantaine ${i.quarantine}` : ''}`)), valuationChip(i.valuation))))) : empty('Aucun produit en stock pour l’instant. Les marchandises apparaissent après leur réception.'),
     h('p', { class: 'small muted' }, 'Le stock vient des réceptions et des mouvements enregistrés ici : ce n’est pas le stock Shopify, et rien n’est écrit dans Shopify.'));
+  draw();
 }
 const valuationChip = (v) => chip({ CONFIRMED: 'coût confirmé', ESTIMATED: 'coût estimé', PARTIAL: 'coût partiel', UNKNOWN: 'coût inconnu', EMPTY: 'vide' }[v.status] ?? v.status, { CONFIRMED: 'g', ESTIMATED: 'a', PARTIAL: 'a', UNKNOWN: 'r', EMPTY: '' }[v.status] ?? '');
 function screenStockItem({ item: i, locations = [] }) {

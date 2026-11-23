@@ -205,7 +205,7 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, s
       return send(res, 200, {
         locations: [...locs.values()].map((l) => ({ id: l.id, name: l.name, type: l.type })),
         items: st.positions.map((x) => ({
-          itemId: x.itemId, sku: x.sku, name: items.get(x.itemId)?.name ?? x.sku, status: items.get(x.itemId)?.status ?? null, photo: (items.get(x.itemId)?.attachments ?? []).find((a) => a.kind === 'PHOTO')?.ref ?? null,
+          itemId: x.itemId, sku: x.sku, name: items.get(x.itemId)?.name ?? x.sku, status: items.get(x.itemId)?.status ?? null, reorderPoint: items.get(x.itemId)?.reorderPoint ?? null, photo: (items.get(x.itemId)?.attachments ?? []).find((a) => a.kind === 'PHOTO')?.ref ?? null,
           physical: x.physical, sellable: x.sellable, reserved: x.reserved, available: x.available, inTransit: x.inTransit, quarantine: x.quarantine,
           incoming: { qty: x.incoming.qty, orders: x.incoming.orders.map((o) => ({ poId: o.poId, number: o.number, qty: o.qty, expectedDate: o.expectedDate, delayed: o.delayed })) },
           perLocation: x.locations.filter((l) => l.onHand || l.reserved).map((l) => ({ locationId: l.locationId, name: locs.get(l.locationId)?.name ?? null, type: l.type, onHand: l.onHand, reserved: l.reserved })),
