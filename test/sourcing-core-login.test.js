@@ -34,5 +34,6 @@ test('on the signed-out home the menu button and the case title are removed (onl
   const html = await read('../src/sourcing/ui/index.html');
   assert.match(app, /document\.body\.classList\.toggle\('core-signed-out', !onSourcing\)/);
   assert.match(app, /document\.body\.classList\.remove\('core-signed-out'\)/);
-  assert.match(html, /body\.core-signed-out #btn-cases, body\.core-signed-out #case-name, body\.core-signed-out #case-sub \{ display: none; \}/);
+  assert.match(html, /body\.core-signed-out > header\.top, body\.core-signed-out > #statusbar, body\.core-signed-out #btn-cases, body\.core-signed-out #case-name, body\.core-signed-out #case-sub, body\.core-signed-out #mode \{ display: none; \}/);
+  assert.match(html, /body\.ui-booting > header\.top, body\.ui-booting > #statusbar \{ display: none; \}/, 'no empty strip while the session is checked');
 });
