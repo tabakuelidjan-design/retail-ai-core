@@ -206,7 +206,7 @@ body.sl-mode .nx .nx-blkacts{display:flex;flex-wrap:wrap;gap:var(--s2);margin:va
 
 /* Sourcing inside Nordla: shared Core frame on desktop, Nordla drawer on phones, and the existing field navigation kept intact. */
 @media (min-width:901px){
-  body{padding-bottom:0}
+  body.nordla-hosted{padding-bottom:0}
   .shell.nordla-frame > .mainarea .top{position:sticky;top:0}
   .shell.nordla-frame > .mainarea main#screen{max-width:1200px;margin:0 auto;padding:26px 32px 40px}
   .shell.nordla-frame > .mainarea .tabs{
@@ -226,10 +226,9 @@ body.sl-mode .nx .nx-blkacts{display:flex;flex-wrap:wrap;gap:var(--s2);margin:va
     color:var(--nx-accent);font-weight:700;box-shadow:inset 0 -3px 0 var(--nx-accent)
   }
   .shell.nordla-frame > .mainarea .tabs .nx-ic{width:20px;height:20px;padding:0;border-radius:0}
-  body.sl-mode{padding-bottom:0}
-  body.sl-mode .top{display:flex}
+  body.nordla-hosted.sl-mode{padding-bottom:0}
   body.sl-mode #statusbar{display:none}
   body.sl-mode .shell.nordla-frame > .mainarea main#screen{max-width:1200px;margin:0 auto;padding:26px 32px 40px}
 }
 
-body.sl-mode .top{display:flex}
+body.nordla-hosted.sl-mode .top{display:flex}
