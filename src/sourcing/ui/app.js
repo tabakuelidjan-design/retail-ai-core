@@ -168,7 +168,8 @@ function render() {
   ensureCase(); const c = cur();
   // Signed out: on the Nordla home (/) the Core sign-in; the Sourcing entry (/sourcing) keeps its own sign-in, folders and offline choice.
   const onSourcing = location.pathname === '/sourcing';
-  if ((!S.token && (!S.offlineChoice || !onSourcing)) || S.authFailed) { $('#tabs').innerHTML = ''; $('#screen').innerHTML = S.authMode === 'session' ? (onSourcing ? loginScreen(S) : coreLoginScreen(S)) : gate(); $('#case-name').textContent = onSourcing || S.authMode !== 'session' ? 'Nordla - Sourcing' : 'Nordla'; if (!onSourcing) document.title = 'Nordla'; finishBoot(); return; }
+  if ((!S.token && (!S.offlineChoice || !onSourcing)) || S.authFailed) { $('#tabs').innerHTML = ''; $('#screen').innerHTML = S.authMode === 'session' ? (onSourcing ? loginScreen(S) : coreLoginScreen(S)) : gate(); $('#case-name').textContent = onSourcing || S.authMode !== 'session' ? 'Nordla - Sourcing' : 'Nordla'; if (!onSourcing) document.title = 'Nordla'; document.body.classList.toggle('core-signed-out', !onSourcing); finishBoot(); return; }
+  document.body.classList.remove('core-signed-out'); // the menu button and the case title come back on the signed-in screens
   const fm = S.mode === 'field'; const sl = S.mode === 'salon';
   document.body.classList.toggle('fm-mode', fm); document.body.classList.toggle('sl-mode', sl);
   if (sl) { // Field V1 salon: its own screens and bottom bar; the drafts the owner typed survive a re-render exactly like everywhere else

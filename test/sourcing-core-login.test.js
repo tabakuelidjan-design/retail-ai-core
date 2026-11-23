@@ -28,3 +28,11 @@ test('the Sourcing header, the folders text and the offline button belong to /so
   assert.match(sourcingLogin, /Travailler sur ce téléphone seulement/, 'the Sourcing entry keeps its offline button');
   assert.match(sourcingLogin, /dossiers et photos/);
 });
+
+test('on the signed-out home the menu button and the case title are removed (only /sourcing shows them)', async () => {
+  const app = await read('../src/sourcing/ui/app.js');
+  const html = await read('../src/sourcing/ui/index.html');
+  assert.match(app, /document\.body\.classList\.toggle\('core-signed-out', !onSourcing\)/);
+  assert.match(app, /document\.body\.classList\.remove\('core-signed-out'\)/);
+  assert.match(html, /body\.core-signed-out #btn-cases, body\.core-signed-out #case-name, body\.core-signed-out #case-sub \{ display: none; \}/);
+});
