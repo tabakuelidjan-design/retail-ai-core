@@ -673,6 +673,8 @@ function openCoreModule(key, requestedPath) {
       document.body.appendChild(form); form.submit(); form.remove();
     }).catch(() => { frame.src = module.url; });
     frame.src = moduleUrl;
+  } else {
+    frame.src = moduleUrl; // every other Core module (Settings, Analyses, Sourcing, Stock): the frame loads its page
   }
   o.scrollTop = 0;
 }
