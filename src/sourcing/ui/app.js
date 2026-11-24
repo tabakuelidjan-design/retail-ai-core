@@ -622,11 +622,25 @@ function openCoreModule(key) {
       // The Core shell outside this iframe already owns navigation; remove the module's duplicate rail.
       doc.getElementById('corerail')?.remove();
       doc.querySelector('.menu-toggle')?.remove();
-      if (doc.getElementById('nordla-embedded-frame-style')) return;
-      const style = doc.createElement('style');
-      style.id = 'nordla-embedded-frame-style';
-      style.textContent = '#corerail,.corerail,.menu-toggle,[data-nordla-core-rail]{display:none!important}nav#corerail,nav.corerail{display:none!important}.shell.nordla-frame{display:block!important;grid-template-columns:minmax(0,1fr)!important;min-height:0!important}.shell.nordla-frame>.mainarea{margin-left:0!important;min-width:0!important;width:100%!important}body.nordla-hosted{padding-left:0!important}.shell{display:block!important;grid-template-columns:minmax(0,1fr)!important;min-height:0!important}.shell>.mainarea{margin-left:0!important;min-width:0!important;width:100%!important}main#main{max-width:none!important;width:100%!important;margin:0!important}';
-      doc.head.appendChild(style);
+      let style = doc.getElementById('nordla-embedded-frame-style');
+      if (!style) {
+        style = doc.createElement('style');
+        style.id = 'nordla-embedded-frame-style';
+        doc.head.appendChild(style);
+      }
+      style.textContent = '#corerail,.corerail,.menu-toggle,[data-nordla-core-rail]{display:none!important}nav#corerail,nav.corerail{display:none!important}.shell{display:block!important;grid-template-columns:minmax(0,1fr)!important;min-height:0!important}.shell>.mainarea{margin-left:0!important;min-width:0!important;width:100%!important}body.nordla-hosted{padding-left:0!important}main#main{max-width:none!important;width:100%!important;margin:0!important}';
+      const shell = doc.querySelector('.shell');
+      shell?.style.setProperty('display', 'block', 'important');
+      shell?.style.setProperty('grid-template-columns', 'minmax(0, 1fr)', 'important');
+      shell?.style.setProperty('min-height', '0', 'important');
+      const mainarea = doc.querySelector('.shell > .mainarea');
+      mainarea?.style.setProperty('margin-left', '0', 'important');
+      mainarea?.style.setProperty('min-width', '0', 'important');
+      mainarea?.style.setProperty('width', '100%', 'important');
+      const content = doc.querySelector('main#main');
+      content?.style.setProperty('max-width', 'none', 'important');
+      content?.style.setProperty('width', '100%', 'important');
+      content?.style.setProperty('margin', '0', 'important');
     } catch { /* a frame stays usable if its module chooses not to expose its document */ }
   });
   frame.src = module.url;
