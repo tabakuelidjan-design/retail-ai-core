@@ -110,7 +110,7 @@ export function createHttpSecurity(config = {}) {
   const refuse = (code, publicCode = 'FORBIDDEN', requestId = null) => Object.freeze({ ok: false, code, response: publicError({ publicCode }, { requestId }) });
   const guarded = (req, f) => {
     let ctx;
-    try { ctx = context(req); } catch (e) { console.log(`[security-refusal] ${e instanceof HttpSecurityError ? e.code : 'REQUEST_INVALID'}/${e instanceof HttpSecurityError ? e.publicCode : 'BAD_REQUEST'} method=${String(req.method)} xfh=${String(req.headers['x-forwarded-host'] ?? '-')} xfp=${String(req.headers['x-forwarded-proto'] ?? '-')} xrip=${req.headers['x-real-ip'] ? 'set' : 'missing'}`); return refuse(e instanceof HttpSecurityError ? e.code : 'REQUEST_INVALID', e instanceof HttpSecurityError ? e.publicCode : 'BAD_REQUEST'); }
+    try { ctx = context(req); } catch (e) { return refuse(e instanceof HttpSecurityError ? e.code : 'REQUEST_INVALID', e instanceof HttpSecurityError ? e.publicCode : 'BAD_REQUEST'); }
     return f(ctx);
   };
 
