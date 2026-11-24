@@ -12,11 +12,12 @@ import https from 'node:https';
 
 export const PROXY_SECRET_HEADER = 'x-nordla-proxy-secret';
 const FINANCE_COOKIE = /^fin_(?:demo_)?sid=/;
+const ANALYTICS_COOKIE = /^an_sid=/;
 
 /** The module table. `cookies` = the only cookies a module may receive (null: none). `upstreamToken` is only ever sent upstream. */
 export const MODULES = Object.freeze({
   finance: { prefix: '/finance', cookies: FINANCE_COOKIE },
-  analytics: { prefix: '/analyses', cookies: null },
+  analytics: { prefix: '/analyses', cookies: ANALYTICS_COOKIE },
   growth: { prefix: '/growth', cookies: null },
 });
 
@@ -101,8 +102,16 @@ export function createGateway({ publicOrigin, services, authorize, modules = MOD
       const out = { ...ur.headers };
       for (const h of STRIP_RESPONSE) delete out[h];
       if (out.location) out.location = rewriteLocation(String(out.location), up.origin, route.prefix);
-      if (out['set-cookie']) out['set-cookie'] = modules[route.key].cookies ? [].concat(out['set-cookie']).map((c) => rewriteSetCookie(c, route.prefix)) : undefined;
-      if (out['set-cookie'] === undefined) delete out['set-cookie'];
+      if (out['set-cookie']) {
+        const cookiePattern = modules[route.key].cookies;
+        const allowedCookies = cookiePattern
+          ? [].concat(out['set-cookie'])
+            .filter((cookie) => cookiePattern.test(String(cookie).split(';', 1)[0].trim()))
+            .map((cookie) => rewriteSetCookie(cookie, route.prefix))
+          : [];
+        if (allowedCookies.length) out['set-cookie'] = allowedCookies;
+        else delete out['set-cookie'];
+      }
       // Server-Timing: the module's own timing is kept, and the gateway adds the time it waited for the module to answer (network + module)
       out['server-timing'] = [out['server-timing'], `gw;dur=${(performance.now() - gwStart).toFixed(1)}`].filter(Boolean).join(', ');
       res.writeHead(ur.statusCode, out);
