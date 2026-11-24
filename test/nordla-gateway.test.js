@@ -42,7 +42,7 @@ async function fakeService(name) {
     if (p === '/after') { res.writeHead(200, { 'content-type': 'text/plain' }); return res.end('after'); }
     if (p === '/redir') { res.writeHead(302, { location: `http://127.0.0.1:${svc.server.address().port}/after?k=1` }); return res.end(); }
     if (p === '/redir-rel') { res.writeHead(302, { location: '/after' }); return res.end(); }
-    if (p === '/login') { res.writeHead(302, { location: '/after', 'set-cookie': ['fin_sid=abc; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800', 'other=1; Path=/'] }); return res.end(); }
+    if (p === '/login') { const sessionCookie = name === 'analytics' ? 'an_sid=abc' : 'fin_sid=abc'; res.writeHead(302, { location: '/after', 'set-cookie': [`${sessionCookie}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800`, 'other=1; Path=/'] }); return res.end(); }
     if (p === '/basic') { res.writeHead(401, { 'www-authenticate': 'Basic realm="x"', 'content-type': 'application/json' }); return res.end('{}'); }
     if (p === '/pdf') { res.writeHead(200, { 'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="facture.pdf"', 'content-length': String(PDF.length) }); return res.end(PDF); }
     res.writeHead(200, { 'content-type': 'text/html', 'content-security-policy': "default-src 'self'; frame-ancestors 'none'", 'x-frame-options': 'DENY' }); res.end('<html>' + name + '</html>');
@@ -141,26 +141,27 @@ test('forwarding: the module gets its prefix-free path, the proxy secret, its ow
   } finally { await f.close(); }
 });
 
-test('analytics: its access token is added by the gateway only, never sent to the browser, and no Core cookie leaks', async () => {
+test('analytics forwards only its SSO cookie while the gateway keeps the access token server-side', async () => {
   const f = await gatewayFixture();
   try {
-    const r = await f.call({ path: '/analyses/echo', headers: { ...f.session, cookie: 'nordla_core_session=1; fin_sid=abc' } });
+    const r = await f.call({ path: '/analyses/echo', headers: { ...f.session, cookie: 'nordla_core_session=1; an_sid=xyz; fin_sid=abc; other=2' } });
     assert.equal(r.status, 200);
     const got = f.ana.seen[0];
     assert.equal(got.headers.authorization, `Basic ${Buffer.from(`nordla:${TOKEN}`).toString('base64')}`);
-    assert.equal(got.headers.cookie, undefined, 'analytics owns no cookie');
+    assert.equal(got.headers.cookie, 'an_sid=xyz', 'only the Analytics SSO cookie reaches Analytics');
     assert.equal(r.text.includes(TOKEN), false);
     for (const v of Object.values(r.headers)) assert.equal(String(v).includes(TOKEN), false, 'token not in any response header');
   } finally { await f.close(); }
 });
 
-test('a service Basic prompt (WWW-Authenticate) never reaches the browser; a service cookie for analytics is dropped', async () => {
+test('Analytics sets only its own SSO cookie under /analyses; Basic prompts never reach the browser', async () => {
   const f = await gatewayFixture();
   try {
     const basic = await f.call({ path: '/analyses/basic', headers: f.session });
     assert.equal(basic.status, 401); assert.equal(basic.headers['www-authenticate'], undefined);
     const login = await f.call({ path: '/analyses/login', headers: f.session });
-    assert.equal(login.headers['set-cookie'], undefined);
+    const cookies = [].concat(login.headers['set-cookie']);
+    assert.deepEqual(cookies, ['an_sid=abc; HttpOnly; SameSite=Strict; Path=/analyses; Max-Age=28800']);
   } finally { await f.close(); }
 });
 
