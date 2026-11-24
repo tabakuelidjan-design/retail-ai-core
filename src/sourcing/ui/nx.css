@@ -4,8 +4,8 @@
 
 /* ---- 1. TOKENS ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- */
 body.sl-mode{
-  --nx-bg:#f3f5f9;--nx-card:#fff;--nx-ink:#14263f;--nx-ink2:#364860;--nx-mute:#58687c;--nx-line:#e2e7ef;--nx-line2:#edf0f5;
-  --nx-accent:#1d4f91;--nx-accent-ink:#fff;--nx-accent-soft:#e7eff9;--nx-navy:#14263f;
+  --nx-bg:#f3f5f9;--nx-card:#fff;--nx-ink:#0f2a52;--nx-ink2:#364860;--nx-mute:#58687c;--nx-line:#e2e7ef;--nx-line2:#edf0f5;
+  --nx-accent:#0f2a52;--nx-accent-ink:#fff;--nx-accent-soft:#e7eff9;--nx-navy:#0f2a52;
   --nx-ok:#1b7447;--nx-ok-soft:#e5f3ea;--nx-warn:#8f5600;--nx-warn-soft:#fcf0d9;--nx-bad:#b3261e;--nx-bad-soft:#fbe9e7;
   --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;
   --r-ctl:14px;--r-card:18px;
@@ -221,14 +221,14 @@ body.nordla-hosted.sl-mode .top{display:flex}
 
 
 /* Hosted Sourcing: keep the complete Sourcing workflow inside the Nordla Core frame. */
-body.nordla-hosted.sl-mode{color-scheme:light;--nx-bg:#f3f5f9;--nx-card:#fff;--nx-ink:#14263f;--nx-ink2:#364860;--nx-mute:#58687c;--nx-line:#d8dee8;--nx-line2:#edf0f5;--nx-accent:#c92536;--nx-accent-ink:#fff;--nx-accent-soft:#fbe9eb;--nx-navy:#14263f;--nx-ok:#1b7447;--nx-ok-soft:#e5f3ea;--nx-warn:#8f5600;--nx-warn-soft:#fcf0d9;--nx-bad:#b3261e;--nx-bad-soft:#fbe9e7;--bg:var(--nx-bg);--card:var(--nx-card);--ink:var(--nx-ink);--muted:var(--nx-mute);--line:var(--nx-line);--accent:var(--nx-accent);background:var(--nx-bg);color:var(--nx-ink)}
+body.nordla-hosted.sl-mode{color-scheme:light;--nx-bg:#f3f5f9;--nx-card:#fff;--nx-ink:#14263f;--nx-ink2:#364860;--nx-mute:#58687c;--nx-line:#d8dee8;--nx-line2:#edf0f5;--nx-accent:#95652F;--nx-accent-ink:#fff;--nx-accent-soft:#fbe9eb;--nx-navy:#14263f;--nx-ok:#1b7447;--nx-ok-soft:#e5f3ea;--nx-warn:#8f5600;--nx-warn-soft:#fcf0d9;--nx-bad:#b3261e;--nx-bad-soft:#fbe9e7;--bg:var(--nx-bg);--card:var(--nx-card);--ink:var(--nx-ink);--muted:var(--nx-mute);--line:var(--nx-line);--accent:var(--nx-accent);background:var(--nx-bg);color:var(--nx-ink)}
 body.nordla-hosted.sl-mode .mainarea{min-height:100vh;background:var(--nx-bg)}
 body.nordla-hosted.sl-mode .mainarea>.top{background:#fff;color:var(--nx-ink);border-bottom:1px solid var(--nx-line);box-shadow:none}
 body.nordla-hosted.sl-mode .mainarea>.top .muted{color:var(--nx-mute)}
 body.nordla-hosted.sl-mode .mainarea>.top .ghost{color:var(--nx-ink2)}
 body.nordla-hosted.sl-mode .mainarea>.statusbar{background:#fff;color:var(--nx-ink2);border-color:var(--nx-line)}
 body.nordla-hosted.sl-mode .tabs button[aria-current=true]{color:var(--nx-accent);box-shadow:inset 0 -3px 0 var(--nx-accent)}
-body.nordla-hosted.sl-mode .tabs .nx-navnote .nx-ic{background:var(--nx-accent);color:#fff;box-shadow:0 5px 14px rgba(201,37,54,.22)}
+body.nordla-hosted.sl-mode .tabs .nx-navnote .nx-ic{background:var(--nx-accent);color:#fff;box-shadow:0 5px 14px rgba(149,101,47,.22)}
 @media (min-width:901px){
   .shell.nordla-frame>.mainarea>.top{min-height:82px;padding:16px 28px;background:#fff;color:#14263f;border-bottom:1px solid #d8dee8}
   .shell.nordla-frame>.mainarea>.top .title{gap:2px}
@@ -236,7 +236,7 @@ body.nordla-hosted.sl-mode .tabs .nx-navnote .nx-ic{background:var(--nx-accent);
   .shell.nordla-frame>.mainarea>.top .muted{font-size:16px;line-height:22px;color:#364860}
   .shell.nordla-frame>.mainarea>.tabs{padding:0 24px;border-bottom:1px solid #d8dee8}
   .shell.nordla-frame>.mainarea>.tabs button{min-height:54px;padding:12px 20px;font-size:15px;color:#14263f}
-  .shell.nordla-frame>.mainarea>.tabs button[aria-current=true]{color:#14263f;box-shadow:inset 0 -3px 0 #c92536}
+  .shell.nordla-frame>.mainarea>.tabs button[aria-current=true]{color:#14263f;box-shadow:inset 0 -3px 0 #95652F}
   .shell.nordla-frame>.mainarea main#screen{max-width:none;padding:28px 24px 40px}
   .shell.nordla-frame>.mainarea .card{background:#fff;border-color:#d8dee8;border-radius:12px;box-shadow:none}
 }
@@ -247,6 +247,92 @@ body.nordla-hosted.sl-mode .nx-hero2{background:#fff;color:#14263f;border:1px so
 body.nordla-hosted.sl-mode .nx-hero2 .nx-cap{color:#58687c}
 body.nordla-hosted.sl-mode .nx-hero2.empty h2{font:700 22px/28px system-ui,-apple-system,"Segoe UI",sans-serif;color:#14263f}
 body.nordla-hosted.sl-mode .nx-hero2.empty p,body.nordla-hosted.sl-mode .nx-hero2 .nx-h2id p{color:#364860}
-body.nordla-hosted.sl-mode .nx-hero2 .sl-btn.pri,body.nordla-hosted.sl-mode .nx-hero2 .nx-btn.pri{background:#c92536;color:#fff}
-body.nordla-hosted.sl-mode .nx-hero2 .nx-link{color:#c92536;opacity:1}
+body.nordla-hosted.sl-mode .nx-hero2 .sl-btn.pri,body.nordla-hosted.sl-mode .nx-hero2 .nx-btn.pri{background:#95652F;color:#fff}
+body.nordla-hosted.sl-mode .nx-hero2 .nx-link{color:#95652F;opacity:1}
 body.nordla-hosted.sl-mode .mainarea>.top #case-sub:empty::before{content:"Fournisseur · Produit · Modèle";color:#364860}
+/* Option A (new Sourcing layout): the Noter screen in three cards. Phone: one column; computer: note + fiche side by side, tools below. */
+.nx-note-grid{display:grid;gap:14px}
+.nx-ncard{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;min-width:0;display:block}
+.nx-card-h{margin:0 0 12px;font-size:18px;font-weight:700;color:var(--ink)}
+.nx-fiche{display:grid;grid-template-columns:110px 1fr;gap:8px 12px;margin:0 0 12px}
+.nx-fiche dt{color:var(--muted);font-size:14px}
+.nx-fiche dd{margin:0;color:var(--ink);font-weight:600;font-size:15px}
+.nx-tools{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (min-width:900px){
+  .nx-note-grid{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);grid-template-areas:"note fiche" "tools tools"}
+  .nx-card-note{grid-area:note}
+  .nx-card-fiche{grid-area:fiche}
+  .nx-card-tools{grid-area:tools}
+}
+@media (max-width:899px){ .nx-tools{grid-template-columns:1fr} }
+/* the Core rail brand: the Nordla logo lockup of the new layout (computer) */
+@media (min-width:901px){ .corerail .cr-brand{font-size:22px;padding:4px 8px 18px} .corerail .cr-mark{width:36px;height:36px;font-size:20px;border-radius:10px} }
+/* The supplier block inside the Fiche fournisseur card: plain row, no card of its own, text can wrap. */
+.nx-card-fiche .nx-who{background:none;box-shadow:none;padding:0 0 12px;margin:0 0 12px;flex-wrap:wrap}
+.nx-card-fiche .nx-who>div{min-width:0;flex:1 1 160px}
+.nx-card-fiche .nx-who b{overflow-wrap:anywhere}
+.nx-card-note .nx-modes{margin-bottom:12px}
+
+/* Mockup (computer): rail brand, menu separators, tabs without icons and a red active line, red primary button, bigger card titles, tools as bordered buttons. */
+@media (min-width:901px){
+  .corerail .cr-brand{font-size:30px;font-weight:800;padding:6px 8px 22px;border-bottom:1px solid #E6E9EF;margin-bottom:12px}
+  .corerail .cr-title{font-size:15px;margin:0 8px 10px}
+  .corerail .cr-menu li{border-bottom:1px solid #EEF1F5}
+  .corerail .cr-menu a,.corerail .cr-cur,.corerail .cr-off{padding:12px 8px;font-size:16px}
+  .corerail .cr-cur{background:none;color:#A4611F}
+  .corerail .cr-ico{width:26px;height:26px;flex-basis:26px}
+  .corerail .cr-note{display:none}
+  body.sl-mode .tabs button svg, body.sl-mode .tabs button .nx-ic{display:none}
+  body.sl-mode .tabs button{font-size:16px;font-weight:600}
+  body.sl-mode .tabs button[aria-current=true]{box-shadow:inset 0 -3px 0 #95652F}
+  .nx-card-note .nx-btn.pri,.nx-card-note .nx-btn.pri.big{background:#95652F;border-color:#95652F}
+  .nx-card-h{font-size:22px}
+  .nx-tools .nx-ico,.nx-tools svg{width:28px;height:28px}
+  .nx-tools button,.nx-tools .sl-btn{min-height:84px;border:1px solid var(--line);border-radius:14px;background:var(--card);font-size:18px;font-weight:600}
+  .nx-card-fiche input,.nx-card-fiche .nx-field-readonly{width:100%}
+}
+/* Mockup (computer): the Sourcing title and its subtitle above the tabs; the folder button and the mode badge are not shown here. */
+@media (min-width:901px){
+  body.sl-mode .mainarea > header.top{display:flex;align-items:center;gap:12px;padding:14px 28px 6px;background:#fff;border-bottom:0}
+  body.sl-mode header.top #btn-cases, body.sl-mode header.top #mode{display:none}
+  body.sl-mode header.top .title strong{font-size:30px;font-weight:800;color:var(--ink)}
+  body.sl-mode header.top .title #case-sub{display:block;font-size:15px;color:var(--muted)}
+}
+/* Mockup (computer), part 2: red active tab line, the save button after the text (not sticky), compact modes, tools with icons and fields (read-only), the Accueil Nordla link hidden here (the rail gives Tableau de bord). */
+@media (min-width:901px){
+  body.sl-mode .tabs button[aria-current=true]{border-bottom:3px solid #95652F !important;box-shadow:none !important;color:var(--ink) !important}
+  .nx-savebar{position:static !important;background:none !important;padding:12px 0 0;margin-top:12px}
+  .nx-noteform textarea{min-height:170px}
+  .nx-modes button{flex-direction:row;min-height:40px;font-size:14px;gap:6px}
+  .nx-card-note .nx-modes{margin-bottom:14px}
+  .nx-back{display:none}
+  .nx-fields{display:grid;gap:12px}
+  .nx-fld{display:grid;gap:6px}
+  .nx-fld span{font-size:15px;font-weight:600;color:var(--ink)}
+  .nx-fld input{min-height:48px;border:1px solid var(--line);border-radius:10px;padding:0 14px;background:var(--card);font-size:16px;color:var(--ink);opacity:1}
+  .nx-tools{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .nx-toolbtn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;min-height:96px;border:1px solid var(--line);border-radius:14px;background:var(--card);font-size:18px;font-weight:600;color:var(--ink);cursor:pointer}
+  .nx-toolbtn svg{width:30px;height:30px}
+}
+@media (max-width:899px){ .nx-toolbtn{min-height:64px;flex-direction:row;justify-content:center;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:16px;font-weight:600;color:var(--ink);gap:10px} }
+/* Mockup (computer): the note screen has no own title bar; the Sourcing title and the tabs are above it. The phone keeps its back button. */
+@media (min-width:901px){ .nx-notescreen > .nx-bar{display:none} }
+/* Phone: the Core menu button (☰) is always visible on the Sourcing screens, top right, above the content. */
+@media (max-width:899px){ body.sl-mode .menu-toggle{position:fixed;top:8px;right:8px;z-index:80;background:#fff;box-shadow:0 1px 4px rgba(20,38,63,.18)} }
+/* Phone: the same look as the computer mockup (title, red active line, red primary, field boxes, tool buttons with coloured icons). Functions unchanged. */
+@media (max-width:899px){
+  body.sl-mode .mainarea > header.top{display:flex;align-items:center;gap:10px;padding:12px 56px 4px 16px;background:#fff}
+  body.sl-mode header.top #btn-cases, body.sl-mode header.top #mode{display:none}
+  body.sl-mode header.top .title strong{font-size:22px;font-weight:800;color:var(--ink)}
+  body.sl-mode header.top .title #case-sub{display:block;font-size:13px;color:var(--muted)}
+  body.sl-mode .nx-back{display:none}
+  body.sl-mode .tabs button[aria-current=true]{box-shadow:inset 0 3px 0 #95652F}
+  .nx-card-note .nx-btn.pri,.nx-card-note .nx-btn.pri.big{background:#95652F;border-color:#95652F}
+  .nx-ncard .nx-card-h{font-size:20px}
+  .nx-fld{display:grid;gap:6px;margin-bottom:10px}
+  .nx-fld span{font-size:14px;font-weight:600;color:var(--ink)}
+  .nx-fld input{min-height:46px;border:1px solid var(--line);border-radius:10px;padding:0 12px;background:var(--card);font-size:16px;color:var(--ink);width:100%}
+  .nx-toolbtn svg{color:#1b5e7f}
+  .nx-toolbtn:nth-child(2) svg{color:#1f6f5c}
+  .nx-toolbtn:nth-child(3) svg{color:#7842B8}
+}
