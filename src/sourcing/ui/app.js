@@ -150,7 +150,7 @@ const SCREENS = { field: fieldScreen, quick: quickScreen, decision: decisionScre
 // ---- shell ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 function paintHeader() {
   const c = cur(); if (!c) return;
-  $('#case-name').textContent = c.identity.workingName || 'New case'; $('#case-sub').textContent = [c.supplier.name, c.identity.identifiers.model].filter(Boolean).join(' - ');
+  const salonHeader = S.mode === 'salon'; $('#case-name').textContent = salonHeader ? 'Sourcing' : (c.identity.workingName || 'New case'); $('#case-sub').textContent = salonHeader ? [c.identity.workingName, c.supplier.name, c.identity.identifiers.model].filter(Boolean).join(' · ') : [c.supplier.name, c.identity.identifiers.model].filter(Boolean).join(' - ');
   const st = status(); const el = $('#mode');
   el.className = `badge ${st.server.tone === 'ok' ? 'b-live' : st.server.tone === 'warn' ? 'b-cached' : 'b-off'}`; el.textContent = st.server.label;
   el.title = st.server.state === 'VERIFIED' ? 'an authenticated check of your server just succeeded' : st.server.state === 'UNREACHABLE' ? 'your server did not answer: the case works on this phone' : st.server.label;
