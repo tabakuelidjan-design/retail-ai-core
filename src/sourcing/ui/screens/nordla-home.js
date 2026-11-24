@@ -143,7 +143,7 @@ const money = (v, cur = 'EUR', digits = 2) => new Intl.NumberFormat('fr-FR', { s
 const pct = (v) => `${v > 0 ? '+' : ''}${(v * 100).toFixed(1).replace('.', ',')} %`;
 const bars = (values) => { const max = Math.max(...values.map((v) => (v ?? 0)), 0); return values.map((v) => (max > 0 && v != null ? Math.max(4, Math.round((v / max) * 100)) : 0)); };
 // The four functions of the circle are links: Agents IA and Règles open the Nordla panel (questions, validations); Données goes to Paramètres; Outils to Connexions.
-const CIRCLE_LINKS = { top: { act: 'nx-open-panel' }, left: { href: '/settings' }, right: { href: '/settings/connections' }, bottom: { act: 'nx-open-panel' } };
+const CIRCLE_LINKS = { top: { act: 'nx-open-panel' }, left: { href: '/?ouvrir=settings' }, right: { href: '/?ouvrir=settings-connections' }, bottom: { act: 'nx-open-panel' } };
 const linkWrap = (p, g) => {
   const t = CIRCLE_LINKS[p.key];
   if (!t) return g;
@@ -275,7 +275,7 @@ export function nordlaHomeHtml({ modules = null, decisions = null, sales = null,
     : `<ul class="nx-h-list">${sum.pending.slice(0, 3).map((d) => `<li><span>${esc(d.subject?.title ?? 'Décision d’achat')}</span></li>`).join('')}</ul><button type="button" class="nx-h-btn" data-act="nx-open-panel">Ouvrir les validations</button>`;
   const connBody = conn === null ? '<p class="nx-h-quiet-line">Chargement…</p>'
     : conn === 'UNAVAILABLE' ? `<p class="nx-h-quiet-line">${esc(NO_DATA)} : l’état des connexions ne répond pas.</p>`
-    : `<ul class="nx-h-conn">${conn.map((c) => `<li><span class="nx-h-cdot${c.connected ? ' ok' : ''}" aria-hidden="true"></span><b>${esc(c.label)}</b><em class="nx-h-pill${c.connected ? ' ok' : ''}">${esc(c.statusLabel)}</em></li>`).join('')}</ul>${linkConnections && !demo ? '<a class="nx-h-link" href="/settings/connections">Voir les connexions</a>' : ''}`;
+    : `<ul class="nx-h-conn">${conn.map((c) => `<li><span class="nx-h-cdot${c.connected ? ' ok' : ''}" aria-hidden="true"></span><b>${esc(c.label)}</b><em class="nx-h-pill${c.connected ? ' ok' : ''}">${esc(c.statusLabel)}</em></li>`).join('')}</ul>${linkConnections && !demo ? '<a class="nx-h-link" href="/?ouvrir=settings-connections">Voir les connexions</a>' : ''}`;
   const act = sum.available && sum.recent.length
     ? sum.recent.map((d) => `<li><div><b>${esc(d.subject?.title ?? 'Décision d’achat')}</b><span>${esc(dateFr(d.created_at))}</span></div><em class="nx-h-state">${esc(d.human_decision ? (DECIDED[d.human_decision.decision] ?? d.human_decision.decision) : 'En attente de décision')}</em></li>`).join('')
     : `<li class="nx-h-empty">${sum.available ? 'Les dernières actions enregistrées apparaîtront ici.' : 'Le journal des décisions est indisponible.'}</li>`;
@@ -338,8 +338,8 @@ export function nordlaHomeHtml({ modules = null, decisions = null, sales = null,
   // The PC circle is the reference picture (image 102). Its four functions are links placed over the four cards.
   const PC_HITS = [
     { key: 'top', act: 'nx-open-panel', label: 'Agents IA' },
-    { key: 'left', href: '/settings', label: 'Données' },
-    { key: 'right', href: '/settings/connections', label: 'Outils' },
+    { key: 'left', href: '/?ouvrir=settings', label: 'Données' },
+    { key: 'right', href: '/?ouvrir=settings-connections', label: 'Outils' },
     { key: 'bottom', act: 'nx-open-panel', label: 'Règles' },
   ];
   const hitOf = (h) => {
@@ -366,7 +366,7 @@ export function nordlaHomeHtml({ modules = null, decisions = null, sales = null,
         ${menu.map((c) => `<li>${navHtml(c)}</li>`).join('')}
       </ul>
       <section class="nx-h-settings" aria-label="Réglages"><p class="nx-h-menu-title">Réglages</p><ul>
-        <li><a class="nx-h-nav" href="/settings/connections"><span class="nx-h-navico" style="color:#46778D" aria-hidden="true">${icon('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>', 19)}</span><span>Connexions</span></a></li>
+        <li><a class="nx-h-nav" href="/?ouvrir=settings-connections"><span class="nx-h-navico" style="color:#46778D" aria-hidden="true">${icon('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>', 19)}</span><span>Connexions</span></a></li>
         <li><a class="nx-h-nav" href="/settings"><span class="nx-h-navico" style="color:#6B7280" aria-hidden="true">${icon(NAV_PATHS.gear, 19)}</span><span>Paramètres</span></a></li>
       </ul></section>
     </aside>

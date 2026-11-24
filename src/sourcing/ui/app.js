@@ -599,6 +599,8 @@ const CORE_EMBED_MODULES = Object.freeze({
   analytics: { title: 'Analyses', url: '/analyses/?embedded=1' },
   sourcing: { title: 'Sourcing', url: '/sourcing?embedded=1' },
   procurement: { title: 'Stock & Achats', url: '/procurement/?tab=stock&embedded=1' },
+  settings: { title: 'Paramètres', url: '/settings?embedded=1' },
+  'settings-connections': { title: 'Paramètres', url: '/settings/connections?embedded=1' },
 });
 /** These modules keep their own features, but render inside the persistent Core frame and share its session. */
 function openCoreModule(key) {
@@ -610,7 +612,7 @@ function openCoreModule(key) {
   if (!side || !top) { o.innerHTML = '<div class="card"><h2>Nordla</h2><p class="warn" role="alert">Le cadre Core n’est pas disponible. Revenez à l’accueil et réessayez.</p></div>'; return; }
   const aside = side.cloneNode(true);
   aside.querySelectorAll('.nx-h-cur').forEach((n) => n.classList.remove('nx-h-cur'));
-  aside.querySelector(`[data-key="${key}"]`)?.closest('li')?.classList.add('nx-h-cur');
+  aside.querySelector(`[data-key="${key.startsWith('settings') ? 'settings' : key}"]`)?.closest('li')?.classList.add('nx-h-cur');
   homeAsLink(aside.querySelector('ul > li'));
   o.innerHTML = `<div class="nx-home nxp-shell nx-module-core">${top.outerHTML}${aside.outerHTML}<div class="nx-h-main"><section class="nx-module-view"><h1>${module.title}</h1><iframe class="nx-module-frame" title="${module.title}" loading="eager" referrerpolicy="same-origin"></iframe></section></div></div>`;
   const frame = o.querySelector('.nx-module-frame');

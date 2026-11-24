@@ -3,7 +3,7 @@
 export function openFromLink() {
   const want = new URLSearchParams(location.search).get('ouvrir');
   if (!want) return;
-  if (['analytics', 'sourcing', 'procurement'].includes(want)) {
+  if (['analytics', 'sourcing', 'procurement', 'settings', 'settings-connections'].includes(want)) {
     history.replaceState(null, '', '/');
     document.dispatchEvent(new CustomEvent('nordla:module', { detail: { module: want } }));
     return;
