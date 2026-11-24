@@ -25,7 +25,7 @@
     { key: 'dashboard', label: 'Tableau de bord', path: '/', icon: 'grid', colour: '#0F1B2D' },
     { key: 'parle', label: 'Parle à Nordla', path: '/?ouvrir=parle', icon: 'chat', colour: '#0F1B2D' },
     { key: 'finance', label: 'Finance', path: '/?ouvrir=finance', icon: 'card', colour: '#46778D' },
-    { key: 'analytics', label: 'Analyses', path: '/?ouvrir=analyses', icon: 'chart', colour: '#7842B8' },
+    { key: 'analytics', label: 'Analyses', path: '/analyses/', icon: 'chart', colour: '#7842B8' },
     { key: 'procurement', label: 'Stock & Achats', path: '/procurement/?tab=stock', icon: 'box', colour: '#E87924' },
     { key: 'sourcing', label: 'Sourcing', path: '/sourcing', icon: 'globe', colour: '#B92335' },
     { key: 'growth', label: 'Croissance', icon: 'chart', colour: '#D1A44F', note: 'Écran pas encore accessible' },
@@ -94,7 +94,7 @@
   /** Fills the placeholders of a static page: [data-nordla-core-rail="<current key>"] and [data-nordla-core-toggle]. */
   function autoMount() {
     var path = location.pathname;
-    var current = path === '/sourcing' || path === '/sourcing/' ? 'sourcing' : path === '/' ? 'dashboard' : '';
+    var current = path === '/sourcing' || path === '/sourcing/' ? 'sourcing' : path === '/analyses' || path.startsWith('/analyses/') ? 'analytics' : path === '/' ? 'dashboard' : '';
     var host = document.querySelector('[data-nordla-core-rail]');
     if (!host && current) {
       host = document.querySelector('[data-nordla-core-rail-slot]');
