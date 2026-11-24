@@ -2,21 +2,24 @@
 :root { --cx-navy: #0f2a52; --cx-navy-deep: #0a1f40; --cx-line: #d9dee7; --cx-muted: #55606f; --cx-bg: #f4f6fa; --cx-blue: #2f5fc4; --cx-blue-soft: #eef3fb; }
 html, body { background: var(--cx-bg); }
 .cx-shell, .cx-shell * { box-sizing: border-box; }
-.cx-shell { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100vh; font-family: var(--font-ui, 'Montserrat', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif); color: var(--cx-navy); overflow-wrap: anywhere; }
-.cx-side { background: var(--cx-navy-deep); color: #fff; padding: 22px 12px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
-.cx-brandrow { display: flex; align-items: center; justify-content: space-between; margin: 0 8px 22px; }
-.cx-brand { color: #fff; font-weight: 800; font-size: 1.35rem; text-decoration: none; letter-spacing: .01em; }
-.cx-menu { display: none; background: none; border: 1px solid rgba(255, 255, 255, .35); color: #fff; border-radius: 8px; padding: 6px 8px; cursor: pointer; }
-.cx-nav { display: flex; flex-direction: column; gap: 4px; }
-.cx-nav-item { display: flex; align-items: center; gap: 12px; color: #fff; text-decoration: none; padding: 11px 12px; border-radius: 9px; font-size: .95rem; }
-.cx-nav-item:hover { background: rgba(255, 255, 255, .08); }
-.cx-nav-item[aria-current="page"] { background: #1f5fe0; font-weight: 700; }
+.cx-shell, .cx-shell * { box-sizing: border-box; }
+.cx-shell { min-height: 100vh; font-family: var(--font-ui, 'Montserrat', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif); color: var(--cx-navy); overflow-wrap: anywhere; }
+.cx-main { min-width: 0; }
+.cx-top { display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 0 28px; background: #fff; border-bottom: 1px solid var(--cx-line); }
+.cx-module-title { color: #0f1b2d; font-size: 1.1rem; font-weight: 800; }
+.cx-top-spacer { flex: 1; }
+.cx-shop { font-weight: 700; border: 1px solid var(--cx-line); border-radius: 9px; padding: 7px 12px; font-size: .95rem; }
+.cx-env { font-size: .8rem; font-weight: 600; background: #e8f3ea; color: #1d5a2c; border-radius: 999px; padding: 5px 10px; }
+.cx-nav { display: flex; align-items: stretch; gap: 8px; min-height: 62px; padding: 0 24px; background: #fff; border-bottom: 1px solid var(--cx-line); overflow-x: auto; scrollbar-width: thin; }
+.cx-nav-item { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 9px; color: #26354b; text-decoration: none; padding: 0 14px; border-bottom: 3px solid transparent; border-radius: 8px 8px 0 0; font-size: .92rem; white-space: nowrap; }
+.cx-nav-item:hover { background: #f7f8fa; }
+.cx-nav-item[aria-current="page"] { background: #f4efe6; border-bottom-color: #b8792e; color: #0f1b2d; font-weight: 700; }
 .cx-ico { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .cx-main { min-width: 0; }
 .cx-top { display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 28px; background: #fff; border-bottom: 1px solid var(--cx-line); }
 .cx-shop { font-weight: 700; border: 1px solid var(--cx-line); border-radius: 9px; padding: 7px 12px; font-size: .95rem; }
 .cx-env { font-size: .8rem; font-weight: 600; background: var(--cx-blue-soft); color: #183247; border-radius: 6px; padding: 3px 9px; }
-.cx-page { padding: 28px 28px 64px; max-width: 1180px; }
+.cx-page { padding: 28px clamp(18px, 2.2vw, 36px) 64px; max-width: 1500px; margin: 0 auto; }
 .cx-page h1 { font-size: 2rem; margin: 0 0 4px; }
 .cx-wrap { max-width: 700px; margin: 0 auto; padding: 32px 16px; color: var(--cx-navy); font-family: var(--font-ui, system-ui, sans-serif); }
 .cx-sub, .cx-crumb, .cx-meta, .cx-desc, .cx-card-desc, .cx-card-note { color: var(--cx-muted); font-size: .9rem; line-height: 1.5; margin: 4px 0; }
@@ -96,13 +99,11 @@ html, body { background: var(--cx-bg); }
 .cx-msg.err { color: #8a2d1f; }
 /* tablets and phones: the Nordla menu becomes a top bar with a toggle; the detail opens in its own view with a Back button */
 @media (max-width: 899px) {
-  .cx-shell { grid-template-columns: minmax(0, 1fr); }
-  .cx-side { position: static; height: auto; padding: 10px 14px; }
-  .cx-brandrow { margin: 0; }
-  .cx-menu { display: inline-flex; }
-  .cx-nav { display: none; margin-top: 10px; }
-  .cx-nav.open { display: flex; }
-  .cx-top { padding: 0 14px; }
+  .cx-top { padding: 10px 14px; flex-wrap: wrap; }
+  .cx-module-title { margin-right: auto; }
+  .cx-shop { font-size: .82rem; }
+  .cx-nav { min-height: 56px; padding: 0 8px; gap: 2px; }
+  .cx-nav-item { gap: 7px; padding: 0 11px; font-size: .84rem; }
   .cx-page { padding: 18px 14px 48px; }
   .cx-page h1 { font-size: 1.6rem; }
   .cx-set-grid { grid-template-columns: minmax(0, 1fr); }
