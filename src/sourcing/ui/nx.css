@@ -221,7 +221,7 @@ body.nordla-hosted.sl-mode .top{display:flex}
 
 
 /* Hosted Sourcing: keep the complete Sourcing workflow inside the Nordla Core frame. */
-body.nordla-hosted.sl-mode{color-scheme:light;--nx-bg:#f3f5f9;--nx-card:#fff;--nx-ink:#14263f;--nx-ink2:#364860;--nx-mute:#58687c;--nx-line:#d8dee8;--nx-line2:#edf0f5;--nx-accent:#95652F;--nx-accent-ink:#fff;--nx-accent-soft:#fbe9eb;--nx-navy:#14263f;--nx-ok:#1b7447;--nx-ok-soft:#e5f3ea;--nx-warn:#8f5600;--nx-warn-soft:#fcf0d9;--nx-bad:#b3261e;--nx-bad-soft:#fbe9e7;--bg:var(--nx-bg);--card:var(--nx-card);--ink:var(--nx-ink);--muted:var(--nx-mute);--line:var(--nx-line);--accent:var(--nx-accent);background:var(--nx-bg);color:var(--nx-ink)}
+body.nordla-hosted.sl-mode{color-scheme:light;--nx-bg:#f3f5f9;--nx-card:#fff;--nx-ink:#14263f;--nx-ink2:#364860;--nx-mute:#58687c;--nx-line:#d8dee8;--nx-line2:#edf0f5;--nx-accent:#95652F;--nx-accent-ink:#fff;--nx-accent-soft:#F1F3F6;--nx-navy:#14263f;--nx-ok:#1b7447;--nx-ok-soft:#e5f3ea;--nx-warn:#8f5600;--nx-warn-soft:#fcf0d9;--nx-bad:#b3261e;--nx-bad-soft:#fbe9e7;--bg:var(--nx-bg);--card:var(--nx-card);--ink:var(--nx-ink);--muted:var(--nx-mute);--line:var(--nx-line);--accent:var(--nx-accent);background:var(--nx-bg);color:var(--nx-ink)}
 body.nordla-hosted.sl-mode .mainarea{min-height:100vh;background:var(--nx-bg)}
 body.nordla-hosted.sl-mode .mainarea>.top{background:#fff;color:var(--nx-ink);border-bottom:1px solid var(--nx-line);box-shadow:none}
 body.nordla-hosted.sl-mode .mainarea>.top .muted{color:var(--nx-mute)}
