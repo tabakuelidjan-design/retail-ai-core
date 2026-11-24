@@ -74,8 +74,11 @@ export function createSourcingApp({ financeGateway = null, redirect = null, rele
     const walk = async (dir, prefix) => { const out = []; for (const e of await readdir(dir, { withFileTypes: true })) { if (e.isDirectory()) out.push(...await walk(join(dir, e.name), `${prefix}${e.name}/`)); else if (/\.js$/.test(e.name)) out.push(`${prefix}${e.name}`); } return out; };
     return (shellCache = { version: 1, files: [...new Set([...Object.keys(STATIC).filter((k) => k !== '/index.html'), ...(await walk(uiDir, '/')), ...(await walk(coreDir, '/core/'))])].sort() });
   }
-  async function serveStatic(res, file, dir) {
-    try { const data = await readFile(join(dir, file)); res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-cache', ...(file === 'voice-engine-worker.js' ? VOICE_SEC : SEC) }); res.end(data); }
+  async function serveStatic(res, file, dir, { embedded = false } = {}) {
+    const pageHeaders = embedded && file === 'index.html'
+      ? { ...SEC, 'x-frame-options': 'SAMEORIGIN', 'content-security-policy': SEC['content-security-policy'].replace("frame-ancestors 'none'", "frame-ancestors 'self'") }
+      : SEC;
+    try { const data = await readFile(join(dir, file)); res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-cache', ...(file === 'voice-engine-worker.js' ? VOICE_SEC : pageHeaders) }); res.end(data); }
     catch { json(res, 404, { error: 'NOT_FOUND' }); }
   }
   async function api(req, res, url) {
@@ -213,7 +216,7 @@ export function createSourcingApp({ financeGateway = null, redirect = null, rele
       if (url.pathname === '/nordla-core-rail.js' || url.pathname === '/nordla-core-rail.css') { const shared = await readNordlaShared(url.pathname); if (shared) { res.writeHead(200, { 'content-type': shared.type, 'cache-control': 'no-cache' }); return res.end(shared.body); } } // Core menu of the shared Nordla frame (src/shared/nordla-core-rail.js)
       if (procurement && (url.pathname === '/procurement' || url.pathname.startsWith('/procurement/'))) return await procurement.handleStatic(req, res, url); // Stock / Achats phone screens (static files only; its data stays behind /api/procurement/*)
       if (voice && await voice.handle(req, res, url.pathname)) return;
-      if (STATIC[url.pathname]) return await serveStatic(res, STATIC[url.pathname], uiDir);
+      if (STATIC[url.pathname]) return await serveStatic(res, STATIC[url.pathname], uiDir, { embedded: url.pathname === '/sourcing' && url.searchParams.get('embedded') === '1' });
       if (UI_MODULE.test(url.pathname)) return await serveStatic(res, url.pathname.slice(1), uiDir);
       if (UI_ASSET.test(url.pathname)) return await serveStatic(res, url.pathname.slice(1), uiDir); // Core home images (assets/*.svg|webp|png) only
       const core = CORE_FILE.exec(url.pathname); if (core) return await serveStatic(res, core[1], coreDir);

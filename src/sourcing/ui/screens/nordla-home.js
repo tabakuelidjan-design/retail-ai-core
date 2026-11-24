@@ -30,7 +30,7 @@ export function homeCards(modules, { online = true } = {}) {
   const byKey = new Map(list.filter((m) => m && typeof m.key === 'string').map((m) => [m.key, m]));
   const cards = [];
   for (const key of MENU_ORDER) {
-    if (key === 'sourcing') { cards.push({ key: 'sourcing', label: 'Sourcing', state: 'DISPONIBLE', detail: 'Fournisseurs, photos, analyses d’achat ; fonctionne hors ligne.', colour: MODULE_COLOURS.sourcing, action: { type: 'local', to: 'sourcing', label: 'Ouvrir Sourcing' } }); continue; }
+    if (key === 'sourcing') { cards.push({ key: 'sourcing', label: 'Sourcing', state: 'DISPONIBLE', detail: 'Fournisseurs, photos, analyses d’achat ; fonctionne hors ligne.', colour: MODULE_COLOURS.sourcing, action: { type: 'nx', act: 'nx-open-sourcing', label: 'Ouvrir Sourcing' } }); continue; }
     const m = byKey.get(key);
     if (!m) continue;
     const card = { key, label: SHORT[key] ?? String(m.label ?? key), state: String(m.state ?? 'NON RACCORDÉ'), detail: String(m.detail ?? ''), colour: MODULE_COLOURS[key] ?? '#44506a', action: null };
@@ -48,7 +48,7 @@ function actionOf(m) {
   if (m.key === 'growth' && m.growth_sso === true && typeof m.growth_url === 'string' && SAFE_HTTPS.test(m.growth_url)) return { type: 'nx', act: 'nx-open-growth', to: 'dropoff', href: `${m.growth_url}/#/dropoff`, label: 'Ouvrir Développement des ventes' };
   if (m.key === 'creative' && m.creator_screen === true) return { type: 'link', href: '/creator', label: 'Ouvrir le Créateur' };
   if (m.key === 'marketing' && m.video_screen === true) return { type: 'link', href: '/videos', label: 'Ajouter une vidéo' };
-  if (m.key === 'procurement') return { type: 'link', href: '/procurement', label: 'Ouvrir Stock / Achats' }; // the existing Stock / Achats screen (its data stays behind its own sign-in)
+  if (m.key === 'procurement') return { type: 'nx', act: 'nx-open-procurement', label: 'Ouvrir Stock / Achats' };
   return null;
 }
 

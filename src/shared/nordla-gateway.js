@@ -111,6 +111,14 @@ export function createGateway({ publicOrigin, services, authorize, modules = MOD
     const upReq = request({ host: up.hostname, port: up.port, method: req.method, path: route.upstreamPath + url.search, headers, agent }, (ur) => {
       const out = { ...ur.headers };
       for (const h of STRIP_RESPONSE) delete out[h];
+      // These three trusted same-origin modules are displayed inside the authenticated Core page. Permit framing by Nordla itself only.
+      if (['analytics', 'sourcing', 'procurement'].includes(route.key) && url.searchParams.get('embedded') === '1') {
+        delete out['x-frame-options'];
+        const policy = String(out['content-security-policy'] ?? '');
+        out['content-security-policy'] = policy
+          ? (/frame-ancestors\s+[^;]+/i.test(policy) ? policy.replace(/frame-ancestors\s+[^;]+/gi, "frame-ancestors 'self'") : `${policy}; frame-ancestors 'self'`)
+          : "frame-ancestors 'self'";
+      }
       if (out.location) out.location = rewriteLocation(String(out.location), up.origin, route.prefix);
       if (out['set-cookie']) {
         const cookiePattern = modules[route.key].cookies;

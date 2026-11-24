@@ -54,7 +54,11 @@ export function createModulesPanel({ S, api, refresh, repaintHome = () => {} }) 
       ev.preventDefault(); const plain = t.getAttribute('href'); const w = window.open('', '_blank'); if (w) w.opener = null; const go = (u) => { if (w) w.location.href = u; else window.location.href = u; };
       return api('/api/core/growth/open', { method: 'POST', body: JSON.stringify({ to: t.dataset.to }) }).then((r) => go(typeof r?.url === 'string' && r.url.startsWith(`${new URL(plain, window.location.href).origin}/`) ? r.url : plain), () => go(plain));
     }
-    if (a === 'nx-open-analytics-here' || a === 'nx-open-analytics') { window.location.assign('/analyses/'); return; }
+    if (a === 'nx-open-analytics-here' || a === 'nx-open-analytics' || a === 'nx-open-sourcing' || a === 'nx-open-procurement') {
+      const module = a === 'nx-open-sourcing' ? 'sourcing' : a === 'nx-open-procurement' ? 'procurement' : 'analytics';
+      (t.closest('.nx-home') ?? document.querySelector('.nx-home'))?.classList.remove('nx-menu-open');
+      document.dispatchEvent(new CustomEvent('nordla:module', { detail: { module } })); return;
+    }
     if (a === 'nx-open-finance') { (t.closest('.nx-home') ?? document.querySelector('.nx-home'))?.classList.remove('nx-menu-open'); document.dispatchEvent(new CustomEvent('nordla:finance')); return; }
     if (a === 'nx-ask') return post('/api/core/ask', { text: t.dataset.q }, (r) => { st.answer = { q: t.dataset.label, ...r }; });
     if (a === 'nx-check') return post('/api/core/branding/check', { text: val('nx-copy') }, (r) => { st.check = r; });
@@ -124,7 +128,7 @@ export function createModulesPanel({ S, api, refresh, repaintHome = () => {} }) 
     const form = `<label class="small">Produit<input id="nx-product"></label><label class="small">Objectif<input id="nx-objective" placeholder="ex. ventes en boutique à Namur"></label><label class="small">Public<input id="nx-audience" placeholder="ex. parents cherchant un cadeau"></label><label class="small">Canal<input id="nx-channel" placeholder="ex. Instagram"></label><label class="small">Texte proposé<textarea id="nx-copy" rows="2"></textarea></label><div class="row"><button class="btn sec" data-act="nx-check">Vérifier la marque</button><button class="btn" data-act="nx-campaign">Préparer la proposition</button></div>`;
     return `${head}${parleCard()}${settingsBar(by.core)}${st.error ? `<p class="warn" role="status">${esc(st.error)}</p>` : ''}<p class="small muted">${st.modules.length} modules — état réel sur ce serveur. Rien n’est publié, payé ni commandé par Nordla.</p>
       ${mod(by.core, `<p class="small muted">Voir « Nordla Core » plus bas (décisions d’achat, suivi).</p>`)}
-      ${mod(by.finance, quick('finance') + financeOpenButton(by.finance) + financeInboxCard())}${by.procurement ? mod(by.procurement, '<p class="small"><a href="/procurement/?tab=stock">Ouvrir Stock / Achats</a></p>') : ''}${mod(by.analytics, quick('analytics') + analyticsLink(by.analytics))}
+      ${mod(by.finance, quick('finance') + financeOpenButton(by.finance) + financeInboxCard())}${by.procurement ? mod(by.procurement, '<p class="small"><button type="button" class="btn" data-act="nx-open-procurement">Ouvrir Stock / Achats</button></p>') : ''}${mod(by.analytics, quick('analytics') + analyticsLink(by.analytics))}
       ${mod(by.sourcing, '<p class="small muted">Écran principal de l’application.</p>')}
       ${mod(by.branding, brandBody)}${mod(by.marketing, `${form}${check}${(st.campaigns ?? []).slice(0, 5).map(campaignCard).join('')}${gbpLink(by.marketing)}${videoLink(by.marketing)}`)}${mod(by.creative, creationBody() + creatorLink(by.creative))}${by.growth ? mod(by.growth, growthLink(by.growth)) : ''}
       `;
