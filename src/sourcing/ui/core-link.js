@@ -4,6 +4,7 @@
 export function openFromLink() {
   const want = new URLSearchParams(location.search).get('ouvrir');
   if (!want) return;
+  if (want === 'analyses') { location.replace('/analyses/'); return; }
   if (want === 'parle') { history.replaceState(null, '', '/'); document.dispatchEvent(new CustomEvent('nordla:parle')); return; }
   const act = { analyses: 'nx-open-analytics', finance: 'nx-open-finance' }[want];
   if (!act) return;
