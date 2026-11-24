@@ -32,9 +32,18 @@ export function homeCards(modules, { online = true } = {}) {
   for (const key of MENU_ORDER) {
     if (key === 'sourcing') { cards.push({ key: 'sourcing', label: 'Sourcing', state: 'DISPONIBLE', detail: 'Fournisseurs, photos, analyses d’achat ; fonctionne hors ligne.', colour: MODULE_COLOURS.sourcing, action: { type: 'nx', act: 'nx-open-sourcing', label: 'Ouvrir Sourcing' } }); continue; }
     const m = byKey.get(key);
-    if (!m) continue;
-    const card = { key, label: SHORT[key] ?? String(m.label ?? key), state: String(m.state ?? 'NON RACCORDÉ'), detail: String(m.detail ?? ''), colour: MODULE_COLOURS[key] ?? '#44506a', action: null };
-    if (online) card.action = actionOf(m);
+    // Keep Core's navigation stable even while its module list is loading or a module is temporarily absent.
+    // A missing server entry stays visible but inert; only a server-confirmed entry receives an action.
+    const label = SHORT[key] ?? ({ finance: 'Finance', analytics: 'Analyses', procurement: 'Stock & Achats' }[key]) ?? key;
+    const card = {
+      key,
+      label: String(m?.label ?? label),
+      state: String(m?.state ?? 'NON DISPONIBLE'),
+      detail: String(m?.detail ?? 'Core n’a pas confirmé la disponibilité de ce module.'),
+      colour: MODULE_COLOURS[key] ?? '#44506a',
+      action: null,
+    };
+    if (m && online) card.action = actionOf(m);
     cards.push(card);
   }
   return cards;
