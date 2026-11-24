@@ -81,7 +81,7 @@ const api = async (path, opts = {}) => { const r = await fetch(path, { ...opts, 
 let retryMs = 0; let retryTimer = null;
 function scheduleRetry() { clearTimeout(retryTimer); retryMs = Math.min(retryMs ? retryMs * 2 : 1500, 30000); retryTimer = setTimeout(() => ping(), retryMs); }
 async function ping() {
-  if (!S.token) { S.online = false; S.verifiedAt = 0; return; }
+  if (!S.token && S.authMode !== 'session') { S.online = false; S.verifiedAt = 0; return; }
   const was = S.online;
   try { await api('/api/health'); S.online = true; S.verifiedAt = Date.now(); S.authFailed = false; S.lockedOut = false; retryMs = 0; }
   catch (e) {
