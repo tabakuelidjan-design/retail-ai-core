@@ -1,5 +1,4 @@
-// Deep links from the Nordla menu of the other modules (/?ouvrir=parle | analyses | finance): the same action as the Core button,
-// once the Core home has drawn it. The parameter is removed first, so a reload does not repeat the action.
+// Core module routes are handled after the home screen is ready. The parameter is removed first, so a reload does not repeat the action.
 // Kept out of app.js (its size is guarded by test/sourcing-v1-ui-modules.test.js).
 export function openFromLink() {
   const want = new URLSearchParams(location.search).get('ouvrir');
