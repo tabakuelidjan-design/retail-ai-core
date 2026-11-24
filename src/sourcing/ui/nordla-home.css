@@ -575,6 +575,11 @@ body:has(#overlay.show.nxa-overlay .nx-module-core) > .shell > .mainarea {
   min-height: 0;
   overflow: hidden;
 }
+/* phone: the Core menu of an in-frame module is the same drawer behind ☰ (not a column above the module) */
+@media (max-width: 899px) {
+  #overlay.show.nxa-overlay:has(.nx-module-core) .nx-home-side { position: fixed; top: 0; left: 0; bottom: 0; width: min(280px, 86vw); height: 100dvh; z-index: 60; transform: translateX(-102%); transition: transform .2s ease; box-shadow: 0 0 24px rgba(16, 24, 40, .18); }
+  #overlay.show.nxa-overlay:has(.nx-module-core) .nx-home.nx-menu-open .nx-home-side { transform: none; }
+}
 #overlay.show.nxa-overlay:has(.nx-module-core) .nx-module-frame {
   flex: 1 1 auto;
   height: calc(100dvh - 88px) !important;
