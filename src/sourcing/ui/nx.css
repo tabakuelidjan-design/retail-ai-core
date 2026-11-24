@@ -240,3 +240,13 @@ body.nordla-hosted.sl-mode .tabs .nx-navnote .nx-ic{background:var(--nx-accent);
   .shell.nordla-frame>.mainarea main#screen{max-width:none;padding:28px 24px 40px}
   .shell.nordla-frame>.mainarea .card{background:#fff;border-color:#d8dee8;border-radius:12px;box-shadow:none}
 }
+
+
+/* Hosted Sourcing home surfaces match the white-card reference. */
+body.nordla-hosted.sl-mode .nx-hero2{background:#fff;color:#14263f;border:1px solid #d8dee8;border-radius:12px;box-shadow:none}
+body.nordla-hosted.sl-mode .nx-hero2 .nx-cap{color:#58687c}
+body.nordla-hosted.sl-mode .nx-hero2.empty h2{font:700 22px/28px system-ui,-apple-system,"Segoe UI",sans-serif;color:#14263f}
+body.nordla-hosted.sl-mode .nx-hero2.empty p,body.nordla-hosted.sl-mode .nx-hero2 .nx-h2id p{color:#364860}
+body.nordla-hosted.sl-mode .nx-hero2 .sl-btn.pri,body.nordla-hosted.sl-mode .nx-hero2 .nx-btn.pri{background:#c92536;color:#fff}
+body.nordla-hosted.sl-mode .nx-hero2 .nx-link{color:#c92536;opacity:1}
+body.nordla-hosted.sl-mode .mainarea>.top #case-sub:empty::before{content:"Fournisseur · Produit · Modèle";color:#364860}
