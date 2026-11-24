@@ -74,6 +74,13 @@
     return nav;
   }
 
+  /** Update the active item when an SPA changes screens without changing its URL. */
+  function setCurrent(key) {
+    var old = document.getElementById('corerail');
+    if (!old || !old.parentNode) return;
+    old.parentNode.replaceChild(create({ current: key, base: location.origin }), old);
+  }
+
   /** The ☰ button of a phone: it opens and closes the drawer of the enclosing .shell.nordla-frame. */
   function toggle() {
     var button = el('button', { 'class': 'menu-toggle', type: 'button', 'aria-label': 'Menu Nordla', 'aria-controls': 'corerail' }, ['☰']);
@@ -93,7 +100,7 @@
     if (slot && host) slot.appendChild(toggle());
   }
 
-  window.NordlaCoreRail = { MENU: MENU, create: create, toggle: toggle, autoMount: autoMount };
+  window.NordlaCoreRail = { MENU: MENU, create: create, toggle: toggle, setCurrent: setCurrent, autoMount: autoMount };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', autoMount);
   else autoMount();
 })();

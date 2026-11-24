@@ -150,7 +150,7 @@ const SCREENS = { field: fieldScreen, quick: quickScreen, decision: decisionScre
 // ---- shell ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 function paintHeader() {
   const c = cur(); if (!c) return;
-  const salonHeader = S.mode === 'salon'; $('#case-name').textContent = salonHeader ? 'Sourcing' : (c.identity.workingName || 'New case'); $('#case-sub').textContent = salonHeader ? [c.identity.workingName, c.supplier.name, c.identity.identifiers.model].filter(Boolean).join(' · ') : [c.supplier.name, c.identity.identifiers.model].filter(Boolean).join(' - ');
+  const salonHeader = S.mode === 'salon'; const salonHome = salonHeader && !onSourcing && salon().state().view.name === 'nordla'; $('#case-name').textContent = salonHome ? 'Nordla' : salonHeader ? 'Sourcing' : (c.identity.workingName || 'New case'); $('#case-sub').textContent = salonHome ? '' : salonHeader ? [c.identity.workingName, c.supplier.name, c.identity.identifiers.model].filter(Boolean).join(' · ') : [c.supplier.name, c.identity.identifiers.model].filter(Boolean).join(' - ');
   const st = status(); const el = $('#mode');
   el.className = `badge ${st.server.tone === 'ok' ? 'b-live' : st.server.tone === 'warn' ? 'b-cached' : 'b-off'}`; el.textContent = st.server.label;
   el.title = st.server.state === 'VERIFIED' ? 'an authenticated check of your server just succeeded' : st.server.state === 'UNREACHABLE' ? 'your server did not answer: the case works on this phone' : st.server.label;
@@ -173,11 +173,15 @@ function render() {
   const fm = S.mode === 'field'; const sl = S.mode === 'salon';
   document.body.classList.toggle('fm-mode', fm); document.body.classList.toggle('sl-mode', sl);
   if (sl) { // Field V1 salon: its own screens and bottom bar; the drafts the owner typed survive a re-render exactly like everywhere else
+    const salonHome = salon().state().view.name === 'nordla' && location.pathname !== '/sourcing';
+    document.body.classList.toggle('core-home-active', salonHome);
+    window.NordlaCoreRail?.setCurrent(salonHome ? 'dashboard' : 'sourcing');
     $('#tabs').innerHTML = salon().nav(); try { paintHeader(); } catch { /* ignore */ }
     const main = $('#screen'); const key = `salon|${salon().state().view.name}|${salon().state().view.caseId ?? ''}|${salon().state().view.offerId ?? ''}`; const keep = !discardDrafts && lastRenderKey === key; discardDrafts = false; lastRenderKey = key;
     const drafts = keep ? captureDrafts(main) : {}; const ae = document.activeElement; const focus = keep && ae?.form && main.contains(ae) && ae.name ? { form: formKey(ae.form), name: ae.name, pos: ae.selectionStart ?? null } : null;
     main.innerHTML = salon().render(); salon().paint(); if (keep) restoreDrafts(main, drafts, focus); finishBoot(); return;
   }
+  document.body.classList.remove('core-home-active');
   $('#tabs').innerHTML = fm ? fmNav() : TABS.map(([k, l]) => `<button data-act="tab" data-key="${k}" aria-current="${S.tab === k}">${l}</button>`).join('');
   try { S.A = run(c); S.error = null; } catch (e) { S.error = e; console.error(e); }
   let fmv = null; clearTimeout(S.fmTimer); clearTimeout(S.turnTimer); S.fmStatus = status();
