@@ -649,7 +649,7 @@ function openCoreModule(key, requestedPath) {
   if (key.startsWith('settings') && typeof requestedPath === 'string') {
     try {
       const target = new URL(requestedPath, location.origin);
-      if (target.origin === location.origin && /^\\/settings(?:\\/|$)/.test(target.pathname)) {
+      if (target.origin === location.origin && (target.pathname === '/settings' || target.pathname.startsWith('/settings/'))) {
         target.searchParams.set('embedded', '1');
         moduleUrl = target.pathname + target.search + target.hash;
       }
