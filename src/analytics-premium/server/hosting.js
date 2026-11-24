@@ -15,6 +15,7 @@ import { timingSafeEqual, createHash, randomBytes } from 'node:crypto';
 import { createTicketVerifier, ANALYTICS_SSO_AUDIENCE } from '../../finance/sso-ticket.js';
 export { ANALYTICS_SSO_AUDIENCE };
 import { isIP } from 'node:net';
+import { proxySecretOk } from '../../shared/proxy-secret.js';
 
 export class HostingConfigError extends Error {}
 
@@ -83,7 +84,7 @@ const cookieOf = (req, name) => { for (const part of String(req.headers?.cookie 
  * sso (optional, hosted): { secret, merchantId } - GET /sso?t=<ticket> issued by the Nordla server for a signed-in person with the right role: a valid, unused, unexpired ticket for THIS merchant opens an
  * 8 h session (HttpOnly, Secure, SameSite=Lax cookie (Lax: sent on the cross-site redirect from Core), kept in memory) and lands on the dashboard. The access token keeps working as before; nothing is served without one of the two.
  */
-export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = null, ssoOnly = false, now = () => Date.now() }) {
+export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = null, ssoOnly = false, proxy = null, now = () => Date.now() }) {
   if (ssoOnly && (!sso?.secret || sso.requirePerson !== true || typeof sso.checkAccess !== 'function')) throw new HostingConfigError('SSO-only mode requires personal Nordla sessions with current access checks.');
   const verifier = sso ? createTicketVerifier({ secret: sso.secret, merchantId: sso.merchantId, audience: ANALYTICS_SSO_AUDIENCE, now, module: 'analytics', requirePerson: sso.requirePerson === true, checkAccess: sso.checkAccess ?? null }) : null;
   const sessions = new Map(); // sid -> expiry (ms)
@@ -98,6 +99,22 @@ export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = nul
     const ip = clientIpOf(req, trustProxyHops);
     const f = failures.get(ip) ?? { n: 0, until: 0 };
     if (f.until > now()) return deny(res, 429, 'TOO_MANY_ATTEMPTS');
+    // Core-proxied requests use the live Nordla session. The proxy secret authenticates these server-only identity headers;
+    // module access is rechecked against current membership, role, MFA assurance, and entitlement on every request.
+    if (proxy?.secret && proxySecretOk(req, proxy.secret)) {
+      const actor = {
+        merchantId: String(req.headers['x-nordla-identity-merchant'] ?? ''),
+        userId: String(req.headers['x-nordla-identity-user'] ?? ''),
+        authSessionId: String(req.headers['x-nordla-identity-session'] ?? ''),
+        role: String(req.headers['x-nordla-identity-role'] ?? ''),
+        module: 'analytics',
+      };
+      const access = await proxy.checkAccess(actor).catch(() => null);
+      if (!access?.ok) return deny(res, 403, 'CORE_ACCESS_REQUIRED');
+      failures.delete(ip);
+      for (const [k, v] of Object.entries(base)) res.setHeader(k, v);
+      return true;
+    }
     if (verifier && req.method === 'GET' && String(req.url ?? '').split('?')[0] === '/sso') {
       const r = await verifier.verifyAsync(new URL(req.url, 'http://localhost').searchParams.get('t') ?? '');
       if (!r.ok) { f.n += 1; if (f.n >= 5) { f.until = now() + 5 * 60_000; f.n = 0; } failures.set(ip, f); return deny(res, 403, r.code); }
