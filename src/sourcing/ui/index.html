@@ -16,26 +16,43 @@
 <meta name="apple-mobile-web-app-title" content="Nordla">
 <style>
 html, body { min-height: 100%; background: #f4f5f7; }
-body.ui-booting > header.top, body.ui-booting > #statusbar { display: none; }
-body.ui-booting > #screen, body.ui-booting > #tabs { visibility: hidden; }
+body.ui-booting .mainarea > header.top, body.ui-booting .mainarea > #statusbar { display: none; }
+body.ui-booting .mainarea > #screen, body.ui-booting .mainarea > #tabs { visibility: hidden; }
 </style>
+<link rel="stylesheet" href="/nordla-core-rail.css">
 <link rel="stylesheet" href="/app.css">
 <link rel="stylesheet" href="/field.css">
 <link rel="stylesheet" href="/salon.css">
 <link rel="stylesheet" href="/nx.css">
 <link rel="stylesheet" href="/nordla-home.css">
-  <style>body.core-signed-out > header.top, body.core-signed-out > #statusbar, body.core-signed-out #btn-cases, body.core-signed-out #case-name, body.core-signed-out #case-sub, body.core-signed-out #mode { display: none; }</style>
+  <style>body.core-signed-out .mainarea > header.top, body.core-signed-out .mainarea > #statusbar, body.core-signed-out #btn-cases, body.core-signed-out #case-name, body.core-signed-out #case-sub, body.core-signed-out #mode { display: none; }</style>
 </head>
 <body class="ui-booting">
-<header class="top">
-  <button class="ghost" id="btn-cases" aria-label="Cases">&#9776;</button>
-  <div class="title"><strong id="case-name">New case</strong><span id="case-sub" class="muted"></span></div>
-  <span id="mode" class="badge"></span>
-</header>
-<div id="statusbar" class="statusbar" aria-live="polite"></div>
-<main id="screen" tabindex="-1"></main>
-<nav class="tabs" id="tabs" aria-label="Navigation principale"></nav>
-<div id="overlay" hidden></div>
+<div class="shell">
+  <div data-nordla-core-rail-slot></div>
+  <div class="mainarea">
+    <header class="top">
+      <span data-nordla-core-toggle-slot></span>
+      <button class="ghost" id="btn-cases" aria-label="Dossiers">&#9636;</button>
+      <div class="title"><strong id="case-name">Sourcing</strong><span id="case-sub" class="muted"></span></div>
+      <span id="mode" class="badge"></span>
+    </header>
+    <div id="statusbar" class="statusbar" aria-live="polite"></div>
+    <main id="screen" tabindex="-1"></main>
+    <nav class="tabs" id="tabs" aria-label="Navigation principale"></nav>
+    <div id="overlay" hidden></div>
+  </div>
+</div>
+<script>
+  var railSlot = document.querySelector('[data-nordla-core-rail-slot]');
+  var toggleSlot = document.querySelector('[data-nordla-core-toggle-slot]');
+  if (/^\/sourcing\/?$/.test(window.location.pathname)) {
+    document.body.classList.add('nordla-hosted');
+    if (railSlot) railSlot.setAttribute('data-nordla-core-rail', 'sourcing');
+    if (toggleSlot) toggleSlot.setAttribute('data-nordla-core-toggle', '');
+  }
+</script>
+<script src="/nordla-core-rail.js"></script>
 <noscript>This tool needs JavaScript.</noscript>
 <script type="module" src="/app.js"></script>
 </body>
