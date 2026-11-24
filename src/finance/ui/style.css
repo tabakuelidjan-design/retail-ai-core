@@ -1534,7 +1534,9 @@ body:has(.modal-back) .contact-support { display: none; }
 
 /* Inside Nordla Core (embedded): no vertical Finance rail, a horizontal Finance menu under the header. */
 .shell.shell-embedded { display: block; grid-template-columns: none; }
-.fin-hnav { display: flex; flex-wrap: wrap; gap: 2px; padding: 0 26px; border-bottom: 1px solid var(--line); background: var(--surface, #fff); }
-.fin-hnav a { padding: 11px 12px 9px; color: var(--ink); text-decoration: none; font-size: 14px; white-space: nowrap; border-bottom: 2px solid transparent; }
+.fin-hnav { display: flex; flex-wrap: nowrap; gap: 2px; padding: 0 26px; border-bottom: 1px solid var(--line); background: var(--surface, #fff); overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.fin-hnav a { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; padding: 11px 12px 9px; color: var(--ink); text-decoration: none; font-size: 14px; white-space: nowrap; border-bottom: 2px solid transparent; }
+.fin-hnav-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.fin-hnav-icon svg { display: block; }
 .fin-hnav a:hover { color: var(--accent); }
 .fin-hnav a.active { color: var(--accent); font-weight: 600; border-bottom-color: var(--accent); }

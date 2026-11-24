@@ -131,6 +131,7 @@ function modal(title, body, buttons) {
 // ---------- layout ----------
 // ---------- icons and small visual helpers (SVG built with the DOM API, never from strings of markup) ----------
 const ICON_PATHS = {
+  chart: 'M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6', bank: 'M3 10h18M5 10v9M9 10v9M15 10v9M19 10v9M3 20h18M12 3l9 5H3',
   home: 'M3 11l9-8 9 8v9a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1z', doc: 'M6 2h8l5 5v15H6z M14 2v6h5 M9 13h7 M9 17h7', quote: 'M4 5h16v11H9l-5 4z',
   building: 'M4 21V4h10v17 M14 9h6v12 M8 8h2 M8 12h2 M8 16h2 M2 21h20', coins: 'M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3z M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6 M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6',
   book: 'M4 4h11a3 3 0 013 3v13H7a3 3 0 01-3-3z M4 17a3 3 0 013-3h11', gear: 'M12 15a3 3 0 100-6 3 3 0 000 6z M4 12h2 M18 12h2 M12 4v2 M12 18v2 M6.3 6.3l1.4 1.4 M16.3 16.3l1.4 1.4 M6.3 17.7l1.4-1.4 M16.3 7.7l1.4-1.4',
@@ -212,7 +213,17 @@ const NAV = [
   { href: '#/pack', label: 'Accountant pack', icon: 'book', nordla: 'packComptable', primary: false },
 ];
 // Inside Nordla Core: the same nine screens as a horizontal menu under Finance's header (Core keeps the only vertical menu).
-const FIN_HNAV = [['#/', 'Home'], ['#/todo', 'To do'], ['#/sales', 'Sales'], ['#/receivables', 'Payments and receivables'], ['#/purchases', 'Purchases'], ['#/bank', 'Bank & Cash'], ['#/contacts', 'Contacts'], ['#/treasury', 'Treasury'], ['#/pack', 'Accountant pack']];
+const FIN_HNAV = [
+  { href: '#/', label: 'Home', icon: 'chart', colour: '#46778D' },
+  { href: '#/todo', label: 'To do', icon: 'check', colour: '#D1A44F' },
+  { href: '#/sales', label: 'Sales', icon: 'doc', colour: '#F17821' },
+  { href: '#/receivables', label: 'Payments and receivables', icon: 'coins', colour: '#7842B8' },
+  { href: '#/purchases', label: 'Purchases', icon: 'cart', colour: '#E87924' },
+  { href: '#/bank', label: 'Bank & Cash', icon: 'bank', colour: '#0F1B2D' },
+  { href: '#/contacts', label: 'Contacts', icon: 'building', colour: '#C84FA4' },
+  { href: '#/treasury', label: 'Treasury', icon: 'clock', colour: '#19946B' },
+  { href: '#/pack', label: 'Accountant pack', icon: 'book', colour: '#6B7280' },
+];
 /** Official Nordla icon for a NAV entry (Home has no official asset yet -> generic svgIcon, flagged in the report). */
 function navIcon(n, size) { return n.nordla ? NordlaIcon.semantic(n.nordla, size) : svgIcon(n.icon, size === 'lg' ? 20 : 18); }
 /** "Nous contacter": reuses the merchant's own configured finance email (Settings) - there is no support
@@ -290,7 +301,7 @@ function layout(active, ...content) {
   const seller = (state.settings && state.settings.seller && state.settings.seller.name) || 'Finance';
   const initial = seller.trim().charAt(0).toUpperCase() || 'F';
   const embedded = typeof finApiBase === 'string' && finApiBase !== '';
-  const hnav = embedded ? h('nav', { class: 'fin-hnav', 'aria-label': 'Finance navigation' }, FIN_HNAV.map(([href, label]) => h('a', { href, class: href === active ? 'active' : '', 'aria-current': href === active ? 'page' : null }, tr(label)))) : null;
+  const hnav = embedded ? h('nav', { class: 'fin-hnav', 'aria-label': 'Finance navigation' }, FIN_HNAV.map((item) => h('a', { href: item.href, class: item.href === active ? 'active' : '', 'aria-current': item.href === active ? 'page' : null }, h('span', { class: 'fin-hnav-icon', style: `color:${item.colour}` }, svgIcon(item.icon, 18)), h('span', { class: 'fin-hnav-label' }, tr(item.label))))) : null;
   const rail = embedded ? null : h('nav', { class: 'rail', 'aria-label': 'Finance navigation' },
     h('a', { class: 'rail-mark', href: '#/', title: seller }, initial),
     h('div', { class: 'rail-nav' }, NAV.map((n) => h('a', { href: n.href, class: `railitem ${n.href === active ? 'active' : ''}`, ...(n.primary ? {} : { 'data-more': '1' }), title: tr(n.label), 'aria-label': tr(n.label) }, h('span', { class: n.nordla ? 'rail-ico official' : 'rail-ico' }, navIcon(n, 'md')), h('span', { class: 'rlabel' }, tr(n.label))))),
