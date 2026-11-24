@@ -2,7 +2,6 @@
 :root { --cx-navy: #0f2a52; --cx-navy-deep: #0a1f40; --cx-line: #d9dee7; --cx-muted: #55606f; --cx-bg: #f4f6fa; --cx-blue: #2f5fc4; --cx-blue-soft: #eef3fb; }
 html, body { background: var(--cx-bg); }
 .cx-shell, .cx-shell * { box-sizing: border-box; }
-.cx-shell, .cx-shell * { box-sizing: border-box; }
 .cx-shell { min-height: 100vh; font-family: var(--font-ui, 'Montserrat', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif); color: var(--cx-navy); overflow-wrap: anywhere; }
 .cx-main { min-width: 0; }
 .cx-top { display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 0 28px; background: #fff; border-bottom: 1px solid var(--cx-line); }
@@ -15,10 +14,6 @@ html, body { background: var(--cx-bg); }
 .cx-nav-item:hover { background: #f7f8fa; }
 .cx-nav-item[aria-current="page"] { background: #f4efe6; border-bottom-color: #b8792e; color: #0f1b2d; font-weight: 700; }
 .cx-ico { width: 22px; height: 22px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.cx-main { min-width: 0; }
-.cx-top { display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 28px; background: #fff; border-bottom: 1px solid var(--cx-line); }
-.cx-shop { font-weight: 700; border: 1px solid var(--cx-line); border-radius: 9px; padding: 7px 12px; font-size: .95rem; }
-.cx-env { font-size: .8rem; font-weight: 600; background: var(--cx-blue-soft); color: #183247; border-radius: 6px; padding: 3px 9px; }
 .cx-page { padding: 28px clamp(18px, 2.2vw, 36px) 64px; max-width: 1500px; margin: 0 auto; }
 .cx-page h1 { font-size: 2rem; margin: 0 0 4px; }
 .cx-wrap { max-width: 700px; margin: 0 auto; padding: 32px 16px; color: var(--cx-navy); font-family: var(--font-ui, system-ui, sans-serif); }
@@ -97,7 +92,7 @@ html, body { background: var(--cx-bg); }
 .cx-back .cx-ico { width: 18px; height: 18px; }
 .cx-msg { font-size: .9rem; }
 .cx-msg.err { color: #8a2d1f; }
-/* tablets and phones: the Nordla menu becomes a top bar with a toggle; the detail opens in its own view with a Back button */
+/* On phones the Settings tabs remain horizontal and can scroll. */
 @media (max-width: 899px) {
   .cx-top { padding: 10px 14px; flex-wrap: wrap; }
   .cx-module-title { margin-right: auto; }
