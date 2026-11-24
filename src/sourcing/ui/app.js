@@ -663,16 +663,13 @@ function openCoreModule(key, requestedPath) {
     } catch { /* keep the safe default Settings page */ }
   }
   if (module.ticket === 'growth') {
-    // Growth opens with a single-use Core ticket for THIS session. The ticket is posted as a form field into the frame, never put in a URL.
-    frame.name = 'nordla-growth-frame'; frame.src = 'about:blank';
+    // Growth opens with a single-use Core ticket for THIS session. The ticket travels only in a POST body; Growth answers with its own session cookie on this origin, then the frame shows Growth.
+    frame.src = 'about:blank';
     api('/api/core/growth/open', { method: 'POST', body: JSON.stringify({ to: 'dropoff' }) }).then((r) => {
       const ticket = typeof r?.url === 'string' ? new URL(r.url, location.href).searchParams.get('t') : null;
       if (!ticket) throw new Error('no ticket');
-      const form = document.createElement('form'); form.method = 'POST'; form.action = '/growth/sso'; form.target = frame.name; form.hidden = true;
-      for (const [name, value] of [['t', ticket], ['to', 'dropoff']]) { const input = document.createElement('input'); input.type = 'hidden'; input.name = name; input.value = value; form.appendChild(input); }
-      document.body.appendChild(form); form.submit(); form.remove();
-    }).catch(() => { frame.src = module.url; });
-    frame.src = moduleUrl;
+      return fetch('/growth/sso', { method: 'POST', credentials: 'same-origin', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ t: ticket, to: 'dropoff' }).toString() });
+    }).then(() => { frame.src = '/growth/#/dropoff'; }).catch(() => { frame.src = module.url; });
   } else {
     frame.src = moduleUrl; // every other Core module (Settings, Analyses, Sourcing, Stock): the frame loads its page
   }
