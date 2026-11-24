@@ -618,10 +618,14 @@ function openCoreModule(key) {
   frame.addEventListener('load', () => {
     try {
       const doc = frame.contentDocument;
-      if (!doc || doc.getElementById('nordla-embedded-frame-style')) return;
+      if (!doc) return;
+      // The Core shell outside this iframe already owns navigation; remove the module's duplicate rail.
+      doc.getElementById('corerail')?.remove();
+      doc.querySelector('.menu-toggle')?.remove();
+      if (doc.getElementById('nordla-embedded-frame-style')) return;
       const style = doc.createElement('style');
       style.id = 'nordla-embedded-frame-style';
-      style.textContent = 'nav#corerail,nav.corerail{display:none!important}.shell.nordla-frame{display:block!important;grid-template-columns:minmax(0,1fr)!important;min-height:0!important}.shell.nordla-frame>.mainarea{margin-left:0!important;min-width:0!important;width:100%!important}body.nordla-hosted{padding-left:0!important}';
+      style.textContent = '#corerail,.corerail,.menu-toggle,[data-nordla-core-rail]{display:none!important}nav#corerail,nav.corerail{display:none!important}.shell.nordla-frame{display:block!important;grid-template-columns:minmax(0,1fr)!important;min-height:0!important}.shell.nordla-frame>.mainarea{margin-left:0!important;min-width:0!important;width:100%!important}body.nordla-hosted{padding-left:0!important}';
       doc.head.appendChild(style);
     } catch { /* a frame stays usable if its module chooses not to expose its document */ }
   });
