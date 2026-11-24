@@ -254,3 +254,12 @@ test('growth: only its own cookies are sent to Growth', async () => {
     assert.equal(got.headers.cookie, '__Host-nordla_growth_sid=g1');
   } finally { await f.close(); }
 });
+
+test('growth: the Nordla host is passed in x-nordla-public-host (the module checks Host against it after the proxy secret)', async () => {
+  const f = await gatewayFixture({ growthEnabled: true });
+  try {
+    await f.call({ path: '/growth/echo', headers: f.session });
+    assert.equal(f.gro.seen[0].headers['x-nordla-public-host'], 'nordla.test');
+    assert.equal(f.gro.seen[0].headers['x-forwarded-host'], 'nordla.test');
+  } finally { await f.close(); }
+});

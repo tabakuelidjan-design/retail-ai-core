@@ -91,6 +91,7 @@ export function createGateway({ publicOrigin, services, authorize, modules = MOD
     if (od.origin) headers.origin = od.origin;
     headers.host = up.host;
     headers['x-forwarded-host'] = new URL(publicOrigin).host;
+    headers['x-nordla-public-host'] = new URL(publicOrigin).host; // Railway overwrites x-forwarded-host on the hop to a module: the module's guard takes the Nordla host from here (after the proxy secret check)
     headers['x-forwarded-proto'] = 'https';
     headers[PROXY_SECRET_HEADER] = svc.secret;
     headers['x-nordla-prefix'] = route.prefix; // the module renders its <base> for this prefix (standalone: no header, root)
