@@ -520,5 +520,6 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').the
 window.nordlaSourcing = { state: () => ({ sw: S.sw, online: S.online, token: !!S.token, server: status().server.state, safety: status().safety.state }) };
 initStorage().then(async () => { await detectAuth(S); installSignIn({ S, after: () => { render(); if (S.token) ping(); } }); render(); ping(); });
 // Parle à Nordla: the conversation lives in the Core section of the settings sheet; the rail entry opens that sheet.
-document.addEventListener('nordla:parle', () => { openSettings(); corePanel.load?.(); }); // the Core status (and Parle with it) is fetched, then the sheet redraws
+// Opened from a link at page load, the server check may not be done yet: the sheet waits for it (up to ~10 s), then shows Parle.
+document.addEventListener('nordla:parle', () => { let tries = 0; const go = () => { if ((S.online && S.token) || tries++ > 20) { openSettings(); corePanel.load?.(); } else setTimeout(go, 500); }; go(); });
 openFromLink(api); // ?ouvrir=… from the other Nordla modules (see core-link.js)
