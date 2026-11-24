@@ -555,6 +555,8 @@ document.addEventListener('touchstart', onFinanceInterest, { passive: true });
 function homeAsLink(li) {
   if (!li || li.querySelector('a[href="/"]')) return;
   const a = document.createElement('a'); a.href = '/'; a.style.cssText = 'display:contents;color:inherit;text-decoration:none';
+  // already on the Core home: Tableau de bord closes the module view in place (no reload would do it)
+  a.addEventListener('click', (ev) => { if (location.pathname === '/' && $('#overlay').classList.contains('show')) { ev.preventDefault(); closeOverlay(); } });
   while (li.firstChild) a.appendChild(li.firstChild);
   li.appendChild(a); li.style.cursor = 'pointer';
 }
