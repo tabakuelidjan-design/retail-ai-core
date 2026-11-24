@@ -8,7 +8,7 @@
 // Campagnes page, and no action button that performs no action.
 
 const t = NORDLA_I18N.t;
-const GROWTH_API = /^\\/growth(?:\\/|$)/.test(location.pathname) ? '/growth/api/growth' : '/api/growth';
+const GROWTH_API = location.pathname === '/growth' || location.pathname.startsWith('/growth/') ? '/growth/api/growth' : '/api/growth';
 
 function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
