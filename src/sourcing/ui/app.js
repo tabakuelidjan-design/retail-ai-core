@@ -682,10 +682,10 @@ $('#btn-cases').addEventListener('click', openMenu);
 document.addEventListener('nordla:module', (ev) => openCoreModule(ev.detail?.module));
 document.addEventListener('nordla:parle', (ev) => openParle(ev.detail?.question));
 document.addEventListener('nordla:finance', () => openFinance());
-openFromLink(); // ?ouvrir=… from the other Nordla modules (see core-link.js)
+
 window.addEventListener('online', ping); window.addEventListener('offline', () => { S.online = false; S.verifiedAt = 0; render(); });
 setInterval(() => { try { paintHeader(); } catch { /* ignore */ } }, 15000); // a verification expires: the header must not keep saying VERIFIED
 setInterval(() => { if (S.token) ping(); }, 30000); // notice a lost or recovered connection
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').then(() => { S.sw = 'registered'; }).catch((e) => { S.sw = `not registered (${e.message})`; });
 window.nordlaSourcing = { state: () => ({ sw: S.sw, online: S.online, token: !!S.token, server: status().server.state, safety: status().safety.state }) };
-initStorage().then(async () => { await detectAuth(S); installSignIn({ S, after: () => { render(); if (S.token) ping(); } }); render(); ping(); }).catch((e) => { console.error('Nordla startup failed', e); $('#screen').innerHTML = '<div class="card"><h2>Nordla</h2><p>Impossible de charger l’application. Rechargez la page.</p></div>'; finishBoot(); });
+initStorage().then(async () => { await detectAuth(S); installSignIn({ S, after: () => { render(); if (S.token) ping(); } }); render(); openFromLink(); ping(); }).catch((e) => { console.error('Nordla startup failed', e); $('#screen').innerHTML = '<div class="card"><h2>Nordla</h2><p>Impossible de charger l’application. Rechargez la page.</p></div>'; finishBoot(); });
