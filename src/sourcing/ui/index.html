@@ -47,16 +47,7 @@ body.ui-booting .mainarea > #screen, body.ui-booting .mainarea > #tabs { visibil
     <div id="overlay" hidden></div>
   </div>
 </div>
-<script>
-  var railSlot = document.querySelector('[data-nordla-core-rail-slot]');
-  var toggleSlot = document.querySelector('[data-nordla-core-toggle-slot]');
-  var currentPath = window.location.pathname;
-  if (currentPath === '/' || currentPath === '/sourcing' || currentPath === '/sourcing/') {
-    document.body.classList.add('nordla-hosted');
-    if (railSlot) railSlot.setAttribute('data-nordla-core-rail', currentPath.indexOf('/sourcing') === 0 ? 'sourcing' : 'dashboard');
-    if (toggleSlot) toggleSlot.setAttribute('data-nordla-core-toggle', '');
-  }
-</script>
+
 <script src="/nordla-core-rail.js"></script>
 <noscript>This tool needs JavaScript.</noscript>
 <script type="module" src="/app.js"></script>
