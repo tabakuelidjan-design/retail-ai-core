@@ -218,3 +218,25 @@ body.nordla-hosted.sl-mode{color-scheme:light;--nx-bg:#f3f5f9;--nx-card:#fff;--n
   body.nordla-hosted.sl-mode .shell.nordla-frame>.mainarea main#screen{max-width:1200px;margin:0 auto;padding:26px 32px 40px}
 }
 body.nordla-hosted.sl-mode .top{display:flex}
+
+
+/* Hosted Sourcing: keep the complete Sourcing workflow inside the Nordla Core frame. */
+body.nordla-hosted.sl-mode{color-scheme:light;--nx-bg:#f3f5f9;--nx-card:#fff;--nx-ink:#14263f;--nx-ink2:#364860;--nx-mute:#58687c;--nx-line:#d8dee8;--nx-line2:#edf0f5;--nx-accent:#c92536;--nx-accent-ink:#fff;--nx-accent-soft:#fbe9eb;--nx-navy:#14263f;--nx-ok:#1b7447;--nx-ok-soft:#e5f3ea;--nx-warn:#8f5600;--nx-warn-soft:#fcf0d9;--nx-bad:#b3261e;--nx-bad-soft:#fbe9e7;--bg:var(--nx-bg);--card:var(--nx-card);--ink:var(--nx-ink);--muted:var(--nx-mute);--line:var(--nx-line);--accent:var(--nx-accent);background:var(--nx-bg);color:var(--nx-ink)}
+body.nordla-hosted.sl-mode .mainarea{min-height:100vh;background:var(--nx-bg)}
+body.nordla-hosted.sl-mode .mainarea>.top{background:#fff;color:var(--nx-ink);border-bottom:1px solid var(--nx-line);box-shadow:none}
+body.nordla-hosted.sl-mode .mainarea>.top .muted{color:var(--nx-mute)}
+body.nordla-hosted.sl-mode .mainarea>.top .ghost{color:var(--nx-ink2)}
+body.nordla-hosted.sl-mode .mainarea>.statusbar{background:#fff;color:var(--nx-ink2);border-color:var(--nx-line)}
+body.nordla-hosted.sl-mode .tabs button[aria-current=true]{color:var(--nx-accent);box-shadow:inset 0 -3px 0 var(--nx-accent)}
+body.nordla-hosted.sl-mode .tabs .nx-navnote .nx-ic{background:var(--nx-accent);color:#fff;box-shadow:0 5px 14px rgba(201,37,54,.22)}
+@media (min-width:901px){
+  .shell.nordla-frame>.mainarea>.top{min-height:82px;padding:16px 28px;background:#fff;color:#14263f;border-bottom:1px solid #d8dee8}
+  .shell.nordla-frame>.mainarea>.top .title{gap:2px}
+  .shell.nordla-frame>.mainarea>.top strong{font-size:25px;line-height:32px;color:#14263f}
+  .shell.nordla-frame>.mainarea>.top .muted{font-size:16px;line-height:22px;color:#364860}
+  .shell.nordla-frame>.mainarea>.tabs{padding:0 24px;border-bottom:1px solid #d8dee8}
+  .shell.nordla-frame>.mainarea>.tabs button{min-height:54px;padding:12px 20px;font-size:15px;color:#14263f}
+  .shell.nordla-frame>.mainarea>.tabs button[aria-current=true]{color:#14263f;box-shadow:inset 0 -3px 0 #c92536}
+  .shell.nordla-frame>.mainarea main#screen{max-width:none;padding:28px 24px 40px}
+  .shell.nordla-frame>.mainarea .card{background:#fff;border-color:#d8dee8;border-radius:12px;box-shadow:none}
+}
