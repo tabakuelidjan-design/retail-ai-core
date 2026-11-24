@@ -27,7 +27,7 @@ async function boot({ withSso = true, maxFailures = 5 } = {}) {
   const handler = createHostedGrowth({ gate, merchantId: M, historyScope: 'x'.repeat(64), app: createGrowthApp({ merchantId: M, hosted: true }), store: createMemoryFollowUpStore(), sso });
   const s = http.createServer(handler); await new Promise((r) => s.listen(0, '127.0.0.1', r)); const base = `http://127.0.0.1:${s.address().port}`;
   const ticket = (userId, extra = {}) => issueHandoff({ secret: SECRET, merchantId: M, userId, now: () => nowMs, ...extra });
-  const go = (t, to) => fetch(`${base}/sso?t=${encodeURIComponent(t)}${to ? `&to=${to}` : ''}`, { redirect: 'manual' });
+  const go = (t, to) => fetch(`${base}/sso`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ t, ...(to ? { to } : {}) }).toString(), redirect: 'manual' });
   const api = (path, cookie, init = {}) => fetch(base + path, { ...init, headers: { ...(cookie ? { cookie } : {}), ...(init.headers ?? {}) } });
   return { base, ticket, go, api, opened, close: () => new Promise((r) => s.close(r)) };
 }
@@ -72,8 +72,9 @@ test('SSO-4 replayed, expired, forged, other-merchant or missing tickets are ref
     const old = s.ticket(OWNER, { ttlSeconds: 10 }); nowMs += 120_000; assert.equal((await s.go(old)).status, 403);
     assert.equal((await s.go(issueHandoff({ secret: 'another-secret-another-secret-123', merchantId: M, userId: OWNER, now: () => nowMs }))).status, 403);
     assert.equal((await s.go(issueHandoff({ secret: SECRET, merchantId: '99999999-9999-4999-8999-999999999999', userId: OWNER, now: () => nowMs }))).status, 403);
-    assert.equal((await s.go('')).status, 403); assert.equal((await fetch(`${s.base}/sso`, { redirect: 'manual' })).status, 403);
-    assert.equal((await fetch(`${s.base}/sso?t=x`, { method: 'POST', redirect: 'manual' })).status, 405);
+    assert.equal((await s.go('')).status, 403); assert.equal((await fetch(`${s.base}/sso`, { redirect: 'manual' })).status, 405);
+    assert.equal((await fetch(`${s.base}/sso?t=x`, { method: 'GET', redirect: 'manual' })).status, 405, 'a ticket in the URL (GET) is refused');
+    assert.equal((await fetch(`${s.base}/sso?t=x`, { method: 'POST', redirect: 'manual' })).status, 403, 'a POST without a valid ticket is refused');
     assert.deepEqual(s.opened, [OWNER], 'only the first, valid ticket reached the database');
   } finally { await s.close(); }
 });
