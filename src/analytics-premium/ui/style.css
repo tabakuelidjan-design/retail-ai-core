@@ -720,3 +720,31 @@ button { font-family: inherit; }
 .ask-premise p { margin: 0; font-size: 14.5px; line-height: 1.55; color: var(--ink); overflow-wrap: anywhere; }
 .ask-premise.contradicted { border-left: 3px solid var(--warn); padding-left: 12px; }
 .ask-suggest { justify-self: start; }
+
+
+/* Horizontal Analytics section navigation, matching Finance's module tabs. Core's global rail
+   stays in the parent shell, so Analytics must not render a second vertical rail. */
+.analytics-frame { min-height: 100vh; min-width: 0; }
+.analytics-tabs {
+  display: flex; align-items: stretch; gap: 6px; min-height: 58px; padding: 0 16px;
+  background: #fff; border-bottom: 1px solid var(--border); overflow-x: auto;
+  scrollbar-width: none; overscroll-behavior-x: contain;
+}
+.analytics-tabs::-webkit-scrollbar { display: none; }
+.analytics-tab {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  gap: 9px; flex: 0 0 auto; padding: 0 14px; color: var(--ink-soft); text-decoration: none;
+  font-size: 14px; font-weight: 550; white-space: nowrap; transition: color .15s ease;
+}
+.analytics-tab:hover { color: var(--tab-color); }
+.analytics-tab.active { color: var(--ink); font-weight: 700; }
+.analytics-tab.active::after {
+  content: ""; position: absolute; left: 10px; right: 10px; bottom: 0; height: 3px;
+  border-radius: 3px 3px 0 0; background: var(--tab-color);
+}
+.analytics-tab-icon { display: inline-flex; color: var(--tab-color); }
+.analytics-tab-icon svg { display: block; }
+@media (max-width: 600px) {
+  .analytics-tabs { min-height: 52px; padding: 0 6px; gap: 0; }
+  .analytics-tab { gap: 6px; padding: 0 10px; font-size: 13px; }
+}

@@ -148,15 +148,22 @@ const NAV_ITEMS = [
   ['customers', 'clients', 'nav.customers', '#/customers'],
   ['products', 'produits', 'nav.products', '#/products'],
 ];
-function sidebar(activeRoute) {
-  return h('div', { class: 'sidebar' },
-    h('div', { class: 'brand' }, h('div', { class: 'brand-mark' }), h('div', { class: 'brand-name' }, t('brand.name'))),
-    h('div', { class: 'nav' }, NAV_ITEMS.map(([route, ic, key, href]) => (href
-      ? h('a', { class: `nav-item ${activeRoute === route ? 'active' : ''}`, href }, h('span', { class: 'ico' }, NordlaIcon.semantic(ic, 'md')), t(key))
-      : h('span', { class: 'nav-item inert' }, h('span', { class: 'ico' }, NordlaIcon.semantic(ic, 'md')), t(key))))),
-    h('div', { class: 'sidebar-foot' },
-      h('span', { class: 'ico' }, NordlaIcon.parle('onTerracotta', 'md')),
-      h('div', null, h('strong', null, t('nav.askNordla')), h('span', null, t('sidebar.askSubtitle')))));
+function moduleTabs(activeRoute) {
+  const colors = {
+    brief: '#46778D',
+    changed: '#C1573F',
+    explore: '#7842B8',
+    customers: '#19946B',
+    products: '#E87924',
+  };
+  const icons = { brief: 'brief', changed: 'changed', explore: 'explore', customers: 'customers', products: 'products' };
+  return h('nav', { class: 'analytics-tabs', 'aria-label': t('brand.name') },
+    NAV_ITEMS.map(([route, _semanticIcon, key, href]) => h('a', {
+      class: `analytics-tab ${activeRoute === route ? 'active' : ''}`,
+      href,
+      style: `--tab-color: ${colors[route] || '#46778D'}`,
+      ...(activeRoute === route ? { 'aria-current': 'page' } : {}),
+    }, h('span', { class: 'analytics-tab-icon' }, icon(icons[route] || 'spark', 18)), h('span', null, t(key)))));
 }
 
 // Same pattern as the Finance module's langSwitch(): a small FR/NL/EN segmented control that calls
@@ -490,7 +497,7 @@ async function route() {
   document.documentElement.lang = NORDLA_I18N.getLang();
   app.innerHTML = '';
   const main = h('div', { class: 'main' });
-  app.appendChild(h('div', { class: 'shell' }, sidebar(r.key), main));
+  app.appendChild(h('div', { class: 'analytics-frame' }, moduleTabs(r.key), main));
   await r.load();
   main.innerHTML = '';
   r.render(main);
