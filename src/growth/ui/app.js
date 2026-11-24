@@ -68,6 +68,31 @@ function gi(name, size = 'md') {
   return v.startsWith('pack:') ? packIcon(GROWTH_PACK[v.slice(5)], size) : NordlaIcon.semantic(v, size);
 }
 
+ 
+// Growth navigation uses the same line-icon language and module colour accents as the Nordla Core menu.
+// Growth's own icon pack remains in use inside the module's cards and specialist screens.
+const CORE_GROWTH_NAV_ICONS = {
+  overview: { colour: '#D1A44F', paths: ['M4 20V4M4 20h16', 'M8 16v-4M12 16V8M16 16v-6'] },
+  opportunities: { colour: '#7842B8', paths: ['M4 20V4M4 20h16', 'M8 16v-4M12 16V8M16 16v-6'] },
+  potential: { colour: '#E87924', paths: ['M12 3l8 4.5v9L12 21l-8-4.5v-9z', 'M12 12l8-4.5M12 12v9M12 12L4 7.5'] },
+  content: { colour: '#C84FA4', paths: ['M4 20l4-1 11-11-3-3L5 16z'] },
+  storeGrowth: { colour: '#D1A44F', paths: ['M4 20V4M4 20h16', 'M8 16v-4M12 16V8M16 16v-6'] },
+  audience: { colour: '#168A70', paths: ['M17 20a5 5 0 0 0-10 0', 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M22 20a4 4 0 0 0-3-3.87', 'M18 4.13a4 4 0 0 1 0 7.75'] },
+  settings: { colour: '#6B7280', paths: ['M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0', 'M12 2v3M12 19v3M2 12h3M19 12h3', 'M4.9 4.9L7 7M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1'] },
+};
+function coreNavIcon(key) {
+  const item = CORE_GROWTH_NAV_ICONS[key];
+  if (!item) return gi('growth', 'md');
+  const span = h('span', { class: 'ico gr-core-nav-icon', 'aria-hidden': 'true' });
+  const svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svgEl.setAttribute('viewBox', '0 0 24 24'); svgEl.setAttribute('width', '19'); svgEl.setAttribute('height', '19');
+  svgEl.setAttribute('fill', 'none'); svgEl.setAttribute('stroke', item.colour); svgEl.setAttribute('stroke-width', '1.7');
+  svgEl.setAttribute('stroke-linecap', 'round'); svgEl.setAttribute('stroke-linejoin', 'round');
+  item.paths.forEach((d) => { const p = document.createElementNS(svgEl.namespaceURI, 'path'); p.setAttribute('d', d); svgEl.appendChild(p); });
+  span.appendChild(svgEl);
+  return span;
+}
+
 // ---------- formatting (same rules as Analytics' Explorer: Intl per language, whole euros, "+28 %") ----------
 const LANG_TAG = { fr: 'fr-BE', nl: 'nl-BE', en: 'en-GB' };
 const tag = () => LANG_TAG[NORDLA_I18N.getLang()] || 'fr-BE';
@@ -113,7 +138,7 @@ const GROWTH_NAV_FOOT = [
   { key: 'settings', icon: 'settings', more: true },
 ];
 function navItem(n, active) {
-  const ico = h('span', { class: 'ico' }, n.parle ? NordlaIcon.parle('onTerracotta', 'md') : gi(n.icon, 'md'));
+  const ico = n.parle ? h('span', { class: 'ico' }, NordlaIcon.parle('onTerracotta', 'md')) : coreNavIcon(n.key);
   const on = n.key === active;
   const cls = `nav-item${on ? ' active' : ''}${n.href ? '' : ' inert'}${n.mobile ? '' : ' gr-desktop-only'}${n.parle ? ' gr-ai' : ''}`;
   return n.href
@@ -143,7 +168,7 @@ function morePanel(active) {
   if (!navMoreOpen) return null;
   const item = (n) => {
     const on = n.key === active;
-    const ico = h('span', { class: 'gr-more-item-ico' }, n.parle ? NordlaIcon.parle('onTerracotta', 'md') : gi(n.icon, 'md'));
+    const ico = h('span', { class: 'gr-more-item-ico' }, n.parle ? NordlaIcon.parle('onTerracotta', 'md') : coreNavIcon(n.key));
     return n.href
       ? h('a', { class: `gr-more-item${on ? ' active' : ''}`, href: n.href, ...(on ? { 'aria-current': 'page' } : {}), on: { click: () => { navMoreOpen = false; } } }, ico, h('span', { class: 'gr-more-item-label' }, t(`gr.nav.${n.key}`)))
       : h('span', { class: 'gr-more-item inert', 'aria-disabled': 'true' }, ico, h('span', { class: 'gr-more-item-label' }, t(`gr.nav.${n.key}`), h('span', { class: 'gr-more-soon' }, t('gr.nav.soon'))));
