@@ -8,6 +8,7 @@
 // Campagnes page, and no action button that performs no action.
 
 const t = NORDLA_I18N.t;
+const GROWTH_API = /^\\/growth(?:\\/|$)/.test(location.pathname) ? '/growth/api/growth' : '/api/growth';
 
 function h(tag, attrs, ...children) {
   const el = document.createElement(tag);
@@ -269,13 +270,13 @@ const loadState = {};
 const ERROR_CODES = ['TENANT_NOT_CONFIGURED', 'DATA_UNAVAILABLE', 'NETWORK', 'UNKNOWN'];
 // `period` = the window the page's engines really use (the top bar shows it in every state).
 const PAGES = {
-  overview: { title: 'gr.title', subtitle: 'gr.subtitle', url: '/api/growth/overview', period: { weeks: 8 }, get: () => data, set: (v) => { data = v; }, render: renderOverview },
-  opportunities: { title: 'gr.op.title', subtitle: 'gr.op.subtitle', url: '/api/growth/opportunities', period: { weeks: 8 }, get: () => oppData, set: (v) => { oppData = v; }, render: renderOpportunities },
-  potential: { title: 'gr.pp.title', subtitle: 'gr.pp.subtitle', url: '/api/growth/products', period: { weeks: 8 }, get: () => potData, set: (v) => { potData = v; }, render: renderPotential },
-  audience: { title: 'gr.au.title', subtitle: 'gr.au.subtitle', url: '/api/growth/audience', period: { days: 90 }, get: () => audData, set: (v) => { audData = v; }, render: renderAudience },
-  content: { title: 'gr.ct.title', subtitle: 'gr.ct.subtitle', url: '/api/growth/content', period: { weeks: 8 }, get: () => ctData, set: (v) => { ctData = v; }, render: renderContent },
-  dropoff: { title: 'gr.do.title', subtitle: 'gr.do.subtitle', url: '/api/growth/dropoff', period: { custom: true }, get: () => doData, set: (v) => { doData = v; }, render: renderDropoff },
-  storeGrowth: { title: 'gr.st.title', subtitle: 'gr.st.subtitle', url: '/api/growth/store', period: { weeks: 8 }, get: () => stData, set: (v) => { stData = v; }, render: renderStore },
+  overview: { title: 'gr.title', subtitle: 'gr.subtitle', url: `${GROWTH_API}/overview`, period: { weeks: 8 }, get: () => data, set: (v) => { data = v; }, render: renderOverview },
+  opportunities: { title: 'gr.op.title', subtitle: 'gr.op.subtitle', url: `${GROWTH_API}/opportunities`, period: { weeks: 8 }, get: () => oppData, set: (v) => { oppData = v; }, render: renderOpportunities },
+  potential: { title: 'gr.pp.title', subtitle: 'gr.pp.subtitle', url: `${GROWTH_API}/products`, period: { weeks: 8 }, get: () => potData, set: (v) => { potData = v; }, render: renderPotential },
+  audience: { title: 'gr.au.title', subtitle: 'gr.au.subtitle', url: `${GROWTH_API}/audience`, period: { days: 90 }, get: () => audData, set: (v) => { audData = v; }, render: renderAudience },
+  content: { title: 'gr.ct.title', subtitle: 'gr.ct.subtitle', url: `${GROWTH_API}/content`, period: { weeks: 8 }, get: () => ctData, set: (v) => { ctData = v; }, render: renderContent },
+  dropoff: { title: 'gr.do.title', subtitle: 'gr.do.subtitle', url: `${GROWTH_API}/dropoff`, period: { custom: true }, get: () => doData, set: (v) => { doData = v; }, render: renderDropoff },
+  storeGrowth: { title: 'gr.st.title', subtitle: 'gr.st.subtitle', url: `${GROWTH_API}/store`, period: { weeks: 8 }, get: () => stData, set: (v) => { stData = v; }, render: renderStore },
 };
 function currentPage() { const p = location.hash.replace(/^#\/?/, '').split('?')[0]; return PAGES[p] && p !== 'overview' ? p : 'overview'; }
 // Deep link to a target of an opportunity: #/potential?open=<product id>&variant=<variant id>, #/audience?open=<segment key>. Identifiers are Growth's own stable ids.
