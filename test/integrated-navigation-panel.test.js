@@ -13,10 +13,10 @@ const api = (extra = {}) => async (path) => {
 };
 const make = (a) => { const S = { online: true, token: 'synthetic' }; const panel = createModulesPanel({ S, api: a, refresh: () => {} }); return { panel, S }; };
 
-test('Analytics shortcut: a link in the Analytics module only for a clean https address, in a new tab, with the honest note about its own access token', async () => {
-  const ok = make(api({ analytics: { analytics_url: 'https://analytics.example.app' } })); await ok.panel.load(); const html = ok.panel.section();
-  assert.match(html, /data-nx-analytics/); assert.match(html, /href="https:\/\/analytics\.example\.app\/" target="_blank" rel="noopener">Ouvrir Analyses/); assert.match(html, /jeton d’accès/);
-  for (const bad of ['javascript:alert(1)', 'http://a.example', undefined]) { const p = make(api({ analytics: { analytics_url: bad } })); await p.panel.load(); assert.ok(!/data-nx-analytics/.test(p.panel.section()), String(bad)); }
+test('Analytics shortcut: with the gateway the module links to /analyses/ in the same tab; an external address is never shown', async () => {
+  const ok = make(api({ analytics: { analytics_inframe: true } })); await ok.panel.load(); const html = ok.panel.section();
+  assert.match(html, /data-nx-analytics/); assert.match(html, /href="\/analyses\/">Ouvrir Analyses/); assert.ok(!/target="_blank"/.test(html.slice(html.indexOf('data-nx-analytics'))), 'same tab');
+  const ext = make(api({ analytics: { analytics_url: 'https://analytics.example.app' } })); await ext.panel.load(); assert.ok(!/data-nx-analytics/.test(ext.panel.section()), 'no external shortcut since 78aa6819');
 });
 
 test('Growth module: links to Où les visiteurs abandonnent and Opportunités, absent without a growth_url', async () => {
@@ -25,7 +25,7 @@ test('Growth module: links to Où les visiteurs abandonnent and Opportunités, a
   const n = make(api()); await n.panel.load(); assert.ok(!/data-nx-module="growth"/.test(n.panel.section()));
 });
 
-test('Analytics: with the single sign-on configured the module shows a button (asks the server for a ticket, no token), not a plain link', async () => {
-  const sso = make(api({ analytics: { dashboard: true, analytics_url: 'https://analytics.example.app' } })); await sso.panel.load(); const html = sso.panel.section();
-  assert.match(html, /data-act="nx-open-analytics">Ouvrir Analyses<\/button>/); assert.match(html, /aucun jeton à saisir/); assert.ok(!/analytics\.example\.app/.test(html), 'the address is only reached through a one-time ticket');
+test('Analytics: with the gateway the module opens in the Core session (no single sign-on ticket button, no address shown)', async () => {
+  const g = make(api({ analytics: { analytics_inframe: true, dashboard: true, analytics_url: 'https://analytics.example.app' } })); await g.panel.load(); const html = g.panel.section();
+  assert.ok(!/nx-open-analytics"/.test(html), 'the SSO new-tab button is gone (78aa6819)'); assert.ok(!/analytics\.example\.app/.test(html), 'the address is not shown');
 });

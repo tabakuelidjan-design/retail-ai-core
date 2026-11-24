@@ -35,12 +35,12 @@ test('rights: an action appears only where the server confirms it', () => {
   const byKey = Object.fromEntries(homeCards(SERVER).map((c) => [c.key, c]));
   assert.equal(byKey.finance.action.act, 'nx-open-finance');
   assert.equal(byKey.analytics.action.act, 'nx-open-analytics');
-  assert.deepEqual(byKey.procurement.action, { type: 'link', href: '/procurement', label: 'Ouvrir Stock / Achats' }, 'Achats: the existing Stock / Achats screen');
+  assert.deepEqual(byKey.procurement.action, { type: 'nx', act: 'nx-open-procurement', label: 'Ouvrir Stock / Achats' }, 'Achats: opens in the Core session (9ab94dc8)');
   assert.equal(byKey.branding.action, null, 'Brand: state only');
   assert.equal(byKey.creative.action.href, '/creator');
   assert.equal(byKey.marketing.action.href, '/videos');
-  assert.equal(byKey.growth.action.act, 'nx-open-growth');
-  assert.equal(byKey.growth.action.href, 'https://growth.example/#/dropoff');
+  assert.equal(byKey.growth.action.act, 'nx-open-growth-here'); // Croissance opens inside the Core frame (6566382a)
+  assert.equal(byKey.growth.action.href, undefined, 'no Growth domain: Croissance opens inside the Core frame (6566382a)');
 });
 
 test('rights: a missing confirmation removes the action, and an unsafe Growth address is refused', () => {
