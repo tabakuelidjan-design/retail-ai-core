@@ -13,6 +13,14 @@ main{padding:12px 16px;max-width:760px;margin:0 auto;outline:none}
 .tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;background:var(--card);border-bottom:1px solid var(--line);padding:0 12px;max-width:100%}
 .tabs::-webkit-scrollbar{display:none}
 .tabs button{flex:0 0 auto;border:0;border-bottom:2px solid transparent;background:none;color:var(--muted);font:inherit;font-size:13.5px;font-weight:600;padding:12px 4px;margin-right:14px;min-height:44px;white-space:nowrap;cursor:pointer}.tabs button[aria-current=true]{color:var(--ink);border-bottom-color:var(--accent)}
+/* Coloured section icons, consistent with the Nordla Core module menu. */
+.tabs button{display:inline-flex;align-items:center;gap:8px}
+.tabs .tab-icon{width:18px;height:18px;flex:0 0 18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tabs button[data-tab="visits"] .tab-icon{color:#46778D}
+.tabs button[data-tab="items"] .tab-icon{color:#E87924}
+.tabs button[data-tab="compare"] .tab-icon{color:#7842B8}
+.tabs button[data-tab="orders"] .tab-icon{color:#1F7A4D}
+.tabs button[data-tab="stock"] .tab-icon{color:#D1A44F}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:0 0 12px}
 .card h2{margin:0 0 8px;font-size:15px}.card h3{margin:12px 0 4px;font-size:14px}
 .list{list-style:none;margin:0;padding:0}.list>li{margin:0 0 10px}
