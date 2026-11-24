@@ -92,6 +92,16 @@ export function createGateway({ publicOrigin, services, authorize, modules = MOD
     headers['x-forwarded-proto'] = 'https';
     headers[PROXY_SECRET_HEADER] = svc.secret;
     headers['x-nordla-prefix'] = route.prefix; // the module renders its <base> for this prefix (standalone: no header, root)
+    // Analytics authenticates each proxied request against the current Core session; the browser never carries a module ticket.
+    if (route.key === 'analytics' && decision.identity) {
+      const actor = decision.identity;
+      if (/^[0-9a-f-]{36}$/i.test(String(actor.merchantId ?? '')) && /^[0-9a-f-]{36}$/i.test(String(actor.userId ?? '')) && /^[0-9a-f-]{36}$/i.test(String(actor.sessionId ?? '')) && ['OWNER', 'ADMIN', 'ACCOUNTANT', 'VIEWER'].includes(actor.role)) {
+        headers['x-nordla-identity-merchant'] = actor.merchantId;
+        headers['x-nordla-identity-user'] = actor.userId;
+        headers['x-nordla-identity-session'] = actor.sessionId;
+        headers['x-nordla-identity-role'] = actor.role;
+      }
+    }
     if (svc.token) headers.authorization = `Basic ${Buffer.from(`nordla:${svc.token}`).toString('base64')}`;
 
     const request = upstreamRequest ?? (up.protocol === 'https:' ? https.request : http.request); // a hosted module is https (Railway)
