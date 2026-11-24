@@ -43,11 +43,13 @@ export function presentDecision(v) {
 
 /** The https origin of the hosted Growth screen (GROWTH_PUBLIC_URL), or null: no origin, no link (a missing or malformed value is never turned into a guess). */
 export function growthOrigin(env) { return httpsOrigin(env?.GROWTH_PUBLIC_URL); }
+/** Growth served under the Core origin: GROWTH_PUBLIC_URL = https://<nordla>/growth (the ticket then lands on https://<nordla>/growth/sso). Any other path is refused. */
+export function growthGatewayBase(env) { try { const u = new URL(String(env?.GROWTH_PUBLIC_URL ?? '').trim()); const p = u.pathname.endsWith('/') ? u.pathname.slice(0, -1) : u.pathname; return u.protocol === 'https:' && p === '/growth' && !u.search && !u.hash && !u.username && !u.password ? u.origin + p : null; } catch { return null; } }
 /** Same rule for any module address given by the environment (ANALYTICS_PUBLIC_URL, ...). */
 export function httpsOrigin(value) { try { const u = new URL(String(value ?? '').trim()); return u.protocol === 'https:' && !u.username && !u.password ? u.origin : null; } catch { return null; } }
 
 /** Growth single sign-on: the https origin (GROWTH_PUBLIC_URL) AND GROWTH_SSO_SECRET (server-side only, 24+ characters, the same on the Growth server). Anything missing: null (the links stay plain links and Growth asks its own sign-in). */
-export function growthSsoConfig(env, merchantId) { const origin = growthOrigin(env); const secret = String(env?.GROWTH_SSO_SECRET ?? ''); return origin && secret.length >= HANDOFF_MIN_SECRET_LENGTH && merchantId ? { origin, secret, merchantId } : null; }
+export function growthSsoConfig(env, merchantId) { const origin = growthGatewayBase(env) ?? growthOrigin(env); const secret = String(env?.GROWTH_SSO_SECRET ?? ''); return origin && secret.length >= HANDOFF_MIN_SECRET_LENGTH && merchantId ? { origin, secret, merchantId } : null; }
 
 export function createCoreHttp({ runtime, configError = null, store, externals = async () => ({}), finance = null, analytics = null, procurement = null, branding = null, campaigns = null, creation = null, financeSso = null, analyticsSso = null, merchantIdentity = null, merchantId = null, entitlements = null, env = process.env }) {
   // Server-Timing: Core's own processing time for the answer (durations only, nothing secret)

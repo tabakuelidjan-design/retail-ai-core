@@ -13,12 +13,14 @@ import https from 'node:https';
 export const PROXY_SECRET_HEADER = 'x-nordla-proxy-secret';
 const FINANCE_COOKIE = /^fin_(?:demo_)?sid=/;
 const ANALYTICS_COOKIE = /^an_sid=/;
+// Growth: its own __Host- session and CSRF cookies; Path=/ is required by the __Host- prefix, so they are passed unchanged.
+const GROWTH_COOKIE = /^__Host-nordla_growth_(?:sid|csrf)=/;
 
 /** The module table. `cookies` = the only cookies a module may receive (null: none). `upstreamToken` is only ever sent upstream. */
 export const MODULES = Object.freeze({
   finance: { prefix: '/finance', cookies: FINANCE_COOKIE },
   analytics: { prefix: '/analyses', cookies: ANALYTICS_COOKIE },
-  growth: { prefix: '/growth', cookies: null },
+  growth: { prefix: '/growth', cookies: GROWTH_COOKIE },
 });
 
 /** Which module (and which upstream path) a request on the Nordla origin belongs to, or null (Core's own paths). */
@@ -127,7 +129,7 @@ export function createGateway({ publicOrigin, services, authorize, modules = MOD
         const allowedCookies = cookiePattern
           ? [].concat(out['set-cookie'])
             .filter((cookie) => cookiePattern.test(String(cookie).split(';', 1)[0].trim()))
-            .map((cookie) => rewriteSetCookie(cookie, route.prefix))
+            .map((cookie) => (route.key === 'growth' ? cookie : rewriteSetCookie(cookie, route.prefix)))
           : [];
         if (allowedCookies.length) out['set-cookie'] = allowedCookies;
         else delete out['set-cookie'];

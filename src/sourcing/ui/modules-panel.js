@@ -50,6 +50,10 @@ export function createModulesPanel({ S, api, refresh, repaintHome = () => {} }) 
     if (a === 'nx-menu') { (t.closest('.nx-home') ?? document.querySelector('.nx-home'))?.classList.toggle('nx-menu-open'); return; } // mobile: the common menu behind ☰
     if (a === 'nx-parle') return parle(document.getElementById('nx-q')?.value);
     if (a === 'nx-parle-ex') { st.askInput = t.dataset.label; return parle(t.dataset.q, t.dataset.label); }
+    if (a === 'nx-open-growth-here') { // same tab, single sign-on ticket; a failure opens the plain Growth screen under the Core origin (Growth asks its own sign-in if needed)
+      ev.preventDefault(); const plain = '/growth/#/dropoff'; st.busy = true; st.error = ''; refresh();
+      return api('/api/core/growth/open', { method: 'POST', body: JSON.stringify({ to: 'dropoff' }) }).then((r) => { window.location.assign(typeof r?.url === 'string' && r.url.startsWith(`${window.location.origin}/growth/`) ? r.url : plain); }, () => { window.location.assign(plain); }).finally(() => { st.busy = false; refresh(); });
+    }
     if (a === 'nx-open-growth') { // single sign-on: a one-time ticket for THIS Nordla session; any failure falls back to the plain link (Growth then asks its own sign-in, never a broken page). No repaint: this also runs from the home.
       ev.preventDefault(); const plain = t.getAttribute('href'); const w = window.open('', '_blank'); if (w) w.opener = null; const go = (u) => { if (w) w.location.href = u; else window.location.href = u; };
       return api('/api/core/growth/open', { method: 'POST', body: JSON.stringify({ to: t.dataset.to }) }).then((r) => go(typeof r?.url === 'string' && r.url.startsWith(`${new URL(plain, window.location.href).origin}/`) ? r.url : plain), () => go(plain));

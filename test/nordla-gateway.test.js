@@ -43,6 +43,7 @@ async function fakeService(name) {
     if (p === '/redir') { res.writeHead(302, { location: `http://127.0.0.1:${svc.server.address().port}/after?k=1` }); return res.end(); }
     if (p === '/redir-rel') { res.writeHead(302, { location: '/after' }); return res.end(); }
     if (p === '/login') { const sessionCookie = name === 'analytics' ? 'an_sid=abc' : 'fin_sid=abc'; res.writeHead(302, { location: '/after', 'set-cookie': [`${sessionCookie}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800`, 'other=1; Path=/'] }); return res.end(); }
+    if (p === '/growth-login') { res.writeHead(302, { location: '/', 'set-cookie': ['__Host-nordla_growth_sid=g1; HttpOnly; Secure; SameSite=Lax; Path=/', 'fin_sid=x; Path=/'] }); return res.end(); }
     if (p === '/basic') { res.writeHead(401, { 'www-authenticate': 'Basic realm="x"', 'content-type': 'application/json' }); return res.end('{}'); }
     if (p === '/pdf') { res.writeHead(200, { 'content-type': 'application/pdf', 'content-disposition': 'attachment; filename="facture.pdf"', 'content-length': String(PDF.length) }); return res.end(PDF); }
     res.writeHead(200, { 'content-type': 'text/html', 'content-security-policy': "default-src 'self'; frame-ancestors 'none'", 'x-frame-options': 'DENY' }); res.end('<html>' + name + '</html>');
@@ -234,3 +235,22 @@ test('Core paths are not touched by the gateway; an unreachable module answers 5
   } finally { await f.close().catch(() => {}); }
 });
 
+test('growth: its own __Host- session cookie reaches the browser unchanged (Path=/), and no other module cookie does', async () => {
+  const f = await gatewayFixture({ growthEnabled: true });
+  try {
+    const r = await f.call({ path: '/growth/growth-login', headers: f.session });
+    const sc = [].concat(r.headers['set-cookie'] ?? []);
+    assert.equal(sc.length, 1, 'exactly one cookie: the Growth session');
+    assert.ok(sc[0].startsWith('__Host-nordla_growth_sid=g1;'));
+    assert.ok(sc[0].endsWith('Path=/') || sc[0].includes('Path=/;'), 'Path stays / for the __Host- prefix');
+  } finally { await f.close(); }
+});
+
+test('growth: only its own cookies are sent to Growth', async () => {
+  const f = await gatewayFixture({ growthEnabled: true });
+  try {
+    await f.call({ path: '/growth/echo', headers: { ...f.session, cookie: 'nordla_core_session=1; __Host-nordla_growth_sid=g1; an_sid=s1; fin_sid=abc' } });
+    const got = f.gro.seen[0];
+    assert.equal(got.headers.cookie, '__Host-nordla_growth_sid=g1');
+  } finally { await f.close(); }
+});
