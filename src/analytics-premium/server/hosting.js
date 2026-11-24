@@ -127,9 +127,12 @@ export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = nul
     }
     const sid = verifier ? cookieOf(req, SSO_COOKIE) : '';
     if (sid && (sessions.get(sid) ?? 0) > now()) {
-      // a session opened by Nordla single sign-on is re-checked on EVERY request (suspended, removed, role changed or entitlement gone = refused now)
+      // The UI shell and its static assets contain no account data. Re-check current membership on every data API request;
+      // this keeps revocations immediate for protected data without sending a remote access query for each CSS/JS file.
+      const path = String(req.url ?? '').split('?')[0];
+      const isDataRequest = path === '/api' || path.startsWith('/api/');
       const p = ssoPeople.get(sid);
-      if (p) {
+      if (p && isDataRequest) {
         const a = sso?.checkAccess ? await sso.checkAccess({ merchantId: sso.merchantId, userId: p.userId, role: p.role, module: 'analytics', ...(p.authSessionId ? {authSessionId:p.authSessionId} : {}) }).catch(() => null) : null;
         if (!a?.ok) { sessions.delete(sid); ssoPeople.delete(sid); return deny(res, 401, 'SESSION_REVOKED'); }
       }
