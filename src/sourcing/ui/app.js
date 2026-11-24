@@ -150,6 +150,7 @@ const SCREENS = { field: fieldScreen, quick: quickScreen, decision: decisionScre
 // ---- shell ------------------------------------------------------------------------------------------------------------------------------------------------------------------
 function paintHeader() {
   const c = cur(); if (!c) return;
+  const onSourcing = location.pathname === '/sourcing'; // the page the header is painted on (was an undeclared name: a ReferenceError on every ping)
   const salonHeader = S.mode === 'salon'; const salonHome = salonHeader && !onSourcing && salon().state().view.name === 'nordla'; $('#case-name').textContent = salonHome ? 'Nordla' : salonHeader ? 'Sourcing' : (c.identity.workingName || 'New case'); $('#case-sub').textContent = salonHome ? '' : salonHeader ? [c.identity.workingName, c.supplier.name, c.identity.identifiers.model].filter(Boolean).join(' · ') : [c.supplier.name, c.identity.identifiers.model].filter(Boolean).join(' - ');
   const st = status(); const el = $('#mode');
   el.className = `badge ${st.server.tone === 'ok' ? 'b-live' : st.server.tone === 'warn' ? 'b-cached' : 'b-off'}`; el.textContent = st.server.label;
