@@ -111,6 +111,17 @@ export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = nul
     const ip = clientIpOf(req, trustProxyHops);
     const f = failures.get(ip) ?? { n: 0, until: 0 };
     if (f.until > now()) return deny(res, 429, 'TOO_MANY_ATTEMPTS');
+    // The ticket route first: a single-use, signed ticket is its own proof; the Core gateway adds the proxy secret to it too.
+    if (verifier && req.method === 'GET' && String(req.url ?? '').split('?')[0] === '/sso') {
+      const r = await verifier.verifyAsync(new URL(req.url, 'http://localhost').searchParams.get('t') ?? '');
+      if (!r.ok) { f.n += 1; if (f.n >= 5) { f.until = now() + 5 * 60_000; f.n = 0; } failures.set(ip, f); return deny(res, 403, r.code); }
+      failures.delete(ip);
+      for (const [k, v] of sessions) if (v < now()) { sessions.delete(k); ssoPeople.delete(k); }
+      const sid = randomBytes(32).toString('hex'); sessions.set(sid, now() + SSO_SESSION_MS);
+      if (r.claims) ssoPeople.set(sid, { userId: r.claims.userId, role: r.access?.role ?? r.claims.role, ...(r.claims.authSessionId ? {authSessionId:r.claims.authSessionId} : {}) }); // re-checked before protected data reads below
+      res.writeHead(302, { ...base, Location: '/', 'Set-Cookie': `${SSO_COOKIE}=${sid}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SSO_SESSION_MS / 1000}` }); res.end();
+      return false; // answered (redirect)
+    }
     // Core-proxied requests use the live Nordla session. The proxy secret authenticates these server-only identity headers;
     // module access is rechecked against current membership, role, MFA assurance, and entitlement on every request.
     if (proxy?.secret && proxySecretOk(req, proxy.secret)) {
@@ -126,16 +137,6 @@ export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = nul
       failures.delete(ip);
       for (const [k, v] of Object.entries(base)) res.setHeader(k, v);
       return true;
-    }
-    if (verifier && req.method === 'GET' && String(req.url ?? '').split('?')[0] === '/sso') {
-      const r = await verifier.verifyAsync(new URL(req.url, 'http://localhost').searchParams.get('t') ?? '');
-      if (!r.ok) { f.n += 1; if (f.n >= 5) { f.until = now() + 5 * 60_000; f.n = 0; } failures.set(ip, f); return deny(res, 403, r.code); }
-      failures.delete(ip);
-      for (const [k, v] of sessions) if (v < now()) { sessions.delete(k); ssoPeople.delete(k); }
-      const sid = randomBytes(32).toString('hex'); sessions.set(sid, now() + SSO_SESSION_MS);
-      if (r.claims) ssoPeople.set(sid, { userId: r.claims.userId, role: r.access?.role ?? r.claims.role, ...(r.claims.authSessionId ? {authSessionId:r.claims.authSessionId} : {}) }); // re-checked before protected data reads below
-      res.writeHead(302, { ...base, Location: '/', 'Set-Cookie': `${SSO_COOKIE}=${sid}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SSO_SESSION_MS / 1000}` }); res.end();
-      return false; // answered (redirect)
     }
     const sid = verifier ? cookieOf(req, SSO_COOKIE) : '';
     if (sid && (sessions.get(sid) ?? 0) > now()) {
