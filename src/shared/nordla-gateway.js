@@ -112,7 +112,7 @@ export function createGateway({ publicOrigin, services, authorize, modules = MOD
       const out = { ...ur.headers };
       for (const h of STRIP_RESPONSE) delete out[h];
       // These three trusted same-origin modules are displayed inside the authenticated Core page. Permit framing by Nordla itself only.
-      if (['analytics', 'sourcing', 'procurement'].includes(route.key)) {
+      if (['analytics', 'sourcing', 'procurement'].includes(route.key) && url.searchParams.get('embedded') === '1') {
         delete out['x-frame-options'];
         const policy = String(out['content-security-policy'] ?? '');
         out['content-security-policy'] = policy
