@@ -93,10 +93,21 @@
 
   /** Fills the placeholders of a static page: [data-nordla-core-rail="<current key>"] and [data-nordla-core-toggle]. */
   function autoMount() {
+    var path = location.pathname;
+    var current = path === '/sourcing' || path === '/sourcing/' ? 'sourcing' : path === '/' ? 'dashboard' : '';
     var host = document.querySelector('[data-nordla-core-rail]');
-    // The frame layout (two columns) applies only once the menu is really there: without this script the page keeps one column.
-    if (host) { if (host.parentElement) host.parentElement.classList.add('nordla-frame'); host.replaceWith(create({ current: host.getAttribute('data-nordla-core-rail'), base: location.origin })); }
+    if (!host && current) {
+      host = document.querySelector('[data-nordla-core-rail-slot]');
+      if (host) host.setAttribute('data-nordla-core-rail', current);
+    }
+    if (current) document.body.classList.add('nordla-hosted');
+    // The frame layout applies only when the module route actually has a Core menu to mount.
+    if (host) { if (host.parentElement) host.parentElement.classList.add('nordla-frame'); host.replaceWith(create({ current: host.getAttribute('data-nordla-core-rail') || current, base: location.origin })); }
     var slot = document.querySelector('[data-nordla-core-toggle]');
+    if (!slot && current) {
+      slot = document.querySelector('[data-nordla-core-toggle-slot]');
+      if (slot) slot.setAttribute('data-nordla-core-toggle', '');
+    }
     if (slot && host) slot.appendChild(toggle());
   }
 
