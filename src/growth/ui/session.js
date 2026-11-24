@@ -20,7 +20,9 @@ var growthHosted = (() => {
   };
   const applyServerText = () => { const d = window.NORDLA_DICTS || {}; for (const lang of Object.keys(SERVER_TEXT)) if (d[lang]) Object.assign(d[lang], SERVER_TEXT[lang]); };
 
+  const growthPrefix = /^\\/growth(?:\\/|$)/.test(location.pathname) ? '/growth' : '';
   async function api(path, init = {}) {
+    if (path.startsWith('/api/growth/')) path = growthPrefix + path;
     const method = init.method ?? 'GET';
     const headers = { accept: 'application/json', ...(init.body ? { 'content-type': 'application/json' } : {}), ...(method !== 'GET' && csrf() ? { 'x-nordla-csrf': csrf() } : {}) };
     const r = await fetch(path, { credentials: 'same-origin', ...init, headers });
