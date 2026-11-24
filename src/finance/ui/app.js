@@ -6,6 +6,7 @@
 const state = { csrf: null, settings: null, missing: [] };
 // API prefix: '' standalone; the Core page embeds Finance with '/finance/' so calls reach the module through the Nordla gateway (never the Core API).
 const FIN_API_BASE = typeof finApiBase === 'string' ? finApiBase : '';
+let finPrefetchedSession = null; // standalone /finance/: no Core prefetch (the embedded frame may pass one); declared so the startup check cannot throw into the sign-in form
 const app = document.getElementById('app');
 
 // ---------- tiny DOM helper ----------
