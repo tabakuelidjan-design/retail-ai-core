@@ -14,21 +14,38 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Nordla">
+<link rel="stylesheet" href="/nordla-core-rail.css">
 <link rel="stylesheet" href="/app.css">
 <link rel="stylesheet" href="/field.css">
 <link rel="stylesheet" href="/salon.css">
 <link rel="stylesheet" href="/nx.css">
 </head>
 <body>
-<header class="top">
-  <button class="ghost" id="btn-cases" aria-label="Cases">&#9776;</button>
-  <div class="title"><strong id="case-name">New case</strong><span id="case-sub" class="muted"></span></div>
-  <span id="mode" class="badge"></span>
-</header>
-<div id="statusbar" class="statusbar" aria-live="polite"></div>
-<main id="screen" tabindex="-1"></main>
-<nav class="tabs" id="tabs" aria-label="Navigation principale"></nav>
-<div id="overlay" hidden></div>
+<div class="shell">
+  <div data-nordla-core-rail-slot></div>
+  <div class="mainarea">
+    <header class="top">
+      <span data-nordla-core-toggle-slot></span>
+      <button class="ghost" id="btn-cases" aria-label="Dossiers">&#9636;</button>
+      <div class="title"><strong id="case-name">Sourcing</strong><span id="case-sub" class="muted"></span></div>
+      <span id="mode" class="badge"></span>
+    </header>
+    <nav class="tabs" id="tabs" aria-label="Navigation principale"></nav>
+    <div id="statusbar" class="statusbar" aria-live="polite"></div>
+    <main id="screen" tabindex="-1"></main>
+    <div id="overlay" hidden></div>
+  </div>
+</div>
+<script>
+  var railSlot = document.querySelector('[data-nordla-core-rail-slot]');
+  var toggleSlot = document.querySelector('[data-nordla-core-toggle-slot]');
+  if (/^\/sourcing\/?$/.test(window.location.pathname)) {
+    document.body.classList.add('nordla-hosted');
+    if (railSlot) railSlot.setAttribute('data-nordla-core-rail', 'sourcing');
+    if (toggleSlot) toggleSlot.setAttribute('data-nordla-core-toggle', '');
+  }
+</script>
+<script src="/nordla-core-rail.js"></script>
 <noscript>This tool needs JavaScript.</noscript>
 <script type="module" src="/app.js"></script>
 </body>
