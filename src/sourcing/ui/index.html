@@ -25,7 +25,11 @@ body.ui-booting .mainarea > #screen, body.ui-booting .mainarea > #tabs { visibil
 <link rel="stylesheet" href="/salon.css">
 <link rel="stylesheet" href="/nx.css">
 <link rel="stylesheet" href="/nordla-home.css">
-  <style>body.core-signed-out .mainarea > header.top, body.core-signed-out .mainarea > #statusbar, body.core-signed-out #btn-cases, body.core-signed-out #case-name, body.core-signed-out #case-sub, body.core-signed-out #mode { display: none; }</style>
+  <style>
+    body.core-signed-out .mainarea > header.top, body.core-signed-out .mainarea > #statusbar, body.core-signed-out #btn-cases, body.core-signed-out #case-name, body.core-signed-out #case-sub, body.core-signed-out #mode { display: none; }
+    body.core-signed-out .corerail, body.core-home-active .corerail { display: none; }
+    body.core-signed-out .shell.nordla-frame > .mainarea, body.core-home-active .shell.nordla-frame > .mainarea { margin-left: 0; }
+  </style>
 </head>
 <body class="ui-booting">
 <div class="shell">
@@ -46,9 +50,9 @@ body.ui-booting .mainarea > #screen, body.ui-booting .mainarea > #tabs { visibil
 <script>
   var railSlot = document.querySelector('[data-nordla-core-rail-slot]');
   var toggleSlot = document.querySelector('[data-nordla-core-toggle-slot]');
-  if (/^\/sourcing\/?$/.test(window.location.pathname)) {
+  if (/^\\/(?:sourcing\\/?)?$/.test(window.location.pathname)) {
     document.body.classList.add('nordla-hosted');
-    if (railSlot) railSlot.setAttribute('data-nordla-core-rail', 'sourcing');
+    if (railSlot) railSlot.setAttribute('data-nordla-core-rail', window.location.pathname.indexOf('/sourcing') === 0 ? 'sourcing' : 'dashboard');
     if (toggleSlot) toggleSlot.setAttribute('data-nordla-core-toggle', '');
   }
 </script>
