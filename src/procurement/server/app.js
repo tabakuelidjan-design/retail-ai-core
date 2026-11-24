@@ -294,6 +294,7 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, s
       const embedded = url.searchParams.get('embedded') === '1';
       const frameCsp = embedded ? CSP.replace("frame-ancestors 'none'", "frame-ancestors 'self'") : CSP;
       res.setHeader('content-security-policy', frameCsp); res.setHeader('referrer-policy', 'no-referrer'); res.setHeader('x-frame-options', embedded ? 'SAMEORIGIN' : 'DENY');
+      if (embedded) res.setHeader('cross-origin-embedder-policy', 'require-corp');
       return await serveAsset(res, rel === '/' ? 'index.html' : rel.slice(1));
     } catch (e) { return fail(res, e); }
   }
