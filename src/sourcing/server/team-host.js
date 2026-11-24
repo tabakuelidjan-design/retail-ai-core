@@ -19,6 +19,7 @@ const CSS = 'text/css; charset=utf-8'; const JS = 'text/javascript; charset=utf-
 const ASSETS = Object.freeze({ 'team.js': [UI, 'team.js', JS], 'team.css': [UI, 'team.css', CSS], 'invitation.js': [UI, 'invitation.js', JS], 'recovery.js': [UI, 'recovery.js', JS], 'shell.js': [GN, 'shell.js', JS], 'connections.css': [CX, 'connections.css', CSS], 'nordla-ds.css': [DS, 'nordla-ds.css', CSS], 'nordla-tokens.css': [DS, 'nordla-tokens.css', CSS] });
 const HEADERS = { 'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'", 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY' };
 const send = (res, status, type, body, extra = {}) => { res.writeHead(status, { ...HEADERS, 'Content-Type': type, ...extra }); res.end(body); };
+const EMBEDDED_SETTINGS_HEADERS = { 'Content-Security-Policy': HEADERS['Content-Security-Policy'].replace("frame-ancestors 'none'", "frame-ancestors 'self'"), 'X-Frame-Options': 'SAMEORIGIN' };
 const json = (res, status, body) => send(res, status, 'application/json; charset=utf-8', JSON.stringify(body), { 'Cache-Control': 'no-store' });
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const SLUGS = Object.freeze({ membres: 'members', invitations: 'invitations', roles: 'roles', historique: 'history' });
@@ -94,7 +95,7 @@ export async function createTeamHost({ gate, merchantId, service, origin = '', s
         }
         if (method !== 'GET' && method !== 'HEAD') return false;
         const page = /^\/settings\/team(?:\/([a-z-]+))?\/?$/.exec(p);
-        if (page && (!page[1] || SLUGS[page[1]])) { send(res, 200, 'text/html; charset=utf-8', await teamPage('index.html')); return true; }
+        if (page && (!page[1] || SLUGS[page[1]])) { send(res, 200, 'text/html; charset=utf-8', await teamPage('index.html'), EMBEDDED_SETTINGS_HEADERS); return true; }
         if (/^\/recuperation\/[A-Za-z0-9_-]{1,64}\/?$/.test(p)) { send(res, 200, 'text/html; charset=utf-8', await teamPage('recovery.html'), { 'Cache-Control': 'no-store' }); return true; }
         if (/^\/invitation\/[A-Za-z0-9_-]{1,64}\/?$/.test(p)) { send(res, 200, 'text/html; charset=utf-8', await teamPage('invitation.html'), { 'Cache-Control': 'no-store' }); return true; }
         if (p.startsWith('/nordla-assets/')) { const f = await readNordlaShared(p); if (!f) return false; send(res, 200, f.type, f.body); return true; }

@@ -16,6 +16,7 @@ const CSS = 'text/css; charset=utf-8'; const JS = 'text/javascript; charset=utf-
 const ASSETS = Object.freeze({ 'connections.js': [UI, 'connections.js', JS], 'connections.css': [UI, 'connections.css', CSS], 'nordla-ds.css': [DS, 'nordla-ds.css', CSS], 'nordla-tokens.css': [DS, 'nordla-tokens.css', CSS] });
 const HEADERS = { 'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'", 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-cache' };
 const send = (res, status, type, body, extra = {}) => { res.writeHead(status, { ...HEADERS, 'Content-Type': type, ...extra }); res.end(body); };
+const EMBEDDED_SETTINGS_HEADERS = { 'Content-Security-Policy': HEADERS['Content-Security-Policy'].replace("frame-ancestors 'none'", "frame-ancestors 'self'"), 'X-Frame-Options': 'SAMEORIGIN' };
 const json = (res, status, body) => send(res, status, 'application/json; charset=utf-8', JSON.stringify(body), { 'Cache-Control': 'no-store' });
 const redirect = (res, to) => { res.writeHead(303, { ...HEADERS, Location: to, 'Cache-Control': 'no-store' }); res.end(); };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -115,7 +116,7 @@ export async function createConnectionsHost({ gate, merchantId, runtime, service
           json(res, 404, { error: { code: 'NOT_FOUND' } }); return true;
         }
         if (req.method !== 'GET' && req.method !== 'HEAD') return false;
-        if (p === PAGE || p === `${PAGE}/` || p === HOME || p === `${HOME}/`) { send(res, 200, 'text/html; charset=utf-8', await connectionsPage()); return true; }
+        if (p === PAGE || p === `${PAGE}/` || p === HOME || p === `${HOME}/`) { send(res, 200, 'text/html; charset=utf-8', await connectionsPage(), EMBEDDED_SETTINGS_HEADERS); return true; }
         const m = /^\/connections-assets\/([a-z0-9.-]+)$/.exec(p);
         if (m) {
           if (m[1] === 'nordla-icon.js') { const f = await readNordlaShared('/nordla-icon.js'); if (!f) { send(res, 404, 'application/json', '{"error":"NOT_FOUND"}'); return true; } send(res, 200, f.type, f.body); return true; }

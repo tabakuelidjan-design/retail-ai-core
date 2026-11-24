@@ -16,6 +16,7 @@ const CSS = 'text/css; charset=utf-8'; const JS = 'text/javascript; charset=utf-
 const ASSETS = Object.freeze({ 'security.js': [UI, 'security.js', JS], 'security.css': [UI, 'security.css', CSS], 'reset.js': [UI, 'reset.js', JS], 'shell.js': [GN, 'shell.js', JS], 'general.css': [GN, 'general.css', CSS], 'connections.css': [CX, 'connections.css', CSS], 'nordla-ds.css': [DS, 'nordla-ds.css', CSS], 'nordla-tokens.css': [DS, 'nordla-tokens.css', CSS] });
 const HEADERS = { 'Content-Security-Policy': "default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'", 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY' };
 const send = (res, status, type, body, extra = {}) => { res.writeHead(status, { ...HEADERS, 'Content-Type': type, ...extra }); res.end(body); };
+const EMBEDDED_SETTINGS_HEADERS = { 'Content-Security-Policy': HEADERS['Content-Security-Policy'].replace("frame-ancestors 'none'", "frame-ancestors 'self'"), 'X-Frame-Options': 'SAMEORIGIN' };
 const json = (res, status, body) => send(res, status, 'application/json; charset=utf-8', JSON.stringify(body), { 'Cache-Control': 'no-store' });
 export const SLUGS = Object.freeze({ connexion: 'sign_in', sessions: 'sessions', activite: 'activity', equipe: 'team' });
 const STATUS = Object.freeze({ REAUTHENTICATION_REQUIRED:403, LINK_INVALID: 410, MFA_REQUIRED: 422, MFA_INVALID: 403, FORBIDDEN_ROLE: 403, FEATURE_UNAVAILABLE: 409, VALIDATION: 422, BAD_CURRENT_PASSWORD: 403, RATE_LIMITED: 429, UNAVAILABLE: 503, PROVIDER_REFUSED: 422, CURRENT_SESSION_UNKNOWN: 409, SESSION_REQUIRED: 401 });
@@ -79,7 +80,7 @@ export async function createSecurityHost({ gate, merchantId, service, sessionCoo
         }
         if (req.method !== 'GET' && req.method !== 'HEAD') return false;
         const page = /^\/settings\/security(?:\/([a-z-]+))?\/?$/.exec(p);
-        if (page && (!page[1] || SLUGS[page[1]])) { send(res, 200, 'text/html; charset=utf-8', await securityPage()); return true; }
+        if (page && (!page[1] || SLUGS[page[1]])) { send(res, 200, 'text/html; charset=utf-8', await securityPage(), EMBEDDED_SETTINGS_HEADERS); return true; }
         if (p.startsWith('/nordla-assets/')) { const f = await readNordlaShared(p); if (!f) return false; send(res, 200, f.type, f.body); return true; }
         const m = /^\/security-assets\/([a-z0-9.-]+)$/.exec(p);
         if (m) {
