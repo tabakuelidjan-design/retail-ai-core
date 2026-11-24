@@ -596,9 +596,9 @@ async function openFinance() {
   o.scrollTop = 0;
 }
 const CORE_EMBED_MODULES = Object.freeze({
-  analytics: { title: 'Analyses', url: '/analyses/' },
-  sourcing: { title: 'Sourcing', url: '/sourcing' },
-  procurement: { title: 'Stock & Achats', url: '/procurement/?tab=stock' },
+  analytics: { title: 'Analyses', url: '/analyses/?embedded=1' },
+  sourcing: { title: 'Sourcing', url: '/sourcing?embedded=1' },
+  procurement: { title: 'Stock & Achats', url: '/procurement/?tab=stock&embedded=1' },
 });
 /** These modules keep their own features, but render inside the persistent Core frame and share its session. */
 function openCoreModule(key) {
