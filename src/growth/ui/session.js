@@ -20,7 +20,7 @@ var growthHosted = (() => {
   };
   const applyServerText = () => { const d = window.NORDLA_DICTS || {}; for (const lang of Object.keys(SERVER_TEXT)) if (d[lang]) Object.assign(d[lang], SERVER_TEXT[lang]); };
 
-  const growthPrefix = /^\\/growth(?:\\/|$)/.test(location.pathname) ? '/growth' : '';
+  const growthPrefix = location.pathname === '/growth' || location.pathname.startsWith('/growth/') ? '/growth' : '';
   async function api(path, init = {}) {
     if (path.startsWith('/api/growth/')) path = growthPrefix + path;
     const method = init.method ?? 'GET';
