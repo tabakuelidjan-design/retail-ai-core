@@ -203,3 +203,18 @@ body.sl-mode .nx .nx-catform .nx-btn{min-height:48px;width:100%;margin:0}
 body.sl-mode .nx .nx-blkacts{display:flex;flex-wrap:wrap;gap:var(--s2);margin:var(--s2) 0}
 
 .nx-growth{margin:0 0 var(--s2)}.nx-growth p{display:flex;flex-wrap:wrap;gap:var(--s2);margin:0 0 var(--s2)}.nx-growth a{flex:1 1 140px;min-height:48px;padding:10px var(--s4);display:inline-flex;align-items:center;justify-content:center;text-align:center;border-radius:var(--r-ctl);background:var(--nx-accent-soft);color:var(--nx-accent);font-weight:600;text-decoration:none}.nx-growth .muted{flex:1 1 100%}
+
+
+/* Sourcing hosted in Nordla: shared Core rail, Sourcing's existing navy header, and its five preserved destinations. */
+body.nordla-hosted.sl-mode{color-scheme:light;--nx-bg:#f3f5f9;--nx-card:#fff;--nx-ink:#14263f;--nx-ink2:#364860;--nx-mute:#58687c;--nx-line:#e2e7ef;--nx-line2:#edf0f5;--nx-accent:#1d4f91;--nx-accent-ink:#fff;--nx-accent-soft:#e7eff9;--nx-navy:#14263f;--nx-ok:#1b7447;--nx-ok-soft:#e5f3ea;--nx-warn:#8f5600;--nx-warn-soft:#fcf0d9;--nx-bad:#b3261e;--nx-bad-soft:#fbe9e7;--bg:var(--nx-bg);--card:var(--nx-card);--ink:var(--nx-ink);--muted:var(--nx-mute);--line:var(--nx-line);--accent:var(--nx-accent);background:var(--nx-bg);color:var(--nx-ink)}
+@media (min-width:901px){
+  body.nordla-hosted{padding-bottom:0}
+  .shell.nordla-frame>.mainarea .top{position:sticky;top:0}
+  .shell.nordla-frame>.mainarea main#screen{max-width:1200px;margin:0 auto;padding:26px 32px 40px}
+  .shell.nordla-frame>.mainarea .tabs{position:static;left:auto;right:auto;bottom:auto;transform:none;width:auto;height:auto;z-index:auto;display:flex;align-items:stretch;justify-content:flex-start;overflow-x:auto;overflow-y:hidden;border-radius:0;border-top:0;border-bottom:1px solid var(--nx-line);padding:0 20px;background:var(--nx-card);box-shadow:none}
+  .shell.nordla-frame>.mainarea .tabs button{display:flex;flex:0 0 auto;flex-direction:row;align-items:center;justify-content:center;gap:8px;min-width:92px;min-height:48px;height:auto;padding:10px 16px;border:0;border-radius:0;background:none;color:var(--nx-mute);font-size:14px;line-height:20px;box-shadow:inset 0 -3px 0 transparent}
+  .shell.nordla-frame>.mainarea .tabs button[aria-current=true]{color:var(--nx-accent);font-weight:700;box-shadow:inset 0 -3px 0 var(--nx-accent)}
+  .shell.nordla-frame>.mainarea .tabs .nx-ic{width:20px;height:20px;padding:0;border-radius:0}
+  body.nordla-hosted.sl-mode .shell.nordla-frame>.mainarea main#screen{max-width:1200px;margin:0 auto;padding:26px 32px 40px}
+}
+body.nordla-hosted.sl-mode .top{display:flex}
