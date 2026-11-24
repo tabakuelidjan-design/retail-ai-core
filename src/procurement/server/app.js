@@ -291,7 +291,9 @@ export function createProcurementApp({ procurement, users, sourcingDir = null, s
       if (req.method !== 'GET' && req.method !== 'HEAD') return send(res, 405, { error: 'METHOD_NOT_ALLOWED' });
       const rel = url.pathname.replace(/^\/procurement/, '');
       if (rel === '') { res.writeHead(301, { location: '/procurement/' }); return res.end(); }
-      res.setHeader('content-security-policy', CSP); res.setHeader('referrer-policy', 'no-referrer'); res.setHeader('x-frame-options', 'DENY');
+      const embedded = url.searchParams.get('embedded') === '1';
+      const frameCsp = embedded ? CSP.replace(\"frame-ancestors 'none'\", \"frame-ancestors 'self'\") : CSP;
+      res.setHeader('content-security-policy', frameCsp); res.setHeader('referrer-policy', 'no-referrer'); res.setHeader('x-frame-options', embedded ? 'SAMEORIGIN' : 'DENY');
       return await serveAsset(res, rel === '/' ? 'index.html' : rel.slice(1));
     } catch (e) { return fail(res, e); }
   }
