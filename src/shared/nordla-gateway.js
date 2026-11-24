@@ -116,8 +116,8 @@ export function createGateway({ publicOrigin, services, authorize, modules = MOD
         delete out['x-frame-options'];
         const policy = String(out['content-security-policy'] ?? '');
         out['content-security-policy'] = policy
-          ? (/frame-ancestors\\s+[^;]+/i.test(policy) ? policy.replace(/frame-ancestors\\s+[^;]+/gi, \"frame-ancestors 'self'\") : `${policy}; frame-ancestors 'self'`)
-          : \"frame-ancestors 'self'\";
+          ? (/frame-ancestors\s+[^;]+/i.test(policy) ? policy.replace(/frame-ancestors\s+[^;]+/gi, "frame-ancestors 'self'") : `${policy}; frame-ancestors 'self'`)
+          : "frame-ancestors 'self'";
       }
       if (out.location) out.location = rewriteLocation(String(out.location), up.origin, route.prefix);
       if (out['set-cookie']) {
