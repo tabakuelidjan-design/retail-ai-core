@@ -97,7 +97,9 @@ export function createFinanceApp(deps) {
   const packCache = new Map();
   const tokenHash = sha(token);
   // Single sign-on from the Nordla server (src/finance/sso-ticket.js): only when the launcher gives a secret; otherwise /sso does not exist.
-  const ssoVerifier = deps.sso?.secret ? createTicketVerifier({ secret: deps.sso.secret, merchantId, now: () => (deps.nowMs ?? Date.now)(), module: 'finance', requirePerson: deps.sso.requirePerson === true, checkAccess: deps.sso.checkAccess ?? null }) : null;
+  // Core signs a short-lived, one-use ticket only after checking current access. The session remains unconfirmed and cannot read data until /api/session re-checks access.
+  // Avoid doing the same remote access lookup twice in a row during a module launch; all protected Finance API requests still re-check current access.
+  const ssoVerifier = deps.sso?.secret ? createTicketVerifier({ secret: deps.sso.secret, merchantId, now: () => (deps.nowMs ?? Date.now)(), module: 'finance', requirePerson: deps.sso.requirePerson === true }) : null;
   if (deps.ssoOnly && (!ssoVerifier || deps.sso.requirePerson !== true || typeof deps.sso.checkAccess !== 'function')) throw new Error('SSO-only mode requires personal Nordla sessions with current access checks.');
   const cookieFlags = deps.secureCookie ? '; Secure' : ''; // hosted mode: HTTPS is terminated by the platform
 
