@@ -362,13 +362,12 @@ export function nordlaHomeHtml({ modules = null, decisions = null, sales = null,
   return `<section class="nx-home${demo ? ' nx-home-demo' : ''}" aria-label="Nordla Core">
     <header class="nx-h-top">
       <button type="button" class="nx-h-burger" data-act="nx-menu" aria-label="Menu des modules">☰</button>
-      <img class="nx-h-logo-img nx-h-logo-top" src="/assets/nordla-logo.png" alt="Nordla" width="120" height="34">
+      <img class="nx-h-logo-img nx-h-logo-top" src="/assets/nordla-logo.png" alt="Nordla" width="120" height="33">
       <span class="nx-h-avatar nx-h-top-av" aria-label="Profil">JD</span>
     </header>
     ${demo ? DEMO_BANNER : ''}
     <aside class="nx-home-side" aria-label="Menu principal">
-      <img class="nx-h-logo-img" src="/assets/nordla-logo.png" alt="Nordla, vos données en action" width="150" height="43">
-      <p class="nx-h-menu-title">Menu principal</p>
+      <img class="nx-h-logo-img" src="/assets/nordla-logo.png" alt="Nordla, vos données en action" width="150" height="42">
       <ul>
         <li class="nx-h-cur"><span class="nx-h-navico" style="color:#0F1B2D">${icon('<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>', 16)}</span><span>Tableau de bord</span></li>
         <li><button type="button" class="nx-h-nav" data-act="nx-open-parle"><span class="nx-h-navico" style="color:#0F1B2D">${icon('<path d="M4 5h16v11H9l-5 4z"/>', 16)}</span><span>Parle à Nordla</span></button></li>
