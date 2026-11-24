@@ -2,6 +2,12 @@
 // Technical debt (documented): the two copies should become one shared file in a separate, approved task.
 (() => {
   'use strict';
+  // A direct Settings URL must return to the Core host; the same route stays in this frame when already embedded.
+  if (window.self === window.top) {
+    const target = location.pathname + location.search + location.hash;
+    location.replace('/?ouvrir=settings&path=' + encodeURIComponent(target));
+    return;
+  }
   const CSRF_COOKIES = ['__Host-nordla_sourcing_csrf'];
   const csrf = () => { for (const part of String(document.cookie).split(';')) { const i = part.indexOf('='); if (i > 0 && CSRF_COOKIES.includes(part.slice(0, i).trim())) return part.slice(i + 1).trim(); } return ''; };
   const app = document.getElementById('app');

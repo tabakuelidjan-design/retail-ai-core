@@ -1,11 +1,12 @@
 // Core module routes are handled after the home screen is ready. The parameter is removed first, so a reload does not repeat the action.
 // Kept out of app.js (its size is guarded by test/sourcing-v1-ui-modules.test.js).
 export function openFromLink() {
-  const want = new URLSearchParams(location.search).get('ouvrir');
+  const params = new URLSearchParams(location.search);
+  const want = params.get('ouvrir');
   if (!want) return;
   if (['analytics', 'sourcing', 'procurement', 'settings', 'settings-connections'].includes(want)) {
     history.replaceState(null, '', '/');
-    document.dispatchEvent(new CustomEvent('nordla:module', { detail: { module: want } }));
+    document.dispatchEvent(new CustomEvent('nordla:module', { detail: { module: want, path: params.get('path') } }));
     return;
   }
   if (want === 'parle') { history.replaceState(null, '', '/'); document.dispatchEvent(new CustomEvent('nordla:parle')); return; }

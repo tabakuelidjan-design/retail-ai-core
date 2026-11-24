@@ -603,7 +603,7 @@ const CORE_EMBED_MODULES = Object.freeze({
   'settings-connections': { title: 'Paramètres', url: '/settings/connections?embedded=1' },
 });
 /** These modules keep their own features, but render inside the persistent Core frame and share its session. */
-function openCoreModule(key) {
+function openCoreModule(key, requestedPath) {
   const module = CORE_EMBED_MODULES[key];
   if (!module) return;
   S.parlePage = false;
@@ -645,7 +645,17 @@ function openCoreModule(key) {
       content?.style.setProperty('margin', '0', 'important');
     } catch { /* a frame stays usable if its module chooses not to expose its document */ }
   });
-  frame.src = module.url;
+  let moduleUrl = module.url;
+  if (key.startsWith('settings') && typeof requestedPath === 'string') {
+    try {
+      const target = new URL(requestedPath, location.origin);
+      if (target.origin === location.origin && /^\\/settings(?:\\/|$)/.test(target.pathname)) {
+        target.searchParams.set('embedded', '1');
+        moduleUrl = target.pathname + target.search + target.hash;
+      }
+    } catch { /* keep the safe default Settings page */ }
+  }
+  frame.src = moduleUrl;
   o.scrollTop = 0;
 }
 function openMenu() {
@@ -679,7 +689,7 @@ document.addEventListener('input', (ev) => { const t = ev.target; if (t?.matches
 document.addEventListener('click', onClick); document.addEventListener('submit', (ev) => { onSubmit(ev).catch((e) => { console.error(e); discardDrafts = false; S.flash = `This could not be saved (${e?.message ?? e}). What you typed is still in the form: try again.`; render(); }); }); document.addEventListener('change', onPhoto);
 document.addEventListener('change', (ev) => { const fi = ev.target.closest?.('input[data-act="rec-file"]'); if (fi) { const f = fi.files?.[0]; fi.value = ''; if (f) recFile(f).catch(() => { (S.rec ??= {}).error = 'Ce fichier n’a pas pu être lu.'; openMenu(); }); return; } const f = ev.target.closest?.('form[data-form]'); if (!f || !['quote', 'costs', 'sale', 'amazon-sale'].includes(f.dataset.form) || !cur()) return; S.quiet = true; try { f.requestSubmit(); } finally { S.quiet = false; } });
 $('#btn-cases').addEventListener('click', openMenu);
-document.addEventListener('nordla:module', (ev) => openCoreModule(ev.detail?.module));
+document.addEventListener('nordla:module', (ev) => openCoreModule(ev.detail?.module, ev.detail?.path));
 document.addEventListener('nordla:parle', (ev) => openParle(ev.detail?.question));
 document.addEventListener('nordla:finance', () => openFinance());
 

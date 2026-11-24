@@ -2,6 +2,12 @@
 // the page never names a provider. All text from the server is inserted with textContent.
 (() => {
   'use strict';
+  // Keep direct Settings URLs inside the persistent Core host; embedded navigation remains within this frame.
+  if (window.self === window.top) {
+    const target = location.pathname + location.search + location.hash;
+    location.replace('/?ouvrir=settings&path=' + encodeURIComponent(target));
+    return;
+  }
   const CSRF_COOKIES = ['__Host-nordla_sourcing_csrf'];
   const csrf = () => { for (const part of String(document.cookie).split(';')) { const i = part.indexOf('='); if (i > 0 && CSRF_COOKIES.includes(part.slice(0, i).trim())) return part.slice(i + 1).trim(); } return ''; };
   const app = document.getElementById('app');
