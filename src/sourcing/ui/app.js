@@ -429,6 +429,8 @@ async function onClick(ev) {
   if (act === 'savetoken') { S.token = $('#tok').value.trim(); ls.set('nordla.sourcing.token', S.token); await ping(); closeOverlay(); queueSync(); return render(); }
 }
 const closeOverlay = () => { const o = $('#overlay'); o.hidden = true; o.className = ''; };
+// Tableau de bord inside an open module view (the menu is re-rendered in the overlay, so a listener on the first copy is lost): on the Core home it closes the view in place
+document.addEventListener('click', (ev) => { const li = ev.target.closest && ev.target.closest('#overlay .nx-home-side ul > li'); if (li && /Tableau de bord/.test(li.textContent) && location.pathname === '/' && $('#overlay').classList.contains('show')) { ev.preventDefault(); closeOverlay(); } }, true);
 let supIdx = 0; let supAll = false;
 function showSupplier() {
   const o = $('#overlay'); o.hidden = false; o.className = 'show show-sup'; const items = S.A.supplierSheet.items; if (supIdx >= items.length) supIdx = 0;
