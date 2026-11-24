@@ -8,7 +8,7 @@ let cachedExplorer = null;
 async function loadExplorerIfNeeded() {
   if (cachedExplorer) return;
   try {
-    const res = await fetch(`/api/explorer?${periodQuery()}`);
+    const res = await fetch(`api/explorer?${periodQuery()}`);
     if (res.ok) cachedExplorer = await res.json();
     else { let code = null; try { code = (await res.json()).error.code; } catch (e) { code = null; } cachedExplorer = { available: false, periodError: code || 'GENERIC' }; }
   } catch (e) { /* surfaces as the empty state */ }

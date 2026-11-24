@@ -174,7 +174,7 @@ async function refreshSyncPill() {
   const el = document.querySelector('[data-sync-pill]');
   if (!el) return;
   try {
-    const r = await fetch('/api/sync-status');
+    const r = await fetch('api/sync-status');
     if (!r.ok) return;
     const s = (await r.json()).sync;
     cachedSync = s;
@@ -420,7 +420,7 @@ let cachedWhatChanged = null;
 async function loadWhatChangedIfNeeded() {
   if (cachedWhatChanged) return;
   try {
-    const res = await fetch('/api/what-changed');
+    const res = await fetch('api/what-changed');
     if (res.ok) cachedWhatChanged = await res.json();
   } catch (e) { /* network error surfaces as the empty state below */ }
 }
@@ -459,7 +459,7 @@ function renderBriefPage(main) {
 async function loadBriefIfNeeded() {
   if (cachedBrief) return;
   try {
-    const res = await fetch('/api/brief');
+    const res = await fetch('api/brief');
     if (res.ok) cachedBrief = await res.json();
   } catch (e) { /* network error surfaces as the empty state in renderBriefPage() */ }
 }

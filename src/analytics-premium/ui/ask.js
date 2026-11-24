@@ -201,7 +201,7 @@ async function askSubmit(input, box, btn) {
   const ac = new AbortController(); const timer = setTimeout(() => ac.abort(), ASK_TIMEOUT_MS);
   let entry = null; let failed = null;
   try {
-    const res = await fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question, lang: NORDLA_I18N.getLang(), period: askSelectedPeriod(), history: askHistory() }), signal: ac.signal });
+    const res = await fetch('api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question, lang: NORDLA_I18N.getLang(), period: askSelectedPeriod(), history: askHistory() }), signal: ac.signal });
     let data = null; try { data = await res.json(); } catch (e) { data = null; }
     if (res.ok && data && data.mode === 'ai') entry = askAiEntry(data);
     else if (res.ok && data && Array.isArray(data.figures) && data.figures.length) { const body = h('div', { class: 'ask-turn-body' }); askRenderAnswer(body, data); entry = { node: body, text: `${t(`ask.f.${data.figures[0].id}`)} : ${askFigureValue(data.figures[0], data.currency || 'EUR')}` }; }
@@ -217,7 +217,7 @@ async function askSubmit(input, box, btn) {
 
 /** The Nordla microphone icon (ui/assets, 96 px + 192 px for dense screens). Decorative: the button's text says what it does. */
 function askMicIcon() {
-  return h('img', { class: 'ask-mic-icon', src: '/assets/nordla-mic.png', srcset: '/assets/nordla-mic.png 1x, /assets/nordla-mic-2x.png 2x', width: '22', height: '22', alt: '', 'aria-hidden': 'true', draggable: 'false' });
+  return h('img', { class: 'ask-mic-icon', src: 'assets/nordla-mic.png', srcset: 'assets/nordla-mic.png 1x, /assets/nordla-mic-2x.png 2x', width: '22', height: '22', alt: '', 'aria-hidden': 'true', draggable: 'false' });
 }
 
 function closeAsk() { askThread = []; askAsk = null; /* the conversation lives only while the box is open */ if (askSpeech) { askSpeech.stop(); askSpeech = null; } if (askOpen) { askOpen.remove(); askOpen = null; document.removeEventListener('keydown', askEsc, true); } }

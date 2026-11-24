@@ -8,7 +8,7 @@ let cachedProducts = null;
 async function loadProductsIfNeeded() {
   if (cachedProducts) return;
   try {
-    const res = await fetch(`/api/products?${periodQuery()}`);
+    const res = await fetch(`api/products?${periodQuery()}`);
     if (res.ok) cachedProducts = await res.json();
     else { let code = null; try { code = (await res.json()).error.code; } catch (e) { code = null; } cachedProducts = { available: false, periodError: code || 'GENERIC' }; }
   } catch (e) { /* surfaces as the empty state */ }
@@ -255,7 +255,7 @@ async function prOpen(id) {
   if (!prEscHandler) { prEscHandler = (e) => { if (e.key === 'Escape') prClose(); }; document.addEventListener('keydown', prEscHandler); }
   panel.querySelector('.pr-close')?.focus();
   if (!prDetails.has(id)) {
-    try { const res = await fetch(`/api/products/detail?id=${encodeURIComponent(id)}&${periodQuery()}`); if (res.ok) prDetails.set(id, await res.json()); } catch (e) { /* shown below */ }
+    try { const res = await fetch(`api/products/detail?id=${encodeURIComponent(id)}&${periodQuery()}`); if (res.ok) prDetails.set(id, await res.json()); } catch (e) { /* shown below */ }
   }
   if (prState.selected !== id || !panel.isConnected) return;
   const data = prDetails.get(id);
