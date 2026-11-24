@@ -50,9 +50,10 @@ body.ui-booting .mainarea > #screen, body.ui-booting .mainarea > #tabs { visibil
 <script>
   var railSlot = document.querySelector('[data-nordla-core-rail-slot]');
   var toggleSlot = document.querySelector('[data-nordla-core-toggle-slot]');
-  if (/^\\/(?:sourcing\\/?)?$/.test(window.location.pathname)) {
+  var currentPath = window.location.pathname;
+  if (currentPath === '/' || currentPath === '/sourcing' || currentPath === '/sourcing/') {
     document.body.classList.add('nordla-hosted');
-    if (railSlot) railSlot.setAttribute('data-nordla-core-rail', window.location.pathname.indexOf('/sourcing') === 0 ? 'sourcing' : 'dashboard');
+    if (railSlot) railSlot.setAttribute('data-nordla-core-rail', currentPath.indexOf('/sourcing') === 0 ? 'sourcing' : 'dashboard');
     if (toggleSlot) toggleSlot.setAttribute('data-nordla-core-toggle', '');
   }
 </script>
