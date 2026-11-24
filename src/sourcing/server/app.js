@@ -76,7 +76,7 @@ export function createSourcingApp({ financeGateway = null, redirect = null, rele
   }
   async function serveStatic(res, file, dir, { embedded = false } = {}) {
     const pageHeaders = embedded && file === 'index.html'
-      ? { ...SEC, 'x-frame-options': 'SAMEORIGIN', 'content-security-policy': SEC['content-security-policy'].replace(\"frame-ancestors 'none'\", \"frame-ancestors 'self'\") }
+      ? { ...SEC, 'x-frame-options': 'SAMEORIGIN', 'content-security-policy': SEC['content-security-policy'].replace("frame-ancestors 'none'", "frame-ancestors 'self'") }
       : SEC;
     try { const data = await readFile(join(dir, file)); res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream', 'cache-control': 'no-cache', ...(file === 'voice-engine-worker.js' ? VOICE_SEC : pageHeaders) }); res.end(data); }
     catch { json(res, 404, { error: 'NOT_FOUND' }); }
