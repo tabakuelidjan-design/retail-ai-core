@@ -60,7 +60,7 @@ export function buildHostedGate(env, hosted, services = null) {
     };
     identity = createIdentityService({ merchantId: hosted.merchantId, moduleCode: 'sourcing', supabase, ...loadIdentityServiceEnv(env), recoveryCheck });
   }
-  const security = services?.security ?? createHttpSecurity({ environment: 'hosted', proxy: 'railway', allowedHosts: hosted.allowedHosts, allowedOrigins: [hosted.origin], moduleCode: 'sourcing', csrfKey: env.NORDLA_CSRF_KEY, rateLimitKey: env.NORDLA_IDENTITY_RATE_LIMIT_KEY });
+  const security = services?.security ?? createHttpSecurity({ environment: 'hosted', proxy: 'railway', allowedHosts: hosted.allowedHosts, allowedOrigins: [hosted.origin], moduleCode: 'sourcing', csp: { frameSources: [\"'self'\"] }, csrfKey: env.NORDLA_CSRF_KEY, rateLimitKey: env.NORDLA_IDENTITY_RATE_LIMIT_KEY });
   let mfaRule = services?.mfaRule ?? null;
   if (!services?.identity) {
     mfaRule = createMfaRule({ supabase: createSupabaseClient(loadSupabaseConfigFromEnv(env)), ttlMs: 0 });
