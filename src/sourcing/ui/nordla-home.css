@@ -534,3 +534,35 @@ html:has(.nx-finance-core) { overflow: hidden; }
 @media (max-width: 899px) {
   .nx-finance-panel { height: calc(100dvh - 112px); min-height: 420px; }
 }
+
+
+/* Integrated modules: Core owns the viewport; the iframe is the only right-side scroller.
+   Prevent the page beneath the overlay and the overlay itself from adding duplicate bars. */
+@media (min-width: 900px) {
+  html:has(#overlay.nxa-overlay .nx-module-core),
+  body:has(#overlay.nxa-overlay .nx-module-core) { overflow: hidden; }
+  #overlay.nxa-overlay:has(.nx-module-core) { overflow: hidden; padding: 0; }
+  #overlay.nxa-overlay .nx-home.nxp-shell.nx-module-core {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+  #overlay.nxa-overlay .nx-module-core > .nx-home-side {
+    position: static;
+    height: 100vh;
+    height: 100dvh;
+    overflow-y: auto;
+  }
+  #overlay.nxa-overlay .nx-module-core > .nx-h-main {
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+  #overlay.nxa-overlay .nx-module-core .nx-module-view {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+}
