@@ -20,7 +20,7 @@
 
   // One entry per Nordla module. `path` is relative to the Nordla home address (or to this origin when no base is given).
   // Entries without `path` are shown as not available yet: no link is written for them.
-  // `?ouvrir=` entries open the module's own sign-in ticket from Core (no token is typed by the person).
+  // `?ouvrir=` entries open the module inside Core, with the Core session and menu kept in place.
   var MENU = Object.freeze([
     { key: 'dashboard', label: 'Tableau de bord', path: '/', icon: 'grid', colour: '#0F1B2D' },
     { key: 'parle', label: 'Parle à Nordla', path: '/?ouvrir=parle', icon: 'chat', colour: '#0F1B2D' },
