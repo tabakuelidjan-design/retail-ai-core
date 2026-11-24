@@ -33,13 +33,26 @@
 
   // ------------------------------------------------------------------ shell: the Nordla menu (left) + the page
   const INITIALS = { shopify: 'S', instagram: 'Ig', tiktok: 'Tk', google_business_profile: 'G', bank: 'B', odoo: 'odoo', woocommerce: 'Woo', prestashop: 'Ps' };
+  const SETTINGS_NAV = [
+    { id: 'overview', label: 'Vue d’ensemble', href: '/settings', icon: 'home', colour: '#0F1B2D' },
+    { id: 'general', label: 'Général', href: '/settings/general', icon: 'settings', colour: '#6B7280' },
+    { id: 'team', label: 'Équipe et accès', href: '/settings/team', icon: 'users', colour: '#46778D' },
+    { id: 'connections', label: 'Connexions', href: '/settings/connections', icon: 'plug', colour: '#7842B8' },
+    { id: 'notifications', label: 'Notifications', href: '/settings/notifications', icon: 'bell', colour: '#E87924' },
+    { id: 'preferences', label: 'Préférences', href: '/settings/preferences', icon: 'sliders', colour: '#D1A44F' },
+    { id: 'security', label: 'Sécurité', href: '/settings/security', icon: 'shield', colour: '#B92335' },
+  ];
   function shell(settings, current, content) {
-    const nav = h('nav', { class: 'cx-nav', id: 'cx-nav', 'aria-label': 'Menu Nordla' }, settings.nav.map((n) => h('a', { class: 'cx-nav-item', href: n.href, 'aria-current': n.id === 'settings' ? 'page' : null, title: n.id === 'settings' || n.href === '/' ? null : 'Ouvre l’accueil Nordla : chaque module y est listé avec son état réel.' }, ico(n.id), h('span', { text: n.label }))));
-    const toggle = h('button', { class: 'cx-menu', type: 'button', 'aria-controls': 'cx-nav', 'aria-expanded': 'false', 'aria-label': 'Ouvrir le menu Nordla', on: { click: (e) => { const open = nav.classList.toggle('open'); e.currentTarget.setAttribute('aria-expanded', String(open)); } } }, ico('menu'));
+    const path = location.pathname.replace(/\\/$/, '') || '/';
+    const nav = h('nav', { class: 'cx-nav', 'aria-label': 'Navigation Paramètres' }, SETTINGS_NAV.map((n) => {
+      const active = n.id === 'overview' ? path === '/settings' : path === n.href;
+      const itemIcon = ico(n.icon); itemIcon.style.color = n.colour;
+      return h('a', { class: 'cx-nav-item', href: n.href, 'aria-current': active ? 'page' : null }, itemIcon, h('span', { text: n.label }));
+    }));
     return h('div', { class: 'cx-shell' },
-      h('aside', { class: 'cx-side' }, h('div', { class: 'cx-brandrow' }, h('a', { class: 'cx-brand', href: '/', text: 'Nordla AI' }), toggle), nav),
       h('div', { class: 'cx-main' },
-        h('header', { class: 'cx-top' }, h('span', { class: 'cx-shop', text: settings.merchant?.name ?? 'Boutique' }), settings.environment ? h('span', { class: 'cx-env', text: settings.environment }) : null),
+        h('header', { class: 'cx-top' }, h('strong', { class: 'cx-module-title', text: 'Paramètres' }), h('span', { class: 'cx-top-spacer' }), h('span', { class: 'cx-shop', text: settings.merchant?.name ?? 'Boutique' }), settings.environment ? h('span', { class: 'cx-env', text: settings.environment }) : null),
+        nav,
         h('main', { class: 'cx-page' }, content)));
   }
   const signIn = () => app.replaceChildren(h('div', { class: 'cx-wrap' }, h('h1', { text: 'Paramètres' }), h('p', { class: 'cx-sub', text: 'Connectez-vous avec votre compte Nordla.' }), h('a', { class: 'cx-btn', href: '/', text: 'Ouvrir Nordla' })));
