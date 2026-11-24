@@ -30,7 +30,7 @@ export function homeCards(modules, { online = true } = {}) {
   const byKey = new Map(list.filter((m) => m && typeof m.key === 'string').map((m) => [m.key, m]));
   const cards = [];
   for (const key of MENU_ORDER) {
-    if (key === 'sourcing') { cards.push({ key: 'sourcing', label: 'Sourcing', state: 'DISPONIBLE', detail: 'Fournisseurs, photos, analyses d’achat ; fonctionne hors ligne.', colour: MODULE_COLOURS.sourcing, action: { type: 'nx', act: 'nx-open-sourcing', label: 'Ouvrir Sourcing' } }); continue; }
+    if (key === 'sourcing') { cards.push({ key: 'sourcing', label: 'Sourcing', state: 'DISPONIBLE', detail: 'Fournisseurs, photos, analyses d’achat ; fonctionne hors ligne.', colour: MODULE_COLOURS.sourcing, action: online ? { type: 'nx', act: 'nx-open-sourcing', label: 'Ouvrir Sourcing' } : { type: 'local', to: 'sourcing', label: 'Ouvrir Sourcing' } }); continue; }
     const m = byKey.get(key);
     // Keep Core's navigation stable even while its module list is loading or a module is temporarily absent.
     // A missing server entry stays visible but inert; only a server-confirmed entry receives an action.
@@ -94,7 +94,7 @@ function navHtml(c) {
   const ico = `<span class="nx-h-navico" aria-hidden="true">${icon(NAV_PATHS[name], 19)}</span>`;
   const m = ` style="--m:${esc(colour)}"`;
   const a = c.action;
-  const label = `<span title="${esc(c.state ?? '')}">${esc(c.label)}</span>`;
+  const label = `<span title="${esc(c.state ?? '')}">${esc(SHORT[c.key] ?? c.label)}</span>`;
   if (a?.type === 'local') return `<button type="button" class="nx-h-nav" data-key="${esc(c.key)}"${m} data-act="sl-nav">${ico}${label}</button>`;
   if (a?.type === 'nx' && a.href) return `<a class="nx-h-nav" data-key="${esc(c.key)}"${m} href="${esc(a.href)}" data-act="${esc(a.act)}" data-to="${esc(a.to)}" target="_blank" rel="noopener">${ico}${label}</a>`;
   if (a?.type === 'nx') return `<button type="button" class="nx-h-nav" data-key="${esc(c.key)}"${m} data-act="${esc(a.act)}">${ico}${label}</button>`;

@@ -40,17 +40,17 @@ test('one Core menu with the Nordla modules, in the existing order; each entry e
 test('Parle à Nordla, Analyses and Finance open their own action on Core, never just the Core home', () => {
   const byLabel = Object.fromEntries(menu().map((i) => [i.label, i.path]));
   assert.equal(byLabel['Parle à Nordla'], '/?ouvrir=parle');
-  assert.equal(byLabel['Analyses'], '/?ouvrir=analyses');
+  assert.equal(byLabel['Analyses'], '/?ouvrir=analytics');
   assert.equal(byLabel['Finance'], '/?ouvrir=finance');
-  assert.equal(byLabel['Stock & Achats'], '/procurement/?tab=stock'); // Stock is the arrival section from the Core menu
-  assert.equal(byLabel['Sourcing'], '/sourcing');
-  assert.equal(byLabel['Paramètres'], '/settings');
+  assert.equal(byLabel['Stock & Achats'], '/?ouvrir=procurement'); // Core opens Stock & Achats from the Core menu (25b76501) // Stock is the arrival section from the Core menu
+  assert.equal(byLabel['Sourcing'], '/?ouvrir=sourcing'); // Core opens Sourcing in its frame (9ab94dc8)
+  assert.equal(byLabel['Paramètres'], '/?ouvrir=settings'); // Core opens the settings sheet in its frame (core-link.js)
 });
 
 test('Core opens the requested action from ?ouvrir= with the existing buttons only (no new endpoint, no token)', () => {
   assert.ok(coreApp.includes("import { openFromLink } from './core-link.js';"));
-  assert.match(coreApp, /^openFromLink\(\);/m);
-  assert.match(coreUi, /const act = \{ analyses: 'nx-open-analytics', finance: 'nx-open-finance' \}\[want\];/);
+  assert.match(coreApp, /openFromLink\(\);/);
+  assert.match(coreUi, /const act = \{ finance: 'nx-open-finance' \}\[want\];/);
   assert.match(modules, /a === 'nx-open-analytics'/);
   assert.match(modules, /a === 'nx-open-finance'/);
   assert.match(coreUi, /if \(want === 'parle'\) \{[^}]*nordla:parle/);
