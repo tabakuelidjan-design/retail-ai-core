@@ -595,6 +595,39 @@ async function openFinance() {
   } catch { fail(); }
   o.scrollTop = 0;
 }
+const CORE_EMBED_MODULES = Object.freeze({
+  analytics: { title: 'Analyses', url: '/analyses/' },
+  sourcing: { title: 'Sourcing', url: '/sourcing' },
+  procurement: { title: 'Stock & Achats', url: '/procurement/?tab=stock' },
+});
+/** These modules keep their own features, but render inside the persistent Core frame and share its session. */
+function openCoreModule(key) {
+  const module = CORE_EMBED_MODULES[key];
+  if (!module) return;
+  S.parlePage = false;
+  const o = $('#overlay'); o.hidden = false; o.className = 'show nxa-overlay';
+  const side = document.querySelector('.nx-home-side'), top = document.querySelector('.nx-h-top');
+  if (!side || !top) { o.innerHTML = '<div class="card"><h2>Nordla</h2><p class="warn" role="alert">Le cadre Core n’est pas disponible. Revenez à l’accueil et réessayez.</p></div>'; return; }
+  const aside = side.cloneNode(true);
+  aside.querySelectorAll('.nx-h-cur').forEach((n) => n.classList.remove('nx-h-cur'));
+  aside.querySelector(`[data-key="${key}"]`)?.closest('li')?.classList.add('nx-h-cur');
+  homeAsLink(aside.querySelector('ul > li'));
+  o.innerHTML = `<div class="nx-home nxp-shell nx-module-core">${top.outerHTML}${aside.outerHTML}<div class="nx-h-main"><section class="nx-module-view"><h1>${module.title}</h1><iframe class="nx-module-frame" title="${module.title}" loading="eager" referrerpolicy="same-origin"></iframe></section></div></div>`;
+  const frame = o.querySelector('.nx-module-frame');
+  frame.style.cssText = 'display:block;width:100%;height:calc(100vh - 130px);height:calc(100dvh - 130px);min-height:560px;border:1px solid #dfe3ea;border-radius:12px;background:#f6f7f9';
+  frame.addEventListener('load', () => {
+    try {
+      const doc = frame.contentDocument;
+      if (!doc || doc.getElementById('nordla-embedded-frame-style')) return;
+      const style = doc.createElement('style');
+      style.id = 'nordla-embedded-frame-style';
+      style.textContent = 'nav#corerail,nav.corerail{display:none!important}.shell.nordla-frame{display:block!important;grid-template-columns:minmax(0,1fr)!important;min-height:0!important}.shell.nordla-frame>.mainarea{margin-left:0!important;min-width:0!important;width:100%!important}body.nordla-hosted{padding-left:0!important}';
+      doc.head.appendChild(style);
+    } catch { /* a frame stays usable if its module chooses not to expose its document */ }
+  });
+  frame.src = module.url;
+  o.scrollTop = 0;
+}
 function openMenu() {
   S.parlePage = false;
   if (!LEGACY_UI) return openSettings();
@@ -626,6 +659,7 @@ document.addEventListener('input', (ev) => { const t = ev.target; if (t?.matches
 document.addEventListener('click', onClick); document.addEventListener('submit', (ev) => { onSubmit(ev).catch((e) => { console.error(e); discardDrafts = false; S.flash = `This could not be saved (${e?.message ?? e}). What you typed is still in the form: try again.`; render(); }); }); document.addEventListener('change', onPhoto);
 document.addEventListener('change', (ev) => { const fi = ev.target.closest?.('input[data-act="rec-file"]'); if (fi) { const f = fi.files?.[0]; fi.value = ''; if (f) recFile(f).catch(() => { (S.rec ??= {}).error = 'Ce fichier n’a pas pu être lu.'; openMenu(); }); return; } const f = ev.target.closest?.('form[data-form]'); if (!f || !['quote', 'costs', 'sale', 'amazon-sale'].includes(f.dataset.form) || !cur()) return; S.quiet = true; try { f.requestSubmit(); } finally { S.quiet = false; } });
 $('#btn-cases').addEventListener('click', openMenu);
+document.addEventListener('nordla:module', (ev) => openCoreModule(ev.detail?.module));
 document.addEventListener('nordla:parle', (ev) => openParle(ev.detail?.question));
 document.addEventListener('nordla:finance', () => openFinance());
 openFromLink(); // ?ouvrir=… from the other Nordla modules (see core-link.js)
