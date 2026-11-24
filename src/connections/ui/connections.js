@@ -43,7 +43,7 @@
     { id: 'security', label: 'Sécurité', href: '/settings/security', icon: 'shield', colour: '#B92335' },
   ];
   function shell(settings, current, content) {
-    const path = location.pathname.replace(/\\/$/, '') || '/';
+    const path = location.pathname.endsWith('/') ? location.pathname.slice(0, -1) || '/' : location.pathname;
     const nav = h('nav', { class: 'cx-nav', 'aria-label': 'Navigation Paramètres' }, SETTINGS_NAV.map((n) => {
       const active = n.id === 'overview' ? path === '/settings' : path === n.href;
       const itemIcon = ico(n.icon); itemIcon.style.color = n.colour;
@@ -215,6 +215,6 @@
     window.matchMedia('(min-width: 900px)').addEventListener('change', () => { if (data) renderConnections(); });
   }
 
-  const path = location.pathname.replace(/\/$/, '');
+    const path = location.pathname.endsWith('/') ? location.pathname.slice(0, -1) || '/' : location.pathname;
   if (path === '/settings/connections') connections(); else { document.title = 'Nordla AI · Paramètres'; hub(); }
 })();
