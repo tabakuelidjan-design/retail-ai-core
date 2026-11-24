@@ -556,6 +556,8 @@ function homeAsLink(li) {
   if (!li) return;
   // already on the Core home: Tableau de bord closes the module view in place (no reload would do it)
   const closeInPlace = (ev) => { if (location.pathname === '/' && $('#overlay').classList.contains('show')) { ev.preventDefault(); closeOverlay(); } };
+  // the whole entry closes the view (the link itself may be only its text)
+  li.addEventListener('click', closeInPlace);
   const existing = li.querySelector('a[href="/"]');
   if (existing) { existing.addEventListener('click', closeInPlace); return; }
   const a = document.createElement('a'); a.href = '/'; a.style.cssText = 'display:contents;color:inherit;text-decoration:none';
