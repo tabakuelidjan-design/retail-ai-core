@@ -18,9 +18,9 @@ export function createModulesPanel({ S, api, refresh, repaintHome = () => {} }) 
   }
   // ACCUEIL: only the module list is read (one light GET, once per page load), so "Développement des ventes" can be shown on the home. Nothing else is loaded; a failure leaves the home exactly as it was.
   async function loadHomeModules() {
-    if (st.homeTried || !S.online || !S.token) return; st.homeTried = true;
+    if (st.homeTried || !S.token) return; st.homeTried = true;
     // A failed load is a state of its own: the home must say so, not stay on "Chargement" forever.
-    try { const m = await api('/api/core/modules'); st.homeModules = Array.isArray(m?.modules) ? m.modules : null; st.homeFailed = !st.homeModules; } catch { st.homeModules = null; st.homeFailed = true; }
+    try { const m = await api('/api/core/modules'); st.homeReachable = true; st.homeModules = Array.isArray(m?.modules) ? m.modules : null; st.homeFailed = !st.homeModules; } catch { st.homeReachable = false; st.homeModules = null; st.homeFailed = true; }
     // The decisions journal feeds the Core dashboard (tasks, validated actions, activity). If Core cannot answer, the panels say so.
     if (st.homeModules) { try { const d = await api('/api/core/decisions'); st.homeDecisions = Array.isArray(d?.decisions) ? d.decisions : 'UNAVAILABLE'; } catch { st.homeDecisions = 'UNAVAILABLE'; } }
     // The sales and the connections are read on their own: a failure blanks only its own panel, never the home.
@@ -28,7 +28,7 @@ export function createModulesPanel({ S, api, refresh, repaintHome = () => {} }) 
       api('/api/core/sales').then((s) => { st.homeSales = s; repaintHome(); }, () => { st.homeSales = { status: 'UNAVAILABLE' }; repaintHome(); });
       api('/api/connections').then((o) => { st.homeConnections = connectionRows(o) ?? 'UNAVAILABLE'; repaintHome(); }, () => { st.homeConnections = 'UNAVAILABLE'; repaintHome(); });
     }
-    if (st.homeModules) repaintHome();
+    repaintHome();
   }
   async function post(path, body, after) { st.busy = true; st.error = ''; refresh(); let failed = false; try { const r = await api(path, { method: 'POST', body: JSON.stringify(body ?? {}) }); after?.(r); /* NOT after?.(await api()): optional chaining would skip the request itself when there is no callback */ } catch (e) { failed = true; fail(e); } st.busy = false; await load({ preserveError: failed }); }
   const val = (id) => document.getElementById(id)?.value.trim() ?? '';
