@@ -13,7 +13,7 @@ const ASSET = /^\/nordla-assets\/((?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.(svg|png|
 /** @returns {Promise<{body: Buffer, type: string}|null>} null when the path is not a shared Nordla file. */
 export async function readNordlaShared(pathname) {
   let rel; let type;
-  if (pathname === '/nordla-icon.js') { rel = 'nordla-icon.js'; type = 'text/javascript; charset=utf-8'; } else if (pathname === '/nordla-charts.js') { rel = 'nordla-charts.js'; type = 'text/javascript; charset=utf-8'; } else if (pathname === '/nordla-fonts.css') { rel = 'nordla-fonts.css'; type = 'text/css; charset=utf-8'; } else if (pathname === '/nordla-charts.css') { rel = 'nordla-charts.css'; type = 'text/css; charset=utf-8'; } else {
+  if (pathname === '/nordla-core-rail.js') { rel = 'nordla-core-rail.js'; type = 'text/javascript; charset=utf-8'; } else if (pathname === '/nordla-core-rail.css') { rel = 'nordla-core-rail.css'; type = 'text/css; charset=utf-8'; } else if (pathname === '/nordla-icon.js') { rel = 'nordla-icon.js'; type = 'text/javascript; charset=utf-8'; } else if (pathname === '/nordla-charts.js') { rel = 'nordla-charts.js'; type = 'text/javascript; charset=utf-8'; } else if (pathname === '/nordla-fonts.css') { rel = 'nordla-fonts.css'; type = 'text/css; charset=utf-8'; } else if (pathname === '/nordla-charts.css') { rel = 'nordla-charts.css'; type = 'text/css; charset=utf-8'; } else {
     const m = ASSET.exec(pathname);
     if (!m) return null;
     rel = `assets/nordla/${m[1]}`; type = TYPES[m[2]];

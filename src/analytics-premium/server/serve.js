@@ -16,6 +16,7 @@ import { reportRefreshState, runReportOnce, startSyncAwareRefresh } from './repo
 import { bindReportsTenant, datasetOwnedBy, resolveAnalyticsTenant, salesSourceOf } from './tenant.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/client.js';
 import { createAccessChecker } from '../../identity/sso-contract.js';
+import { requiredProxySecret } from '../../shared/proxy-secret.js';
 import { parseSsoKey, ssoKeyReuseOf } from '../../identity/sso-keys.js';
 import { latestSyncStatus } from '../../sync/run-log.js';
 import { releaseOf } from '../../identity/release.js';
@@ -36,7 +37,8 @@ export async function startAnalyticsServer({ env = process.env, supabase: inject
   const merchantId = tenant.merchantId;
   // Single sign-on key (optional): ANALYTICS_SSO_KEY = canonical base64url of 32 random bytes, never the access token. Missing, malformed or reused: SSO stays off.
   const ssoKey = parseSsoKey(env.ANALYTICS_SSO_KEY); const ssoReuse = ssoKey.ok ? ssoKeyReuseOf(env.ANALYTICS_SSO_KEY, { dashboardToken: hosting.token }) : null;
-  guard = hosting.hosted ? createGuard({ allowedHosts: hosting.allowedHosts, token: hosting.token, trustProxyHops: hosting.trustProxyHops, ssoOnly: env.NORDLA_SSO_ONLY === '1', sso: ssoKey.ok && !ssoReuse ? { secret: env.ANALYTICS_SSO_KEY, merchantId, requirePerson: true, checkAccess: createAccessChecker({ supabase, merchantId, requireCoreSession:true }) } : null }) : undefined;
+  const checkAnalyticsAccess = createAccessChecker({ supabase, merchantId, requireCoreSession: true });
+  guard = hosting.hosted ? createGuard({ allowedHosts: hosting.allowedHosts, token: hosting.token, trustProxyHops: hosting.trustProxyHops, ssoOnly: env.NORDLA_SSO_ONLY === '1', proxy: { secret: requiredProxySecret(env), checkAccess: checkAnalyticsAccess }, sso: ssoKey.ok && !ssoReuse ? { secret: env.ANALYTICS_SSO_KEY, merchantId, requirePerson: true, checkAccess: checkAnalyticsAccess } : null }) : undefined;
   bindReportsTenant(reportsDir, merchantId); // from now on, only this tenant's report files are served from reportsDir
 
   // Sync health of THIS merchant only (sync_runs written by Core). No sales connector at all -> a neutral state, not a failure.
