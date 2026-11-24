@@ -553,10 +553,13 @@ document.addEventListener('touchstart', onFinanceInterest, { passive: true });
 // (two minutes without a click) is prepared again, once.
 /** The Core home entry as a real link (same origin, same tab): the menu item keeps its look, the browser follows the href. */
 function homeAsLink(li) {
-  if (!li || li.querySelector('a[href="/"]')) return;
-  const a = document.createElement('a'); a.href = '/'; a.style.cssText = 'display:contents;color:inherit;text-decoration:none';
+  if (!li) return;
   // already on the Core home: Tableau de bord closes the module view in place (no reload would do it)
-  a.addEventListener('click', (ev) => { if (location.pathname === '/' && $('#overlay').classList.contains('show')) { ev.preventDefault(); closeOverlay(); } });
+  const closeInPlace = (ev) => { if (location.pathname === '/' && $('#overlay').classList.contains('show')) { ev.preventDefault(); closeOverlay(); } };
+  const existing = li.querySelector('a[href="/"]');
+  if (existing) { existing.addEventListener('click', closeInPlace); return; }
+  const a = document.createElement('a'); a.href = '/'; a.style.cssText = 'display:contents;color:inherit;text-decoration:none';
+  a.addEventListener('click', closeInPlace);
   while (li.firstChild) a.appendChild(li.firstChild);
   li.appendChild(a); li.style.cursor = 'pointer';
 }
