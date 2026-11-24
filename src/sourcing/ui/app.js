@@ -601,6 +601,7 @@ const CORE_EMBED_MODULES = Object.freeze({
   sourcing: { title: 'Sourcing', url: '/sourcing?embedded=1' },
   procurement: { title: 'Stock & Achats', url: '/procurement/?tab=stock&embedded=1' },
   settings: { title: 'Paramètres', url: '/settings?embedded=1' },
+  growth: { title: 'Développement des ventes', url: '/growth/#/dropoff', ticket: 'growth' },
   'settings-connections': { title: 'Paramètres', url: '/settings/connections?embedded=1' },
 });
 /** These modules keep their own features, but render inside the persistent Core frame and share its session. */
@@ -656,7 +657,12 @@ function openCoreModule(key, requestedPath) {
       }
     } catch { /* keep the safe default Settings page */ }
   }
-  frame.src = moduleUrl;
+  if (module.ticket === 'growth') {
+    // Growth opens with a single-use Core ticket for THIS session: Growth's own session is set on the Nordla origin, inside the frame
+    api('/api/core/growth/open', { method: 'POST', body: JSON.stringify({ to: 'dropoff' }) }).then((r) => { frame.src = typeof r?.url === 'string' && r.url.startsWith(`${location.origin}/growth/sso`) ? r.url : module.url; }, () => { frame.src = module.url; });
+  } else {
+    frame.src = moduleUrl;
+  }
   o.scrollTop = 0;
 }
 function openMenu() {

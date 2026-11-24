@@ -29,11 +29,12 @@ test('the shared frame never writes HTML strings into the page (DOM API only) an
 
 test('one Core menu with the Nordla modules, in the existing order; each entry either opens a destination or says it is not available', () => {
   const items = menu();
-  assert.deepEqual(items.map((i) => i.label), ['Tableau de bord', 'Parle à Nordla', 'Finance', 'Analyses', 'Stock & Achats', 'Sourcing', 'Croissance', 'Marketing', 'Création', 'Branding', 'Paramètres']);
+  assert.deepEqual(items.map((i) => i.label), ['Tableau de bord', 'Parle à Nordla', 'Finance', 'Analyses', 'Stock & Achats', 'Sourcing', 'Développement des ventes', 'Marketing', 'Création', 'Branding', 'Paramètres']);
   assert.equal(new Set(items.map((i) => i.key)).size, items.length, 'keys are unique');
   for (const i of items) if (i.path !== undefined) assert.match(i.path, /^\//, `${i.label} is a path on the Nordla home`);
-  for (const label of ['Croissance', 'Branding']) assert.equal(items.find((i) => i.label === label).path, undefined, `${label} has no link until its screen is reachable`);
-  assert.match(rail, /note: 'Écran pas encore accessible'/);
+  assert.equal(items.find((i) => i.label === 'Développement des ventes').path, '/growth/', 'Croissance opens its screen in the Core frame');
+  assert.equal(items.find((i) => i.label === 'Branding').path, undefined, 'Branding has no link until its screen is reachable');
+  assert.doesNotMatch(rail, /Écran pas encore accessible.*Développement|Développement.*Écran pas encore accessible/);
 });
 
 test('Parle à Nordla, Analyses and Finance open their own action on Core, never just the Core home', () => {

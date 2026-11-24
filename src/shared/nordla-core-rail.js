@@ -28,7 +28,7 @@
     { key: 'analytics', label: 'Analyses', path: '/?ouvrir=analytics', icon: 'chart', colour: '#7842B8' },
     { key: 'procurement', label: 'Stock & Achats', path: '/?ouvrir=procurement', icon: 'box', colour: '#E87924' },
     { key: 'sourcing', label: 'Sourcing', path: '/?ouvrir=sourcing', icon: 'globe', colour: '#B92335' },
-    { key: 'growth', label: 'Croissance', icon: 'chart', colour: '#D1A44F', note: 'Écran pas encore accessible' },
+    { key: 'growth', label: 'Développement des ventes', path: '/growth/', icon: 'chart', colour: '#D1A44F' },
     { key: 'marketing', label: 'Marketing', path: '/videos', icon: 'megaphone', colour: '#F17821' },
     { key: 'creation', label: 'Création', path: '/creator', icon: 'paint', colour: '#C84FA4' },
     { key: 'branding', label: 'Branding', icon: 'tag', colour: '#9E2F86', note: 'Écran pas encore accessible' },

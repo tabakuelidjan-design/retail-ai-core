@@ -263,3 +263,15 @@ test('growth: the Nordla host is passed in x-nordla-public-host (the module chec
     assert.equal(f.gro.seen[0].headers['x-forwarded-host'], 'nordla.test');
   } finally { await f.close(); }
 });
+
+test('growth: framed by the Core page itself (same-origin iframe), it may be shown in the Core frame; a direct page load is not framed', async () => {
+  const f = await gatewayFixture({ growthEnabled: true });
+  try {
+    const framed = await f.call({ path: '/growth/', headers: { ...f.session, 'sec-fetch-dest': 'iframe', 'sec-fetch-site': 'same-origin' } });
+    assert.equal(framed.headers['x-frame-options'], undefined, 'no X-Frame-Options for the Core frame');
+    assert.ok(String(framed.headers['content-security-policy'] ?? '').includes("frame-ancestors 'self'"), 'frame-ancestors self');
+    const direct = await f.call({ path: '/growth/', headers: f.session });
+    assert.equal(direct.headers['x-frame-options'], 'DENY', 'a direct load keeps DENY');
+    assert.ok(String(direct.headers['content-security-policy'] ?? '').includes("frame-ancestors 'none'"), 'a direct load is not framed');
+  } finally { await f.close(); }
+});
