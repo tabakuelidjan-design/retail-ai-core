@@ -24,7 +24,7 @@ test('Core sales home still works with Analytics on its own domain (no prefix)',
   assert.equal(seen[1], 'https://analytics.example.app/api/brief');
 });
 
-test('Core sales home sends the proxy secret to the Analytics upstream on both calls', async () => {
+test('Core sales home sends the proxy secret on the ticket call, and the brief with the session cookie only', async () => {
   const calls = [];
   const fetchImpl = async (url, opts = {}) => {
     calls.push({ url: String(url), h: opts.headers ?? {} });
@@ -32,6 +32,6 @@ test('Core sales home sends the proxy secret to the Analytics upstream on both c
   };
   await loadSalesHome({ publicUrl: 'https://analytics-up.example.app', ticket: 'tk.3', headers: { 'x-nordla-proxy-secret': 'S'.repeat(24) }, fetchImpl });
   assert.equal(calls[0].h['x-nordla-proxy-secret'], 'S'.repeat(24));
-  assert.equal(calls[1].h['x-nordla-proxy-secret'], 'S'.repeat(24));
+  assert.equal(calls[1].h['x-nordla-proxy-secret'], undefined, 'the brief carries no proxy secret');
   assert.equal(calls[1].h.cookie, 'an_sid=abc');
 });
