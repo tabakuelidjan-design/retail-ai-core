@@ -53,7 +53,7 @@ export function buildGrowthGate(env, hosted, services = null) {
 
 export async function startGrowthHosted({ env = process.env, log = console.log, port = Number(env.GROWTH_PORT || env.PORT || 8788), services = null, fetchImpl } = {}) {
   const hosted = growthHostedConfig(env);
-  const proxySecret = requiredProxySecret(env); // the Core gateway's secret: nothing starts without it
+  const proxySecret = requiredProxySecret(env, 'GROWTH_PROXY_SECRET'); // the Core gateway's secret (the name Core already uses): nothing starts without it
   const basePath = env.NORDLA_MODULE_BASE || '/';
   if (hosted.supabaseRef) log(`Supabase project check (${hosted.supabaseRef}): ${await verifyPinnedProject(env, hosted, fetchImpl ? { fetchImpl } : {})}`);
   const sources = services?.sources ?? await buildGrowthSources(env, { log });
