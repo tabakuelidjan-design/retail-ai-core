@@ -86,9 +86,21 @@ const cookieOf = (req, name) => { for (const part of String(req.headers?.cookie 
  */
 export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = null, ssoOnly = false, proxy = null, now = () => Date.now() }) {
   if (ssoOnly && (!sso?.secret || sso.requirePerson !== true || typeof sso.checkAccess !== 'function')) throw new HostingConfigError('SSO-only mode requires personal Nordla sessions with current access checks.');
-  const verifier = sso ? createTicketVerifier({ secret: sso.secret, merchantId: sso.merchantId, audience: ANALYTICS_SSO_AUDIENCE, now, module: 'analytics', requirePerson: sso.requirePerson === true, checkAccess: sso.checkAccess ?? null }) : null;
+  // Core only issues a short-lived, one-use ticket after its own current-access check. Protected API reads below still check access.
+  const verifier = sso ? createTicketVerifier({ secret: sso.secret, merchantId: sso.merchantId, audience: ANALYTICS_SSO_AUDIENCE, now, module: 'analytics', requirePerson: sso.requirePerson === true }) : null;
   const sessions = new Map(); // sid -> expiry (ms)
   const ssoPeople = new Map(); // sid -> { userId, role } for sessions opened by Nordla single sign-on
+  const pendingAccessChecks = new Map(); // same in-flight check can serve simultaneous API reads from one session
+  const currentAccess = (sid, person) => {
+    const running = pendingAccessChecks.get(sid);
+    if (running) return running;
+    const check = Promise.resolve()
+      .then(() => sso?.checkAccess ? sso.checkAccess({ merchantId: sso.merchantId, userId: person.userId, role: person.role, module: 'analytics', ...(person.authSessionId ? {authSessionId:person.authSessionId} : {}) }) : null)
+      .catch(() => null)
+      .finally(() => pendingAccessChecks.delete(sid));
+    pendingAccessChecks.set(sid, check);
+    return check;
+  };
   const tokenHash = sha(token);
   const failures = new Map();
   const base = { 'Cache-Control': 'no-store', 'Strict-Transport-Security': 'max-age=31536000', 'X-Robots-Tag': 'noindex, nofollow' };
@@ -133,7 +145,7 @@ export function createGuard({ allowedHosts, token, trustProxyHops = 0, sso = nul
       const isDataRequest = path === '/api' || path.startsWith('/api/');
       const p = ssoPeople.get(sid);
       if (p && isDataRequest) {
-        const a = sso?.checkAccess ? await sso.checkAccess({ merchantId: sso.merchantId, userId: p.userId, role: p.role, module: 'analytics', ...(p.authSessionId ? {authSessionId:p.authSessionId} : {}) }).catch(() => null) : null;
+        const a = await currentAccess(sid, p);
         if (!a?.ok) { sessions.delete(sid); ssoPeople.delete(sid); return deny(res, 401, 'SESSION_REVOKED'); }
       }
       failures.delete(ip); for (const [k, v] of Object.entries(base)) res.setHeader(k, v); return true;
