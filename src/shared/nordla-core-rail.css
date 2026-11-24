@@ -11,7 +11,7 @@
 .corerail .cr-cur { background: #F7F1E8; color: #A4611F; font-weight: 700; }
 .corerail .cr-title { margin: 0 8px 8px; font-size: 13px; color: #6B7280; }
 .corerail .cr-off { color: #6B7280; cursor: default; }
-.corerail .cr-ico { width: 24px; height: 24px; flex: 0 0 24px; display: grid; place-items: center; color: #3B4A63; }
+.corerail .cr-ico { width: 24px; height: 24px; flex: 0 0 24px; display: grid; place-items: center; color: var(--m, #3B4A63); }
 .corerail .cr-note { display: block; font-style: normal; font-size: 12px; color: #6B7280; margin-top: 1px; }
 .menu-toggle { display: none; }
 @media (max-width: 900px) {

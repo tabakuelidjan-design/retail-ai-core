@@ -27,18 +27,20 @@ body.ui-booting .mainarea > #screen, body.ui-booting .mainarea > #tabs { visibil
 <link rel="stylesheet" href="/nordla-home.css">
   <style>
     body.core-signed-out .mainarea > header.top, body.core-signed-out .mainarea > #statusbar, body.core-signed-out #btn-cases, body.core-signed-out #case-name, body.core-signed-out #case-sub, body.core-signed-out #mode { display: none; }
-    body.core-signed-out .corerail, body.core-home-active .corerail { display: none; }
-    body.core-signed-out .shell.nordla-frame > .mainarea, body.core-home-active .shell.nordla-frame > .mainarea { margin-left: 0; }
+    /* The Core menu stays on the left of the Sourcing screens, also without a Core sign-in (the layout of the mockup). It is hidden only on the Nordla home. */
+    body.core-home-active .corerail { display: none; }
+    body.core-home-active .shell.nordla-frame > .mainarea { margin-left: 0; }
   </style>
 </head>
 <body class="ui-booting">
 <div class="shell">
-  <div data-nordla-core-rail-slot></div>
+  <div data-nordla-core-rail="sourcing"></div>
   <div class="mainarea">
+    <span data-nordla-core-toggle></span>
     <header class="top">
-      <span data-nordla-core-toggle-slot></span>
+
       <button class="ghost" id="btn-cases" aria-label="Dossiers">&#9636;</button>
-      <div class="title"><strong id="case-name">Sourcing</strong><span id="case-sub" class="muted"></span></div>
+      <div class="title"><strong id="case-name">Sourcing</strong><span id="case-sub" class="muted">Fournisseur · Produit · Modèle</span></div>
       <span id="mode" class="badge"></span>
     </header>
     <nav class="tabs" id="tabs" aria-label="Navigation principale"></nav>
@@ -50,7 +52,7 @@ body.ui-booting .mainarea > #screen, body.ui-booting .mainarea > #tabs { visibil
 <script>
   var railSlot = document.querySelector('[data-nordla-core-rail-slot]');
   var toggleSlot = document.querySelector('[data-nordla-core-toggle-slot]');
-  if (/^\\/(?:sourcing\\/?)?$/.test(window.location.pathname)) {
+  if (/^\/(?:sourcing\/?)?$/.test(window.location.pathname)) {
     document.body.classList.add('nordla-hosted');
     if (railSlot) railSlot.setAttribute('data-nordla-core-rail', window.location.pathname.indexOf('/sourcing') === 0 ? 'sourcing' : 'dashboard');
     if (toggleSlot) toggleSlot.setAttribute('data-nordla-core-toggle', '');
