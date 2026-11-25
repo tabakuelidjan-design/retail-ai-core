@@ -38,6 +38,9 @@ export const SSO_CONTRACT = Object.freeze({
 const MEMBERS = 'merchant_members';
 const ENTITLEMENTS = 'module_entitlements';
 
+// The value of a settled read; a failed read is re-thrown (the caller's catch then denies: default deny).
+const settledValue = (result) => { if (result.status === 'rejected') throw result.reason; return result.value; };
+
 /**
  * Builds the access check a service runs at USE time. Pure apart from the injected reader: `supabase.select(table, query)`.
  * Default deny: any missing row, unknown status or read error is a refusal.
@@ -54,23 +57,32 @@ export function createAccessChecker({ supabase, merchantId, requireCoreSession =
     if (!SSO_CONTRACT.modules.includes(module) || !MODULE_CODES.includes(module)) return { ok: false, code: 'MODULE_UNKNOWN' };
     if (typeof userId !== 'string' || !userId) return { ok: false, code: 'NOT_MEMBER' };
     try {
-      const rows = await supabase.select(MEMBERS, { select: 'role,status,removed_at', merchant_id: `eq.${merchant}`, user_id: `eq.${userId}`, limit: '1' });
+      // Independent reads run together (one round trip each stage instead of one per read). Each result keeps the original
+      // refusal order: a failed read is re-thrown only where the original sequence would have reached it.
+      const [memberRead, entitlementRead] = await Promise.allSettled([
+        supabase.select(MEMBERS, { select: 'role,status,removed_at', merchant_id: `eq.${merchant}`, user_id: `eq.${userId}`, limit: '1' }),
+        supabase.select(ENTITLEMENTS, { select: 'merchant_id,module_code,status', merchant_id: `eq.${merchant}`, module_code: `eq.${module}`, limit: '1' }),
+      ]);
+      const rows = settledValue(memberRead);
       const m = (rows ?? [])[0];
       if (!m || String(m.merchant_id ?? merchant).toLowerCase() !== merchant) return { ok: false, code: 'NOT_MEMBER' };
       if (m.removed_at) return { ok: false, code: 'NOT_MEMBER' };
       if (m.status !== 'ACTIVE') return { ok: false, code: 'MEMBER_SUSPENDED' };
       if (m.role !== role) return { ok: false, code: 'ROLE_CHANGED' };
-      const ent = (await supabase.select(ENTITLEMENTS, { select: 'merchant_id,module_code,status', merchant_id: `eq.${merchant}`, module_code: `eq.${module}`, limit: '1' })) ?? [];
+      const ent = settledValue(entitlementRead) ?? [];
       const e = ent[0];
       if (!e || e.status !== 'ACTIVE' || String(e.merchant_id ?? merchant).toLowerCase() !== merchant) return { ok: false, code: 'MODULE_NOT_ENABLED' };
       const d = decideModuleOpen({ key: module, role, activeCodes: new Set([module]) });
       if (!d.ok) return { ok: false, code: d.code === 'FORBIDDEN' ? 'MODULE_ROLE_FORBIDDEN' : d.code };
-      if (authSessionId || requireCoreSession) {
-        const source = await assurance.check({merchantId:merchant,userId,sessionId:authSessionId,module:'sourcing'});
-        if (!source.ok) return {ok:false,code:source.code};
-      }
+      // The session assurance and the MFA rule are independent: both run together. The assurance refusal still wins, then the MFA state.
+      const [sourceRead, blockedRead] = await Promise.allSettled([
+        (authSessionId || requireCoreSession) ? assurance.check({merchantId:merchant,userId,sessionId:authSessionId,module:'sourcing'}) : Promise.resolve({ ok: true }),
+        mfaRule ? mfaRule.blocked({ merchantId: merchant, userId, sessionId:authSessionId, module:'sourcing' }) : Promise.resolve(null),
+      ]);
+      const source = settledValue(sourceRead);
+      if (!source.ok) return {ok:false,code:source.code};
       if (!mfaRule) return { ok: false, code: 'MFA_POLICY_UNAVAILABLE' };
-      if (await mfaRule.blocked({ merchantId: merchant, userId, sessionId:authSessionId, module:'sourcing' })) return { ok: false, code: 'MFA_REQUIRED_FOR_ROLE' };
+      if (settledValue(blockedRead)) return { ok: false, code: 'MFA_REQUIRED_FOR_ROLE' };
       return { ok: true, role };
     } catch (error) {
       if (error?.code === 'MFA_POLICY_UNAVAILABLE') return { ok: false, code: 'MFA_POLICY_UNAVAILABLE' };
