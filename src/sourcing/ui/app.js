@@ -672,7 +672,7 @@ function openCoreModule(key, requestedPath) {
     api('/api/core/growth/open', { method: 'POST', body: JSON.stringify({ to: 'dropoff' }) }).then((r) => {
       const ticket = typeof r?.url === 'string' ? new URL(r.url, location.href).searchParams.get('t') : null;
       if (!ticket) throw new Error('no ticket');
-      return fetch('/growth/sso', { method: 'POST', credentials: 'same-origin', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ t: ticket, to: 'dropoff' }).toString() });
+      return fetch('/growth/sso', { method: 'POST', credentials: 'same-origin', redirect: 'manual', headers: { 'content-type': 'application/x-www-form-urlencoded', ...(S.authMode === 'session' ? { 'x-nordla-csrf': csrfToken() } : {}) }, body: new URLSearchParams({ t: ticket, to: 'dropoff' }).toString() });
     }).then(() => { frame.src = '/growth/#/dropoff'; }).catch(() => { frame.src = module.url; });
   } else {
     frame.src = moduleUrl; // every other Core module (Settings, Analyses, Sourcing, Stock): the frame loads its page
