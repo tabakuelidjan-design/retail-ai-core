@@ -20,7 +20,7 @@ const A = { id: '0f5a1c2e-3b4d-4e6f-8a9b-0c1d2e3f4a5b', name: 'Synthetic Merchan
 const B = { id: '9e8d7c6b-5a49-4382-a716-f5e4d3c2b1a0', name: 'Synthetic Merchant B', vertical: 'bookstore', source_system: 'manual', source_id: 'nordla:B', source_domain: null };
 const SHOP_A = 'gid://shopify/Shop/SYN-A'; // the shop A's connector points to (deliberately different from merchants.source_id)
 const UNKNOWN_ID = '11111111-2222-4333-8444-555555555555';
-const SHOPIFY_ENV = { SHOPIFY_SHOP_DOMAIN: 'synthetic-a.myshopify.example', SHOPIFY_CLIENT_ID: 'synthetic-client', SHOPIFY_CLIENT_SECRET: 'synthetic-not-a-secret' };
+const SHOPIFY_ENV = { SHOPIFY_LEGACY_MERCHANT_ID: '0f5a1c2e-3b4d-4e6f-8a9b-0c1d2e3f4a5b', SHOPIFY_SHOP_DOMAIN: 'synthetic-a.myshopify.example', SHOPIFY_CLIENT_ID: 'synthetic-client', SHOPIFY_CLIENT_SECRET: 'synthetic-not-a-secret' };
 
 /** Fake Supabase with merchants A and B; A owns one shopify connector (unless `withConnector` is false). */
 function db({ withConnector = true } = {}) {

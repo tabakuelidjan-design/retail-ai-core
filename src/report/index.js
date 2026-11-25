@@ -27,18 +27,26 @@ import { renderMarkdown } from './render.js';
 export const MODES = ['report', 'flags', 'validate', 'triage', 'demand', 'all'];
 const SHOPIFY_MODES = ['validate', 'triage', 'demand', 'all'];
 
-/** The Shopify client for the modes that compare with Shopify - built lazily, only for them. */
-async function shopifyFor(mode, env, createClient) {
-  const { hasShopifyCredentials } = await import('../connectors/shopify.js');
-  if (!hasShopifyCredentials(env)) throw Object.assign(new Error(`mode "${mode}" compares with Shopify and needs its credentials (Shopify is NOT_CONFIGURED); "report" and "flags" work without Shopify`), { code: 'SHOPIFY_NOT_CONFIGURED' });
+/**
+ * The Shopify client for the modes that compare with Shopify - built lazily, only for them, and only for THIS merchant: its own OAuth
+ * connection first; the global SHOPIFY_* setup only for the explicitly named legacy merchant; otherwise "Shopify non connecte".
+ */
+async function shopifyFor(mode, env, createClient, { merchantId, credentialsFor }) {
   const client = await import('../shopify/client.js');
+  if (credentialsFor) {
+    const own = await credentialsFor(merchantId);
+    if (own.state === 'CONFIGURED') return (createClient ?? client.createShopifyClient)({ shopDomain: own.shopDomain, apiVersion: own.apiVersion, accessToken: own.accessToken });
+  }
+  const { hasShopifyCredentials } = await import('../connectors/shopify.js');
+  const { globalShopifySetupFor } = await import('../shopify/global-setup.js');
+  if (!(globalShopifySetupFor(env, merchantId) && hasShopifyCredentials(env))) throw Object.assign(new Error(`mode "${mode}" compares with Shopify: this merchant has no Shopify connection ("Shopify non connecte"); "report" and "flags" work without Shopify`), { code: 'SHOPIFY_NOT_CONNECTED' });
   return (createClient ?? client.createShopifyClient)(client.loadShopifyConfigFromEnv(env));
 }
 
 /**
  * @returns {Promise<{ merchantId: string, written: string[] }>}
  */
-export async function runReport({ mode, env = process.env, supabase: injectedSupabase, now = new Date(), outDir = 'reports', log = console.log, createClient = null } = {}) {
+export async function runReport({ mode, env = process.env, supabase: injectedSupabase, now = new Date(), outDir = 'reports', log = console.log, createClient = null, shopifyCredentialsFor = null } = {}) {
   if (!MODES.includes(mode)) throw Object.assign(new Error(`Usage: node src/report/index.js <${MODES.join('|')}>`), { code: 'BAD_MODE' });
 
   const supabase = injectedSupabase ?? createSupabaseClient(loadSupabaseConfigFromEnv(env));
@@ -49,7 +57,12 @@ export async function runReport({ mode, env = process.env, supabase: injectedSup
   const timeZone = profile.timezone;
   const config = applyProfileToConfig(mergeConfig(), profile);
   const stamp = tenantStamp(merchantId);
-  const shopify = SHOPIFY_MODES.includes(mode) && mode !== 'all' ? await shopifyFor(mode, env, createClient) : null;
+  // Per-merchant Shopify credentials (the merchant of THIS run only). Built lazily: reports that do not compare with Shopify never open the Vault.
+  const credentialsFor = shopifyCredentialsFor ?? (async (id) => (await import('../provider-connections/shopify-credentials.js')).createShopifyCredentialResolver({
+    connectorRepository: (await import('../tenant/connectors.js')).createConnectorRepository({ supabase }),
+    tokenManagerFor: async () => (await import('../provider-connections/runtime.js')).createProviderConnectionsRuntime({ supabase, env }).tokenManager,
+  })(id));
+  const shopify = SHOPIFY_MODES.includes(mode) && mode !== 'all' ? await shopifyFor(mode, env, createClient, { merchantId, credentialsFor }) : null;
   const written = [];
   const out = (name) => path.join(outDir, name);
 

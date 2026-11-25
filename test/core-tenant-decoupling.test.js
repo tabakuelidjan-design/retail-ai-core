@@ -21,7 +21,7 @@ const B = { id: '9e8d7c6b-5a49-4382-a716-f5e4d3c2b1a0', name: 'Synthetic Merchan
 const SHOP_A = 'gid://shopify/Shop/SYN-A';
 const SHOP_B = 'gid://shopify/Shop/SYN-B';
 const UNKNOWN_ID = '11111111-2222-4333-8444-555555555555';
-const SHOPIFY_ENV = { SHOPIFY_SHOP_DOMAIN: 'synthetic.myshopify.example', SHOPIFY_CLIENT_ID: 'synthetic-client', SHOPIFY_CLIENT_SECRET: 'synthetic-not-a-secret' };
+const SHOPIFY_ENV = { SHOPIFY_LEGACY_MERCHANT_ID: '0f5a1c2e-3b4d-4e6f-8a9b-0c1d2e3f4a5b', SHOPIFY_SHOP_DOMAIN: 'synthetic.myshopify.example', SHOPIFY_CLIENT_ID: 'synthetic-client', SHOPIFY_CLIENT_SECRET: 'synthetic-not-a-secret' };
 const DATA_TABLES = SYNC_WRITE_TABLES.filter((t) => t !== 'sync_runs');
 
 /** Fake Supabase: merchants A and B, each with its own shopify connector; every write call is recorded. */
@@ -97,7 +97,7 @@ test('Shopify not configured: the Shopify job is skipped (NOT_CONFIGURED, exit 0
   const s = db(); s._tables.set('orders', [{ id: 'o-old', merchant_id: A.id, source_system: 'shopify', source_id: 'gid://shopify/Order/OLD' }]);
   const before = JSON.stringify([...s._tables]);
   const r = await sync(s, { env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A.id } });
-  assert.equal(r.status, 'SKIPPED'); assert.equal(r.exitCode, 0); assert.equal(r.state, 'NOT_CONFIGURED'); assert.equal(r.reason, 'NO_SHOPIFY_CREDENTIALS');
+  assert.equal(r.status, 'SKIPPED'); assert.equal(r.exitCode, 0); assert.equal(r.state, 'NOT_CONFIGURED'); assert.equal(r.reason, 'SHOPIFY_NOT_CONNECTED');
   assert.deepEqual(s.writes, []); assert.equal(JSON.stringify([...s._tables]), before);
   // a connector explicitly NOT_CONFIGURED in merchant_connectors is skipped the same way
   const s2 = db({ connectors: [['c-a', A.id, SHOP_A, 'NOT_CONFIGURED']] });
@@ -141,11 +141,14 @@ test('credentials present but the tenant has no shopify connector: MISCONFIGURED
 });
 
 // 7
-test('two merchants: only NORDLA_MERCHANT_ID is synced - B with B\'s shop writes only B, A stays empty', async () => {
+test('two merchants: B (no Shopify connection of its own) never reads the global shop: SKIPPED "Shopify non connecte", no Shopify call, no write', async () => {
+  // The global SHOPIFY_* setup belongs to A (declared as the legacy merchant). B must not use it, even when it is B's own shop.
   const s = db();
-  const r = await sync(s, { env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: B.id, ...SHOPIFY_ENV }, shop: shopifyAs(SHOP_B) });
-  assert.equal(r.status, 'SUCCESS'); assert.equal(r.merchantId, B.id);
-  for (const t of ['products', 'variants', 'orders', 'order_lines', 'inventory_snapshots', 'sync_runs']) assert.deepEqual(merchantIdsIn(s, t), [B.id], t);
+  const shop = shopifyAs(SHOP_B);
+  const r = await sync(s, { env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: B.id, ...SHOPIFY_ENV }, shop });
+  assert.equal(r.status, 'SKIPPED'); assert.equal(r.reason, 'SHOPIFY_NOT_CONNECTED');
+  assert.equal(shop.calls.created, 0, 'no Shopify client was built for B');
+  assert.deepEqual(s.writes.filter((w) => w.table !== 'sync_runs'), [], 'nothing written for B');
 });
 
 // 8 + 9

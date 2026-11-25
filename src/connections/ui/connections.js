@@ -31,7 +31,7 @@
     APP_NOT_CONFIGURED: 'L’application du fournisseur n’est pas encore configurée sur ce serveur.', FORBIDDEN_ROLE: 'Votre rôle ne permet pas de gérer les connexions.', SESSION_INVALID: 'Votre session n’est plus valide : reconnectez-vous.', CSRF_INVALID: 'Session expirée : rechargez la page.',
     TENANT_MISMATCH: 'Cette connexion appartient à une autre boutique.', PC_TARGET_INELIGIBLE: 'Ce compte ne peut pas être utilisé : un compte professionnel est nécessaire.', PC_TARGET_NOT_FOUND: 'Ce compte ne fait pas partie de ceux que vous avez autorisés.',
     PC_SESSION_NOT_FOUND: 'Cette autorisation est introuvable ou expirée : recommencez la connexion.', PC_SESSION_STATE_CONFLICT: 'Cette autorisation a déjà été utilisée : recommencez la connexion.', PC_VAULT_UNAVAILABLE: 'Le coffre des jetons est indisponible : rien n’a été enregistré.',
-    USER_DENIED: 'Vous avez refusé l’accès : rien n’a été connecté.', INVALID_STATE: 'La réponse du fournisseur ne correspond à aucune demande en cours : recommencez.', SESSION_EXPIRED: 'La demande a expiré : recommencez.', CODE_EXCHANGE_FAILED: 'Le fournisseur a refusé l’autorisation : recommencez.',
+    TARGET_REQUIRED: 'Indiquez le domaine de votre boutique, au format xxx.myshopify.com.', APP_MISCONFIGURED: 'L’application Shopify de Nordla n’est pas encore configurée : contactez Nordla.', SCOPE_MISSING: 'Shopify n’a pas accordé les permissions de lecture demandées : reconnectez la boutique et acceptez-les.', SHOP_MISMATCH: 'Le domaine indiqué ne correspond pas à la boutique qui a accepté : recommencez avec le bon domaine.', USER_DENIED: 'Vous avez refusé l’accès : rien n’a été connecté.', INVALID_STATE: 'La réponse du fournisseur ne correspond à aucune demande en cours : recommencez.', SESSION_EXPIRED: 'La demande a expiré : recommencez.', CODE_EXCHANGE_FAILED: 'Le fournisseur a refusé l’autorisation : recommencez.',
     REAUTH_REQUIRED: 'Instagram a refusé l’accès : reconnectez le compte.', RATE_LIMITED: 'Instagram a demandé de ralentir : réessayez plus tard.', SOURCE_UNREACHABLE: 'Instagram est injoignable pour le moment : réessayez plus tard.', NOT_CONNECTED: 'Ce compte n’est pas connecté.',
     SCOPE_MISSING: 'Une permission de lecture n’a pas été accordée : recommencez et acceptez-les toutes.', PROVIDER_UNAVAILABLE: 'Le fournisseur ne répond pas pour le moment : réessayez plus tard.', PROVIDER_UNSUPPORTED: 'Ce fournisseur n’est pas encore connectable.', CALLBACK_FAILED: 'La connexion n’a pas abouti : recommencez.',
   };
@@ -192,9 +192,19 @@
       p.connections.length ? [h('h3', { text: p.connections.length > 1 ? 'Comptes connectés' : 'Compte connecté' }), p.connections.map(connRow)] : (p.status === 'AVAILABLE' && p.setup.state !== 'APP_MISSING' ? h('p', { class: 'cx-meta', text: p.source === 'shopify' ? 'Aucune boutique de Shopify n’est reliée à ce marchand dans Nordla.' : 'Aucun compte connecté.' }) : null),
       picker(p),
       p.bank ? h('details', { class: 'cx-banks' }, h('summary', { text: `Banques belges proposées par ${p.bank.provider ? p.bank.provider.label : 'le fournisseur prévu'} (${p.bank.banks.length}) — à confirmer à la première lecture réelle` }), h('ul', {}, p.bank.banks.map((b) => h('li', {}, h('strong', { text: b.label }), b.key === p.bank.pilot ? ' · banque du pilote' : '', b.aliasOf ? ' · même banque que Crelan' : '')))) : null,
-      showConnect ? h('div', { class: 'cx-actions' }, h('button', { class: 'cx-btn', type: 'button', disabled: !canClick, text: connectLabel, on: { click: () => startOAuth('/api/connections/connect', { provider: p.id }) } }),
+      p.id === 'shopify' && p.status === 'AVAILABLE' ? shopifyConnect() : showConnect ? h('div', { class: 'cx-actions' }, h('button', { class: 'cx-btn', type: 'button', disabled: !canClick, text: connectLabel, on: { click: () => startOAuth('/api/connections/connect', { provider: p.id }) } }),
         !canClick ? h('span', { class: 'cx-meta', text: p.setup.state === 'APP_MISSING' ? 'Disponible dès que l’application est configurée.' : !data.canManage ? 'Réservé au propriétaire ou à un administrateur.' : '' }) : null) : null);
   }
+  // Shopify is connected per merchant: the merchant names its shop, Nordla starts OAuth for THAT shop (the consent screen is Shopify's).
+  function shopifyConnect() {
+    const input = h('input', { id: 'cx-shop-domain', type: 'text', autocomplete: 'off', spellcheck: 'false', placeholder: 'votre-boutique.myshopify.com', 'aria-label': 'Domaine de la boutique Shopify' });
+    const go = () => { const shop = input.value.trim(); if (!shop) { setFlash('err', ERR.TARGET_REQUIRED); input.focus(); return; } startOAuth('/api/connections/connect', { provider: 'shopify', shop }); };
+    return h('div', { class: 'cx-actions cx-shop' },
+      h('label', { class: 'cx-meta', for: 'cx-shop-domain', text: 'Domaine de votre boutique (xxx.myshopify.com)' }), input,
+      h('button', { class: 'cx-btn', type: 'button', disabled: !data.canManage, text: 'Connecter Shopify', on: { click: go } }),
+      !data.canManage ? h('span', { class: 'cx-meta', text: 'Réservé au propriétaire ou à un administrateur.' }) : null);
+  }
+
   function renderConnections() {
     const list = providers();
     if (wide() && !selected) selected = (list.find((p) => p.id === 'instagram') ?? list[0]).id;

@@ -26,7 +26,7 @@ const B = { id: '9e8d7c6b-5a49-4382-a716-f5e4d3c2b1a0', name: 'Synthetic Beta (n
 const UNKNOWN = '11111111-2222-4333-8444-555555555555';
 const SECRET = 'synthetic-secret-value-c6f-0123456789';
 // Shopify variables point at A's shop on purpose: they must never select A.
-const SHOPIFY_ENV = { SHOPIFY_SHOP_DOMAIN: A.source_domain, SHOPIFY_CLIENT_ID: 'synthetic-client', SHOPIFY_CLIENT_SECRET: SECRET };
+const SHOPIFY_ENV = { SHOPIFY_LEGACY_MERCHANT_ID: A.id, SHOPIFY_SHOP_DOMAIN: A.source_domain, SHOPIFY_CLIENT_ID: 'synthetic-client', SHOPIFY_CLIENT_SECRET: SECRET };
 const LEGACY_FLAG = { NORDLA_TENANT_LEGACY_SHOPIFY_LOOKUP: 'true' };
 const quiet = () => {};
 
@@ -150,7 +150,7 @@ test('merchant without Shopify: the Analytics report is built from Nordla data a
 
 // 10: Core without a Shopify connector - the planned state, never another merchant
 test('Core, merchant without connector: no credentials -> SKIPPED NOT_CONFIGURED; credentials -> MISCONFIGURED before any Shopify call; never A, never A\'s connector', () => noNetwork(async () => {
-  for (const [env, state, reason] of [[{ NORDLA_MERCHANT_ID: B.id }, 'NOT_CONFIGURED', 'NO_SHOPIFY_CREDENTIALS'], [{ NORDLA_MERCHANT_ID: B.id, ...SHOPIFY_ENV, ...LEGACY_FLAG }, 'MISCONFIGURED', 'NO_SHOPIFY_CONNECTOR_FOR_TENANT']]) {
+  for (const [env, state, reason] of [[{ NORDLA_MERCHANT_ID: B.id }, 'NOT_CONFIGURED', 'SHOPIFY_NOT_CONNECTED'], [{ NORDLA_MERCHANT_ID: B.id, ...SHOPIFY_ENV, ...LEGACY_FLAG }, 'NOT_CONFIGURED', 'SHOPIFY_NOT_CONNECTED']] /* B is not the declared legacy merchant (A is): the global setup never serves B */) {
     const s = db(); const shop = shopAsA();
     const tenant = await resolveSyncTenant({ env, supabase: s, log: quiet });
     const prep = await prepareShopifySync({ env, supabase: s, tenant, createClient: shop.factory });

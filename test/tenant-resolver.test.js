@@ -17,7 +17,7 @@ const A = { id: '0f5a1c2e-3b4d-4e6f-8a9b-0c1d2e3f4a5b', name: 'Synthetic Merchan
 const B = { id: '9e8d7c6b-5a49-4382-a716-f5e4d3c2b1a0', name: 'Synthetic Merchant B', vertical: 'bookstore', source_system: 'shopify', source_id: 'gid://shopify/Shop/SYN-B' };
 const UNKNOWN = '11111111-2222-4333-8444-555555555555';
 // Shopify variables present on purpose: the resolver must ignore them.
-const SHOPIFY_ENV = { SHOPIFY_SHOP_DOMAIN: 'synthetic-shop.myshopify.example', SHOPIFY_CLIENT_ID: 'synthetic-client', SHOPIFY_CLIENT_SECRET: 'synthetic-secret' };
+const SHOPIFY_ENV = { SHOPIFY_LEGACY_MERCHANT_ID: '0f5a1c2e-3b4d-4e6f-8a9b-0c1d2e3f4a5b', SHOPIFY_SHOP_DOMAIN: 'synthetic-shop.myshopify.example', SHOPIFY_CLIENT_ID: 'synthetic-client', SHOPIFY_CLIENT_SECRET: 'synthetic-secret' };
 
 /** Fake Supabase seeded with the given merchants, recording every call made on it. */
 function spyDb(...merchants) {

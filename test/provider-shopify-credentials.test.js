@@ -145,7 +145,7 @@ test('sync preparation refuses a shop that is not the connection\'s shop (identi
 test('sync preparation without an OAuth connection and without the global setup is NOT_CONFIGURED (nothing written)', async () => {
   const prep = await prepareShopifySync({ env: {}, supabase: fakeDb([]), tenant: { merchantId: M2 }, createClient: () => { throw new Error('must not be called'); }, shopifyCredentialsFor: async () => ({ state: 'NOT_CONNECTED' }) });
   assert.equal(prep.state, 'NOT_CONFIGURED');
-  assert.equal(prep.reason, 'NO_SHOPIFY_CREDENTIALS');
+  assert.equal(prep.reason, 'SHOPIFY_NOT_CONNECTED');
 });
 
 test('repeated sync preparations for the same merchant resolve the same identity and write nothing', async () => {
@@ -159,4 +159,82 @@ test('repeated sync preparations for the same merchant resolve the same identity
   assert.equal(first.context.externalId, second.context.externalId);
   assert.equal(first.context.merchantId, M1);
   assert.equal(writes.length, 0, 'preparation never writes');
+});
+
+// ---- connector level: the Finance / tool readers use the same per-merchant credentials ----
+import { createShopifyConnector, shopifyPathAvailable } from '../src/connectors/shopify.js';
+
+const HABB_SHOP = 'habb-global.myshopify.com';
+const HABB_GLOBAL_ENV = { SHOPIFY_SHOP_DOMAIN: HABB_SHOP, SHOPIFY_CLIENT_ID: 'global-client', SHOPIFY_CLIENT_SECRET: 'global-secret-synthetic' };
+
+/** A Shopify client stand-in that records the configuration it was built with and answers the shop identity of that configuration. */
+function recordingFactory(identityById) {
+  const built = [];
+  const factory = (config) => {
+    built.push({ shopDomain: config.shopDomain, accessToken: config.accessToken ?? null, clientId: config.clientId ?? null });
+    const id = identityById[config.shopDomain];
+    return { graphql: async () => ({ shop: { id, name: config.shopDomain, myshopifyDomain: config.shopDomain } }) };
+  };
+  return { factory, built };
+}
+
+test('two merchants at the connector level: each reads ONLY its own shop and token', async () => {
+  const rows = [oauthRow('c-a', M1, SHOP1, GID1), oauthRow('c-b', M2, SHOP2, GID2)];
+  const tokens = fakeTokens({ 'c-a': { token: TOKEN1 }, 'c-b': { token: TOKEN2 } });
+  const resolver = createShopifyCredentialResolver({ connectorRepository: createConnectorRepository({ supabase: fakeDb(rows) }), tokenManager: tokens });
+  const rec = recordingFactory({ [SHOP1]: GID1, [SHOP2]: GID2 });
+  const connectors = createConnectorRepository({ supabase: fakeDb(rows) });
+  const a = createShopifyConnector({ env: {}, merchantId: M1, connectors, credentialsFor: resolver, createClient: rec.factory });
+  const b = createShopifyConnector({ env: {}, merchantId: M2, connectors, credentialsFor: resolver, createClient: rec.factory });
+  assert.equal(await a.state({ verify: true }), 'CONFIGURED');
+  assert.equal(await b.state({ verify: true }), 'CONFIGURED');
+  assert.equal(a.source(), 'oauth');
+  assert.deepEqual(rec.built.map((x) => [x.shopDomain, x.accessToken]), [[SHOP1, TOKEN1], [SHOP2, TOKEN2]]);
+});
+
+test('the second merchant never reads the HABB shop, even with the global SHOPIFY_* set for another declared merchant', async () => {
+  const rows = [oauthRow('c-b', M2, SHOP2, GID2)];
+  const env = { ...HABB_GLOBAL_ENV, SHOPIFY_LEGACY_MERCHANT_ID: M1 }; // the global setup belongs to M1
+  const rec = recordingFactory({ [HABB_SHOP]: 'gid://shopify/Shop/HABB', [SHOP2]: GID2 });
+  const connectors = createConnectorRepository({ supabase: fakeDb(rows) });
+  const tokens = fakeTokens({ 'c-b': { token: TOKEN2 } });
+  const resolver = createShopifyCredentialResolver({ connectorRepository: connectors, tokenManager: tokens });
+  // M2 has its own connection: it reads SHOP2 only
+  const b = createShopifyConnector({ env, merchantId: M2, connectors, credentialsFor: resolver, createClient: rec.factory });
+  assert.equal(await b.state({ verify: true }), 'CONFIGURED');
+  assert.ok(rec.built.every((x) => x.shopDomain !== HABB_SHOP), 'HABB shop never built for M2');
+  // a merchant with NO connection and NOT the declared one: not connected, no client at all
+  const rec2 = recordingFactory({ [HABB_SHOP]: 'gid://shopify/Shop/HABB' });
+  const other = createShopifyConnector({ env, merchantId: '33333333-3333-4333-8333-333333333333', connectors: createConnectorRepository({ supabase: fakeDb([]) }), credentialsFor: resolver, createClient: rec2.factory });
+  assert.equal(await other.state({ verify: true }), 'NOT_CONFIGURED');
+  assert.equal(other.describe().reason, 'SHOPIFY_NOT_CONNECTED');
+  assert.equal(rec2.built.length, 0);
+  assert.equal(await shopifyPathAvailable({ env, merchantId: '33333333-3333-4333-8333-333333333333', credentialsFor: resolver }), false);
+});
+
+test('the declared legacy merchant keeps the global setup, and only it', async () => {
+  const env = { ...HABB_GLOBAL_ENV, SHOPIFY_LEGACY_MERCHANT_ID: M1 };
+  const rec = recordingFactory({ [HABB_SHOP]: 'gid://shopify/Shop/HABB' });
+  const connectors = createConnectorRepository({ supabase: fakeDb([globalRow('g-1', M1, 'gid://shopify/Shop/HABB')]) });
+  const resolver = createShopifyCredentialResolver({ connectorRepository: connectors, tokenManager: fakeTokens({}) });
+  const legacy = createShopifyConnector({ env, merchantId: M1, connectors, credentialsFor: resolver, createClient: rec.factory });
+  assert.equal(await legacy.state({ verify: true }), 'CONFIGURED');
+  assert.equal(legacy.source(), 'legacy');
+  assert.equal(rec.built[0].shopDomain, HABB_SHOP);
+});
+
+test('the connector refuses to start without an explicit merchant', () => {
+  assert.throws(() => createShopifyConnector({ env: {}, merchantId: '', connectors: createConnectorRepository({ supabase: fakeDb([]) }) }), /explicit merchantId/);
+});
+
+test('a rotated token is used on the next call (no stale cache across rotation)', async () => {
+  const rows = [oauthRow('c-a', M1, SHOP1, GID1)];
+  let current = TOKEN1;
+  const tokens = { getValidCredential: async () => ({ tokens: { access_token: secret(current), scopes: [...SHOPIFY_READ_SCOPES] } }) };
+  const resolver = createShopifyCredentialResolver({ connectorRepository: createConnectorRepository({ supabase: fakeDb(rows) }), tokenManager: tokens });
+  const first = await resolver(M1);
+  current = 'shpat_rotated_merchant_a_0003';
+  const second = await resolver(M1);
+  assert.equal(first.accessToken, TOKEN1);
+  assert.equal(second.accessToken, 'shpat_rotated_merchant_a_0003');
 });

@@ -15,7 +15,7 @@ import { runSync } from '../src/sync/index.js';
 const A = '0f5a1c2e-3b4d-4e6f-8a9b-0c1d2e3f4a5b';
 const B = '9e8d7c6b-5a49-4382-a716-f5e4d3c2b1a0';
 const SHOP_A = 'gid://shopify/Shop/SYN-A'; const SHOP_B = 'gid://shopify/Shop/SYN-B';
-const ENV = { SHOPIFY_SHOP_DOMAIN: 'synthetic.myshopify.example', SHOPIFY_CLIENT_ID: 'synthetic-client', SHOPIFY_CLIENT_SECRET: 'synthetic-not-a-secret' };
+const ENV = { SHOPIFY_LEGACY_MERCHANT_ID: '0f5a1c2e-3b4d-4e6f-8a9b-0c1d2e3f4a5b', SHOPIFY_SHOP_DOMAIN: 'synthetic.myshopify.example', SHOPIFY_CLIENT_ID: 'synthetic-client', SHOPIFY_CLIENT_SECRET: 'synthetic-not-a-secret' };
 const IMG = (n, alt = `Alt ${n}`) => ({ url: `https://cdn.example/products/${n}.jpg?v=1`, altText: alt });
 
 /** The fixture products page with a featuredImage per product: `images` maps product index -> featuredImage value ('absent' = no key). */
@@ -120,13 +120,14 @@ const run = (s, merchant, createClient) => runSync({ mode: 'all', env: { MERCHAN
 test('two merchants: each merchant\'s images land on its own products only (no leak), through the guarded runSync', async () => {
   const s = tenantDb();
   assert.equal((await run(s, A, full(SHOP_A, [IMG('a1'), IMG('a2'), null], { tag: 'A' }))).status, 'SUCCESS');
-  assert.equal((await run(s, B, full(SHOP_B, [IMG('b1'), null, IMG('b3')], { tag: 'B' }))).status, 'SUCCESS');
+  // B has no Shopify connection of its own: the global setup belongs to A, so B is SKIPPED and receives nothing (no leak in either direction).
+  assert.equal((await run(s, B, full(SHOP_B, [IMG('b1'), null, IMG('b3')], { tag: 'B' }))).status, 'SKIPPED');
   const products = s._tables.get('products');
   for (const p of products) {
     if (p.image_url) assert.equal(p.image_url.includes('/a') ? A : B, p.merchant_id, `${p.image_url} on the right merchant`);
     assert.equal(p.title.startsWith('A ') ? A : B, p.merchant_id);
   }
-  assert.equal(products.filter((p) => p.merchant_id === A && p.image_url).length, 2); assert.equal(products.filter((p) => p.merchant_id === B && p.image_url).length, 2);
+  assert.equal(products.filter((p) => p.merchant_id === A && p.image_url).length, 2); assert.equal(products.filter((p) => p.merchant_id === B && p.image_url).length, 0);
 });
 
 test('wrong shop (B\'s shop for A) -> MISCONFIGURED, zero data write (no image, no product); Shopify down -> UNAVAILABLE, no partial write', async () => {

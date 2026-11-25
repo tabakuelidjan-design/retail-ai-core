@@ -26,13 +26,17 @@ export async function resolveToolTenant({ env = process.env, supabase, tool, log
  * The tenant's verified Shopify, for a feature that needs it. Returns { state, reason, shopify } - `shopify` (a guarded client with
  * graphql()) only when state is CONFIGURED; every other state means: do not call Shopify, and say so.
  */
-export async function openShopifyForTenant({ env = process.env, supabase, merchantId, createClient = null, timeoutMs }) {
-  if (!hasShopifyCredentials(env)) return { state: 'NOT_CONFIGURED', reason: 'NO_SHOPIFY_CREDENTIALS', shopify: null };
+export async function openShopifyForTenant({ env = process.env, supabase, merchantId, createClient = null, timeoutMs, credentialsFor = null }) {
+  // No default shop: the merchant must be stated, and it is the only one whose Shopify is read.
+  if (typeof merchantId !== 'string' || !merchantId.trim()) throw new TypeError('openShopifyForTenant needs an explicit merchantId: there is no default shop');
   const connectors = createConnectorRepository({ supabase });
-  const own = (await connectors.listForMerchant(merchantId)).filter((c) => c.kind === 'shopify');
-  if (!own.length) return { state: 'NOT_CONFIGURED', reason: 'NO_SHOPIFY_CONNECTOR_FOR_TENANT', shopify: null };
+  // No Shopify connection row for this merchant at all: not connected (the tool says so, and never calls Shopify).
+  if (!(await connectors.listForMerchant(merchantId)).some((c) => c.kind === 'shopify')) return { state: 'NOT_CONFIGURED', reason: 'NO_SHOPIFY_CONNECTOR_FOR_TENANT', shopify: null };
   const { createShopifyConnector } = await import('../connectors/shopify.js');
-  const connector = createShopifyConnector({ env, merchantId, connectors, ...(createClient ? { createClient } : {}), ...(timeoutMs ? { timeoutMs } : {}) });
+  const { createShopifyCredentialResolver } = await import('../provider-connections/shopify-credentials.js');
+  const { createProviderConnectionsRuntime } = await import('../provider-connections/runtime.js');
+  const resolver = credentialsFor ?? createShopifyCredentialResolver({ connectorRepository: connectors, tokenManagerFor: () => createProviderConnectionsRuntime({ supabase, env }).tokenManager });
+  const connector = createShopifyConnector({ env, merchantId, connectors, credentialsFor: resolver, ...(createClient ? { createClient } : {}), ...(timeoutMs ? { timeoutMs } : {}) });
   const state = await connector.state({ verify: true });
   return { state, reason: connector.describe().reason, shopify: state === 'CONFIGURED' ? connector : null };
 }

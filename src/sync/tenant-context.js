@@ -5,6 +5,7 @@
 //   NORDLA_MERCHANT_ID -> tenant resolver -> merchant -> its shopify connector -> shop identity check -> sync (guarded writes)
 
 import { createShopifyClient, loadShopifyConfigFromEnv } from '../shopify/client.js';
+import { globalShopifySetupFor } from '../shopify/global-setup.js';
 import { SHOP_QUERY } from '../shopify/queries.js';
 import { resolveTenant } from '../tenant/index.js';
 import { createConnectorRepository } from '../tenant/connectors.js';
@@ -47,7 +48,8 @@ export async function prepareShopifySync({ env = process.env, supabase, tenant, 
   if (own.state === 'NOT_CONFIGURED') return out('NOT_CONFIGURED', own.reason ?? 'CONNECTOR_NOT_CONFIGURED');
   if (own.state === 'UNAVAILABLE') return out('UNAVAILABLE', own.reason ?? 'UNAVAILABLE');
   const useOwn = own.state === 'CONFIGURED';
-  if (!useOwn && !hasShopifyCredentials(env)) return out('NOT_CONFIGURED', 'NO_SHOPIFY_CREDENTIALS');
+  // The global SHOPIFY_* setup serves ONE explicitly named legacy merchant. Any other merchant without its own connection: "Shopify non connecté".
+  if (!useOwn && !(globalShopifySetupFor(env, merchantId) && hasShopifyCredentials(env))) return out('NOT_CONFIGURED', 'SHOPIFY_NOT_CONNECTED');
 
   const connectors = createConnectorRepository({ supabase });
   const connector = await connectors.getForMerchant(merchantId, 'shopify');

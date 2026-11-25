@@ -19,7 +19,7 @@ import { TENANT_ERROR_CODES as T } from '../src/tenant/index.js';
 const A = '0f5a1c2e-3b4d-4e6f-8a9b-0c1d2e3f4a5b';
 const B = '9e8d7c6b-5a49-4382-a716-f5e4d3c2b1a0';
 const UNKNOWN = '11111111-2222-4333-8444-555555555555';
-const SHOPIFY_ENV = { SHOPIFY_SHOP_DOMAIN: 'synthetic.myshopify.example', SHOPIFY_CLIENT_ID: 'synthetic-client', SHOPIFY_CLIENT_SECRET: 'synthetic-not-a-secret' };
+const SHOPIFY_ENV = { SHOPIFY_LEGACY_MERCHANT_ID: '0f5a1c2e-3b4d-4e6f-8a9b-0c1d2e3f4a5b', SHOPIFY_SHOP_DOMAIN: 'synthetic.myshopify.example', SHOPIFY_CLIENT_ID: 'synthetic-client', SHOPIFY_CLIENT_SECRET: 'synthetic-not-a-secret' };
 const DAY = 86_400_000;
 
 /** Two merchants with the same shapes but distinct names and amounts; each has a shopify connector unless told otherwise. */
@@ -204,5 +204,5 @@ test('C6-F: no NORDLA_MERCHANT_ID -> refused whatever the old switch says; the s
 
 test('the Shopify-comparison modes say so explicitly when Shopify is not configured; "report" never needs it', async () => {
   const s = await twoMerchants();
-  for (const mode of ['validate', 'triage', 'demand']) await assert.rejects(runReport({ mode, env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A }, supabase: s, outDir: await tmp(), log: quiet }), (e) => e.code === 'SHOPIFY_NOT_CONFIGURED', mode);
+  for (const mode of ['validate', 'triage', 'demand']) await assert.rejects(runReport({ mode, env: { MERCHANT_TIMEZONE: 'UTC', NORDLA_MERCHANT_ID: A }, supabase: s, outDir: await tmp(), log: quiet }), (e) => e.code === 'SHOPIFY_NOT_CONNECTED', mode);
 });

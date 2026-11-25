@@ -20,7 +20,7 @@ const A = '0f5a1c2e-3b4d-4e6f-8a9b-0c1d2e3f4a5b';
 const B = '9e8d7c6b-5a49-4382-a716-f5e4d3c2b1a0';
 const UNKNOWN = '11111111-2222-4333-8444-555555555555';
 const SHOP_A = 'gid://shopify/Shop/SYN-A'; const SHOP_B = 'gid://shopify/Shop/SYN-B';
-const SHOPIFY_ENV = { SHOPIFY_SHOP_DOMAIN: 'synthetic.myshopify.example', SHOPIFY_CLIENT_ID: 'synthetic-client', SHOPIFY_CLIENT_SECRET: 'synthetic-not-a-secret' };
+const SHOPIFY_ENV = { SHOPIFY_LEGACY_MERCHANT_ID: '0f5a1c2e-3b4d-4e6f-8a9b-0c1d2e3f4a5b', SHOPIFY_SHOP_DOMAIN: 'synthetic.myshopify.example', SHOPIFY_CLIENT_ID: 'synthetic-client', SHOPIFY_CLIENT_SECRET: 'synthetic-not-a-secret' };
 const DAY = 86_400_000;
 const quiet = () => {};
 const tmp = () => mkdtemp(path.join(tmpdir(), 'tools-tenant-'));

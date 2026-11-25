@@ -53,7 +53,8 @@ export async function startFinanceServer({ env = process.env, runtimeDeps = {}, 
   const app = createFinanceApp({
     merchantId: rt.merchant.id, store: rt.store, token, retail: rt.retail, priceSource: createShopifyPriceSource(rt.shopify), salesConnector: rt.shopify,
     // Shopify stock applier gated by the connector state: NOT_CONFIGURED / MISCONFIGURED / UNAVAILABLE block it explicitly.
-    stockApplier: { ...createShopifyStockApplier(rt.shopify), state: () => rt.shopify.state({ verify: true }) },
+    // Stock WRITES to Shopify stay off for an OAuth connection in V1 (read-only scopes): the applier reports NOT_CONFIGURED for it.
+    stockApplier: { ...createShopifyStockApplier(rt.shopify), state: async () => { const s = await rt.shopify.state({ verify: true }); return rt.shopify.source() === 'oauth' ? 'NOT_CONFIGURED' : s; } },
     attachmentStore: createSupabaseAttachmentStore({ url: env.SUPABASE_URL, serviceKey: env.SUPABASE_SERVICE_ROLE_KEY, merchantId: rt.merchant.id }), retailConfig: rt.retailConfig, timeZone: rt.timeZone, retailHistory: async () => { let at = null; try { at = (await latestSyncStatus(rt.supabase, rt.merchant.id))?.lastSuccess?.finishedAt ?? null; } catch { at = null; } return mergeRetailHistory(await rt.retailHistory(), at); },
     // No sales-source connector at all -> an honest "no source" instead of an unknown sync.
     syncStatus: async () => {

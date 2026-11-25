@@ -15,7 +15,9 @@ import { readCoverage } from '../sync/history.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../supabase/client.js';
 import { resolveTenant } from '../tenant/index.js';
 import { createConnectorRepository } from '../tenant/connectors.js';
-import { createShopifyConnector, DEFAULT_SHOPIFY_TIMEOUT_MS } from '../connectors/shopify.js';
+import { createShopifyConnector, DEFAULT_SHOPIFY_TIMEOUT_MS, shopifyPathAvailable } from '../connectors/shopify.js';
+import { createShopifyCredentialResolver } from '../provider-connections/shopify-credentials.js';
+import { createProviderConnectionsRuntime } from '../provider-connections/runtime.js';
 import { createRetailAccess } from './retail-access.js';
 import { createSupabaseFinanceStore } from './supabase-store.js';
 
@@ -36,14 +38,16 @@ export async function resolveFinanceTenant({ env = process.env, supabase, log = 
  * @param {{ env?: Record<string, string|undefined>, supabase?: object, createShopifyClient?: typeof createShopifyClient,
  *           log?: (line: string) => void, shopifyTimeoutMs?: number }} [deps]
  */
-export async function createRuntime({ env = process.env, supabase: injectedSupabase, createShopifyClient: createClient = createShopifyClient, log = console.log, shopifyTimeoutMs = DEFAULT_SHOPIFY_TIMEOUT_MS } = {}) {
+export async function createRuntime({ env = process.env, supabase: injectedSupabase, createShopifyClient: createClient = createShopifyClient, shopifyCredentialsFor = null, log = console.log, shopifyTimeoutMs = DEFAULT_SHOPIFY_TIMEOUT_MS } = {}) {
   const supabase = injectedSupabase ?? createSupabaseClient(loadSupabaseConfigFromEnv(env));
   const connectors = createConnectorRepository({ supabase });
   const tenant = await resolveFinanceTenant({ env, supabase, log });
   const merchant = { id: tenant.merchantId, name: tenant.merchant.name };
 
   // Optional Shopify connector: never contacted here; it verifies its shop against this tenant on first real use.
-  const shopify = createShopifyConnector({ env, merchantId: merchant.id, connectors, createClient, timeoutMs: shopifyTimeoutMs });
+  // Shopify reads for this merchant: its own OAuth connection (Vault), or the legacy global setup only if it is explicitly the legacy merchant.
+  const defaultShopifyCredentials = createShopifyCredentialResolver({ connectorRepository: connectors, tokenManagerFor: () => createProviderConnectionsRuntime({ supabase, env }).tokenManager });
+  const shopify = createShopifyConnector({ env, merchantId: merchant.id, connectors, credentialsFor: shopifyCredentialsFor ?? defaultShopifyCredentials, createClient, timeoutMs: shopifyTimeoutMs });
 
   const retailConfig = mergeConfig(existsSync('data/local/marketing-policy.json') ? JSON.parse(await readFile('data/local/marketing-policy.json', 'utf8')) : {});
   const timeZone = env.MERCHANT_TIMEZONE || 'UTC';
@@ -65,7 +69,8 @@ export async function createRuntime({ env = process.env, supabase: injectedSupab
   const salesSource = async () => {
     const kinds = new Set((await connectors.listForMerchant(merchant.id)).map((c) => c.kind).filter((k) => SALES_CONNECTOR_KINDS.includes(k)));
     if (!kinds.size) return 'NONE';
-    return [...kinds].some((k) => (k === 'shopify' ? shopify.configured : true)) ? 'ACTIVE' : 'NOT_CONFIGURED';
+    const shopifyOk = kinds.has('shopify') ? await shopifyPathAvailable({ env, merchantId: merchant.id, credentialsFor: shopifyCredentialsFor ?? defaultShopifyCredentials }) : false;
+    return [...kinds].some((k) => (k === 'shopify' ? shopifyOk : true)) ? 'ACTIVE' : 'NOT_CONFIGURED';
   };
   const hasSalesSource = async () => (await salesSource()) !== 'NONE';
   const retail = createRetailAccess({ loadRetail, listOrderRefs, timeZone });
