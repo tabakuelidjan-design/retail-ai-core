@@ -23,6 +23,9 @@ import { SHOP_CREATED_QUERY } from '../shopify/queries.js';
 import { getGrantedScopes, nextCoverage, planOrdersSync, readCoverage, writeCoverage } from './history.js';
 import { finishRun, recordStartupFailure, startRun } from './run-log.js';
 import { resolveSyncTenant, prepareShopifySync, SyncConnectorError } from './tenant-context.js';
+import { createShopifyCredentialResolver } from '../provider-connections/shopify-credentials.js';
+import { createProviderConnectionsRuntime } from '../provider-connections/runtime.js';
+import { createConnectorRepository } from '../tenant/connectors.js';
 import { guardSyncWrites } from './write-guard.js';
 
 export const MODES = ['catalog', 'inventory', 'cost', 'orders', 'all'];
@@ -35,6 +38,7 @@ export async function runSync({
   mode, args = [], env = process.env, supabase: injectedSupabase, createClient, log = console.log, logError = console.error,
   now = () => new Date(), customerKeySecret = () => loadCustomerKeySecret(), coverage = { read: readCoverage, write: writeCoverage },
   grantedScopes = () => getGrantedScopes(loadShopifyConfigFromEnv(env)),
+  shopifyCredentialsFor = null, // per-merchant Shopify credentials (tests inject a fake); default: the merchant's own OAuth connection from Vault
 } = {}) {
   if (!MODES.includes(mode)) { logError(`Usage: node src/sync/index.js <${MODES.join('|')}>`); return { status: 'REFUSED', exitCode: 1, reason: 'BAD_MODE' }; }
   const supabase = injectedSupabase ?? createSupabaseClient(loadSupabaseConfigFromEnv(env));
@@ -51,7 +55,11 @@ export async function runSync({
     run.merchantId = tenant.merchantId;
 
     // 2. the tenant's Shopify connector, validated against the shop behind the credentials
-    const prep = await prepareShopifySync({ env, supabase, tenant, ...clientOpt });
+    const credentials = shopifyCredentialsFor ?? createShopifyCredentialResolver({
+      connectorRepository: createConnectorRepository({ supabase }),
+      tokenManagerFor: () => createProviderConnectionsRuntime({ supabase, env }).tokenManager,
+    });
+    const prep = await prepareShopifySync({ env, supabase, tenant, ...clientOpt, shopifyCredentialsFor: credentials });
     if (prep.state === 'NOT_CONFIGURED') {
       log(`shopify sync skipped: NOT_CONFIGURED (${prep.reason}) - nothing written`);
       return { status: 'SKIPPED', exitCode: 0, merchantId: tenant.merchantId, runId: null, state: prep.state, reason: prep.reason };
@@ -97,7 +105,8 @@ export async function runSync({
         storeCreatedOn = (await shopify.graphql(SHOP_CREATED_QUERY)).shop.createdAt.slice(0, 10);
         if (args.includes('--full-history')) since = storeCreatedOn;
       }
-      const plan = planOrdersSync({ since, grantedScopes: since ? await grantedScopes() : [] });
+      // Per-merchant: the scopes on the merchant's own token. Global: the existing check (unchanged).
+      const plan = planOrdersSync({ since, grantedScopes: since ? (prep.grantedScopes ?? await grantedScopes()) : [] });
       if (!plan.ok) throw Object.assign(new Error(JSON.stringify(plan)), { planRefused: true });
       const summary = await syncOrders({ shopify, supabase: db }, { merchantId, customerKeySecret: customerKeySecret(), since, refundCatchUp: true });
       log('orders sync summary:', JSON.stringify(summary, null, 2));

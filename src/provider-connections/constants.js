@@ -67,7 +67,8 @@ export const REFRESH_POLICY = Object.freeze({
   [PROVIDER.INSTAGRAM]: Object.freeze({ refresh_before_seconds: 7 * 86_400, min_token_age_seconds: 86_400 }),
   [PROVIDER.GOOGLE_BUSINESS_PROFILE]: Object.freeze({ refresh_before_seconds: 300, min_token_age_seconds: 0 }),
   // Shopify offline tokens do not expire: never refreshed (the adapter refuses refresh; a missing expiry is VALID).
-  [PROVIDER_SHOPIFY]: Object.freeze({ refresh_before_seconds: 0, min_token_age_seconds: 0 }),
+  // Expiring offline token (~1 h): refreshed 5 minutes before expiry. A refresh that is refused means the merchant must connect again.
+  [PROVIDER_SHOPIFY]: Object.freeze({ refresh_before_seconds: 300, min_token_age_seconds: 0 }),
 });
 
 // Names of the project-level app settings (environment / deployment secrets): NAMES only, never values.

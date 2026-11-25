@@ -38,15 +38,19 @@ export const serializeBundle = (bundle) => JSON.stringify({
   refreshable: bundle.refreshable,
   external_user_id: bundle.external_user_id,
   issued_at: bundle.issued_at,
+  shop_domain: bundle.shop_domain ?? null, // Shopify only: the shop the token belongs to (not secret); needed to refresh at the same shop
 });
 
 export function parseBundle(json) {
   let raw;
   try { raw = JSON.parse(json); } catch { fail(E.VAULT_UNAVAILABLE, 'the stored credential could not be read'); }
   if (!isPlainObject(raw) || typeof raw.access_token !== 'string') fail(E.VAULT_UNAVAILABLE, 'the stored credential is malformed');
-  return makeTokenBundle({
-    accessToken: raw.access_token, refreshToken: raw.refresh_token, expiresAt: raw.expires_at, scopes: raw.scopes ?? [], refreshable: raw.refreshable,
-    externalUserId: raw.external_user_id, issuedAt: raw.issued_at,
+  return deepFreeze({
+    ...makeTokenBundle({
+      accessToken: raw.access_token, refreshToken: raw.refresh_token, expiresAt: raw.expires_at, scopes: raw.scopes ?? [], refreshable: raw.refreshable,
+      externalUserId: raw.external_user_id, issuedAt: raw.issued_at,
+    }),
+    shop_domain: typeof raw.shop_domain === 'string' ? raw.shop_domain : null,
   });
 }
 

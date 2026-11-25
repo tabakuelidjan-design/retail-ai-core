@@ -73,6 +73,8 @@ export function createShopifyClient(config, deps = {}) {
   let cachedTokenExpiresAt = 0; // epoch ms
 
   async function getValidAccessToken() {
+    // Per-merchant path: the token was obtained from Vault by the caller (server side) and is used as is. Global path: client credentials.
+    if (config.accessToken) return config.accessToken;
     const now = Date.now();
     if (cachedToken && now < cachedTokenExpiresAt) return cachedToken;
 

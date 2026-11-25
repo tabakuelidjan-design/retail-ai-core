@@ -20,7 +20,7 @@ const sign = (query) => ({ ...query, hmac: createHmac('sha256', APP_SECRET).upda
 const ok = (body) => ({ status: 200, body });
 let exchanges = 0; // counts code exchanges sent to Shopify (reset per test)
 const shopRoutes = (shopDomain = SHOP, id = SHOP_GID, scope = 'read_orders,read_products,read_inventory,read_locations') => [
-  { method: 'POST', url: `${SHOP}/admin/oauth/access_token`, respond: () => { exchanges += 1; return ok({ access_token: TOKEN, scope }); } },
+  { method: 'POST', url: `${SHOP}/admin/oauth/access_token`, respond: () => { exchanges += 1; return ok({ access_token: TOKEN, scope, expires_in: 3600, refresh_token: 'shprt_flow_refresh_0001' }); } },
   { method: 'POST', url: `${SHOP}/admin/api/2024-10/graphql.json`, respond: ok({ data: { shop: { id, name: 'Nordla Test', myshopifyDomain: shopDomain } } }) },
 ];
 

@@ -17,6 +17,8 @@ import { SHOP_QUERY } from '../../shopify/queries.js';
 import { OAuthFailure, bundleFromResponse, oauthRequest, parseScopes } from './common.js';
 
 const SHOPIFY_PROVIDER = 'shopify';
+// The shop domain travels with the token bundle (not secret) so a refresh goes back to the SAME shop.
+const withShop = (bundle, shop) => deepFreeze({ ...bundle, shop_domain: shop });
 
 /** Read-only scopes for sales, catalogue, inventory and locations. Customer scopes are NOT requested (see docs/security/shopify-auth.md). */
 export const SHOPIFY_READ_SCOPES = Object.freeze(['read_orders', 'read_products', 'read_inventory', 'read_locations']);
@@ -68,7 +70,7 @@ export function createShopifyOAuth({ http, timeoutMs, now = Date.now, scopes = S
       method: 'POST',
       url: `https://${shop}/admin/api/${apiVersion}/graphql.json`,
       headers: { 'X-Shopify-Access-Token': accessToken, 'Content-Type': 'application/json' },
-      json: { query: SHOP_QUERY },
+      body: { query: SHOP_QUERY },
     });
     const s = res.body?.data?.shop;
     if (!s || typeof s.id !== 'string' || !s.id) throw new OAuthFailure({ code: OAUTH_ERROR.TOKEN_RESPONSE_INVALID, safeCode: 'NO_SHOP' });
@@ -88,7 +90,7 @@ export function createShopifyOAuth({ http, timeoutMs, now = Date.now, scopes = S
 
   return {
     provider: SHOPIFY_PROVIDER,
-    descriptor: deepFreeze({ minimum_scopes: scopes, uses_pkce: false, revocable_remotely: false, offline_token: true }),
+    descriptor: deepFreeze({ minimum_scopes: scopes, uses_pkce: false, revocable_remotely: false, offline_token: true, expiring_offline_token: true }),
 
     buildAuthorizationRequest({ appConfig, state, redirectUri = appConfig.redirectUri, shop }) {
       const url = new URL(`https://${shopOf(shop)}/admin/oauth/authorize`);
@@ -104,13 +106,31 @@ export function createShopifyOAuth({ http, timeoutMs, now = Date.now, scopes = S
       const res = await call({
         method: 'POST',
         url: `https://${shopOf(shop)}/admin/oauth/access_token`,
-        json: { client_id: appConfig.clientId, client_secret: appConfig.clientSecret, code: String(code) },
+        body: { client_id: appConfig.clientId, client_secret: appConfig.clientSecret, code: String(code), expiring: 1 },
       });
-      return bundleFromResponse({ accessToken: res.body?.access_token, scopes: parseScopes(res.body?.scope), externalUserId: null, refreshable: false, nowMs: now() });
+      // expiring offline token: the access token lasts ~1 h, the refresh token rotates on every refresh. Without a refresh token the grant is refused.
+      if (typeof res.body?.refresh_token !== 'string' || !res.body.refresh_token) throw new OAuthFailure({ code: OAUTH_ERROR.TOKEN_RESPONSE_INVALID, safeCode: 'NO_REFRESH_TOKEN' });
+      return withShop(bundleFromResponse({
+        accessToken: res.body?.access_token, refreshToken: res.body.refresh_token, expiresInSeconds: res.body?.expires_in, scopes: parseScopes(res.body?.scope), externalUserId: null, refreshable: true, nowMs: now(),
+      }), shopOf(shop));
     },
 
-    /** No refresh: an offline token stays valid until the app is removed. Asking for one is a programming error, reported as such. */
-    async refreshToken() { throw new OAuthFailure({ code: OAUTH_ERROR.TOKEN_RESPONSE_INVALID, safeCode: 'NOT_REFRESHABLE' }); },
+    /** Expiring offline tokens: POST access_token with grant_type=refresh_token. Returns a NEW refresh token that replaces the old one. */
+    async refreshToken({ appConfig, tokens }) {
+      const shop = shopOf(tokens?.shop_domain);
+      const refreshToken = tokens?.refresh_token == null ? null : (typeof tokens.refresh_token.reveal === 'function' ? tokens.refresh_token.reveal() : tokens.refresh_token);
+      if (!refreshToken) throw new OAuthFailure({ code: OAUTH_ERROR.TOKEN_RESPONSE_INVALID, safeCode: 'NO_REFRESH_TOKEN' });
+      const res = await call({
+        method: 'POST',
+        url: `https://${shop}/admin/oauth/access_token`,
+        body: { client_id: appConfig.clientId, client_secret: appConfig.clientSecret, grant_type: 'refresh_token', refresh_token: refreshToken },
+      });
+      const scopes = res.body?.scope ? parseScopes(res.body.scope) : tokens.scopes;
+      if (typeof res.body?.refresh_token !== 'string' || !res.body.refresh_token) throw new OAuthFailure({ code: OAUTH_ERROR.TOKEN_RESPONSE_INVALID, safeCode: 'NO_REFRESH_TOKEN' });
+      return withShop(bundleFromResponse({
+        accessToken: res.body?.access_token, refreshToken: res.body.refresh_token, expiresInSeconds: res.body?.expires_in, scopes, externalUserId: null, refreshable: true, nowMs: now(),
+      }), shop);
+    },
 
     async discoverTargets({ tokens, shop }) {
       const requested = shopOf(shop);

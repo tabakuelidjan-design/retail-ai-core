@@ -37,19 +37,29 @@ export async function resolveSyncTenant({ env = process.env, supabase, log = con
  *   { state: 'MISCONFIGURED' | 'UNAVAILABLE', reason }      -> the sync must fail without writing data
  *   { state: 'CONFIGURED', shopify, context }               -> `context` is the validated identity every write is checked against
  */
-export async function prepareShopifySync({ env = process.env, supabase, tenant, createClient = createShopifyClient, timeoutMs = DEFAULT_SYNC_SHOPIFY_TIMEOUT_MS }) {
+export async function prepareShopifySync({ env = process.env, supabase, tenant, createClient = createShopifyClient, timeoutMs = DEFAULT_SYNC_SHOPIFY_TIMEOUT_MS, shopifyCredentialsFor = null }) {
   const merchantId = tenant.merchantId;
   const out = (state, reason) => ({ state, reason, merchantId });
-  if (!hasShopifyCredentials(env)) return out('NOT_CONFIGURED', 'NO_SHOPIFY_CREDENTIALS');
+
+  // The merchant's own Shopify connection (OAuth, Vault token) comes first. Only a merchant WITHOUT one uses the global SHOPIFY_* setup.
+  const own = shopifyCredentialsFor ? await shopifyCredentialsFor(merchantId) : { state: 'NOT_CONNECTED' };
+  if (own.state === 'AMBIGUOUS' || own.state === 'MISCONFIGURED' || own.state === 'MISSING_SCOPES' || own.state === 'REAUTH_REQUIRED') return out('MISCONFIGURED', own.reason ?? own.state);
+  if (own.state === 'NOT_CONFIGURED') return out('NOT_CONFIGURED', own.reason ?? 'CONNECTOR_NOT_CONFIGURED');
+  if (own.state === 'UNAVAILABLE') return out('UNAVAILABLE', own.reason ?? 'UNAVAILABLE');
+  const useOwn = own.state === 'CONFIGURED';
+  if (!useOwn && !hasShopifyCredentials(env)) return out('NOT_CONFIGURED', 'NO_SHOPIFY_CREDENTIALS');
 
   const connectors = createConnectorRepository({ supabase });
   const connector = await connectors.getForMerchant(merchantId, 'shopify');
   if (!connector) return out('MISCONFIGURED', 'NO_SHOPIFY_CONNECTOR_FOR_TENANT');
+  if (useOwn && connector.id !== own.connectorId) return out('MISCONFIGURED', 'CONNECTOR_CHANGED_DURING_RESOLUTION');
   if (connector.status === 'NOT_CONFIGURED') return out('NOT_CONFIGURED', 'CONNECTOR_NOT_CONFIGURED');
   if (connector.status !== 'CONFIGURED') return out('MISCONFIGURED', `CONNECTOR_STATUS_${connector.status}`);
   if (!connector.externalId) return out('MISCONFIGURED', 'CONNECTOR_WITHOUT_EXTERNAL_ID');
 
-  const shopify = createClient(loadShopifyConfigFromEnv(env), { fetchImpl: timeoutFetch(timeoutMs) });
+  // Per-merchant: this merchant's shop and token. Global: the single SHOPIFY_* setup (unchanged for merchants without an OAuth connection).
+  const config = useOwn ? { shopDomain: own.shopDomain, apiVersion: own.apiVersion, accessToken: own.accessToken } : loadShopifyConfigFromEnv(env);
+  const shopify = createClient(config, { fetchImpl: timeoutFetch(timeoutMs) });
   let shop;
   try { shop = (await shopify.graphql(SHOP_QUERY))?.shop; } catch (e) { return out('UNAVAILABLE', e?.name === 'TimeoutError' || e?.name === 'AbortError' ? 'TIMEOUT' : 'SHOPIFY_ERROR'); }
   if (!shop?.id) return out('UNAVAILABLE', 'NO_SHOP_IDENTITY');
@@ -59,5 +69,6 @@ export async function prepareShopifySync({ env = process.env, supabase, tenant, 
     return out('MISCONFIGURED', owner && owner.merchantId !== merchantId ? 'SHOP_LINKED_TO_ANOTHER_MERCHANT' : 'SHOP_NOT_LINKED_TO_TENANT');
   }
   const context = Object.freeze({ merchantId, connectorId: connector.id, kind: 'shopify', externalId: connector.externalId, shop: Object.freeze({ id: shop.id, name: shop.name ?? null, domain: shop.myshopifyDomain ?? null }) });
-  return { state: 'CONFIGURED', reason: null, merchantId, shopify, context };
+  // grantedScopes: the scopes on THIS merchant's token (null for the global setup, which asks Shopify through the sync history module).
+  return { state: 'CONFIGURED', reason: null, merchantId, shopify, context, grantedScopes: useOwn ? own.grantedScopes : null };
 }
