@@ -49,7 +49,8 @@ export async function connectionsPage() {
 /** @param {{ gate: object, merchantId: string, runtime: object, service: object, registry: object }} o runtime = createProviderConnectionsRuntime(...) (real, or the test fakes) */
 export async function createConnectionsHost({ gate, merchantId, runtime, service, registry, reads = null, langOf = null }) {
   const center = runtime.connectionCenter; const tenantOf = () => ({ merchantId, source: 'session' });
-  const providerFor = (key) => { const p = registry.byProviderKey(key); return p && p.source === 'oauth' && p.status === 'AVAILABLE' ? p : null; };
+  // Shopify connects per merchant through OAuth (its registry line still describes the global, read-only setup). Other providers: unchanged.
+  const providerFor = (key) => { if (key === 'shopify') return { providerKey: 'shopify' }; const p = registry.byProviderKey(key); return p && p.source === 'oauth' && p.status === 'AVAILABLE' ? p : null; };
   const overview = (role) => service.overview({ tenant: tenantOf(), role });
   return Object.freeze({
     async handle(req, res, url) {
@@ -72,7 +73,8 @@ export async function createConnectionsHost({ gate, merchantId, runtime, service
             const provider = providerFor(cb[1]); if (!provider) { redirect(res, `${PAGE}?connect_error=PROVIDER_UNSUPPORTED`); return true; }
             if (!writer) { redirect(res, `${PAGE}?connect_error=FORBIDDEN_ROLE`); return true; }
             try {
-              const q = Object.fromEntries(['code', 'state', 'error', 'error_description'].map((k) => [k, url.searchParams.get(k) ?? undefined]).filter(([, v]) => v !== undefined));
+              // Every parameter the provider sent: Shopify's HMAC covers all of them (shop, hmac, host, timestamp...). Bounded in size.
+              const q = Object.fromEntries([...url.searchParams.entries()].slice(0, 32).map(([k, v]) => [k.slice(0, 64), String(v).slice(0, 2048)]));
               const done = await runtime.provisioning.handleCallback({ tenant: tenantOf(), provider: provider.providerKey, query: q });
               redirect(res, `${PAGE}?connect=${encodeURIComponent(done.session_ref)}&provider=${encodeURIComponent(provider.providerKey)}`); return true;
             } catch (e) { const pr = problem(e); redirect(res, `${PAGE}?connect_error=${encodeURIComponent(pr?.body?.oauth ?? pr?.body?.error?.code ?? 'CALLBACK_FAILED')}`); return true; }
@@ -88,9 +90,9 @@ export async function createConnectionsHost({ gate, merchantId, runtime, service
               if (!writer) { json(res, 403, { error: { code: 'FORBIDDEN_ROLE' } }); return true; }
               const body = await readJson(req);
               if (p === '/api/connections/connect') {
-                const provider = registry.get(String(body.provider ?? '')); const ok = provider && providerFor(provider.providerKey);
+                const provider = registry.get(String(body.provider ?? '')) ?? (String(body.provider ?? '') === 'shopify' ? { providerKey: 'shopify' } : null); const ok = provider && providerFor(provider.providerKey);
                 if (!ok) { json(res, 400, { error: { code: 'PROVIDER_UNSUPPORTED' } }); return true; }
-                const started = await center.startConnect({ tenant: tenantOf(), provider: provider.providerKey, actorRef });
+                const started = await center.startConnect({ tenant: tenantOf(), provider: provider.providerKey, actorRef, targetHint: provider.providerKey === 'shopify' ? body.shop : undefined });
                 json(res, 200, { authorizationUrl: started.authorization_url, sessionRef: started.session_ref, expiresAt: started.expires_at }); return true;
               }
               if (p === '/api/connections/select') {

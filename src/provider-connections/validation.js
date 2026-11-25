@@ -3,7 +3,7 @@
 import {
   createHash, randomBytes, timingSafeEqual,
 } from 'node:crypto';
-import { PC_ERROR as E, ProvisioningError, PROVIDERS } from './constants.js';
+import { PC_ERROR as E, ProvisioningError, OAUTH_PROVIDERS as PROVIDERS } from './constants.js';
 
 export {
   SealedSecret, seal, redact, findSecretLeaks, assertNoSecrets, deepFreeze, deriveId, canonical, sortedUnique,

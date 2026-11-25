@@ -168,6 +168,8 @@ function sources(dir) {
 const SHOP_QUERY_ALLOWED = {
   'src/shopify/queries.js': 'the query definition',
   'src/connectors/shopify.js': 'verifies the shop behind the credentials against the tenant\'s connector (identity CHECK, not lookup)',
+  // Per-merchant Shopify OAuth: checks that the shop which answered the consent is the one the merchant named (identity CHECK). It never picks a merchant from a shop.
+  'src/provider-connections/providers/shopify-oauth.js': 'per-merchant OAuth: identity CHECK of the consenting shop against the session of the same merchant (never a merchant lookup)',
   'src/sync/tenant-context.js': 'Core: connector verification + the ADR legacy lookup (explicit flag, merchant_connectors)',
   'src/finance/runtime.js': 'Finance: the ADR legacy lookup (explicit flag, merchant_connectors)',
   'src/analytics-premium/server/tenant.js': 'Analytics: the ADR legacy lookup (explicit flag, merchant_connectors)',

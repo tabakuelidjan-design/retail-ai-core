@@ -34,15 +34,18 @@ export function normalizeShopDomain(value) {
  * Shopify HMAC of a callback query: sorted keys (without hmac and signature), `key=value` joined by `&`, `&` and `%` escaped in values.
  * @param {Record<string, string>} query the decoded query parameters the callback carried
  */
+// The app secret may arrive sealed (SealedSecret from the settings loader): it is revealed only here, for the HMAC.
+const plain = (value) => (typeof value?.reveal === 'function' ? value.reveal() : value);
+
 export function shopifyCallbackHmac(query, clientSecret) {
   const message = Object.keys(query).filter((k) => k !== 'hmac' && k !== 'signature').sort()
     .map((k) => `${k}=${String(query[k]).replace(/%/g, '%25').replace(/&/g, '%26')}`).join('&');
-  return createHmac('sha256', clientSecret).update(message).digest('hex');
+  return createHmac('sha256', plain(clientSecret)).update(message).digest('hex');
 }
 
 /** True when the callback's hmac matches the app secret (constant-time compare). A missing or malformed hmac is false. */
 export function verifyShopifyCallback(query, clientSecret) {
-  if (typeof query?.hmac !== 'string' || !/^[0-9a-f]{64}$/i.test(query.hmac) || !clientSecret) return false;
+  if (typeof query?.hmac !== 'string' || !/^[0-9a-f]{64}$/i.test(query.hmac) || !plain(clientSecret)) return false;
   const expected = Buffer.from(shopifyCallbackHmac(query, clientSecret), 'hex');
   const given = Buffer.from(query.hmac.toLowerCase(), 'hex');
   return expected.length === given.length && timingSafeEqual(expected, given);

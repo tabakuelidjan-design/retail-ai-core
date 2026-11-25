@@ -10,10 +10,11 @@ import { createOAuthSessionRepository } from './oauth-session.js';
 import { createProviderProvisioningService } from './provisioning-service.js';
 import { createProviderTokenManager } from './token-manager.js';
 import { createGoogleBusinessOAuth } from './providers/google-business-oauth.js';
+import { createShopifyOAuth } from './providers/shopify-oauth.js';
 import { createInstagramOAuth, INSTAGRAM_READ_SCOPES } from './providers/instagram-oauth.js';
 import { createTikTokOAuth, TIKTOK_READ_SCOPES } from './providers/tiktok-oauth.js';
 import { loadProviderAppConfig } from './providers/common.js';
-import { PROVIDER } from './constants.js';
+import { PROVIDER, PROVIDER_SHOPIFY } from './constants.js';
 
 /**
  * @param {object} deps { supabase, fetch?, http?, env?, clock?, rng?, logger?, credentialStore?, sessionSecrets?, timeoutMs?, returnToAllowlist? }
@@ -29,6 +30,8 @@ export function createProviderConnectionsRuntime({
     [PROVIDER.INSTAGRAM]: createInstagramOAuth({ http, timeoutMs, now: clock, ...(readOnly ? { scopes: INSTAGRAM_READ_SCOPES } : {}) }),
     [PROVIDER.TIKTOK]: createTikTokOAuth({ http, timeoutMs, now: clock, ...(readOnly ? { scopes: TIKTOK_READ_SCOPES } : {}) }),
     [PROVIDER.GOOGLE_BUSINESS_PROFILE]: createGoogleBusinessOAuth({ http, timeoutMs, now: clock }),
+    // Per-merchant Shopify: the shop comes from the merchant's consent, never from the environment.
+    [PROVIDER_SHOPIFY]: createShopifyOAuth({ http, timeoutMs, now: clock, ...(String(env.NORDLA_SHOPIFY_API_VERSION ?? '').trim() ? { apiVersion: String(env.NORDLA_SHOPIFY_API_VERSION).trim() } : {}) }),
   };
   const appConfigFor = (provider) => loadProviderAppConfig(provider, env);
   const connectorRepository = createConnectorRepository({ supabase });

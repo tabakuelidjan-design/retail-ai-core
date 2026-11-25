@@ -13,7 +13,13 @@ import { CHANNEL_PROVIDER, CHANNEL_PROVIDERS } from '../activation/constants.js'
 export const PROVISIONING_VERSION = 'provider-provisioning.v1';
 
 export const PROVIDER = CHANNEL_PROVIDER;
+// Shopify is a per-merchant OAuth provider here (its own shop, Vault token). It is NOT in CHANNEL_PROVIDER: publishing code never sees it.
+export const PROVIDER_SHOPIFY = 'shopify';
 export const PROVIDERS = CHANNEL_PROVIDERS;
+// Providers that can be connected through OAuth from Nordla. Shopify is here; its global, env-based connector keeps its own listing (see isOauthConnector).
+export const OAUTH_PROVIDERS = Object.freeze([...CHANNEL_PROVIDERS, PROVIDER_SHOPIFY]);
+// A 'shopify' connector is an OAuth connector only when Nordla provisioned it (config.provisioned_via = 'oauth'). The global setup's row is not.
+export const isOauthConnector = (c) => OAUTH_PROVIDERS.includes(c?.kind) && (c.kind !== PROVIDER_SHOPIFY || c.config?.provisioned_via === 'oauth');
 
 export const OAUTH_SESSION_STATUS = Object.freeze({
   PENDING: 'PENDING', // authorization requested, nothing came back yet
@@ -60,6 +66,8 @@ export const REFRESH_POLICY = Object.freeze({
   [PROVIDER.TIKTOK]: Object.freeze({ refresh_before_seconds: 3_600, min_token_age_seconds: 0 }),
   [PROVIDER.INSTAGRAM]: Object.freeze({ refresh_before_seconds: 7 * 86_400, min_token_age_seconds: 86_400 }),
   [PROVIDER.GOOGLE_BUSINESS_PROFILE]: Object.freeze({ refresh_before_seconds: 300, min_token_age_seconds: 0 }),
+  // Shopify offline tokens do not expire: never refreshed (the adapter refuses refresh; a missing expiry is VALID).
+  [PROVIDER_SHOPIFY]: Object.freeze({ refresh_before_seconds: 0, min_token_age_seconds: 0 }),
 });
 
 // Names of the project-level app settings (environment / deployment secrets): NAMES only, never values.
@@ -67,6 +75,8 @@ export const APP_ENV = Object.freeze({
   [PROVIDER.INSTAGRAM]: Object.freeze({ clientId: 'INSTAGRAM_CLIENT_ID', clientSecret: 'INSTAGRAM_CLIENT_SECRET', redirectUri: 'INSTAGRAM_REDIRECT_URI' }),
   [PROVIDER.TIKTOK]: Object.freeze({ clientId: 'TIKTOK_CLIENT_KEY', clientSecret: 'TIKTOK_CLIENT_SECRET', redirectUri: 'TIKTOK_REDIRECT_URI' }),
   [PROVIDER.GOOGLE_BUSINESS_PROFILE]: Object.freeze({ clientId: 'GOOGLE_CLIENT_ID', clientSecret: 'GOOGLE_CLIENT_SECRET', redirectUri: 'GOOGLE_REDIRECT_URI' }),
+  // The Nordla Shopify APP (one app for all merchants). Its names are NOT SHOPIFY_* on purpose: those stay the global single-shop setup.
+  [PROVIDER_SHOPIFY]: Object.freeze({ clientId: 'NORDLA_SHOPIFY_APP_CLIENT_ID', clientSecret: 'NORDLA_SHOPIFY_APP_CLIENT_SECRET', redirectUri: 'NORDLA_SHOPIFY_REDIRECT_URI' }),
 });
 
 export const LIVE_READINESS = Object.freeze({

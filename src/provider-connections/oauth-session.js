@@ -28,7 +28,7 @@ function redirectUriOf(value) {
  *          `state` goes into the authorization URL only; `pkceVerifier` goes to the SessionSecretStore only.
  */
 export function buildOAuthSession({
-  merchantId, provider, redirectUri, descriptor, returnTo = null, returnToAllowlist, actorRef = null, nowMs, ttlMs = SESSION_TTL_MS, rng,
+  merchantId, provider, redirectUri, descriptor, returnTo = null, returnToAllowlist, actorRef = null, nowMs, ttlMs = SESSION_TTL_MS, rng, targetHint = null,
 }) {
   const state = randomToken(rng);
   const verifier = descriptor.uses_pkce ? randomToken(rng, 48) : null;
@@ -44,6 +44,8 @@ export function buildOAuthSession({
     actor_ref: actorRef == null ? null : String(actorRef).slice(0, 200),
     created_at: new Date(nowMs).toISOString(),
     expires_at: new Date(nowMs + ttlMs).toISOString(),
+    // Shopify: the *.myshopify.com domain the merchant asked for (not a secret). Null for every other provider.
+    ...(targetHint ? { target_hint: targetHint } : {}),
   };
   assertNoSecrets(session, 'oauth session');
   return { session, state: seal(state), pkceVerifier: verifier ? seal(verifier) : null };
@@ -53,6 +55,7 @@ const fromRow = (r) => deepFreeze({
   id: r.id, merchant_id: r.merchant_id, provider: r.provider, state_hash: r.state_hash, pkce_challenge: r.pkce_challenge ?? null, redirect_uri: r.redirect_uri,
   requested_scopes: [...(r.requested_scopes ?? [])], status: r.status, return_to: r.return_to ?? null, actor_ref: r.actor_ref ?? null, created_at: r.created_at,
   expires_at: r.expires_at, authorized_at: r.authorized_at ?? null, completed_at: r.completed_at ?? null, bound_connector_id: r.bound_connector_id ?? null, failure_code: r.failure_code ?? null,
+  target_hint: r.target_hint ?? null,
 });
 
 /** @param {{ supabase: { select: Function, insert: Function, update: Function, rpc?: Function } }} deps */

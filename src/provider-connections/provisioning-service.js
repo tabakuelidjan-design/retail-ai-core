@@ -8,11 +8,13 @@
 // ONLY from the server-side tenant, never from a callback parameter. A raw provider response is parsed, allow-listed and discarded.
 
 import {
-  CONNECTION_STATE as C, OAUTH_ERROR, OAUTH_SESSION_STATUS as S, PC_ERROR as E, PENDING_BINDING_TTL_MS, ProvisioningError, PROVIDERS,
+  CONNECTION_STATE as C, OAUTH_ERROR, OAUTH_SESSION_STATUS as S, PC_ERROR as E, PENDING_BINDING_TTL_MS, ProvisioningError, isOauthConnector,
 } from './constants.js';
 import { buildChannelConnectionView, normalizeChannelConnector } from '../activation/connection-view.js';
 import { parseBundle, serializeBundle } from './credential-store.js';
 import { buildOAuthSession } from './oauth-session.js';
+import { normalizeShopDomain, verifyShopifyCallback } from './providers/shopify-oauth.js';
+import { shopifyConnectionView } from './shopify-view.js';
 import {
   deepFreeze, fail, merchantOf, providerOf, sha256Hex, sortedUnique, uuid,
 } from './validation.js';
@@ -42,18 +44,21 @@ export function createProviderProvisioningService({
   }
 
   // ---------------------------------------------------------------- start
-  async function startConnection({ tenant, provider, returnTo = null, actorRef = null }) {
+  async function startConnection({ tenant, provider, returnTo = null, actorRef = null, targetHint = null }) {
     const merchantId = merchantOf(tenant);
     const adapter = adapterOf(provider);
     const appConfig = appConfigFor(provider); // APP_MISCONFIGURED names the missing variables, never a value
+    // Shopify: the merchant names its own shop before consenting. Anything but a *.myshopify.com domain is refused here.
+    const shop = provider === 'shopify' ? normalizeShopDomain(targetHint) : null;
+    if (provider === 'shopify' && !shop) throw new ProvisioningError(E.TARGET_REQUIRED, 'the shop domain (*.myshopify.com) is required');
     const { session, state, pkceVerifier } = buildOAuthSession({
-      merchantId, provider, redirectUri: appConfig.redirectUri, descriptor: adapter.descriptor, returnTo, returnToAllowlist, actorRef, nowMs: clock(), rng,
+      merchantId, provider, redirectUri: appConfig.redirectUri, descriptor: adapter.descriptor, returnTo, returnToAllowlist, actorRef, nowMs: clock(), rng, targetHint: shop,
     });
     const row = await sessions.create(session);
     if (pkceVerifier) await sessionSecrets.put({ merchantId, sessionId: row.id, kind: 'PKCE_VERIFIER', secret: pkceVerifier, ttlMs: new Date(row.expires_at).getTime() - clock() });
     let authorizationUrl;
     try {
-      authorizationUrl = adapter.buildAuthorizationRequest({ appConfig, state: state.reveal(), pkceChallenge: row.pkce_challenge, redirectUri: row.redirect_uri });
+      authorizationUrl = adapter.buildAuthorizationRequest({ appConfig, state: state.reveal(), pkceChallenge: row.pkce_challenge, redirectUri: row.redirect_uri, shop: row.target_hint });
     } catch (error) {
       await failSession(row, OAUTH_ERROR.APP_MISCONFIGURED);
       throw oauthError(adapter.normalizeOAuthError(error).code, 'the provider app settings are not valid for this provider', { provider });
@@ -84,11 +89,15 @@ export function createProviderProvisioningService({
     if (typeof query.code !== 'string' || !query.code) { await failSession(session, OAUTH_ERROR.CODE_EXCHANGE_FAILED); throw oauthError(OAUTH_ERROR.CODE_EXCHANGE_FAILED, 'the callback carries no code'); }
 
     const appConfig = appConfigFor(provider);
+    if (provider === 'shopify' && !(normalizeShopDomain(query.shop) === session.target_hint && verifyShopifyCallback(query, appConfig.clientSecret))) {
+      await failSession(session, OAUTH_ERROR.INVALID_STATE); // the shop or the signature does not match this authorization: nothing is exchanged
+      throw oauthError(OAUTH_ERROR.INVALID_STATE, 'the callback does not match this shop authorization');
+    }
     const pkceVerifier = adapter.descriptor.uses_pkce ? await sessionSecrets.take({ merchantId, sessionId: session.id, kind: 'PKCE_VERIFIER' }) : null;
     if (adapter.descriptor.uses_pkce && !pkceVerifier) { await failSession(session, OAUTH_ERROR.INVALID_STATE); throw oauthError(OAUTH_ERROR.INVALID_STATE, 'the PKCE verifier is gone'); }
     let tokens;
     try {
-      tokens = await adapter.exchangeCode({ appConfig, code: query.code, redirectUri: session.redirect_uri, pkceVerifier }); // server side; the browser never sees a token
+      tokens = await adapter.exchangeCode({ appConfig, code: query.code, redirectUri: session.redirect_uri, pkceVerifier, shop: session.target_hint }); // server side; the browser never sees a token
     } catch (error) {
       const normalized = adapter.normalizeOAuthError(error);
       await failSession(session, normalized.code);
@@ -116,7 +125,7 @@ export function createProviderProvisioningService({
     const { session, tokens } = await authorizedSession(merchantId, sessionRef);
     const adapter = adapterOf(session.provider);
     try {
-      return deepFreeze(await adapter.discoverTargets({ tokens, appConfig: appConfigFor(session.provider) }));
+      return deepFreeze(await adapter.discoverTargets({ tokens, appConfig: appConfigFor(session.provider), shop: session.target_hint }));
     } catch (error) {
       const normalized = adapter.normalizeOAuthError(error);
       throw oauthError(normalized.code, 'the provider accounts could not be listed', { provider: session.provider });
@@ -126,12 +135,13 @@ export function createProviderProvisioningService({
   const accountState = (candidate) => candidate.account_type ?? null;
   const configOf = (candidate, extra = {}) => ({
     granted_scopes: [...candidate.granted_scopes], account_state: accountState(candidate), display_name: candidate.display_name, provisioned_via: 'oauth', ...extra,
+    ...(candidate.safe_metadata?.shop_domain ? { shop_domain: candidate.safe_metadata.shop_domain } : {}),
     ...(candidate.location_name ? { location_name: candidate.location_name } : {}),
   });
 
   async function connectorOf(merchantId, connectorId) {
     const all = await connectorRepository.listForMerchant(merchantId);
-    const connector = all.find((c) => c.id === uuid(connectorId, 'connector_id') && PROVIDERS.includes(c.kind));
+    const connector = all.find((c) => c.id === uuid(connectorId, 'connector_id') && isOauthConnector(c));
     if (!connector) throw new ProvisioningError(E.CONNECTOR_NOT_FOUND, 'unknown connector for this merchant');
     return connector;
   }
@@ -154,7 +164,7 @@ export function createProviderProvisioningService({
     let outcome;
     try {
       const { tokens } = await tokenManager.getValidCredential({ merchantId, connectorId: stored.id, provider });
-      const candidate = await adapter.verifyTarget({ tokens, appConfig: appConfigFor(provider), externalId: stored.externalId });
+      const candidate = await adapter.verifyTarget({ tokens, appConfig: appConfigFor(provider), externalId: stored.externalId, shop: stored.config?.shop_domain });
       outcome = candidate.eligibility.eligible
         ? result(C.CONFIGURED, [], { candidate }, candidate.review_signals)
         : result(C.MISCONFIGURED, candidate.eligibility.reasons, { candidate }, candidate.review_signals);
@@ -176,9 +186,9 @@ export function createProviderProvisioningService({
       const config = outcome.extra.candidate ? { ...stored.config, ...configOf(outcome.extra.candidate), last_verified_at: nowIso() } : { ...stored.config, last_verified_at: nowIso() };
       connector = await connectorRepository.update({ merchantId, connectorId: stored.id, status: outcome.state, config });
     }
-    const normalizedConnector = normalizeChannelConnector(connector, { merchantId });
+    const normalizedConnector = provider === 'shopify' ? connector : normalizeChannelConnector(connector, { merchantId });
     const candidate = outcome.extra.candidate;
-    const view = buildChannelConnectionView({
+    const view = provider === 'shopify' ? shopifyConnectionView(connector, { runtime: { granted_scopes: candidate?.granted_scopes, display_name: candidate?.display_name ?? null, last_verified_at: nowIso(), signals: outcome.signals } }) : buildChannelConnectionView({
       connector: normalizedConnector,
       runtime: { account_state: candidate ? accountState(candidate) : undefined, granted_scopes: candidate?.granted_scopes, external_display_name: candidate?.display_name ?? null, last_verified_at: nowIso(), status: persistable ? outcome.state : (outcome.state === C.UNAVAILABLE ? C.UNAVAILABLE : undefined) },
     });
@@ -199,13 +209,13 @@ export function createProviderProvisioningService({
     const adapter = adapterOf(provider);
     const appConfig = appConfigFor(provider);
     let discovered;
-    try { discovered = await adapter.discoverTargets({ tokens, appConfig }); } catch (error) {
+    try { discovered = await adapter.discoverTargets({ tokens, appConfig, shop: session.target_hint }); } catch (error) {
       throw oauthError(adapter.normalizeOAuthError(error).code, 'the provider accounts could not be listed', { provider });
     }
     const chosen = discovered.find((candidate) => candidate.external_id === externalId);
     if (!chosen) throw new ProvisioningError(E.TARGET_NOT_FOUND, 'this account is not among the accounts the merchant authorized');
     if (!chosen.eligibility.eligible) throw new ProvisioningError(E.TARGET_INELIGIBLE, 'this account cannot be used for publishing', { reasons: chosen.eligibility.reasons });
-    try { await adapter.verifyTarget({ tokens, appConfig, externalId }); } catch (error) { // re-verified against the provider right before binding
+    try { await adapter.verifyTarget({ tokens, appConfig, externalId, shop: session.target_hint }); } catch (error) { // re-verified against the provider right before binding
       throw oauthError(adapter.normalizeOAuthError(error).code, 'the account could not be re-verified', { provider });
     }
 

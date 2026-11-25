@@ -7,8 +7,9 @@
 // Several connectors of the same provider coexist (one per authorized account / location); none is ever picked implicitly.
 
 import { buildChannelConnectionView, normalizeChannelConnector } from '../activation/connection-view.js';
+import { shopifyConnectionView } from './shopify-view.js';
 import {
-  CONNECTION_STATE as C, CREDENTIAL_STATUS, PROVIDERS,
+  CONNECTION_STATE as C, CREDENTIAL_STATUS, isOauthConnector,
 } from './constants.js';
 import { assessLiveConnectionReadiness } from './readiness.js';
 import {
@@ -21,10 +22,10 @@ export function createConnectionCenterService({
 }) {
   async function describe(merchantId, stored) {
     const credential = await credentialStore.readMetadata({ merchantId, connectorId: stored.id });
-    const connector = normalizeChannelConnector(stored, { merchantId });
+    const connector = stored.kind === 'shopify' ? stored : normalizeChannelConnector(stored, { merchantId });
     const reauth = credential && credential.status !== CREDENTIAL_STATUS.ACTIVE && credential.status !== CREDENTIAL_STATUS.REVOKED;
     const connectionState = !credential || credential.status === CREDENTIAL_STATUS.REVOKED ? C.NOT_CONFIGURED : (reauth ? C.REAUTH_REQUIRED : stored.status);
-    const view = buildChannelConnectionView({
+    const view = stored.kind === 'shopify' ? shopifyConnectionView(stored, { runtime: { granted_scopes: credential?.scopes?.length ? credential.scopes : undefined, last_verified_at: stored.config.last_verified_at ?? undefined, display_name: stored.config.display_name ?? null } }) : buildChannelConnectionView({
       connector, runtime: { granted_scopes: credential?.scopes?.length ? credential.scopes : undefined, last_verified_at: stored.config.last_verified_at ?? undefined, external_display_name: stored.config.display_name ?? null },
     });
     return deepFreeze({
@@ -42,7 +43,7 @@ export function createConnectionCenterService({
     /** Every provider connector of the tenant, secret-free. */
     async listConnections({ tenant }) {
       const merchantId = merchantOf(tenant);
-      const all = (await connectorRepository.listForMerchant(merchantId)).filter((c) => PROVIDERS.includes(c.kind));
+      const all = (await connectorRepository.listForMerchant(merchantId)).filter(isOauthConnector);
       const out = [];
       for (const connector of all) out.push(await describe(merchantId, connector));
       return deepFreeze(out);
@@ -52,8 +53,8 @@ export function createConnectionCenterService({
       return describe(merchantId, await provisioning.connectorOf(merchantId, connectorId));
     },
     /** Provider choice -> the authorization URL to open (and the session reference to complete the flow). No secret. */
-    startConnect({ tenant, provider, returnTo, actorRef }) {
-      return provisioning.startConnection({ tenant, provider: providerOf(provider), returnTo, actorRef });
+    startConnect({ tenant, provider, returnTo, actorRef, targetHint }) {
+      return provisioning.startConnection({ tenant, provider: providerOf(provider), returnTo, actorRef, targetHint });
     },
     /** The accounts / locations the merchant authorized. Choosing one is mandatory (selectTarget). */
     async listTargets({ tenant, sessionRef }) {
@@ -65,7 +66,8 @@ export function createConnectionCenterService({
     async reconnect({ tenant, connectorId, returnTo, actorRef }) {
       const merchantId = merchantOf(tenant);
       const connector = await provisioning.connectorOf(merchantId, connectorId);
-      return provisioning.startConnection({ tenant, provider: connector.kind, returnTo, actorRef });
+      // Shopify reconnects to the SAME shop the connector was bound to (its stored domain), never to another one.
+      return provisioning.startConnection({ tenant, provider: connector.kind, returnTo, actorRef, targetHint: connector.kind === 'shopify' ? connector.config?.shop_domain ?? null : undefined });
     },
     disconnect({ tenant, connectorId }) { return provisioning.disconnectConnection({ tenant, connectorId }); },
     verify({ tenant, connectorId }) { return provisioning.verifyConnection({ tenant, connectorId }); },
