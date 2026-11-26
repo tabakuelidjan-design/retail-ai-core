@@ -79,7 +79,7 @@ export async function growthDom(hash, { products = potentialPayload(), productsS
   const payloads = { '/api/growth/overview': overview, '/api/growth/opportunities': opportunities, '/api/growth/products': products, '/api/growth/audience': audience, '/api/growth/content': content, '/api/growth/store': store, '/api/growth/dropoff': dropoff };
   const el = () => new Node('div');
   const ctx = {
-    document: doc, location: { hash }, console: { error: (...a) => errors.push(a.join(' ')), log() {} },
+    document: doc, location: { hash, pathname: '/' }, console: { error: (...a) => errors.push(a.join(' ')), log() {} },
     localStorage: { getItem: () => lang, setItem() {} }, Intl, Math, Date, JSON, Object, Array, Set, Number, String, Error, Promise, setTimeout,
     fetch: async (u) => (String(u).startsWith('/api/growth/review') ? (review ? { ok: true, json: async () => JSON.parse(JSON.stringify(typeof review === 'function' ? await review(u) : review)) } : { ok: false, status: 503, json: async () => ({ error: { code: 'DATA_UNAVAILABLE' } }) }) : ((u === '/api/growth/products' && productsStatus !== 200) || (u === '/api/growth/audience' && audienceStatus !== 200) || (u === '/api/growth/content' && contentStatus !== 200) || (u === '/api/growth/store' && storeStatus !== 200) ? { ok: false, status: productsStatus, json: async () => ({ error: { code: 'TENANT_NOT_CONFIGURED' } }) } : { ok: true, json: async () => JSON.parse(JSON.stringify(payloads[u])) })),
     NordlaIcon: { semantic: (n) => Object.assign(new Node('img'), { className: `nordla-icon official ${n}` }), parle: () => new Node('img') },
