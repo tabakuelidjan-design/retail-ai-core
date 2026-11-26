@@ -60,6 +60,7 @@ export function createProviderTokenManager({
         if (error instanceof ProvisioningError) throw error;
         const normalized = adapter.normalizeOAuthError(error);
         log('credential.refresh_failed', { merchant_id: merchantId, connector_id: connectorId, provider, safe_code: normalized.safe_provider_code, oauth: normalized.code });
+        if (normalized.code === OAUTH_ERROR.APP_MISCONFIGURED) throw new ProvisioningError(E.APP_MISCONFIGURED, 'the provider rejects the Nordla app secret: a configuration to fix, not a merchant reconnection', { provider }); // the credential is kept
         if (normalized.reauth || normalized.code === OAUTH_ERROR.TOKEN_RESPONSE_INVALID) {
           await store.markExpired({ merchantId, connectorId });
           throw new ProvisioningError(E.REAUTH_REQUIRED, 'the provider no longer accepts this grant: the merchant must connect again', { provider });

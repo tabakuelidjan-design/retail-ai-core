@@ -19,7 +19,7 @@ export function createShopifyCredentialResolver({ connectorRepository, tokenMana
   if (!connectorRepository || (!tokenManager && !tokenManagerFor)) throw new TypeError('createShopifyCredentialResolver needs a connector repository and a token manager (or a factory for it)');
   // Built only when this merchant really has an OAuth Shopify connection: merchants without one never touch the Vault.
   const manager = () => tokenManager ?? tokenManagerFor();
-  return async function shopifyCredentialsFor(merchantId) {
+  const credentialsFor = async function shopifyCredentialsFor(merchantId) {
     const all = await connectorRepository.listForMerchant(merchantId);
     const own = all.filter((c) => c.kind === PROVIDER && c.config?.provisioned_via === 'oauth');
     if (own.length === 0) return { state: 'NOT_CONNECTED' };
@@ -33,6 +33,7 @@ export function createShopifyCredentialResolver({ connectorRepository, tokenMana
       credential = await manager().getValidCredential({ merchantId, connectorId: connector.id, provider: PROVIDER }); // refreshes when near expiry
     } catch (error) {
       const code = error?.code ?? 'ERROR';
+      if (code === PC_ERROR.APP_MISCONFIGURED) return { state: 'MISCONFIGURED', connectorId: connector.id, reason: 'APP_SECRET_REJECTED' };
       return OAUTH_REFUSALS.has(code) ? { state: 'REAUTH_REQUIRED', connectorId: connector.id, reason: 'REAUTH_REQUIRED' } : { state: 'UNAVAILABLE', connectorId: connector.id, reason: code };
     }
     // The scopes that are ACTUALLY on the token decide, not what was requested earlier.
@@ -44,4 +45,24 @@ export function createShopifyCredentialResolver({ connectorRepository, tokenMana
     if (typeof accessToken !== 'string' || !accessToken) return { state: 'REAUTH_REQUIRED', connectorId: connector.id, reason: 'NO_ACCESS_TOKEN' };
     return Object.freeze({ state: 'CONFIGURED', merchantId, connectorId: connector.id, shopDomain, apiVersion, accessToken, grantedScopes: [...granted] });
   };
+
+  /**
+   * Silent renewal after Shopify refused the access token: ONE refresh through the token manager (single-flight: a lease shared by
+   * every worker), then the credential is read again. A refused refresh grant is REAUTH_REQUIRED; a rejected app secret is
+   * MISCONFIGURED; any other failure is UNAVAILABLE (an outage, never a reconnection request).
+   */
+  credentialsFor.renew = async function renewShopifyCredential(merchantId) {
+    const first = await credentialsFor(merchantId);
+    if (first.state !== 'CONFIGURED') return first;
+    const mgr = manager();
+    try {
+      await mgr.forceRefresh({ merchantId, connectorId: first.connectorId, provider: PROVIDER });
+    } catch (error) {
+      const code = error?.code ?? 'ERROR';
+      if (code === PC_ERROR.APP_MISCONFIGURED) return { state: 'MISCONFIGURED', connectorId: first.connectorId, reason: 'APP_SECRET_REJECTED' };
+      return OAUTH_REFUSALS.has(code) ? { state: 'REAUTH_REQUIRED', connectorId: first.connectorId, reason: 'REAUTH_REQUIRED' } : { state: 'UNAVAILABLE', connectorId: first.connectorId, reason: code };
+    }
+    return credentialsFor(merchantId);
+  };
+  return credentialsFor;
 }

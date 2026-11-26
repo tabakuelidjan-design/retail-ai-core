@@ -61,6 +61,7 @@ export function createShopifyConnector({
   if (!merchantId) throw new TypeError('createShopifyConnector needs an explicit merchantId: there is no default shop');
   const legacyUsable = globalShopifySetupFor(env, merchantId) && hasShopifyCredentials(env);
   const configured = Boolean(credentialsFor) || legacyUsable; // without any path, Shopify is simply not connected
+  const renewFor = credentialsFor?.renew ?? null; // per-merchant silent renewal (shopify-credentials.js); absent = no renewal
   let activeSource = null; // 'oauth' | 'legacy', set by the last resolution
   let authFailed = false; // Shopify answered 401: the token (or the credentials) is no longer accepted
   let httpDown = false; // the last answer was a 5xx or a 404
@@ -71,6 +72,7 @@ export function createShopifyConnector({
 
   const watchedFetch = (url, opts) => timeoutFetch(timeoutMs, fetchImpl)(url, opts).then((res) => {
     if (res?.status === 401) authFailed = true;
+    else if (res?.ok) authFailed = false; // a renewed token that works clears the flag
     httpDown = res?.status >= 500 || res?.status === 404;
     return res;
   });
@@ -90,12 +92,21 @@ export function createShopifyConnector({
   function clientFor({ source, config }) {
     activeSource = source;
     const key = `${source}|${config.shopDomain}|${config.accessToken ?? ''}`;
-    if (!client || clientKey !== key) { client = createClient(config, { fetchImpl: watchedFetch }); clientKey = key; }
+    if (!client || clientKey !== key) {
+      // Silent renewal only for the merchant's own OAuth credentials: one refresh when Shopify refuses the token (see shopify/client.js)
+      const renewAccessToken = source === 'oauth' && renewFor ? async () => {
+        const c = await renewFor(merchantId);
+        if (c?.state === 'CONFIGURED') return c.accessToken;
+        throw new ShopifyConnectorStateError(REFUSAL[c?.state] ?? 'UNAVAILABLE', c?.reason ?? c?.state ?? 'RENEW_FAILED');
+      } : null;
+      client = createClient(config, { fetchImpl: watchedFetch, ...(renewAccessToken ? { renewAccessToken } : {}) }); clientKey = key;
+    }
     return client;
   }
 
   /** After an auth failure the client is dropped, so the next use resolves (and may rotate) the credentials again. */
   const onFailure = (e) => {
+    if (e instanceof ShopifyConnectorStateError) { client = null; clientKey = null; authFailed = false; return { state: e.state, reason: e.reason }; } // a renewal that ended in a named state
     if (authFailed) { client = null; clientKey = null; authFailed = false; return { state: 'UNAVAILABLE', reason: 'AUTH_FAILED' }; }
     const reason = e?.name === 'TimeoutError' || e?.name === 'AbortError' ? 'TIMEOUT' : e instanceof TypeError || httpDown ? 'SHOPIFY_UNREACHABLE' : 'SHOPIFY_ERROR';
     httpDown = false;

@@ -71,9 +71,12 @@ export function createShopifyClient(config, deps = {}) {
 
   let cachedToken = null;
   let cachedTokenExpiresAt = 0; // epoch ms
+  let renewedToken = null; // per-merchant: the token obtained by a silent renewal, used from then on by this client
+  let renewing = null; // single-flight: concurrent refusals share ONE renewal
 
   async function getValidAccessToken() {
     // Per-merchant path: the token was obtained from Vault by the caller (server side) and is used as is. Global path: client credentials.
+    if (renewedToken) return renewedToken;
     if (config.accessToken) return config.accessToken;
     const now = Date.now();
     if (cachedToken && now < cachedTokenExpiresAt) return cachedToken;
@@ -84,7 +87,16 @@ export function createShopifyClient(config, deps = {}) {
     return cachedToken;
   }
 
-  async function graphql(query, variables = {}) {
+  /** One renewal for every request that was refused with the same token (single-flight). A renewal that fails propagates its own state. */
+  function renewOnce(usedToken) {
+    if (renewedToken && renewedToken !== usedToken) return Promise.resolve(); // someone already renewed past the refused token
+    if (!renewing) {
+      renewing = Promise.resolve().then(() => deps.renewAccessToken()).then((token) => { renewedToken = token; }).finally(() => { renewing = null; });
+    }
+    return renewing;
+  }
+
+  async function graphql(query, variables = {}, { retried = false } = {}) {
     const accessToken = await getValidAccessToken();
 
     const res = await fetchImpl(endpoint, {
@@ -95,6 +107,11 @@ export function createShopifyClient(config, deps = {}) {
       },
       body: JSON.stringify({ query, variables }),
     });
+
+    if (res.status === 401 && deps.renewAccessToken && !retried) {
+      await renewOnce(accessToken); // refused: renew once (a state error from the renewal is thrown as is), then retry this request once
+      return graphql(query, variables, { retried: true });
+    }
 
     if (!res.ok) {
       const body = await res.text().catch(() => '');

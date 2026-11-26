@@ -58,15 +58,19 @@ export function verifyShopifyCallback(query, clientSecret) {
  *   `http` is the injected, timeout-bounded HTTP function of the provider connections runtime (never a raw fetch here).
  */
 export function createShopifyOAuth({ http, timeoutMs, now = Date.now, scopes = SHOPIFY_READ_SCOPES, apiVersion = DEFAULT_API_VERSION } = {}) {
-  const call = (request) => oauthRequest(http, request, {
-    timeoutMs,
-    now,
-    // A refused grant (401/403, or 400 invalid_grant: the refresh token is expired, revoked or the app was removed) means the merchant must connect again.
-    classify: (r) => {
-      const grantRefused = r.status === 401 || r.status === 403 || (r.status === 400 && r.body?.error === 'invalid_grant');
-      return grantRefused ? { code: OAUTH_ERROR.CODE_EXCHANGE_FAILED, reauth: true, safeCode: 'GRANT_REFUSED' } : { code: OAUTH_ERROR.CODE_EXCHANGE_FAILED, reauth: false, safeCode: 'REJECTED' };
-    },
-  });
+  // The code exchange (connect) and identification keep their classification: a refused code means the merchant must connect again.
+  const classifyConnect = (r) => {
+    const grantRefused = r.status === 401 || r.status === 403 || (r.status === 400 && r.body?.error === 'invalid_grant');
+    return grantRefused ? { code: OAUTH_ERROR.CODE_EXCHANGE_FAILED, reauth: true, safeCode: 'GRANT_REFUSED' } : { code: OAUTH_ERROR.CODE_EXCHANGE_FAILED, reauth: false, safeCode: 'REJECTED' };
+  };
+  // The refresh of an existing grant is classified strictly: 400 invalid_grant = the merchant's refresh grant is gone (reconnection);
+  // 401 invalid_client = the Nordla app secret is rejected (configuration, never a merchant state); anything else is transient.
+  const classifyRefresh = (r) => {
+    if (r.status === 401 && r.body?.error === 'invalid_client') return { code: OAUTH_ERROR.APP_MISCONFIGURED, reauth: false, safeCode: 'APP_SECRET_REJECTED' };
+    if (r.status === 400 && r.body?.error === 'invalid_grant') return { code: OAUTH_ERROR.CODE_EXCHANGE_FAILED, reauth: true, safeCode: 'GRANT_REFUSED' };
+    return { code: OAUTH_ERROR.CODE_EXCHANGE_FAILED, reauth: false, safeCode: 'REJECTED' };
+  };
+  const call = (request, { refresh = false } = {}) => oauthRequest(http, request, { timeoutMs, now, classify: refresh ? classifyRefresh : classifyConnect });
   const shopOf = (shop) => normalizeShopDomain(shop) ?? (() => { throw new OAuthFailure({ code: OAUTH_ERROR.APP_MISCONFIGURED, safeCode: 'SHOP_DOMAIN' }); })();
 
   async function identify({ shop, accessToken }) {
@@ -128,7 +132,7 @@ export function createShopifyOAuth({ http, timeoutMs, now = Date.now, scopes = S
         method: 'POST',
         url: `https://${shop}/admin/oauth/access_token`,
         body: { client_id: appConfig.clientId, client_secret: appConfig.clientSecret, grant_type: 'refresh_token', refresh_token: refreshToken },
-      });
+      }, { refresh: true });
       const scopes = res.body?.scope ? parseScopes(res.body.scope) : tokens.scopes;
       if (typeof res.body?.refresh_token !== 'string' || !res.body.refresh_token) throw new OAuthFailure({ code: OAUTH_ERROR.TOKEN_RESPONSE_INVALID, safeCode: 'NO_REFRESH_TOKEN' });
       return withShop(bundleFromResponse({
