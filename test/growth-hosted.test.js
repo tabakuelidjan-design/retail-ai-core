@@ -66,7 +66,7 @@ const put = (srv, token, key, value, expected = 0, extra = {}) => srv.req('/api/
 test('HOS-1 the page and its scripts need no session; every API route needs one; the hosted script is served only to the hosted app', async () => {
   const srv = await boot();
   try {
-    const page = await srv.req('/'); assert.equal(page.status, 200); assert.ok(page.raw.includes('<script src="/session.js"></script>') && page.raw.includes('/persist.js'), 'the hosted page loads the sign-in script');
+    const page = await srv.req('/'); assert.equal(page.status, 200); assert.ok(page.raw.includes('<script src="session.js"></script>') && page.raw.includes('src="persist.js"'), 'the hosted page loads the sign-in script (relative path, so it works under the Core /growth/ mount)');
     assert.equal((await srv.req('/session.js')).status, 200); assert.equal((await srv.req('/persist.js')).status, 200); assert.equal((await srv.req('/nordla-ds.css')).status, 200);
     assert.equal((await srv.req('/healthz')).status, 200);
     for (const p of ['/api/growth/overview', '/api/growth/opportunities', '/api/growth/corrections', '/api/growth/review', '/api/growth/follow-up', '/api/growth/store']) assert.equal((await srv.req(p)).status, 401, `${p} without a session`);
@@ -186,7 +186,7 @@ async function browser(srv, { local = {}, lang = 'fr' } = {}) {
   const document = { createElement: (t) => new Node(t), createTextNode: (s) => ({ nodeType: 3, data: s }), getElementById: (id) => (id === 'app' ? root : byId(id)),
     get cookie() { return [...jar].filter(([k]) => k === CSRF).map(([k, v]) => `${k}=${v}`).join('; '); } };
   const localStorage = { getItem: (k) => (ls.has(k) ? ls.get(k) : (k === 'nordla_lang' ? lang : null)), setItem: (k, v) => { ls.set(k, String(v)); }, key: (i) => [...ls.keys()][i] ?? null, get length() { return ls.size; } };
-  const ctx = { document, console: { error: (...a) => errors.push(a.join(' ')), log() {} }, localStorage, fetch: realFetch, Intl, Math, Date, JSON, Object, Array, Set, Map, Number, String, Error, Promise, setTimeout, location: { reload() { ctx.reloaded = true; } }, reloaded: false };
+  const ctx = { document, console: { error: (...a) => errors.push(a.join(' ')), log() {} }, localStorage, fetch: realFetch, Intl, Math, Date, JSON, Object, Array, Set, Map, Number, String, Error, Promise, setTimeout, location: { reload() { ctx.reloaded = true; }, pathname: '/', hash: '' }, reloaded: false };
   ctx.window = ctx; ctx.window.addEventListener = () => {}; ctx.window.location = ctx.location;
   vm.createContext(ctx);
   // the page's tiny element helper (app.js defines the real one): same contract for what session.js uses (class, id, on, disabled, children)

@@ -75,7 +75,7 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
       if (STATIC[url.pathname]) {
         const [base, file, type] = STATIC[url.pathname];
         const body = await readFile(new URL(file, base));
-        return send(res, 200, type, hosted && url.pathname === '/' ? String(body).replace('<script src="/app.js"></script>', '<script src="/session.js"></script>\n<script src="/app.js"></script>') : body);
+        return send(res, 200, type, hosted && url.pathname === '/' ? String(body).replace(/<script src="\/?app\.js"><\/script>/, '<script src="session.js"></script>\n<script src="app.js"></script>') : body);
       }
       const shared = await readNordlaShared(url.pathname);
       if (shared) return send(res, 200, shared.type, shared.body);
