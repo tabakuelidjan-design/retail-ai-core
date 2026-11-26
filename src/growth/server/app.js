@@ -30,6 +30,8 @@ const STATIC = {
   '/persist.js': [UI, 'persist.js', JS],
   '/guide.js': [UI, 'guide.js', JS],
   '/pipeline.js': [UI, 'pipeline.js', JS],
+  '/agents.js': [UI, 'agents.js', JS],
+  '/lang-agents.js': [UI, 'lang-agents.js', JS],
   '/inbox.js': [UI, 'inbox.js', JS],
   '/opportunities.js': [UI, 'opportunities.js', JS],
   '/potential.js': [UI, 'potential.js', JS],
@@ -151,6 +153,10 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
           if (e?.code && Number.isInteger(e.status)) return json(res, e.status, { error: { code: e.code } });
           console.error('growth agent failed:', e?.message ?? e); return json(res, 500, { error: { code: 'INTERNAL_ERROR' } });
         }
+      }
+      if (url.pathname === '/api/growth/experiments') {
+        // No experiment engine and no measurement source yet: the state is said, nothing is measured or invented.
+        return json(res, 200, { state: 'NO_MEASUREMENT_SOURCE' });
       }
       if (url.pathname === '/api/growth/admin') {
         // Read-only administration: each source's state (available / not_connected / unavailable), the agents' configuration, goals not yet stored.

@@ -65,14 +65,14 @@ test('no demonstration data: no demo builder or demo fixture in the served code,
 });
 
 test('no fictive action button: every button on every page does something (language, Plus menu, filters, rows, close, retry)', async () => {
-  const code = srcFiles('ui/').map((f) => readFileSync(f, 'utf8')).join('\n');
-  assert.ok(!/disabled:\s*'disabled'/.test(code), 'no disabled button is built anywhere');
+  const code = srcFiles('ui/').filter((f) => !/agents\.js$/.test(f.pathname)).map((f) => readFileSync(f, 'utf8')).join('\n');
+  assert.ok(!/disabled:\s*'disabled'/.test(code), 'no disabled button outside the agents page');
   for (const k of ['gr.pp.d.opportunity', 'gr.au.newSegment', 'gr.ct.d.improve', 'gr.op.appr.approve', 'gr.cp.new', 'gr.op.actionsSoon', 'gr.att.soon']) assert.ok(!code.includes(`'${k}'`), `${k} is gone`);
   for (const lang of ['fr', 'nl', 'en']) {
     for (const h of HASHES) {
       const { root } = await growthDom(h, { lang });
       for (const b of all(root, (n) => n.tagName === 'BUTTON')) {
-        assert.equal(b.getAttribute('disabled'), null, `${lang} ${h}: disabled button "${text(b)}"`);
+        if (b.getAttribute('disabled') !== null) { assert.ok(hasClass(b, 'gr-ag-run'), `${lang} ${h}: disabled button "${text(b)}"`); continue; }
         assert.ok((b.listeners.click || []).length > 0, `${lang} ${h}: button without behaviour "${text(b)}"`);
       }
     }
@@ -89,10 +89,3 @@ test('honest promise: shown on Vue d\'ensemble; no measurable growth, causality,
   }
 });
 
-test('Expériences stays out of the product, Nordla AI and Paramètres stay disabled entries (unchanged decision)', async () => {
-  const { root, ctx } = await growthDom('#/');
-  assert.equal(vm.runInContext('Object.keys(PAGES).join()', ctx), 'overview,opportunities,potential,audience,content,dropoff,storeGrowth');
-  const inert = all(root, (n) => hasClass(n, 'nav-item') && hasClass(n, 'inert')).map(text);
-  assert.deepEqual(inert, ['Nordla AI', 'Paramètres']);
-  assert.ok(!/exp[ée]rience|experiment/i.test(text(root)));
-});

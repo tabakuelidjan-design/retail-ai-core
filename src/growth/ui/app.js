@@ -134,8 +134,9 @@ const GROWTH_NAV = [
 // Secondary zone (bottom of the rail). Nordla AI keeps the official "Parle à Nordla" asset, as in Analytics.
 const GROWTH_NAV_FOOT = [
   // Nordla AI and Paramètres (not built yet, disabled): desktop rail + the mobile "Plus" panel.
-  { key: 'ai', parle: true, more: true },
-  { key: 'settings', icon: 'settings', more: true },
+  { key: 'agents', parle: true, href: '#/agents', more: true },
+  { key: 'experiments', href: '#/experiments', more: true },
+  { key: 'admin', icon: 'settings', href: '#/admin', more: true },
 ];
 function navItem(n, active) {
   const ico = n.parle ? h('span', { class: 'ico' }, NordlaIcon.parle('onTerracotta', 'md')) : coreNavIcon(n.key);
@@ -204,7 +205,9 @@ function langSwitch() {
 /** Top bar. The period comes from the PAGE definition (PAGES), so the pill is identical in every state; it is the window the page's engines use. */
 function topbar(page) {
   const p = page.period;
-  const pill = p.custom
+  const pill = p.perAgent ? h('span', { class: 'period-pill locked', 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), t('gr.ag.periodPerAgent'))
+    : p.none ? h('span', { class: 'period-pill locked', 'aria-disabled': 'true' }, t('gr.adm.periodNone'))
+    : p.custom
     ? h('span', { class: 'period-pill locked', title: t('gr.do.periodNote'), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), doData && doData.window ? doWindow(doData) : t('gr.do.periodPending'))
     : p.weeks
     ? h('span', { class: 'period-pill locked', title: t('gr.period.weeksNote', p.weeks), 'aria-disabled': 'true' }, NordlaIcon.semantic('calendrier', 'sm'), t('gr.period.lastWeeks', p.weeks), h('span', { class: 'period-fixed' }, t('gr.period.fixed')))
@@ -300,6 +303,9 @@ const PAGES = {
   potential: { title: 'gr.pp.title', subtitle: 'gr.pp.subtitle', url: `${GROWTH_API}/products`, period: { weeks: 8 }, get: () => potData, set: (v) => { potData = v; }, render: renderPotential },
   audience: { title: 'gr.au.title', subtitle: 'gr.au.subtitle', url: `${GROWTH_API}/audience`, period: { days: 90 }, get: () => audData, set: (v) => { audData = v; }, render: renderAudience },
   content: { title: 'gr.ct.title', subtitle: 'gr.ct.subtitle', url: `${GROWTH_API}/content`, period: { weeks: 8 }, get: () => ctData, set: (v) => { ctData = v; }, render: renderContent },
+  agents: { title: 'gr.ag.title', subtitle: 'gr.ag.subtitle', url: `${GROWTH_API}/agents`, period: { perAgent: true }, get: () => agData, set: (v) => { agData = v; }, render: renderAgents },
+  experiments: { title: 'gr.xp.title', subtitle: 'gr.xp.subtitle', url: `${GROWTH_API}/experiments`, period: { none: true }, get: () => xpData, set: (v) => { xpData = v; }, render: renderExperiments },
+  admin: { title: 'gr.adm.title', subtitle: 'gr.adm.subtitle', url: `${GROWTH_API}/admin`, period: { none: true }, get: () => admData, set: (v) => { admData = v; }, render: renderAdmin },
   dropoff: { title: 'gr.do.title', subtitle: 'gr.do.subtitle', url: `${GROWTH_API}/dropoff`, period: { custom: true }, get: () => doData, set: (v) => { doData = v; }, render: renderDropoff },
   storeGrowth: { title: 'gr.st.title', subtitle: 'gr.st.subtitle', url: `${GROWTH_API}/store`, period: { weeks: 8 }, get: () => stData, set: (v) => { stData = v; }, render: renderStore },
 };

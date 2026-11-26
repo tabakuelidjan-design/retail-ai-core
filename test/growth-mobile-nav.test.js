@@ -23,18 +23,16 @@ test('mobile nav: the bar holds exactly 6 slots - 5 central pages + Plus', async
   assert.ok(!hasClass(b, 'active'));
 });
 
-test('mobile nav: Plus opens a panel with Croissance magasin and the disabled entries; navigation closes it', async () => {
+test('mobile nav: Plus opens a panel with every page not in the bar; navigation closes it', async () => {
   const { root, errors, navigate } = await growthDom('#/');
   moreBtn(root).listeners.click[0]();
   assert.equal(moreBtn(root).getAttribute('aria-expanded'), 'true');
   const p = panel(root);
   assert.equal(p.getAttribute('role'), 'dialog');
   const links = all(p, (n) => n.tagName === 'A').map((n) => [text(n), n.getAttribute('href')]);
-  assert.deepEqual(links, [['Croissance magasin', '#/storeGrowth'], ['Abandons', '#/dropoff']], 'Contenu moved to the bar when Campagnes left the launch scope');
+  assert.deepEqual(links, [['Croissance magasin', '#/storeGrowth'], ['Abandons', '#/dropoff'], ['Agents IA', '#/agents'], ['Expériences', '#/experiments'], ['Administration', '#/admin']], 'Plus holds every page that is not in the bar');
   const disabled = all(p, (n) => hasClass(n, 'gr-more-item') && hasClass(n, 'inert'));
-  assert.deepEqual(disabled.map((n) => n.getAttribute('aria-disabled')), ['true', 'true']);
-  assert.ok(text(disabled[0]).startsWith('Nordla AI') && text(disabled[1]).startsWith('Paramètres'), 'Expériences is no longer in the menu');
-  assert.ok(text(disabled[0]).includes('Bientôt disponible'));
+  assert.deepEqual(disabled, [], 'no disabled entry: every Plus item opens a page or an explained state');
   await navigate('#/storeGrowth');
   assert.equal(panel(root), undefined, 'the panel closes after navigation');
   assert.equal(moreBtn(root).getAttribute('aria-expanded'), 'false');
@@ -50,13 +48,13 @@ test('mobile nav: Plus is active on Croissance magasin (and only there)', async 
 });
 
 test('mobile nav: from every Growth page, every built page is reachable on mobile (bar or Plus)', async () => {
-  for (const hash of ['#/', '#/opportunities', '#/potential', '#/audience', '#/content', '#/storeGrowth', '#/dropoff']) {
+  for (const hash of ['#/', '#/opportunities', '#/potential', '#/audience', '#/content', '#/storeGrowth', '#/dropoff', '#/agents', '#/experiments', '#/admin']) {
     const { root } = await growthDom(hash);
     const inBar = barItems(root).filter((n) => n.tagName === 'A').map((n) => n.getAttribute('href'));
     moreBtn(root).listeners.click[0]();
     const inMore = all(panel(root), (n) => n.tagName === 'A').map((n) => n.getAttribute('href'));
     const built = all(root, (n) => hasClass(n, 'nav-item') && n.tagName === 'A').map((n) => n.getAttribute('href'));
-    assert.equal(built.length, 7);
+    assert.equal(built.length, 10);
     for (const href of built) assert.ok(inBar.includes(href) || inMore.includes(href), `${hash}: ${href} unreachable on mobile`);
   }
 });

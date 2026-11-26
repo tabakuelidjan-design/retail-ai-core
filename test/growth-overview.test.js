@@ -89,11 +89,11 @@ test('growth UI: no data value lives in the UI - every figure, name and text com
   assert.ok(!/CHANNEL_LOGOS|campaignsCard|channelCard|renderCampaigns|roasFmt/.test(src), 'no Campagnes / channel code left');
 });
 
-test('growth UI: sidebar is Growth\'s own navigation (6 built pages + disabled entries Nordla AI, Paramètres), no Campagnes, no other module', async () => {
+test('growth UI: sidebar is Growth\'s own navigation (7 pages in the rail, Agents IA / Expériences / Administration in the foot), no Campagnes, no other module', async () => {
   const src = await readFile(new URL('app.js', UI), 'utf8');
   const keys = (block) => [...src.split(`const ${block} = [`)[1].split('];')[0].matchAll(/key: '(\w+)'/g)].map((m) => m[1]);
   assert.deepEqual(keys('GROWTH_NAV'), ['overview', 'opportunities', 'potential', 'content', 'storeGrowth', 'audience', 'dropoff']);
-  assert.deepEqual(keys('GROWTH_NAV_FOOT'), ['ai', 'settings']);
+  assert.deepEqual(keys('GROWTH_NAV_FOOT'), ['agents', 'experiments', 'admin']);
   assert.ok(!/gr\.nav\.(finance|analytics|buying|afterSales|compliance|campaigns)|tresorerie|buyingSuppliers/.test(src), 'no other Nordla module in the Growth navigation');
 });
 
@@ -158,11 +158,12 @@ test('« À corriger maintenant » total: counted as corrections (one product ma
 test('growth UI: FR, NL and EN dictionaries have exactly the same keys, and every key the pages build exists', async () => {
   const ctx = { window: {} };
   for (const l of ['fr', 'nl', 'en']) vm.runInNewContext(await readFile(new URL(`lang-${l}.js`, UI), 'utf8'), ctx);
+  vm.runInNewContext(await readFile(new URL('lang-agents.js', UI), 'utf8'), ctx); // the agents / administration texts live in their own file
   const D = ctx.window.NORDLA_DICTS;
   const fr = Object.keys(D.fr).sort();
   assert.deepEqual(Object.keys(D.nl).sort(), fr);
   assert.deepEqual(Object.keys(D.en).sort(), fr);
-  for (const f of ['app.js', 'opportunities.js']) {
+  for (const f of ['app.js', 'opportunities.js', 'agents.js']) {
     const src = await readFile(new URL(f, UI), 'utf8');
     for (const k of [...src.matchAll(/\bt\('(gr\.[\w.]+)'/g)].map((m) => m[1])) assert.ok(D.fr[k], `${f}: missing key ${k}`);
   }

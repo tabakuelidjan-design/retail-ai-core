@@ -157,5 +157,5 @@ var growthHosted = (() => {
   /** A data request answered 401 (the session ended): back to the sign-in, nothing else is lost. */
   function expired() { state.loginError = t('gr.session.expired'); state.role = null; showLogin(); }
 
-  return { boot, expired, state, store };
+  return { boot, expired, state, store, api };
 })();
