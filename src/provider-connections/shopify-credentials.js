@@ -2,9 +2,11 @@
 // authenticated Nordla context (never from request data, never from a Shopify shop). The shop and the token come from that merchant's own
 // Shopify connector (provisioned through OAuth) and its Vault credential. Nothing here falls back to another merchant's connector.
 import { normalizeShopDomain, SHOPIFY_READ_SCOPES } from './providers/shopify-oauth.js';
+import { PC_ERROR } from './constants.js';
 
 const PROVIDER = 'shopify';
-const OAUTH_REFUSALS = new Set(['REAUTH_REQUIRED', 'CREDENTIAL_REVOKED', 'CREDENTIAL_NOT_FOUND']);
+// The codes the token manager raises when the merchant must connect again (values from PC_ERROR, e.g. PC_REAUTH_REQUIRED).
+const OAUTH_REFUSALS = new Set([PC_ERROR.REAUTH_REQUIRED, PC_ERROR.CREDENTIAL_REVOKED, PC_ERROR.CREDENTIAL_NOT_FOUND]);
 
 /**
  * @param {{ connectorRepository: { listForMerchant(merchantId: string): Promise<object[]> }, tokenManager: { getValidCredential(args: object): Promise<object> }, apiVersion?: string }} deps
@@ -31,7 +33,7 @@ export function createShopifyCredentialResolver({ connectorRepository, tokenMana
       credential = await manager().getValidCredential({ merchantId, connectorId: connector.id, provider: PROVIDER }); // refreshes when near expiry
     } catch (error) {
       const code = error?.code ?? 'ERROR';
-      return OAUTH_REFUSALS.has(code) ? { state: 'REAUTH_REQUIRED', connectorId: connector.id, reason: code } : { state: 'UNAVAILABLE', connectorId: connector.id, reason: code };
+      return OAUTH_REFUSALS.has(code) ? { state: 'REAUTH_REQUIRED', connectorId: connector.id, reason: 'REAUTH_REQUIRED' } : { state: 'UNAVAILABLE', connectorId: connector.id, reason: code };
     }
     // The scopes that are ACTUALLY on the token decide, not what was requested earlier.
     const granted = new Set(credential.tokens?.scopes ?? []);

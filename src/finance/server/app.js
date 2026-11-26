@@ -18,7 +18,7 @@ import { readNordlaShared } from '../../shared/nordla-static.js';
 import { createTicketVerifier } from '../sso-ticket.js';
 import { createStaticAssets } from './static-assets.js';
 import { createRequestReadCache } from './request-read-cache.js';
-import { createSessionStore } from './session-store.js';
+import { createSessionStore, sessionServesMerchant } from './session-store.js';
 import { buildAccountantPack } from '../accountant-pack.js';
 import { createMerchantClock } from '../civil-date.js';
 import { createCompanyLookup, createViesProvider, ManualProvider, normalizeBelgianNumber } from '../company.js';
@@ -129,7 +129,7 @@ export function createFinanceApp(deps) {
   });
   const cookies = (req) => Object.fromEntries((req.headers.cookie ?? '').split(';').map((c) => c.trim().split('=')).filter((p) => p[0]).map(([k, ...v]) => [k, v.join('=')]));
   const COOKIE = deps.cookieName ?? 'fin_sid'; // a second instance (the demo) uses its own cookie name so it never signs the real dashboard out
-  const sessionOf = (req) => { const s = sessions.get(cookies(req)[COOKIE]); if (!s) return null; if (s.expires < Date.now()) { sessions.delete(cookies(req)[COOKIE]); return null; } return s; };
+  const sessionOf = (req) => { const s = sessions.get(cookies(req)[COOKIE]); if (!s) return null; if (s.expires < Date.now()) { sessions.delete(cookies(req)[COOKIE]); return null; } if (!sessionServesMerchant(s, merchantId, { ssoOnly: deps.ssoOnly === true })) return null; return s; };
   const actor = MERCHANT_ACTOR;
 
   async function servicesFor() {
@@ -1445,7 +1445,7 @@ export function createFinanceApp(deps) {
     }
     failures.delete(ip);
     const sid = randomBytes(32).toString('hex');
-    sessions.set(sid, { csrf: randomBytes(24).toString('hex'), expires: Date.now() + UNCONFIRMED_SESSION_MS, unconfirmed: true, ...(r.claims ? { sso: { userId: r.claims.userId, role: r.access?.role ?? r.claims.role, ...(r.claims.authSessionId ? {authSessionId:r.claims.authSessionId} : {}) } } : {}) });
+    sessions.set(sid, { csrf: randomBytes(24).toString('hex'), expires: Date.now() + UNCONFIRMED_SESSION_MS, unconfirmed: true, ...(r.claims ? { sso: { userId: r.claims.userId, role: r.access?.role ?? r.claims.role, merchantId, ...(r.claims.authSessionId ? {authSessionId:r.claims.authSessionId} : {}) } } : {}) });
     await audit({ at: clock.now(), action: 'LOGIN_SSO' });
     const openId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(url.searchParams.get('open') ?? '') ? url.searchParams.get('open').toLowerCase() : null; // a landing hint (which supplier-invoice file to show): it is not a credential, the page reads it under the session
     send(res, 302, '', { Location: openId ? `/#/purchases?open=${openId}` : '/', 'Cache-Control': 'no-store', 'Set-Cookie': `${COOKIE}=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${SESSION_MS / 1000}${cookieFlags}` });

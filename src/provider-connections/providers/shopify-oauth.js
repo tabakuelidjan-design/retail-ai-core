@@ -61,7 +61,11 @@ export function createShopifyOAuth({ http, timeoutMs, now = Date.now, scopes = S
   const call = (request) => oauthRequest(http, request, {
     timeoutMs,
     now,
-    classify: (r) => (r.status === 401 || r.status === 403 ? { code: OAUTH_ERROR.CODE_EXCHANGE_FAILED, reauth: true, safeCode: 'REFUSED' } : { code: OAUTH_ERROR.CODE_EXCHANGE_FAILED, reauth: false, safeCode: 'REJECTED' }),
+    // A refused grant (401/403, or 400 invalid_grant: the refresh token is expired, revoked or the app was removed) means the merchant must connect again.
+    classify: (r) => {
+      const grantRefused = r.status === 401 || r.status === 403 || (r.status === 400 && r.body?.error === 'invalid_grant');
+      return grantRefused ? { code: OAUTH_ERROR.CODE_EXCHANGE_FAILED, reauth: true, safeCode: 'GRANT_REFUSED' } : { code: OAUTH_ERROR.CODE_EXCHANGE_FAILED, reauth: false, safeCode: 'REJECTED' };
+    },
   });
   const shopOf = (shop) => normalizeShopDomain(shop) ?? (() => { throw new OAuthFailure({ code: OAUTH_ERROR.APP_MISCONFIGURED, safeCode: 'SHOP_DOMAIN' }); })();
 

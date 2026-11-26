@@ -14,7 +14,19 @@ import { rename, writeFile } from 'node:fs/promises';
 
 const keyOf = (sid) => createHash('sha256').update(String(sid ?? '')).digest('hex');
 // The Nordla person of a session opened by single sign-on (kept so the session is re-checked on each request); absent for token sessions.
-const sso0 = (sso) => (sso && typeof sso.userId === 'string' && typeof sso.role === 'string' ? { sso: { userId: sso.userId, role: sso.role, ...(typeof sso.authSessionId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sso.authSessionId) ? {authSessionId:sso.authSessionId} : {}) } } : {});
+/**
+ * The merchant a session belongs to, from the server side only: an SSO session carries the merchant of the Core ticket it was opened
+ * with (verified against this server's merchant before the session exists). A session that belongs to ANOTHER merchant is never served
+ * here, and in hosted SSO-only mode a session without a merchant is not served either.
+ */
+export function sessionServesMerchant(session, merchantId, { ssoOnly = false } = {}) {
+  if (!session) return false;
+  const bound = session.sso?.merchantId ?? null;
+  if (bound !== null) return bound === merchantId;
+  return !ssoOnly;
+}
+
+const sso0 = (sso) => (sso && typeof sso.userId === 'string' && typeof sso.role === 'string' ? { sso: { userId: sso.userId, role: sso.role, ...(typeof sso.merchantId === 'string' && sso.merchantId ? { merchantId: sso.merchantId } : {}), ...(typeof sso.authSessionId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sso.authSessionId) ? {authSessionId:sso.authSessionId} : {}) } } : {});
 
 /**
  * @param {{ persistence?: { load: () => Array<[string, {csrf: string, expires: number}]>, save: (entries) => Promise<void> } | null, now?: () => number }} [o]

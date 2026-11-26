@@ -110,7 +110,7 @@ test('a token missing a read scope is refused (scopes are checked on the token, 
 
 test('a refused grant asks the merchant to connect again; any other failure is UNAVAILABLE', async () => {
   const rows = [oauthRow('c-a', M1, SHOP1, GID1)];
-  const reauth = createShopifyCredentialResolver({ connectorRepository: createConnectorRepository({ supabase: fakeDb(rows) }), tokenManager: fakeTokens({ 'c-a': { error: 'REAUTH_REQUIRED' } }) });
+  const reauth = createShopifyCredentialResolver({ connectorRepository: createConnectorRepository({ supabase: fakeDb(rows) }), tokenManager: fakeTokens({ 'c-a': { error: 'PC_REAUTH_REQUIRED' } }) });
   assert.equal((await reauth(M1)).state, 'REAUTH_REQUIRED');
   const down = createShopifyCredentialResolver({ connectorRepository: createConnectorRepository({ supabase: fakeDb(rows) }), tokenManager: fakeTokens({ 'c-a': { error: 'VAULT_UNAVAILABLE' } }) });
   assert.equal((await down(M1)).state, 'UNAVAILABLE');
