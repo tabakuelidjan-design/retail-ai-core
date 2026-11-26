@@ -752,3 +752,27 @@ body.gr-pp-lock { overflow: hidden; }
 .gr-tabs .nav-item { flex: 0 0 auto; width: auto; min-width: 0; flex-direction: row; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; padding: 8px 12px; border-radius: 10px; text-decoration: none; color: inherit; background: none; border: 0; font: inherit; cursor: pointer; }
 .gr-tabs .nav-item.active { font-weight: 700; }
 .gr-tabs .nav-item.inert { opacity: .55; cursor: default; }
+/* Agents IA, Administration and the explained pages (namespaced .gr-ag-*, .gr-xp-card): no global selectors. */
+.gr-ag-grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+.gr-ag-card { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.gr-ag-intro p { margin: 0; }
+.gr-ag-purpose { margin: 0; }
+.gr-ag-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.9rem; margin: 0; }
+.gr-ag-note { color: #6b6b6b; font-size: 0.9rem; margin: 0; }
+.gr-ag-q { width: 100%; box-sizing: border-box; min-height: 3.2em; font: inherit; padding: 8px 10px; border: 1px solid #d9d4cc; border-radius: 10px; resize: vertical; }
+.gr-ag-actions { display: flex; justify-content: flex-start; }
+.gr-ag-run:disabled { opacity: 0.55; cursor: not-allowed; }
+.gr-ag-banner { font-weight: 600; margin: 0; }
+.gr-ag-h { margin: 14px 0 4px; font-size: 1rem; }
+.gr-ag-list { margin: 0; padding-left: 18px; }
+.gr-ag-draft { white-space: pre-wrap; word-break: break-word; font: inherit; background: #efe9e1; padding: 12px; border-radius: 10px; margin: 0; }
+.gr-ag-confirm { margin: 0; font-size: 0.9rem; }
+.gr-ag-table-wrap { overflow-x: auto; max-width: 100%; }
+.gr-ag-table { width: 100%; }
+.gr-xp-card { display: flex; flex-direction: column; gap: 8px; }
+@media (max-width: 600px) {
+  .gr-ag-table thead { display: none; }
+  .gr-ag-table, .gr-ag-table tbody, .gr-ag-table tr, .gr-ag-table td { display: block; width: 100%; min-width: 0; }
+  .gr-ag-table tr { padding: 8px 0; border-bottom: 1px solid #e6e1d8; }
+  .gr-ag-table td { display: flex; justify-content: space-between; align-items: center; gap: 12px; border: 0; padding: 4px 0; }
+}
