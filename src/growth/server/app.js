@@ -12,6 +12,7 @@
 //   Produits Potentiels / Audience / Contenu / Croissance magasin read the tenant's real synced data.
 // Campagnes is not part of this version (no advertising connector): no page, no script, no endpoint.
 
+import { createAgentGateway, sourceStatusOf } from '../agents/gateway.js';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { readNordlaShared } from '../../shared/nordla-static.js';
@@ -61,15 +62,27 @@ const IMG = { svg: 'image/svg+xml', png: 'image/png', webp: 'image/webp' };
 // productPotential: the tenant's Potentiel produits source (server/products.js), created from the Growth server's context
 // (NORDLA_MERCHANT_ID). Nothing in a request can choose or change the merchant: the route reads no parameter at all.
 // audience / content / store: the tenant's Audience, Contenu and Croissance magasin sources (server/*.js), same contract.
-export function createGrowthApp({ now = () => new Date(), generalContext = null, productPotential = null, audience = null, content = null, store = null, merchantId = null, review = null, corrections = null, ads = null, site = null, siteReview = null, social = null, socialReview = null, inbox = null, inboxReview = null, dropoff = null, guide = null, hosted = false } = {}) {
+/** One JSON object, at most `max` bytes, application/json only. Throws a code, never a stack. */
+async function readJsonBody(req, max) {
+  const ct = String(req.headers['content-type'] ?? '');
+  if (!ct.startsWith('application/json')) throw Object.assign(new Error('content type'), { code: 'BAD_CONTENT_TYPE' });
+  const chunks = []; let n = 0;
+  for await (const c of req) { n += c.length; if (n > max) throw Object.assign(new Error('too large'), { code: 'BODY_TOO_LARGE' }); chunks.push(c); }
+  try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw Object.assign(new Error('json'), { code: 'BAD_REQUEST' }); }
+}
+
+export function createGrowthApp({ now = () => new Date(), generalContext = null, productPotential = null, audience = null, content = null, store = null, merchantId = null, review = null, corrections = null, ads = null, site = null, siteReview = null, social = null, socialReview = null, inbox = null, inboxReview = null, dropoff = null, guide = null, hosted = false, agentProvider = null, agentConfig = { missing: [], unknownProvider: false } } = {}) {
   const historyScope = merchantId ? createHash('sha256').update(String(merchantId)).digest('hex') : null;
   const priorities = createPrioritiesSource({ productPotential, audience, content, store, ads, site, social, inbox, general: generalContext, now });
+  const getters = { priorities, products: productPotential, audience, content, store, dropoff, ads, social };
+  const agents = createAgentGateway({ provider: agentProvider, getters });
   const send = (res, status, type, body) => { res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', ...SECURITY_HEADERS }); res.end(body); };
   const json = (res, status, obj) => send(res, status, 'application/json', JSON.stringify(obj));
   return async function handle(req, res) {
     try {
       const url = new URL(req.url, 'http://localhost');
-      if (req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { error: { code: 'METHOD_NOT_ALLOWED' } });
+      const isAgentRun = req.method === 'POST' && url.pathname === '/api/growth/agents/run';
+      if (!isAgentRun && req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { error: { code: 'METHOD_NOT_ALLOWED' } });
       // HOSTED (hosted.js): the sign-in and server-side follow-up script is in the page and served only then
       if (hosted && url.pathname === '/session.js') return send(res, 200, JS, await readFile(new URL('session.js', UI)));
       if (STATIC[url.pathname]) {
@@ -124,6 +137,29 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
         const date = /^\d{4}-\d{2}-\d{2}$/;
         if (!['product', 'variant', 'page', 'post', 'inbox'].includes(q.type) || !q.id || q.id.length > 200 || !date.test(q.applied ?? '') || !date.test(q.review ?? '')) return json(res, 400, { error: { code: 'BAD_REQUEST' } });
         try { if (q.type === 'inbox') { if (!inboxReview) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } }); if (!['instagram', 'tiktok'].includes(q.network) || !q.account || q.account.length > 200 || !/^\d{1,3}$/.test(q.days ?? '') || !date.test(q.from ?? '') || (q.qualified ?? '').length > 4000 || (q.notQualified ?? '').length > 4000 || (q.declared ?? '').length > 4000) return json(res, 400, { error: { code: 'BAD_REQUEST' } }); return json(res, 200, await inboxReview({ id: q.id, network: q.network, account: q.account, days: q.days, from: q.from, type: q.type2 ?? q.requestType, qualified: q.qualified, notQualified: q.notQualified, declared: q.declared })); } if (q.type === 'post') { if (!socialReview) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } }); if (!['instagram', 'tiktok'].includes(q.network) || !q.account || q.account.length > 200 || !/^\d{1,3}$/.test(q.days ?? '')) return json(res, 400, { error: { code: 'BAD_REQUEST' } }); return json(res, 200, await socialReview({ id: q.id, network: q.network, account: q.account, days: q.days })); } if (q.type === 'page') { if (!siteReview) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } }); return json(res, 200, await siteReview({ id: q.id, applied: q.applied, review: q.review })); } return json(res, 200, await review({ type: q.type, id: q.id, applied: q.applied, review: q.review })); } catch (e) { console.error('growth review failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
+      }
+      if (url.pathname === '/api/growth/agents') {
+        // The agent registry and the configuration state. Names of missing variables only; never a key, never a prompt.
+        return json(res, 200, { ...agents.status(), configuration: agentConfig });
+      }
+      if (url.pathname === '/api/growth/agents/run' && req.method === 'POST') {
+        // A DRAFT only: the agent reads its own sources for this merchant and nothing is sent, published or changed.
+        let body;
+        try { body = await readJsonBody(req, 16 * 1024); } catch (e) { return json(res, e.code === 'BODY_TOO_LARGE' ? 413 : 400, { error: { code: e.code ?? 'BAD_REQUEST' } }); }
+        if (!body || typeof body !== 'object' || typeof body.agentId !== 'string') return json(res, 400, { error: { code: 'BAD_REQUEST' } });
+        try { return json(res, 200, await agents.run({ agentId: body.agentId, question: body.question, scope: historyScope ?? 'local' })); } catch (e) {
+          if (e?.code && Number.isInteger(e.status)) return json(res, e.status, { error: { code: e.code } });
+          console.error('growth agent failed:', e?.message ?? e); return json(res, 500, { error: { code: 'INTERNAL_ERROR' } });
+        }
+      }
+      if (url.pathname === '/api/growth/admin') {
+        // Read-only administration: each source's state (available / not_connected / unavailable), the agents' configuration, goals not yet stored.
+        const sources = await Promise.all(Object.keys(getters).map(async (key) => {
+          const g = getters[key];
+          if (typeof g !== 'function') return { key, status: 'unavailable' };
+          try { return { key, status: sourceStatusOf(await g()) }; } catch { return { key, status: 'unavailable' }; }
+        }));
+        return json(res, 200, { sources, agents: agents.status(), configuration: agentConfig, goals: { stored: false } });
       }
       if (url.pathname === '/api/growth/dropoff') {
         if (!dropoff) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });

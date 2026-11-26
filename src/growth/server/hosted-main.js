@@ -27,6 +27,7 @@ import { createHandoffVerifier, openSessionForHandoff, HANDOFF_MIN_SECRET_LENGTH
 import { createIdentityService, loadIdentityServiceEnv } from '../../identity/service.js';
 import { createHttpSecurity } from '../../security/index.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/client.js';
+import { providerFromEnv, agentConfigFromEnv } from '../agents/provider.js';
 
 /** The hosted configuration of Growth: the Sourcing checks with Growth's names (the Sourcing merchant-profile requirement does not apply). */
 export function growthHostedConfig(env = process.env) {
@@ -58,7 +59,7 @@ export async function startGrowthHosted({ env = process.env, log = console.log, 
   if (sources.merchantId !== hosted.merchantId) throw Object.assign(new Error('the resolved merchant is not NORDLA_MERCHANT_ID'), { code: 'HOSTED_MERCHANT_MISMATCH' });
   const gate = buildGrowthGate(env, hosted, services);
   const { guide, ...rest } = sources;
-  const app = createGrowthApp({ ...rest, guide: { previewUrl: null, isPreview: false, hosted: true }, hosted: true });
+  const app = createGrowthApp({ ...rest, guide: { previewUrl: null, isPreview: false, hosted: true }, hosted: true, agentProvider: providerFromEnv(env), agentConfig: agentConfigFromEnv(env) });
   const store = services?.store ?? createSupabaseFollowUpStore(sources.supabase ?? createSupabaseClient(loadSupabaseConfigFromEnv(env)));
   const historyScope = createHash('sha256').update(hosted.merchantId).digest('hex');
   const collectOrigins = String(env.GROWTH_COLLECT_ORIGINS ?? 'https://habb.be').split(',').map((s) => s.trim()).filter(Boolean); // the shop origins allowed to send personalizer events

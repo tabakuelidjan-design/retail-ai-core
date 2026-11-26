@@ -69,6 +69,8 @@ export function createHostedGrowth({ gate, merchantId, historyScope, app, store,
       if (access.merchantId !== merchantId) return json(res, 403, { error: { code: 'TENANT_MISMATCH' } });
       if (pathname === '/api/growth/home') return json(res, 200, { url: homeUrl }); // the Nordla home address (https only, or null): the "Accueil Nordla" link of the session bar
       if (pathname === '/api/growth/follow-up') return await followUp(req, res, access);
+      // The agents run consumes the merchant's quota and reads its data: writers only (a viewer reads the registry and the admin page).
+      if (pathname === '/api/growth/agents/run' && req.method === 'POST' && !GROWTH_WRITERS.has(access.role)) return json(res, 403, { error: { code: 'FORBIDDEN_ROLE' } });
       return app(req, res); // the Growth app's read-only data routes (it refuses any other method itself)
     } catch {
       if (!res.headersSent) json(res, 500, { error: { code: 'INTERNAL' } }); // no stack, no detail
