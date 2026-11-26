@@ -13,8 +13,7 @@ Not promised (and tested as absent from the interface): measurable growth, causa
 advertising actions, automated campaigns.
 
 ## Scope
-Built (6 pages): **Vue d'ensemble** (`#/`), **Opportunités** (`#/opportunities`), **Produits Potentiels** (`#/potential`),
-**Audience** (`#/audience`), **Contenu** (`#/content`), **Croissance magasin** (`#/storeGrowth`). Every page shows real data
+**Historique** : la première version comptait 6 pages ; la version du 2026-11-26 en compte 14 (voir « Périmètre 2026-11-26 » ci-dessous, qui fait foi). Every page shows real data
 or an honest state (« Données insuffisantes », an empty section that says what is missing). There is **no demonstration data** anywhere.
 
 - **Campagnes** is out of the launch scope (removed 2026-09-28: no advertising connector, all its figures were demonstration
@@ -116,3 +115,55 @@ earlier (demonstration) version.
 - Some tests read the UI sources as text; page render tests use a minimal fake DOM (`test/growth-dom.js`).
 - Unused Growth pack files and channel logos stay on disk (not referenced by any page).
 - No extraction to `src/shared` in this phase.
+
+## Périmètre 2026-11-26 (fait foi)
+
+Ce bloc remplace les exclusions du 2026-09-28 pour Expériences, Nordla AI et Paramètres. Les passages plus anciens ci-dessus décrivent l’historique.
+
+### Pages (14 entrées de menu, toutes ouvrent une vraie page ou un état expliqué)
+| Page | Route | Source / état |
+|---|---|---|
+| Vue d’ensemble | `#/` | ventes réelles du magasin, priorités ; sans source : « non connectée » |
+| Opportunités | `#/opportunities` | moteurs réels (corrections, produits, audience, magasin) |
+| Produits Potentiels | `#/potential` | ventes réelles ; coûts d’achat non vérifiés = blocage affiché |
+| Audience | `#/audience` | clients identifiés, agrégés, 90 jours |
+| Contenu | `#/content` | fiches produit (SKU, type, image, collection) |
+| Croissance magasin | `#/storeGrowth` | ventes en magasin, 8 semaines |
+| Abandons (tunnel) | `#/dropoff` | instantané Shopify importé + événements du personnalisateur (test) |
+| Suivi commercial | `#/pipeline` | explicatif : enregistré dans ce navigateur uniquement |
+| Conversations | `#/inbox` | explicatif : messagerie non reliée (import manuel seulement) |
+| Calendrier social | `#/social` | explicatif : aucun compte Instagram / TikTok relié, aucun jeton |
+| Publicités | `#/ads` | explicatif : aucun compte publicitaire relié (NOT_CONNECTED) |
+| Agents IA | `#/agents` | registre des 8 agents ; brouillon seulement, désactivé sans fournisseur |
+| Expériences | `#/experiments` | explicatif : aucune source de mesure fiable, aucun résultat affiché |
+| Administration | `#/admin` | état des sources, configuration des agents, objectifs non enregistrés |
+
+Chaque état « non connectée », « indisponible » ou « navigateur uniquement » est affiché tel quel : une donnée absente n’est jamais zéro et n’est jamais estimée.
+
+### Agents IA (`src/growth/agents/`)
+- Huit rôles : Stratège Growth, Produits et offres, Audience et fidélisation, Contenu et réseaux sociaux, Boutique locale, Conversion du site, Publicités, Expériences (`registry.js`).
+- Chaque agent lit **uniquement** ses sources, pour la boutique de la session, et renvoie un **brouillon** avec sa période, ses sources (disponible / non connectée / indisponible), ses limites, sa raison et les confirmations humaines requises (`gateway.js`).
+- Aucune action n’est exécutée : publication, modification Shopify, dépense publicitaire, envoi de message ou lancement d’expérience exigent une confirmation humaine explicite (hors de ce module).
+- **Fournisseur d’IA** : seul le serveur appelle un modèle (`provider.js`, adaptateur Anthropic). Variables serveur :
+  - `GROWTH_AI_PROVIDER=anthropic`
+  - `GROWTH_AI_API_KEY` (secret, jamais renvoyé, jamais journalisé)
+  - `GROWTH_AI_MODEL` (identifiant du modèle ; rien n’est deviné)
+- Sans configuration complète : statut `AI_NOT_CONFIGURED`, bouton désactivé avec les noms des variables manquantes. **Aucune réponse n’est simulée.**
+- Limites : question ≤ 500 caractères, contexte ≤ 60 000 caractères (tronqué et signalé), sortie JSON stricte (≤ 8 000 caractères de brouillon), délai 30 s, quota quotidien de 20 brouillons par boutique (en mémoire), journal sans invite ni donnée ni réponse.
+- Routes : `GET /api/growth/agents`, `POST /api/growth/agents/run` (JSON, 16 Ko, rôle rédacteur en hébergé), `GET /api/growth/admin`.
+- **Non vérifié en réel** : aucun appel au fournisseur n’a été fait (aucune clé configurée). La qualité des brouillons n’est pas évaluée.
+
+### Prérequis de connexion (ce qui reste à relier)
+- Instagram / TikTok (calendrier, conversations) : compte relié et jeton avec autorisations de lecture ; aucun jeton aujourd’hui.
+- Messagerie (conversations) : connecteur de messagerie ; aujourd’hui import manuel seulement.
+- Meta Ads / Google Ads (publicités) : compte publicitaire relié ; aucun aujourd’hui.
+- GA4 / Search Console : aucun connecteur ; l’entonnoir repose sur un instantané Shopify importé.
+- Suivi commercial serveur : identité Nordla (Core) requise ; aujourd’hui navigateur uniquement.
+- Objectifs (Administration) : stockage non encore construit.
+- Fournisseur d’IA : clé et modèle à fournir côté serveur.
+
+### Tests
+- `test/growth-agents.test.js` : registre, passerelle (sans fournisseur, entrée stricte, quota, délai, sortie stricte, troncature), fournisseur depuis l’environnement, routes HTTP (fournisseur factice, données synthétiques).
+- `test/growth-built-scope.test.js` : 14 pages ouvrent sans erreur en FR / NL / EN, une seule entrée active, aucune entrée de menu inerte, états des sources, endpoints.
+- `test/growth-browser.test.js` : 14 pages × 7 largeurs (1440 à 320 px), sans défilement horizontal ni erreur console ; nécessite `CHROME_PATH`.
+- Données synthétiques uniquement.
