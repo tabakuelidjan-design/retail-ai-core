@@ -7,10 +7,10 @@ import vm from 'node:vm';
 import { createGrowthApp } from '../src/growth/server/app.js';
 import { growthDom, text, navState, title } from './growth-dom.js';
 
-const PAGE_HASH = { overview: '#/', opportunities: '#/opportunities', potential: '#/potential', audience: '#/audience', content: '#/content', storeGrowth: '#/storeGrowth', dropoff: '#/dropoff', agents: '#/agents', experiments: '#/experiments', admin: '#/admin' };
+const PAGE_HASH = { overview: '#/', opportunities: '#/opportunities', potential: '#/potential', audience: '#/audience', content: '#/content', storeGrowth: '#/storeGrowth', dropoff: '#/dropoff', pipeline: '#/pipeline', inbox: '#/inbox', social: '#/social', ads: '#/ads', agents: '#/agents', experiments: '#/experiments', admin: '#/admin' };
 const BUILT = Object.keys(PAGE_HASH);
 
-test('the built pages are exactly the PAGES definitions (10); no disabled entry is left in the menu', async () => {
+test('the built pages are exactly the PAGES definitions (14); no disabled entry is left in the menu', async () => {
   const { ctx } = await growthDom('#/');
   assert.deepEqual(vm.runInContext('Object.keys(PAGES)', ctx).slice().sort(), BUILT.slice().sort());
   const { root } = await growthDom('#/');
@@ -58,4 +58,19 @@ test('the agents and admin pages are served with their scripts; no simulated AI 
   assert.match(agents, /disabled/); // the run button is disabled unless a provider is configured
   assert.match(agents, /textContent|h\('pre'/); // the draft is shown as text
   assert.doesNotMatch(agents, /innerHTML/);
+});
+
+test('source states: the page reads the state of its source (available / not connected / unavailable), never a figure; pipeline is browser-only; unknown keys are 404', async () => {
+  const notConnected = async () => ({ status: 'NOT_CONNECTED' });
+  const server = http.createServer(createGrowthApp({ ads: notConnected }));
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const base = 'http://127.0.0.1:' + server.address().port;
+  try {
+    assert.deepEqual(await (await fetch(base + '/api/growth/sources/ads')).json(), { key: 'ads', status: 'not_connected' });
+    assert.deepEqual(await (await fetch(base + '/api/growth/sources/social')).json(), { key: 'social', status: 'unavailable' }); // no getter: unavailable, not zero
+    assert.deepEqual(await (await fetch(base + '/api/growth/sources/inbox')).json(), { key: 'inbox', status: 'unavailable' });
+    assert.deepEqual(await (await fetch(base + '/api/growth/sources/pipeline')).json(), { key: 'pipeline', status: 'browser_only' });
+    assert.equal((await fetch(base + '/api/growth/sources/campaigns')).status, 404);
+    await fetch(base + '/api/growth/sources/ads').then((r) => r.arrayBuffer());
+  } finally { server.close(); }
 });

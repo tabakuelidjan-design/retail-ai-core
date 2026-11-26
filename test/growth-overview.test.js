@@ -92,7 +92,7 @@ test('growth UI: no data value lives in the UI - every figure, name and text com
 test('growth UI: sidebar is Growth\'s own navigation (7 pages in the rail, Agents IA / Expériences / Administration in the foot), no Campagnes, no other module', async () => {
   const src = await readFile(new URL('app.js', UI), 'utf8');
   const keys = (block) => [...src.split(`const ${block} = [`)[1].split('];')[0].matchAll(/key: '(\w+)'/g)].map((m) => m[1]);
-  assert.deepEqual(keys('GROWTH_NAV'), ['overview', 'opportunities', 'potential', 'content', 'storeGrowth', 'audience', 'dropoff']);
+  assert.deepEqual(keys('GROWTH_NAV'), ['overview', 'opportunities', 'potential', 'content', 'storeGrowth', 'audience', 'dropoff', 'pipeline', 'inbox', 'social', 'ads']);
   assert.deepEqual(keys('GROWTH_NAV_FOOT'), ['agents', 'experiments', 'admin']);
   assert.ok(!/gr\.nav\.(finance|analytics|buying|afterSales|compliance|campaigns)|tresorerie|buyingSuppliers/.test(src), 'no other Nordla module in the Growth navigation');
 });

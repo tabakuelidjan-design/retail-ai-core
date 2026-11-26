@@ -5,6 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import { createDropoffSource } from '../src/growth/server/dropoff.js';
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -25,7 +26,7 @@ const CHROME = CANDIDATES.find((p) => existsSync(p));
 const skip = !CHROME ? 'no Chrome/Chromium found (set CHROME_PATH)' : typeof WebSocket === 'undefined' ? `no global WebSocket on Node ${process.versions.node} (needs Node >= 22)` : false;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const WIDTHS = [1440, 1280, 1024, 768, 390, 375, 320];
-const PAGES = ['', 'opportunities', 'potential', 'audience', 'content', 'storeGrowth'];
+const PAGES = ['', 'opportunities', 'potential', 'audience', 'content', 'storeGrowth', 'dropoff', 'pipeline', 'inbox', 'social', 'ads', 'agents', 'experiments', 'admin'];
 
 async function serve(opts) {
   const server = http.createServer(createGrowthApp(opts));
@@ -132,18 +133,21 @@ async function browser() {
 const sources = () => ({
   productPotential: async () => potentialPayload(), audience: async () => audiencePayload(),
   content: async () => contentPayload(), store: async () => storePayload(),
+  // the funnel with no snapshot: an honest NOT_CONNECTED state, rendered as such (not an error)
+  dropoff: createDropoffSource({ timeZone: 'Europe/Brussels', load: async () => null }),
 });
 
-test('browser: 6 pages x 1440 / 1280 / 1024 / 768 / 390 / 375 / 320 - no horizontal page scroll, no console error, data rendered', { skip, timeout: 360000 }, async () => {
+test('browser: 10 pages x 1440 / 1280 / 1024 / 768 / 390 / 375 / 320 - no horizontal page scroll, no console error, data rendered', { skip, timeout: 360000 }, async () => {
   const app = await serve(sources()); const b = await browser();
   try {
     for (const pg of PAGES) {
       for (const w of WIDTHS) {
         await b.open(`${app.base}/#/${pg}`, w);
-        const r = JSON.parse(await b.eval(`JSON.stringify({ sw: document.documentElement.scrollWidth, w: innerWidth, state: !!document.querySelector('.gr-state'), kpis: document.querySelectorAll('.ex-kpi').length, fiche: document.querySelectorAll('.gv-action').length })`));
+        const r = JSON.parse(await b.eval(`JSON.stringify({ sw: document.documentElement.scrollWidth, w: innerWidth, state: !!document.querySelector('.gr-state'), kpis: document.querySelectorAll('.ex-kpi').length, cards: document.querySelectorAll('.ex-card').length, fiche: document.querySelectorAll('.gv-action').length })`));
         assert.ok(r.sw <= r.w, `${pg || 'overview'} @${w}: page scrolls horizontally (${r.sw} > ${r.w})`);
         assert.equal(r.state, false, `${pg || 'overview'} @${w}: still in a loading / error state`);
-        assert.ok(pg === 'opportunities' ? r.fiche >= 1 : r.kpis >= 3, `${pg || 'overview'} @${w}: page content rendered`); // Opportunités now opens on the compact priority lines (the count tiles are gone)
+        const cardPage = ['dropoff', 'pipeline', 'inbox', 'social', 'ads', 'agents', 'experiments', 'admin'].includes(pg); // explained / list pages: cards, not KPI tiles
+        assert.ok(pg === 'opportunities' ? r.fiche >= 1 : cardPage ? r.cards >= 1 : r.kpis >= 3, `${pg || 'overview'} @${w}: page content rendered`); // Opportunités now opens on the compact priority lines (the count tiles are gone)
       }
     }
     assert.deepEqual(b.errors.filter((e) => !/ResizeObserver/.test(e)), []);

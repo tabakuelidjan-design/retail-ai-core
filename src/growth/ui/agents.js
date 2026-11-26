@@ -102,7 +102,7 @@ function renderAdmin(main, safe) {
 
 function renderExperiments(main, safe) {
   const d = xpData || { state: null, needs: [] };
-  main.appendChild(safe(() => h('div', { class: 'ex-card gr-state' },
+  main.appendChild(safe(() => h('div', { class: 'ex-card gr-xp-card' },
     cardHead('', t('gr.xp.stateTitle')),
     h('p', { class: 'gr-state-text' }, t(`gr.xp.state.${d.state || 'UNKNOWN'}`)),
     h('p', null, t('gr.xp.needsLabel')),
@@ -110,6 +110,20 @@ function renderExperiments(main, safe) {
     h('p', null, h('a', { class: 'btn-outline', href: '#/agents' }, t('gr.xp.agentLink'))))));
 }
 
+// Pipeline, Inbox, social calendar and advertising: the state of their source, explained. No figure is shown here.
+function renderSource(key, main, safe) {
+  const d = srcData[key] || null;
+  const status = d ? d.status : 'unavailable';
+  main.appendChild(safe(() => h('div', { class: 'ex-card gr-xp-card' },
+    cardHead('', t(`gr.src.${key}.title`)),
+    h('p', null, t(`gr.src.${key}.what`)),
+    h('p', { class: 'gr-state-text' }, t(`gr.src.status.${status}`)),
+    h('p', null, t(`gr.src.${key}.need`)),
+    status === 'available' ? h('p', null, t(`gr.src.${key}.available`)) : null,
+    h('p', null, h('a', { class: 'btn-outline', href: '#/agents' }, t('gr.xp.agentLink'))))));
+}
+
 let agData = null;
 let admData = null;
 let xpData = null;
+const srcData = {};

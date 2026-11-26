@@ -130,6 +130,10 @@ const GROWTH_NAV = [
   { key: 'storeGrowth', icon: 'storeGrowth', href: '#/storeGrowth', more: true },
   { key: 'audience', icon: 'audience', href: '#/audience', mobile: true },
   { key: 'dropoff', icon: 'needsAttention', href: '#/dropoff', more: true },
+  { key: 'pipeline', href: '#/pipeline', more: true },
+  { key: 'inbox', href: '#/inbox', more: true },
+  { key: 'social', href: '#/social', more: true },
+  { key: 'ads', href: '#/ads', more: true },
 ];
 // Secondary zone (bottom of the rail). Nordla AI keeps the official "Parle à Nordla" asset, as in Analytics.
 const GROWTH_NAV_FOOT = [
@@ -304,6 +308,10 @@ const PAGES = {
   audience: { title: 'gr.au.title', subtitle: 'gr.au.subtitle', url: `${GROWTH_API}/audience`, period: { days: 90 }, get: () => audData, set: (v) => { audData = v; }, render: renderAudience },
   content: { title: 'gr.ct.title', subtitle: 'gr.ct.subtitle', url: `${GROWTH_API}/content`, period: { weeks: 8 }, get: () => ctData, set: (v) => { ctData = v; }, render: renderContent },
   agents: { title: 'gr.ag.title', subtitle: 'gr.ag.subtitle', url: `${GROWTH_API}/agents`, period: { perAgent: true }, get: () => agData, set: (v) => { agData = v; }, render: renderAgents },
+  pipeline: { title: 'gr.src.pipeline.title', subtitle: 'gr.src.pipeline.subtitle', url: `${GROWTH_API}/sources/pipeline`, period: { none: true }, get: () => srcData.pipeline, set: (v) => { srcData.pipeline = v; }, render: (m, s) => renderSource('pipeline', m, s) },
+  inbox: { title: 'gr.src.inbox.title', subtitle: 'gr.src.inbox.subtitle', url: `${GROWTH_API}/sources/inbox`, period: { none: true }, get: () => srcData.inbox, set: (v) => { srcData.inbox = v; }, render: (m, s) => renderSource('inbox', m, s) },
+  social: { title: 'gr.src.social.title', subtitle: 'gr.src.social.subtitle', url: `${GROWTH_API}/sources/social`, period: { none: true }, get: () => srcData.social, set: (v) => { srcData.social = v; }, render: (m, s) => renderSource('social', m, s) },
+  ads: { title: 'gr.src.ads.title', subtitle: 'gr.src.ads.subtitle', url: `${GROWTH_API}/sources/ads`, period: { none: true }, get: () => srcData.ads, set: (v) => { srcData.ads = v; }, render: (m, s) => renderSource('ads', m, s) },
   experiments: { title: 'gr.xp.title', subtitle: 'gr.xp.subtitle', url: `${GROWTH_API}/experiments`, period: { none: true }, get: () => xpData, set: (v) => { xpData = v; }, render: renderExperiments },
   admin: { title: 'gr.adm.title', subtitle: 'gr.adm.subtitle', url: `${GROWTH_API}/admin`, period: { none: true }, get: () => admData, set: (v) => { admData = v; }, render: renderAdmin },
   dropoff: { title: 'gr.do.title', subtitle: 'gr.do.subtitle', url: `${GROWTH_API}/dropoff`, period: { custom: true }, get: () => doData, set: (v) => { doData = v; }, render: renderDropoff },

@@ -30,7 +30,7 @@ test('mobile nav: Plus opens a panel with every page not in the bar; navigation 
   const p = panel(root);
   assert.equal(p.getAttribute('role'), 'dialog');
   const links = all(p, (n) => n.tagName === 'A').map((n) => [text(n), n.getAttribute('href')]);
-  assert.deepEqual(links, [['Croissance magasin', '#/storeGrowth'], ['Abandons', '#/dropoff'], ['Agents IA', '#/agents'], ['Expériences', '#/experiments'], ['Administration', '#/admin']], 'Plus holds every page that is not in the bar');
+  assert.deepEqual(links, [['Croissance magasin', '#/storeGrowth'], ['Abandons', '#/dropoff'], ['Suivi commercial', '#/pipeline'], ['Conversations', '#/inbox'], ['Calendrier social', '#/social'], ['Publicités', '#/ads'], ['Agents IA', '#/agents'], ['Expériences', '#/experiments'], ['Administration', '#/admin']], 'Plus holds every page that is not in the bar');
   const disabled = all(p, (n) => hasClass(n, 'gr-more-item') && hasClass(n, 'inert'));
   assert.deepEqual(disabled, [], 'no disabled entry: every Plus item opens a page or an explained state');
   await navigate('#/storeGrowth');
@@ -48,13 +48,13 @@ test('mobile nav: Plus is active on Croissance magasin (and only there)', async 
 });
 
 test('mobile nav: from every Growth page, every built page is reachable on mobile (bar or Plus)', async () => {
-  for (const hash of ['#/', '#/opportunities', '#/potential', '#/audience', '#/content', '#/storeGrowth', '#/dropoff', '#/agents', '#/experiments', '#/admin']) {
+  for (const hash of ['#/', '#/opportunities', '#/potential', '#/audience', '#/content', '#/storeGrowth', '#/dropoff', '#/pipeline', '#/inbox', '#/social', '#/ads', '#/agents', '#/experiments', '#/admin']) {
     const { root } = await growthDom(hash);
     const inBar = barItems(root).filter((n) => n.tagName === 'A').map((n) => n.getAttribute('href'));
     moreBtn(root).listeners.click[0]();
     const inMore = all(panel(root), (n) => n.tagName === 'A').map((n) => n.getAttribute('href'));
     const built = all(root, (n) => hasClass(n, 'nav-item') && n.tagName === 'A').map((n) => n.getAttribute('href'));
-    assert.equal(built.length, 10);
+    assert.equal(built.length, 14);
     for (const href of built) assert.ok(inBar.includes(href) || inMore.includes(href), `${hash}: ${href} unreachable on mobile`);
   }
 });

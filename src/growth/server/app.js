@@ -154,6 +154,16 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
           console.error('growth agent failed:', e?.message ?? e); return json(res, 500, { error: { code: 'INTERNAL_ERROR' } });
         }
       }
+      if (url.pathname.startsWith('/api/growth/sources/')) {
+        // The state of ONE source for its explained page: available / not_connected / unavailable (never a figure, never zero).
+        const key = url.pathname.slice('/api/growth/sources/'.length);
+        if (key === 'pipeline') return json(res, 200, { key, status: 'browser_only' }); // the commercial follow-up lives in this browser only
+        const getters = { ads, social, inbox };
+        if (!Object.hasOwn(getters, key)) return json(res, 404, { error: { code: 'NOT_FOUND' } });
+        const getter = getters[key];
+        if (typeof getter !== 'function') return json(res, 200, { key, status: 'unavailable' }); // not wired for this tenant: unavailable, never zero
+        try { return json(res, 200, { key, status: sourceStatusOf(await getter()) }); } catch { return json(res, 200, { key, status: 'unavailable' }); }
+      }
       if (url.pathname === '/api/growth/experiments') {
         // No experiment engine and no measurement source yet: the state is said, nothing is measured or invented.
         return json(res, 200, { state: 'NO_MEASUREMENT_SOURCE' });
