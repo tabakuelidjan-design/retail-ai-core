@@ -7,16 +7,16 @@ import { startApp } from './finance-dashboard-helpers.js';
 import { K_FINANCE } from './fixtures/sso-test-keys.js';
 
 const SECRET = K_FINANCE;
-const HABB = 'merchant-habb-test';
+const MERCH_A = 'merchant-test-a';
 const OTHER = 'merchant-other-test';
 const PERSON = { userId: '5c2f4d6e-ea34-452d-8107-0197a3eb54da', role: 'OWNER', module: 'finance' };
 const sidOf = (cookie) => cookie.split(';')[0].replace(/^fin_sid=/, '');
 
 async function openApp() {
-  return startApp({ merchantId: HABB, deps: { sso: { secret: SECRET, checkAccess: async () => ({ ok: true, role: 'OWNER' }) } } });
+  return startApp({ merchantId: MERCH_A, deps: { sso: { secret: SECRET, checkAccess: async () => ({ ok: true, role: 'OWNER' }) } } });
 }
 
-test('a Core ticket for ANOTHER merchant never opens a session on the HABB server (403, no cookie)', async () => {
+test('a Core ticket for ANOTHER merchant never opens a session on the server of merchant A (403, no cookie)', async () => {
   const a = await openApp();
   try {
     const t = issueTicket({ secret: SECRET, merchantId: OTHER, person: PERSON });
@@ -26,15 +26,15 @@ test('a Core ticket for ANOTHER merchant never opens a session on the HABB serve
   } finally { await a.server.close(); }
 });
 
-test('a HABB session is bound to the merchant it was opened for, and works for that merchant only', async () => {
+test('a merchant A session is bound to the merchant it was opened for, and works for that merchant only', async () => {
   const a = await openApp();
   try {
-    const t = issueTicket({ secret: SECRET, merchantId: HABB, person: PERSON });
+    const t = issueTicket({ secret: SECRET, merchantId: MERCH_A, person: PERSON });
     const ok = await fetch(`${a.base}/sso?t=${encodeURIComponent(t)}`, { redirect: 'manual' });
     assert.equal(ok.status, 302);
     const cookie = ok.headers.get('set-cookie').split(';')[0];
     const session = a.app.sessions.get(sidOf(cookie));
-    assert.equal(session.sso.merchantId, HABB, 'the session records its merchant on the server');
+    assert.equal(session.sso.merchantId, MERCH_A, 'the session records its merchant on the server');
     const me = await fetch(`${a.base}/api/session?include=settings`, { headers: { Cookie: cookie } }); // confirms the session (the explicit start)
     assert.equal(me.status, 200);
   } finally { await a.server.close(); }
@@ -55,7 +55,7 @@ test('a session whose merchant does not match this server is refused, on every r
 test('no query parameter can choose another merchant (merchantId, merchant, tenant are ignored)', async () => {
   const a = await openApp();
   try {
-    const t = issueTicket({ secret: SECRET, merchantId: HABB, person: PERSON });
+    const t = issueTicket({ secret: SECRET, merchantId: MERCH_A, person: PERSON });
     const ok = await fetch(`${a.base}/sso?t=${encodeURIComponent(t)}`, { redirect: 'manual' });
     const cookie = ok.headers.get('set-cookie').split(';')[0];
     await fetch(`${a.base}/api/session?include=settings`, { headers: { Cookie: cookie } }); // confirm
