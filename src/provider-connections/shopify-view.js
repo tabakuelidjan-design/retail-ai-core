@@ -8,10 +8,11 @@ export function shopifyConnectionView(stored, { runtime = {} } = {}) {
   return deepFreeze({
     provider: 'shopify',
     connector_id: stored.id,
+    external_id: stored.external_id ?? stored.externalId ?? null,
     shop_domain: config.shop_domain ?? null,
     status: stored.status,
     granted_scopes: [...(runtime.granted_scopes ?? config.granted_scopes ?? [])],
-    display_name: runtime.display_name ?? config.display_name ?? null,
+    display_name: runtime.display_name ?? config.display_name ?? config.shop_domain ?? null,
     last_verified_at: runtime.last_verified_at ?? config.last_verified_at ?? null,
     review_signals: sortedUnique(runtime.signals ?? []),
   });

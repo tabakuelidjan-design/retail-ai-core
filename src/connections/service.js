@@ -51,9 +51,13 @@ export function createConnectionsService({
     });
   }
 
-  async function shopifyConnections(merchantId) {
+  // Per-merchant Shopify (OAuth) connections come from the same connection views as the other OAuth providers: state, scopes, reconnect.
+  // The global, historical row is listed only when this merchant has no OAuth connection (it is the declared legacy merchant's setup).
+  async function shopifyConnections(merchantId, all = [], role = null, cfg = new Map()) {
+    const oauth = await oauthConnections({ providerKey: 'shopify', canRead: false }, all, role, cfg);
+    if (oauth.length) return oauth;
     if (!connectorRepository) return [];
-    const rows = (await connectorRepository.listForMerchant(merchantId)).filter((c) => c.kind === 'shopify');
+    const rows = (await connectorRepository.listForMerchant(merchantId)).filter((c) => c.kind === 'shopify' && c.config?.provisioned_via !== 'oauth');
     const sync = rows.length ? await shopifySync(merchantId).catch(() => null) : null;
     return rows.map((c) => {
       const linked = c.status === 'CONFIGURED';
@@ -70,7 +74,7 @@ export function createConnectionsService({
   function setupOf(p, role, ctx = {}) {
     if (p.status === 'PLANNED') return { state: 'PLANNED', label: 'Prévu', detail: 'Pas encore de parcours de connexion.', steps: [], canConnect: false };
     if (p.status === 'WAITING') return { state: 'WAITING', label: 'En attente', detail: p.holdReason ?? null, steps: p.steps.map((s, i) => ({ title: s.label, detail: null, owner: s.owner, facts: [], state: s.done ? 'done' : (i === p.steps.findIndex((x) => !x.done) ? 'current' : 'todo') })), canConnect: false };
-    if (p.source === 'shopify') return { state: 'READY', label: 'Gérée par la synchronisation existante', detail: null, steps: [], canConnect: false };
+    if (p.source === 'shopify') return { state: 'READY', label: 'Connexion par boutique (OAuth)', detail: null, steps: [], canConnect: WRITER_ROLES.has(role) };
     if (p.source === 'oauth') {
       const ready = appConfigPresent(p.providerKey); const app = p.appName ?? p.label; const who = ctx.merchant ? ` ${ctx.merchant}` : '';
       const names = Object.values(appEnvNames[p.providerKey] ?? {});
@@ -98,7 +102,7 @@ export function createConnectionsService({
       for (const cat of registry.categories()) {
         const providers = [];
         for (const p of cat.providers) {
-          const connections = p.source === 'oauth' && p.status === 'AVAILABLE' ? await oauthConnections(p, all, role, cfg) : p.source === 'shopify' ? await shopifyConnections(merchantId) : [];
+          const connections = p.source === 'oauth' && p.status === 'AVAILABLE' ? await oauthConnections(p, all, role, cfg) : p.source === 'shopify' ? await shopifyConnections(merchantId, all, role, cfg) : [];
           const setup = setupOf(p, role, { merchant: merchantName, connections });
           providers.push({
             id: p.id, label: p.label, category: p.category, source: p.source, dataLabel: p.dataLabel ?? null, status: p.status, statusLabel: STATUS_FR[p.status], description: p.description, access: p.access, accessLabel: ACCESS_FR[p.access],
