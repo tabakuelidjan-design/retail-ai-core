@@ -523,3 +523,29 @@ const GR_A4 = {
   }
 };
 for (const lang of ['fr', 'nl', 'en']) Object.assign(window.NORDLA_DICTS[lang], GR_A4[lang]);
+
+// A5 texts
+const GR_A5 = {
+  "fr": {
+    "gr.ag.fromPriority": "Préparer un brouillon",
+    "gr.ag.priorityLinked": "Priorité liée :",
+    "gr.ag.priorityGone": "Priorité absente aujourd’hui : elle ne figure plus dans vos priorités actuelles.",
+    "gr.ag.priorityGeneric": "Priorité d’Opportunités",
+    "gr.ag.err.PRIORITY_NOT_FOUND": "Cette priorité n’existe plus aujourd’hui. Aucun brouillon n’a été produit."
+  },
+  "nl": {
+    "gr.ag.fromPriority": "Concept opstellen",
+    "gr.ag.priorityLinked": "Gekoppelde prioriteit:",
+    "gr.ag.priorityGone": "Prioriteit vandaag afwezig: ze staat niet meer in uw huidige prioriteiten.",
+    "gr.ag.priorityGeneric": "Prioriteit uit Kansen",
+    "gr.ag.err.PRIORITY_NOT_FOUND": "Deze prioriteit bestaat vandaag niet meer. Er is geen concept opgesteld."
+  },
+  "en": {
+    "gr.ag.fromPriority": "Prepare a draft",
+    "gr.ag.priorityLinked": "Linked priority:",
+    "gr.ag.priorityGone": "Priority missing today: it is no longer among your current priorities.",
+    "gr.ag.priorityGeneric": "Opportunities priority",
+    "gr.ag.err.PRIORITY_NOT_FOUND": "This priority no longer exists today. No draft was produced."
+  }
+};
+for (const lang of ['fr', 'nl', 'en']) Object.assign(window.NORDLA_DICTS[lang], GR_A5[lang]);

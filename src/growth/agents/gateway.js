@@ -7,6 +7,7 @@
 //     duration only - never the prompt, the data or the answer.
 
 import { AGENTS, agentById } from './registry.js';
+import { redactPersonalFields } from './priority-ref.js';
 
 export const MAX_QUESTION = 500;
 export const MAX_CONTEXT_CHARS = 60_000;
@@ -61,7 +62,7 @@ export function createAgentGateway({ provider = null, getters = {}, timeoutMs = 
     };
   }
 
-  async function run({ agentId, question = '', scope = 'anonymous' }) {
+  async function run({ agentId, question = '', scope = 'anonymous', focus = null }) { // focus: a priority the server has verified (A5), or null
     const agent = agentById(agentId);
     if (!agent) throw new AgentError('BAD_AGENT', 400);
     const q = validateQuestion(question);
@@ -81,11 +82,11 @@ export function createAgentGateway({ provider = null, getters = {}, timeoutMs = 
       if (typeof getters[key] === 'function') { try { payload = await getters[key](); st = sourceStatusOf(payload); } catch { payload = null; st = 'unavailable'; } }
       sources.push({ key, status: st });
       if (st !== 'available') { context[key] = { status: st }; continue; }
-      const text = JSON.stringify(payload);
+      const text = JSON.stringify(redactPersonalFields(payload)); // personal fields never reach the provider (A5 hardening)
       if (text.length > perSource) { context[key] = { status: 'available', data_truncated: text.slice(0, perSource) }; truncated.push(key); }
-      else context[key] = { status: 'available', data: payload };
+      else context[key] = { status: 'available', data: JSON.parse(text) };
     }
-    const user = JSON.stringify({ period: agent.period, question: q, context });
+    const user = JSON.stringify({ period: agent.period, question: q, context, ...(focus ? { priority: focus } : {}) });
 
     const ac = new AbortController();
     let timer;

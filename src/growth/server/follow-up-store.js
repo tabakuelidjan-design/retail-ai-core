@@ -32,7 +32,9 @@ export function normalizeDraftState(state) { return state === 'validated' || sta
 /** The id of a draft. Drafts written before A4 have none: their id is derived from their date (the same rule as the page). */
 export function draftId(d) { return typeof d?.id === 'string' && isDraftId(d.id) ? d.id : `a${String(d?.at ?? '').replace(/\D/g, '')}`; }
 const DRAFT_STATES = ['to_validate', 'pending', 'validated', 'rejected'];
-const validDraft = (d) => Boolean(d) && typeof d === 'object' && !Array.isArray(d) && (d.state === undefined || DRAFT_STATES.includes(d.state)) && (d.id === undefined || isDraftId(d.id));
+// A5: the priority reference is the priority's own id (up to 200 characters, no control character) and nothing else
+const validPriorityRef = (r) => Boolean(r) && typeof r === 'object' && !Array.isArray(r) && Object.keys(r).every((k) => k === 'id') && typeof r.id === 'string' && r.id.length > 0 && r.id.length <= 200 && !/[\u0000-\u001f]/.test(r.id);
+const validDraft = (d) => Boolean(d) && typeof d === 'object' && !Array.isArray(d) && (d.state === undefined || DRAFT_STATES.includes(d.state)) && (d.id === undefined || isDraftId(d.id)) && (d.priorityRef === undefined || validPriorityRef(d.priorityRef));
 
 /** A value of the shapes the screen writes (an object, a plan history, or the pipeline store), and not larger than MAX_ENTRY_BYTES. Returns an error code or null. */
 export function followUpValueError(key, value) {

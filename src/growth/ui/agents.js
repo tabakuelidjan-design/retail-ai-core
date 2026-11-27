@@ -9,8 +9,8 @@ const AG_CONFIRMATIONS = ['plan_review', 'shopify_change', 'price_change', 'mess
 const agResults = {}; // agent id -> the last draft or error for this page session (in memory only)
 const agBusy = {};
 
-async function agentRunRequest(agentId, question) {
-  const body = JSON.stringify({ agentId, question });
+async function agentRunRequest(agentId, question, priorityId) {
+  const body = JSON.stringify({ agentId, question, ...(priorityId ? { priorityId } : {}) }); // A5: a priority of this merchant, checked by the server
   // HOSTED: the session's api() adds the CSRF header and the /growth prefix; the local preview calls the route directly.
   if (typeof growthHosted !== 'undefined' && growthHosted && typeof growthHosted.api === 'function') return growthHosted.api('/api/growth/agents/run', { method: 'POST', body });
   const r = await fetch('/api/growth/agents/run', { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body });
@@ -28,7 +28,7 @@ async function runAgent(agentId, question) {
   if (res && res.ok && res.body && agentId === 'strategist') saveStrategistDraft(res.body); // A3: kept as a draft to validate
   render();
 }
-const AG_ERROR_CODES = ['AI_NOT_CONFIGURED', 'AI_QUOTA_EXCEEDED', 'AI_TIMEOUT', 'AI_PROVIDER_ERROR', 'AI_BAD_OUTPUT', 'BAD_REQUEST', 'BAD_AGENT', 'FORBIDDEN_ROLE', 'INTERNAL_ERROR'];
+const AG_ERROR_CODES = ['PRIORITY_NOT_FOUND', 'AI_NOT_CONFIGURED', 'AI_QUOTA_EXCEEDED', 'AI_TIMEOUT', 'AI_PROVIDER_ERROR', 'AI_BAD_OUTPUT', 'BAD_REQUEST', 'BAD_AGENT', 'FORBIDDEN_ROLE', 'INTERNAL_ERROR'];
 
 const agSourceLabel = (key) => t(`gr.ag.src.${key}`);
 const agStatusLabel = (s) => t(`gr.ag.status.${s}`);
@@ -146,9 +146,9 @@ function readStrategistDrafts(scope) {
 /** A new draft gets its own id and starts as pending (to validate). Called only after the server returned a checked draft. */
 function newDraftId() { return `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`; }
 function saveStrategistDraft(res) {
-  const scope = agData && agData.historyScope;
+  const scope = (agData && agData.historyScope) || (oppData && oppData.historyScope); // the Opportunités payload carries the scope too
   if (!scope) return; // the local preview has no merchant scope: nothing is kept there
-  const entry = { id: newDraftId(), at: new Date().toISOString(), period: res.period, draft: res.draft, reason: res.reason, limits: res.limits, sources: res.sources, confirmations: res.confirmations, state: 'pending' };
+  const entry = { id: newDraftId(), at: new Date().toISOString(), period: res.period, draft: res.draft, reason: res.reason, limits: res.limits, sources: res.sources, confirmations: res.confirmations, state: 'pending', ...(res.priorityRef ? { priorityRef: { id: res.priorityRef.id } } : {}) };
   const drafts = [entry, ...readStrategistDrafts(scope)].slice(0, AG_DRAFTS_MAX);
   try { growthStorage.setItem(agDraftKey(scope), JSON.stringify({ v: 1, drafts })); } catch { /* storage refused: the draft is still shown on the agents page */ }
 }
@@ -183,12 +183,12 @@ function agentDraftsCard(d) {
         : s.missing.length ? t('gr.ag.draftsProviderOff', s.missing.join(', ')) : t('gr.ag.draftsProviderOffPlain'));
   });
   const list = drafts.length
-    ? drafts.map((dr) => agentDraftArticle(dr, { key, hosted }))
+    ? drafts.map((dr) => agentDraftArticle(dr, { key, hosted, page: d }))
     : [h('p', { class: 'gr-muted' }, t('gr.ag.draftsNone'), ' ', h('a', { href: '#/agents' }, t('gr.ag.draftsGoAgents')))];
   return h('div', { class: 'ex-card gr-xp-card', 'data-agent-drafts': '1' }, cardHead('', t('gr.ag.draftsTitle')), stateLine, ...list);
 }
 
-function agentDraftArticle(dr, { key, hosted }) {
+function agentDraftArticle(dr, { key, hosted, page }) {
   const id = agDraftIdOf(dr);
   const st = agDraftStateOf(dr);
   const stateText = st === 'pending' ? t('gr.ag.draftsState.pending')
@@ -204,6 +204,7 @@ function agentDraftArticle(dr, { key, hosted }) {
   return h('article', { class: 'gr-ag-result', 'data-draft-id': id, 'data-draft-state': st },
     h('p', { class: 'gr-ag-banner' }, stateText),
     h('p', { class: 'gr-muted' }, `${t('gr.ag.draftsAt')} ${agFmtDate(dr.at)} · ${t(`gr.ag.period.${dr.period}`)}`),
+    dr.priorityRef ? agentDraftPriorityLine(dr.priorityRef, page) : null,
     dr.reviewedBy ? h('p', { class: 'gr-muted' }, t('gr.ag.review.byTeam')) : null,
     h('pre', { class: 'gr-ag-draft' }, dr.draft),
     h('p', null, dr.reason),
@@ -234,3 +235,40 @@ let agData = null;
 let admData = null;
 let xpData = null;
 const srcData = {};
+
+// ---- A5: a draft started from ONE priority of Opportunités. The server sets the reference; the page only shows it. ----
+/** The priorities the page shows, by id (the same rule as the server: sections, then the conversation, ads, site and social blocks). */
+function agPriorityIndex(d) {
+  const out = new Map();
+  const add = (l) => { if (Array.isArray(l)) for (const i of l) if (i && typeof i.id === 'string' && !out.has(i.id)) out.set(i.id, i); };
+  if (d && d.sections) { add(d.sections.fix); add(d.sections.commercial); add(d.sections.watch); }
+  for (const k of ['inbox', 'ads', 'site', 'social']) add(d && d[k] ? d[k].items : null);
+  return out;
+}
+function agPriorityLabel(item) {
+  try { if (['product', 'storeWeekday', 'segment'].includes(item.kind) && typeof opCommercialTitle === 'function') return opCommercialTitle(item); } catch { /* fall back below */ }
+  return t('gr.ag.priorityGeneric');
+}
+function agentDraftPriorityLine(ref, page) {
+  const item = agPriorityIndex(page).get(ref.id);
+  if (!item) return h('p', { class: 'gr-muted' }, t('gr.ag.priorityGone'));
+  return h('p', null, t('gr.ag.priorityLinked'), ' ', h('a', { href: `#/opportunities?open=${encodeURIComponent(ref.id)}` }, agPriorityLabel(item)));
+}
+const agErrText = (code) => t(`gr.ag.err.${AG_ERROR_CODES.includes(code) ? code : 'NETWORK'}`);
+
+/** The button on a priority row of Opportunités. It only asks the server for a draft: no draft and no link are made here. */
+function opAgentDraftAction(priorityId) {
+  const feedback = h('p', { class: 'gr-ag-note', role: 'status' });
+  const btn = h('button', { type: 'button', class: 'btn-outline gr-ag-frompriority', on: { click: () => agentDraftFromPriority(priorityId, btn, feedback) } }, t('gr.ag.fromPriority'));
+  return h('div', { class: 'gr-ag-frompriority-box' }, btn, feedback);
+}
+async function agentDraftFromPriority(priorityId, btn, feedback) {
+  feedback.replaceChildren();
+  btn.setAttribute('disabled', 'disabled');
+  let r = null;
+  try { r = await agentRunRequest('strategist', '', priorityId); } catch { r = null; }
+  btn.removeAttribute('disabled');
+  if (!r || !r.ok || !r.body) { feedback.replaceChildren(agErrText(r && r.body && r.body.error ? r.body.error.code : null)); return; }
+  saveStrategistDraft(r.body); // the reference is the server's (r.body.priorityRef); a failed run saves nothing
+  render();
+}

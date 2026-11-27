@@ -902,7 +902,7 @@ function opFollowUp(scope, snapshot, view = {}) {
       isInq && !view.reviewMode ? opInboxPanel({ inbox: view.inbox, evidence, events, plan, applied: appliedForPlan ?? applied, save, rerender: () => render(read()) }) : null,
       isInq ? opPipelinePanel({ scope, testId: snapshot.id, live: pipeLive, applied: appliedForPlan ?? applied, evidence, rerender: () => render(read()), period: pipePeriod }) : null,
       ...(canSave ? [planPanel, resultPanel, followDetails] : [staticPanel]));
-    root.replaceChildren(...[line, body, status].filter(Boolean)); // replaceChildren would write the word "null" for a null child
+    root.replaceChildren(...[line, body, status, view.priorityId ? opAgentDraftAction(view.priorityId) : null].filter(Boolean)); // A5: a draft from this priority (the server checks it) // replaceChildren would write the word "null" for a null child
   }
 
   try { render(read()); } catch { status.append(opFollowLabel('storageError')); root.replaceChildren(status); }

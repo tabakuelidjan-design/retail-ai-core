@@ -13,6 +13,7 @@
 // Campagnes is not part of this version (no advertising connector): no page, no script, no endpoint.
 
 import { createAgentGateway, sourceStatusOf } from '../agents/gateway.js';
+import { priorityItemsById, priorityFocus } from '../agents/priority-ref.js';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { readNordlaShared } from '../../shared/nordla-static.js';
@@ -150,7 +151,19 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
         let body;
         try { body = await readJsonBody(req, 16 * 1024); } catch (e) { return json(res, e.code === 'BODY_TOO_LARGE' ? 413 : 400, { error: { code: e.code ?? 'BAD_REQUEST' } }); }
         if (!body || typeof body !== 'object' || typeof body.agentId !== 'string') return json(res, 400, { error: { code: 'BAD_REQUEST' } });
-        try { return json(res, 200, await agents.run({ agentId: body.agentId, question: body.question, scope: historyScope ?? 'local' })); } catch (e) {
+        // A5: a draft may start from ONE priority of this merchant's CURRENT priorities. The server finds it; the model never chooses it.
+        let focus = null;
+        if (body.priorityId !== undefined) {
+          if (body.agentId !== 'strategist' || typeof body.priorityId !== 'string' || body.priorityId.length === 0 || body.priorityId.length > 200) return json(res, 400, { error: { code: 'BAD_REQUEST' } });
+          let payload = null; if (priorities) { try { payload = await priorities(); } catch { payload = null; } }
+          const item = payload ? priorityItemsById(payload).get(body.priorityId) : null;
+          if (!item) return json(res, 404, { error: { code: 'PRIORITY_NOT_FOUND' } }); // unknown, gone, or another merchant's
+          focus = priorityFocus(item);
+        }
+        try {
+          const result = await agents.run({ agentId: body.agentId, question: body.question, scope: historyScope ?? 'local', focus });
+          return json(res, 200, focus ? { ...result, priorityRef: { id: focus.id } } : result);
+        } catch (e) {
           if (e?.code && Number.isInteger(e.status)) return json(res, e.status, { error: { code: e.code } });
           console.error('growth agent failed:', e?.message ?? e); return json(res, 500, { error: { code: 'INTERNAL_ERROR' } });
         }
