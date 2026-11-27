@@ -43,6 +43,7 @@ export function validateCases(cases = CASES) {
       for (const k of keys) if (FORBIDDEN_KEYS.includes(k)) problems.push(`${c.id}: forbidden field ${k} in a REAL-catalogue case`);
       if (keys.includes('synthetic')) problems.push(`${c.id}: a synthetic block in a REAL-catalogue case`);
     }
+    if (c.group === 'goal' && !JSON.stringify(c).includes('FICTIF')) problems.push(`${c.id}: weekly-target figures without the FICTIF label`);
     if (c.group === 'remax-synthetic') {
       // FICTIONAL figures: each case carries a block explicitly labelled FICTIF
       if (!keys.includes('synthetic') || !JSON.stringify(c.sources).includes('FICTIF')) problems.push(`${c.id}: fictional figures without the FICTIF label`);
@@ -66,7 +67,7 @@ export async function runEvaluation({ answers = null, env = process.env, cases =
     let captured = null;
     const capture = { name: 'capture', model: 'offline', complete: async ({ user }) => { captured = user; return typeof answers[c.id] === 'string' ? answers[c.id] : JSON.stringify(answers[c.id]); } };
     const gw = createAgentGateway({ provider: capture, getters: gettersOf(c) });
-    try { await gw.run({ agentId: c.agent, question: c.question, scope: `eval-${c.id}` }); } catch (e) { /* a refused answer is graded as failed below */ }
+    try { await gw.run({ agentId: c.agent, question: c.question, scope: `eval-${c.id}`, goal: c.goal ?? null }); } catch (e) { /* a refused answer is graded as failed below */ }
     const g = gradeAnswer(c, answers[c.id], captured ?? JSON.stringify(c.sources));
     result.graded.push({ ...g, promptHasPersonalData: detectPersonalData(captured ?? '').length > 0 });
   }

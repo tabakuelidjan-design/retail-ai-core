@@ -28,6 +28,7 @@ import { createIdentityService, loadIdentityServiceEnv } from '../../identity/se
 import { createHttpSecurity } from '../../security/index.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/client.js';
 import { providerFromEnv, agentConfigFromEnv } from '../agents/provider.js';
+import { goalFromRows } from './follow-up-store.js';
 import { errorLabel } from './safe-log.js';
 
 /** The hosted configuration of Growth: the Sourcing checks with Growth's names (the Sourcing merchant-profile requirement does not apply). */
@@ -60,7 +61,8 @@ export async function startGrowthHosted({ env = process.env, log = console.log, 
   if (sources.merchantId !== hosted.merchantId) throw Object.assign(new Error('the resolved merchant is not NORDLA_MERCHANT_ID'), { code: 'HOSTED_MERCHANT_MISMATCH' });
   const gate = buildGrowthGate(env, hosted, services);
   const { guide, ...rest } = sources;
-  const app = createGrowthApp({ ...rest, guide: { previewUrl: null, isPreview: false, hosted: true }, hosted: true, agentProvider: providerFromEnv(env), agentConfig: agentConfigFromEnv(env) });
+  // the merchant's weekly target, read from its own follow-up entry at each run (this server's merchant only)
+  const app = createGrowthApp({ ...rest, guide: { previewUrl: null, isPreview: false, hosted: true }, hosted: true, agentProvider: providerFromEnv(env), agentConfig: agentConfigFromEnv(env), goalSource: async () => goalFromRows(await store.list(hosted.merchantId), historyScope) });
   const store = services?.store ?? createSupabaseFollowUpStore(sources.supabase ?? createSupabaseClient(loadSupabaseConfigFromEnv(env)));
   const historyScope = createHash('sha256').update(hosted.merchantId).digest('hex');
   const collectOrigins = String(env.GROWTH_COLLECT_ORIGINS ?? 'https://habb.be').split(',').map((s) => s.trim()).filter(Boolean); // the shop origins allowed to send personalizer events

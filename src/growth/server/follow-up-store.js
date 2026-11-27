@@ -100,3 +100,12 @@ export function createSupabaseFollowUpStore(supabase, { table = 'growth_follow_u
     },
   };
 }
+
+// A goal (Administration): the merchant's weekly target is ONE follow-up entry under its own key. This reads this merchant's scope only.
+export const goalKey = (scope) => `nordla.growth.goals.v1:${scope}`;
+/** The weekly target of this merchant from its follow-up rows, or null (absent, or not a valid goal value). */
+export function goalFromRows(rows, scope) {
+  const row = (Array.isArray(rows) ? rows : []).find((r) => r && r.key === goalKey(scope)) ?? null;
+  if (!row || followUpValueError(row.key, row.value) !== null) return null;
+  return row.value.goals ?? null;
+}

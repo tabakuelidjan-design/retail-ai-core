@@ -32,7 +32,7 @@ test('every agent: the provider receives only the sources of that agent, with pe
     for (const s of SENT) assert.doesNotMatch(user, new RegExp(s), `${a.id}: ${s} reached the provider`);
     assert.doesNotMatch(user, /"entity"/, `${a.id}: the socialAccount entity reached the provider`);
     const ctx = JSON.parse(user).context;
-    assert.deepEqual(Object.keys(ctx).sort(), [...a.sources].sort(), `${a.id}: only its own sources`);
+    assert.deepEqual(Object.keys(ctx).sort(), [...a.sources, ...(a.goal ? ['goal'] : [])].sort(), `${a.id}: only its own sources (and the weekly target for the agents that use it)`);
     for (const k of a.sources) {
       assert.ok(JSON.stringify(ctx[k]).includes(`KEEP-${a.id}-${k}`), `${a.id}/${k}: the non-personal marker is kept`);
       assert.ok(JSON.stringify(ctx[k]).includes('"units":2'), `${a.id}/${k}: units still arrive`);

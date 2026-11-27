@@ -75,7 +75,7 @@ async function readJsonBody(req, max) {
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw Object.assign(new Error('json'), { code: 'BAD_REQUEST' }); }
 }
 
-export function createGrowthApp({ now = () => new Date(), generalContext = null, productPotential = null, audience = null, content = null, store = null, merchantId = null, review = null, corrections = null, ads = null, site = null, siteReview = null, social = null, socialReview = null, inbox = null, inboxReview = null, dropoff = null, guide = null, hosted = false, agentProvider = null, agentConfig = { missing: [], unknownProvider: false } } = {}) {
+export function createGrowthApp({ now = () => new Date(), generalContext = null, productPotential = null, audience = null, content = null, store = null, merchantId = null, review = null, corrections = null, ads = null, site = null, siteReview = null, social = null, socialReview = null, inbox = null, inboxReview = null, dropoff = null, guide = null, hosted = false, agentProvider = null, agentConfig = { missing: [], unknownProvider: false }, goalSource = null } = {}) { // goalSource: this merchant's weekly target (hosted), or null
   const historyScope = merchantId ? createHash('sha256').update(String(merchantId)).digest('hex') : null;
   const priorities = createPrioritiesSource({ productPotential, audience, content, store, ads, site, social, inbox, general: generalContext, now });
   const getters = { priorities, products: productPotential, audience, content, store, dropoff, ads, social };
@@ -162,7 +162,10 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
           focus = priorityFocus(item);
         }
         try {
-          const result = await agents.run({ agentId: body.agentId, question: body.question, scope: historyScope ?? 'local', focus });
+          // the weekly target is read for this merchant only (hosted); the local preview has none and says so
+          // a failed read is "no target" (the agents say it is unavailable); it never fails the draft
+          const goal = goalSource ? await goalSource().catch(() => null) : null;
+          const result = await agents.run({ agentId: body.agentId, question: body.question, scope: historyScope ?? 'local', focus, goal });
           return json(res, 200, focus ? { ...result, priorityRef: { id: focus.id } } : result);
         } catch (e) {
           if (e?.code && Number.isInteger(e.status)) return json(res, e.status, { error: { code: e.code, ...(Array.isArray(e.details) ? { details: e.details } : {}) } });

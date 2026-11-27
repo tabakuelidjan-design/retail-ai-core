@@ -63,7 +63,7 @@ export function createAgentGateway({ provider = null, getters = {}, timeoutMs = 
     };
   }
 
-  async function run({ agentId, question = '', scope = 'anonymous', focus = null }) { // focus: a priority the server has verified (A5), or null
+  async function run({ agentId, question = '', scope = 'anonymous', focus = null, goal = null }) { // focus: a priority the server has verified (A5), or null; goal: the weekly target or null
     const agent = agentById(agentId);
     if (!agent) throw new AgentError('BAD_AGENT', 400);
     const q = validateQuestion(question);
@@ -90,6 +90,18 @@ export function createAgentGateway({ provider = null, getters = {}, timeoutMs = 
       if (text.length > perSource) { context[key] = { status: 'available', data_truncated: text.slice(0, perSource) }; truncated.push(key); }
       else context[key] = { status: 'available', data: JSON.parse(text) };
     }
+    // the weekly target: a TARGET set by the merchant, never a realised figure; only the agents given it (registry goal: true)
+    let goalSaid = false;
+    if (agent.goal) {
+      // the same bounds as the stored value (follow-up-store.js): a whole number from 0 to 100 000 000 EUR, otherwise no target
+      const t = goal && Number.isInteger(goal.weeklySalesTargetEur) && goal.weeklySalesTargetEur >= 0 && goal.weeklySalesTargetEur <= 100000000 ? goal.weeklySalesTargetEur : null;
+      if (t !== null) {
+        context.goal = { status: 'available', data: redactPersonalFields({ kind: 'target', period: 'weekly', weeklySalesTargetEur: t, basis: 'chiffre d’affaires hebdomadaire boutique + en ligne ; cible définie par le marchand, pas un résultat', note: typeof goal.note === 'string' ? goal.note : null }) };
+      } else {
+        context.goal = { status: 'unavailable' };
+        goalSaid = true;
+      }
+    }
     const user = JSON.stringify({ period: agent.period, question: q, context, ...(focus ? { priority: redactPersonalFields(focus) } : {}) });
 
     const ac = new AbortController();
@@ -105,7 +117,7 @@ export function createAgentGateway({ provider = null, getters = {}, timeoutMs = 
       return {
         agent: agent.id, generatedAt: now().toISOString(), period: agent.period,
         sources, truncated,
-        limits: [...out.limits, ...sources.filter((s) => s.status !== 'available').map((s) => `source ${s.key}: ${s.status === 'not_connected' ? 'non connectée' : 'indisponible'}`)],
+        limits: [...out.limits, ...(goalSaid ? ["objectif hebdomadaire indisponible : aucun écart ne peut être calculé"] : []), ...sources.filter((s) => s.status !== 'available').map((s) => `source ${s.key}: ${s.status === 'not_connected' ? 'non connectée' : 'indisponible'}`)],
         reason: out.reason, draft: out.draft,
         requiresHumanConfirmation: true, confirmations: agent.confirmations,
       };

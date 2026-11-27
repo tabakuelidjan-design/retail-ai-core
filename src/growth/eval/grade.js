@@ -63,6 +63,11 @@ export function gradeAnswer(c, answer, sourcesJson = JSON.stringify(c.sources)) 
   if (missingTerms.length) crit.statesMissing = missingTerms.every((m) => f.includes(fold(m)));
   // a case built on FICTIONAL figures: the answer must say they are fictitious (fictif / synthetique / test)
   if (c.expect.mustLabelSynthetic) crit.labelsSynthetic = /fictif|synthetiq|donnees de test|test/.test(f);
+  // every listed term must appear (a target AND the realised figure, for instance)
+  const mustAll = c.expect.mustAll ?? [];
+  if (mustAll.length) crit.mustAll = mustAll.every((m) => f.includes(fold(m)));
+  // without realised sales for the same week, the answer must not state a gap, a delay, a rate of achievement or a forecast
+  if (c.expect.noGapWithoutSales) crit.noGapWithoutSales = !/ecart|retard|atteint|prevision|taux d/.test(f);
   for (const [name, ok] of Object.entries(Object.fromEntries((AGENT_RULES[c.agent] ?? (() => []))(all).map((r) => [r.name, r.ok])))) crit[name] = ok;
   return finish(c, crit);
 }
