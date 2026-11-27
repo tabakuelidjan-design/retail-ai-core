@@ -414,3 +414,56 @@ const GR_SRC = {
   },
 };
 for (const lang of ['fr', 'nl', 'en']) Object.assign(window.NORDLA_DICTS[lang], GR_SRC[lang]);
+
+// A2 / A3 texts
+const GR_A23 = {
+  "fr": {
+    "gr.src.pipeline.linksTitle": "Conversations à suivre",
+    "gr.src.pipeline.linksNote": "Chaque lien ouvre la conversation concernée dans Opportunités.",
+    "gr.src.pipeline.noItems": "Aucune conversation n’est encore reliée à un suivi. Elles apparaissent ici lorsqu’une messagerie est connectée ou importée.",
+    "gr.src.pipeline.openLink": "ouvrir la conversation",
+    "gr.inbox.linkMissing": "Cette conversation n’est plus dans la liste (période ou source changée). Aucun détail n’est affiché.",
+    "gr.ag.draftsTitle": "Brouillons de l’agent Stratège",
+    "gr.ag.draftsChecking": "Vérification de l’agent IA…",
+    "gr.ag.draftsStatusUnknown": "État du fournisseur IA indisponible pour le moment.",
+    "gr.ag.draftsProviderOn": "Fournisseur IA configuré. Préparez de nouveaux brouillons dans Agents IA.",
+    "gr.ag.draftsProviderOff": "Fournisseur IA non configuré : aucun brouillon ne peut être produit ici. Variables à définir côté serveur : {0}.",
+    "gr.ag.draftsNone": "Aucun brouillon produit pour l’instant.",
+    "gr.ag.draftsGoAgents": "Ouvrir Agents IA",
+    "gr.ag.draftsAt": "Produit le",
+    "gr.ag.draftsState.to_validate": "Brouillon à valider — aucune action n’a été faite."
+  },
+  "nl": {
+    "gr.src.pipeline.linksTitle": "Gesprekken om op te volgen",
+    "gr.src.pipeline.linksNote": "Elke link opent het betreffende gesprek in Kansen.",
+    "gr.src.pipeline.noItems": "Er is nog geen gesprek aan een opvolging gekoppeld. Ze verschijnen hier zodra een berichtendienst gekoppeld of geïmporteerd is.",
+    "gr.src.pipeline.openLink": "het gesprek openen",
+    "gr.inbox.linkMissing": "Dit gesprek staat niet meer in de lijst (periode of bron gewijzigd). Geen details getoond.",
+    "gr.ag.draftsTitle": "Concepten van de Stratège-agent",
+    "gr.ag.draftsChecking": "AI-agent wordt gecontroleerd…",
+    "gr.ag.draftsStatusUnknown": "Status van de AI-aanbieder momenteel niet beschikbaar.",
+    "gr.ag.draftsProviderOn": "AI-aanbieder geconfigureerd. Stel nieuwe concepten op in AI-agents.",
+    "gr.ag.draftsProviderOff": "AI-aanbieder niet geconfigureerd: hier kan geen concept worden gemaakt. Te definiëren variabelen op de server: {0}.",
+    "gr.ag.draftsNone": "Nog geen concept opgesteld.",
+    "gr.ag.draftsGoAgents": "AI-agents openen",
+    "gr.ag.draftsAt": "Opgesteld op",
+    "gr.ag.draftsState.to_validate": "Concept om te valideren — er is geen actie uitgevoerd."
+  },
+  "en": {
+    "gr.src.pipeline.linksTitle": "Conversations to follow up",
+    "gr.src.pipeline.linksNote": "Each link opens that conversation in Opportunities.",
+    "gr.src.pipeline.noItems": "No conversation is linked to a follow-up yet. They appear here once a messaging account is connected or imported.",
+    "gr.src.pipeline.openLink": "open the conversation",
+    "gr.inbox.linkMissing": "This conversation is no longer in the list (period or source changed). No detail is shown.",
+    "gr.ag.draftsTitle": "Stratège agent drafts",
+    "gr.ag.draftsChecking": "Checking the AI agent…",
+    "gr.ag.draftsStatusUnknown": "AI provider state unavailable for now.",
+    "gr.ag.draftsProviderOn": "AI provider configured. Prepare new drafts in AI agents.",
+    "gr.ag.draftsProviderOff": "AI provider not configured: no draft can be produced here. Variables to set on the server: {0}.",
+    "gr.ag.draftsNone": "No draft produced yet.",
+    "gr.ag.draftsGoAgents": "Open AI agents",
+    "gr.ag.draftsAt": "Produced on",
+    "gr.ag.draftsState.to_validate": "Draft to validate — no action has been taken."
+  }
+};
+for (const lang of ['fr', 'nl', 'en']) Object.assign(window.NORDLA_DICTS[lang], GR_A23[lang]);

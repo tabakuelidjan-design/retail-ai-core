@@ -69,10 +69,10 @@ test('source states: the page reads the state of its source (available / not con
     assert.deepEqual(await (await fetch(base + '/api/growth/sources/ads')).json(), { key: 'ads', status: 'not_connected' });
     assert.deepEqual(await (await fetch(base + '/api/growth/sources/social')).json(), { key: 'social', status: 'unavailable' }); // no getter: unavailable, not zero
     assert.deepEqual(await (await fetch(base + '/api/growth/sources/inbox')).json(), { key: 'inbox', status: 'unavailable' });
-    assert.deepEqual(await (await fetch(base + '/api/growth/sources/pipeline')).json(), { key: 'pipeline', status: 'browser_only' });
+    assert.deepEqual(await (await fetch(base + '/api/growth/sources/pipeline')).json(), { key: 'pipeline', status: 'browser_only', items: [] });
     const hostedSrv = http.createServer(createGrowthApp({ hosted: true }));
     await new Promise((r) => hostedSrv.listen(0, '127.0.0.1', r));
-    assert.deepEqual(await (await fetch('http://127.0.0.1:' + hostedSrv.address().port + '/api/growth/sources/pipeline')).json(), { key: 'pipeline', status: 'server' });
+    assert.deepEqual(await (await fetch('http://127.0.0.1:' + hostedSrv.address().port + '/api/growth/sources/pipeline')).json(), { key: 'pipeline', status: 'server', items: [] });
     hostedSrv.close();
     assert.equal((await fetch(base + '/api/growth/sources/campaigns')).status, 404);
     await fetch(base + '/api/growth/sources/ads').then((r) => r.arrayBuffer());

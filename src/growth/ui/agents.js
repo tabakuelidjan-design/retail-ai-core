@@ -25,6 +25,7 @@ async function runAgent(agentId, question) {
   agBusy[agentId] = false;
   const code = res && res.body && res.body.error ? res.body.error.code : null;
   agResults[agentId] = res && res.ok && res.body ? { result: res.body } : { error: code && AG_ERROR_CODES.includes(code) ? code : 'NETWORK' };
+  if (res && res.ok && res.body && agentId === 'strategist') saveStrategistDraft(res.body); // A3: kept as a draft to validate
   render();
 }
 const AG_ERROR_CODES = ['AI_NOT_CONFIGURED', 'AI_QUOTA_EXCEEDED', 'AI_TIMEOUT', 'AI_PROVIDER_ERROR', 'AI_BAD_OUTPUT', 'BAD_REQUEST', 'BAD_AGENT', 'FORBIDDEN_ROLE', 'INTERNAL_ERROR'];
@@ -111,6 +112,7 @@ function renderExperiments(main, safe) {
 }
 
 // Pipeline, Inbox, social calendar and advertising: the state of their source, explained. No figure is shown here.
+// « Suivi commercial » also lists the conversations that carry a follow-up: each link opens THAT conversation in Opportunités.
 function renderSource(key, main, safe) {
   const d = srcData[key] || null;
   const status = d ? d.status : 'unavailable';
@@ -121,7 +123,68 @@ function renderSource(key, main, safe) {
     h('p', null, t(`gr.src.${key}.need`)),
     status === 'available' || status === 'server' ? h('p', null, t(`gr.src.${key}.available`)) : null,
     h('p', null, h('a', { class: 'btn-outline', href: '#/agents' }, t('gr.xp.agentLink'))))));
+  if (key === 'pipeline') main.appendChild(safe(() => conversationLinksCard(d)));
 }
+
+/** A2: one line per conversation that has a follow-up; the link carries the opportunity's stable id (the page opens that row). */
+function conversationLinksCard(d) {
+  const items = d && Array.isArray(d.items) ? d.items : [];
+  const head = cardHead('', t('gr.src.pipeline.linksTitle'));
+  if (!items.length) return h('div', { class: 'ex-card gr-xp-card' }, head, h('p', { class: 'gr-muted' }, t('gr.src.pipeline.noItems')));
+  return h('div', { class: 'ex-card gr-xp-card' }, head,
+    h('p', { class: 'gr-muted' }, t('gr.src.pipeline.linksNote')),
+    h('ul', { class: 'gr-ag-list' }, ...items.map((i) => h('li', null,
+      h('a', { href: `#/opportunities?open=${encodeURIComponent(i.id)}` },
+        `${typeof opSocialNetwork === 'function' ? opSocialNetwork(i.network) : (i.network || '–')} · ${(typeof INQ_KEYWORD !== 'undefined' && INQ_KEYWORD[i.requestType]) || i.requestType || '–'} — ${t('gr.src.pipeline.openLink')}`)))));
+}
+
+// ---- A3: the Stratège drafts already produced on this page, kept per merchant (follow-up store key agent.v1, no opportunity id) ----
+const AG_DRAFTS_MAX = 10;
+const agDraftKey = (scope) => `nordla.growth.agent.v1:${scope}`;
+function readStrategistDrafts(scope) {
+  try { const v = JSON.parse(growthStorage.getItem(agDraftKey(scope)) ?? 'null'); return v && v.v === 1 && Array.isArray(v.drafts) ? v.drafts : []; } catch { return []; }
+}
+/** Called only after the server returned a checked draft (never a simulated one). The draft is stored as to-validate: nothing was done. */
+function saveStrategistDraft(res) {
+  const scope = agData && agData.historyScope;
+  if (!scope) return; // the local preview has no merchant scope: nothing is kept there
+  const entry = { at: new Date().toISOString(), period: res.period, draft: res.draft, reason: res.reason, limits: res.limits, sources: res.sources, confirmations: res.confirmations, state: 'to_validate' };
+  const drafts = [entry, ...readStrategistDrafts(scope)].slice(0, AG_DRAFTS_MAX);
+  try { growthStorage.setItem(agDraftKey(scope), JSON.stringify({ v: 1, drafts })); } catch { /* storage refused: the draft is still shown on the agents page */ }
+}
+/** The provider state, read from the server (never assumed). Resolves to { configured, missing } or null. */
+async function agentStatusRequest() {
+  try {
+    if (typeof growthHosted !== 'undefined' && growthHosted && typeof growthHosted.api === 'function') {
+      const r = await growthHosted.api('/api/growth/agents'); return r && r.ok && r.body ? { configured: r.body.configured === true, missing: (r.body.configuration && r.body.configuration.missing) || [] } : null;
+    }
+    const r = await fetch('/api/growth/agents', { headers: { accept: 'application/json' } }); const b = await r.json();
+    return { configured: b.configured === true, missing: (b.configuration && b.configuration.missing) || [] };
+  } catch { return null; }
+}
+/** The « Brouillons de l'agent Stratège » block of Opportunités: stored drafts with their state; the provider state is said, not assumed. */
+/** The merchant scope comes from the Opportunités payload (always there) or from the agents payload when this page has loaded it. */
+function agentDraftsCard(d) {
+  const scope = (d && d.historyScope) || (agData && agData.historyScope) || null;
+  const drafts = scope ? readStrategistDrafts(scope) : [];
+  const stateLine = h('p', { class: 'gr-muted', role: 'status' }, t('gr.ag.draftsChecking'));
+  agentStatusRequest().then((s) => {
+    stateLine.replaceChildren(s === null ? t('gr.ag.draftsStatusUnknown')
+      : s.configured ? t('gr.ag.draftsProviderOn')
+        : t('gr.ag.draftsProviderOff', s.missing.length ? s.missing.join(', ') : t('gr.ag.notConfigured')));
+  });
+  const list = drafts.length
+    ? drafts.map((d) => h('article', { class: 'gr-ag-result', 'data-draft-at': d.at },
+      h('p', { class: 'gr-ag-banner' }, t('gr.ag.draftsState.to_validate')),
+      h('p', { class: 'gr-muted' }, `${t('gr.ag.draftsAt')} ${new Date(d.at).toLocaleString(NORDLA_I18N.getLang())} · ${t(`gr.ag.period.${d.period}`)}`),
+      h('pre', { class: 'gr-ag-draft' }, d.draft),
+      h('p', null, d.reason),
+      h('ul', { class: 'gr-ag-list' }, ...(d.limits || []).map((l) => h('li', null, l))),
+      h('p', { class: 'gr-ag-confirm' }, t('gr.ag.confirmFirst', (d.confirmations || []).map((c) => t(`gr.ag.conf.${c}`)).join(' · ')))))
+    : [h('p', { class: 'gr-muted' }, t('gr.ag.draftsNone'), ' ', h('a', { href: '#/agents' }, t('gr.ag.draftsGoAgents')))];
+  return h('div', { class: 'ex-card gr-xp-card', 'data-agent-drafts': '1' }, cardHead('', t('gr.ag.draftsTitle')), stateLine, ...list);
+}
+
 
 let agData = null;
 let admData = null;

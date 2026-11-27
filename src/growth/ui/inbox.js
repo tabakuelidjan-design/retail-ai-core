@@ -42,6 +42,8 @@ function opInboxCard(d) {
   const a = d.inbox; if (!a) return null;
   const items = Array.isArray(a.items) ? a.items : []; const dayBefore = (iso) => inqAddDays(iso, -1);
   const ok = (a.accounts || []).filter((x) => x.state === 'OK');
+  const target = typeof hashParam === 'function' ? hashParam('open') : null; // deep link from « Suivi commercial »: #/opportunities?open=<id>
+  const linked = Boolean(target) && items.some((i) => i.id === target);
   const signal = items.length ? t('gr.inbox.signal', num(items.length)) : t('gr.inbox.state.NOT_CONNECTED');
   const body = [];
   for (const acc of a.accounts || []) {
@@ -58,9 +60,10 @@ function opInboxCard(d) {
   }
   if (items.length) body.push(h('div', { class: 'ex-movers gv-priorities' }, items.map((i) => {
     const acc = (a.accounts || []).find((x) => x.network === i.evidence.network); const threads = acc && acc.threads ? acc.threads : [];
-    return opFollowUp(d.historyScope, opSnapshot(i), { priorityId: i.id, rowClass: true, publication: i.publication ?? null, inbox: { threads }, onChange: () => render() });
+    return opFollowUp(d.historyScope, opSnapshot(i), { priorityId: i.id, rowClass: true, open: i.id === target, publication: i.publication ?? null, inbox: { threads }, onChange: () => render() });
   })));
-  return h('details', { class: 'ex-card gr-pr-card gv-fold gv-watch gv-inbox' }, h('summary', null, h('span', { class: 'gv-fold-title' }, t('gr.inbox.title')), h('span', { class: 'gv-fold-signal' }, signal)), ...body);
+  if (target && !linked) body.push(h('p', { class: 'ex-sub gr-muted', role: 'status' }, t('gr.inbox.linkMissing')));
+  return h('details', { class: 'ex-card gr-pr-card gv-fold gv-watch gv-inbox', ...(linked ? { open: '' } : {}) }, h('summary', null, h('span', { class: 'gv-fold-title' }, t('gr.inbox.title')), h('span', { class: 'gv-fold-signal' }, signal)), ...body);
 }
 
 // ---------- the conversations of the publication's period, to qualify (inside the test's row, on demand) ----------

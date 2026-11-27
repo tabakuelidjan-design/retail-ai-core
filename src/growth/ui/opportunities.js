@@ -293,7 +293,8 @@ function renderOpportunities(main, safe) {
   const archived = safe(opArchivedFollowUps);
   if (archived) main.appendChild(archived);
   const socialBlock = safe(opSocialCard); if (socialBlock) main.appendChild(socialBlock); // lot _08: shown only when a social source is wired (connected or explicitly not connected)
-  const inboxBlock = safe(opInboxCard); if (inboxBlock) main.appendChild(inboxBlock); // lot _10: conversations and qualified requests, shown only when an inbox source is wired
+  const inboxBlock = safe(opInboxCard); if (inboxBlock) main.appendChild(inboxBlock);
+  const agentBlock = safe(agentDraftsCard); if (agentBlock) main.appendChild(agentBlock); // A3: the Stratège drafts already produced, with their state // lot _10: conversations and qualified requests, shown only when an inbox source is wired
   const siteBlock = safe(opSiteCard); if (siteBlock) main.appendChild(siteBlock); // lot _07: shown only when a site source is wired (connected or explicitly not connected)
   const adsBlock = safe(opAdsCard); if (adsBlock) main.appendChild(adsBlock); // lot _06: shown only when an ad source is wired (connected or explicitly not connected)
   main.appendChild(h('div', { class: 'gr-pr-sections' }, safe(opFixCard), safe(opWatchCard))); // folded: the signal stays visible in the closed label

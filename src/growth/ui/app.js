@@ -324,6 +324,12 @@ function hashParam(name) {
   for (const part of q.split('&')) { const [k, v = ''] = part.split('='); if (k === name) { try { return decodeURIComponent(v); } catch { return null; } } }
   return null;
 }
+/** A2: #/opportunities?open=<id> scrolls to the row of that conversation (its detail is opened by inbox.js). Nothing happens when the row is absent. */
+function focusDeepLink() {
+  const id = hashParam('open'); if (!id || typeof document.querySelectorAll !== 'function') return;
+  const el = [...document.querySelectorAll('[data-priority-id]')].find((n) => n.getAttribute('data-priority-id') === id);
+  if (el && typeof el.scrollIntoView === 'function') el.scrollIntoView({ block: 'start' });
+}
 function clearHashParams(page) { if (typeof history !== 'undefined' && history.replaceState && location.hash.includes('?')) history.replaceState(null, '', `#/${page}`); }
 
 // Partial data: the figures below are real but some engines could not be read; they are named, never hidden (same wording as Opportunités).
@@ -350,6 +356,7 @@ function render() {
   // Each section is built on its own: a failing section is replaced by an empty state, the rest of the page still renders.
   const safe = (fn) => { try { return fn(d); } catch (e) { console.error('growth section failed', e); return h('div', { class: 'ex-card' }, NordlaCharts.insufficient(t('gr.noData'), '')); } };
   page.render(main, safe);
+  if (key === 'opportunities') focusDeepLink();
   applyDialogFocus();
 }
 

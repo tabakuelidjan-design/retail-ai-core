@@ -12,9 +12,9 @@
 
 export const MAX_ENTRY_BYTES = 256 * 1024;
 export const MAX_ENTRIES = 5000;
-const KEY = /^nordla\.growth\.(follow-up|pipeline)\.v1:([0-9a-f]{64})(?::((?:[A-Za-z0-9_.:@/-]|%[0-9A-Fa-f]{2}){1,200}))?$/; // the screen writes encodeURIComponent(id): a product id "product:<uuid>" arrives as "product%3A<uuid>"
+const KEY = /^nordla\.growth\.(follow-up|pipeline|agent)\.v1:([0-9a-f]{64})(?::((?:[A-Za-z0-9_.:@/-]|%[0-9A-Fa-f]{2}){1,200}))?$/; // the screen writes encodeURIComponent(id): a product id "product:<uuid>" arrives as "product%3A<uuid>"
 
-/** Is this key one of the follow-up keys of THIS merchant's scope? follow-up keys carry an opportunity id, the pipeline key none. */
+/** Is this key one of the follow-up keys of THIS merchant's scope? follow-up keys carry an opportunity id; the pipeline and agent-draft keys carry none. */
 export function followUpKeyOk(key, historyScope) {
   if (typeof key !== 'string' || key.length > 400 || typeof historyScope !== 'string' || !/^[0-9a-f]{64}$/.test(historyScope)) return false;
   const m = KEY.exec(key);
@@ -27,6 +27,10 @@ export function followUpValueError(key, value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return 'VALUE_INVALID';
   let size; try { size = Buffer.byteLength(JSON.stringify(value)); } catch { return 'VALUE_INVALID'; }
   if (size > MAX_ENTRY_BYTES) return 'VALUE_TOO_LARGE';
+  if (key.startsWith('nordla.growth.agent.v1:')) {
+    // the saved drafts of the Stratège agent: at most 10 entries, each already capped by the agent contract
+    return value.v === 1 && Array.isArray(value.drafts) && value.drafts.length <= 10 ? null : 'VALUE_INVALID';
+  }
   if (key.startsWith('nordla.growth.follow-up.v1:')) { if (!Array.isArray(value.events) || value.events.length > 2000 || !value.snapshot || typeof value.snapshot !== 'object') return 'VALUE_INVALID'; return null; }
   return value.v === 1 && value.requests && typeof value.requests === 'object' && !Array.isArray(value.requests) ? null : 'VALUE_INVALID';
 }

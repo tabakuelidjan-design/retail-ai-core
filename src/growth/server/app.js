@@ -142,7 +142,7 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
       }
       if (url.pathname === '/api/growth/agents') {
         // The agent registry and the configuration state. Names of missing variables only; never a key, never a prompt.
-        return json(res, 200, { ...agents.status(), configuration: agentConfig });
+        return json(res, 200, { ...agents.status(), configuration: agentConfig, ...(historyScope && { historyScope }) }); // the merchant's scope: where the page keeps the Stratège drafts
       }
       if (url.pathname === '/api/growth/agents/run' && req.method === 'POST') {
         // A DRAFT only: the agent reads its own sources for this merchant and nothing is sent, published or changed.
@@ -158,7 +158,12 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
         // The state of ONE source for its explained page: available / not_connected / unavailable (never a figure, never zero).
         const key = url.pathname.slice('/api/growth/sources/'.length);
         // The commercial follow-up is saved on the server in the HOSTED app (follow-up store, per merchant); the local preview keeps it in this browser.
-        if (key === 'pipeline') return json(res, 200, { key, status: hosted ? 'server' : 'browser_only' });
+        if (key === 'pipeline') {
+          // The conversations that can be followed from « Suivi commercial »: id, network, request type and state only (no handle, no text).
+          let items = [];
+          if (priorities) { try { const p = await priorities(); items = (p.inbox?.items ?? []).map((i) => ({ id: i.id, network: i.evidence?.network ?? null, requestType: i.evidence?.requestType ?? null, status: i.evidence?.status ?? null })); } catch { items = []; } }
+          return json(res, 200, { key, status: hosted ? 'server' : 'browser_only', items });
+        }
         const getters = { ads, social, inbox };
         if (!Object.hasOwn(getters, key)) return json(res, 404, { error: { code: 'NOT_FOUND' } });
         const getter = getters[key];
