@@ -93,8 +93,7 @@ function renderAdmin(main, safe) {
     d.agents && d.agents.dailyLimit ? h('p', null, `${t('gr.adm.quota')}: ${d.agents.dailyLimit}`) : null,
     cfgMissing.length ? h('p', { class: 'gr-ag-note' }, t('gr.adm.missing'), ' ', h('code', null, cfgMissing.join(', '))) : null,
     h('p', { class: 'gr-muted' }, t('gr.adm.secretNote')))));
-  main.appendChild(safe(() => h('div', { class: 'ex-card' }, cardHead('', t('gr.adm.goals')),
-    h('p', null, t('gr.adm.goalsNotStored')))));
+  main.appendChild(safe(() => goalsCard(d)));
   main.appendChild(safe(() => h('div', { class: 'ex-card' }, cardHead('', t('gr.adm.prefs')),
     h('ul', { class: 'gr-ag-list' }, h('li', null, t('gr.adm.langs')), h('li', null, t('gr.adm.periods'))))));
   main.appendChild(safe(() => h('div', { class: 'ex-card' }, cardHead('', t('gr.adm.connectors')),
@@ -271,4 +270,31 @@ async function agentDraftFromPriority(priorityId, btn, feedback) {
   if (!r || !r.ok || !r.body) { feedback.replaceChildren(agErrText(r && r.body && r.body.error ? r.body.error.code : null)); return; }
   saveStrategistDraft(r.body); // the reference is the server's (r.body.priorityRef); a failed run saves nothing
   render();
+}
+
+// ---- Objectives (Administration): the merchant's own follow-up entry, written through growthStorage (hosted: the server; local: this browser) ----
+const goalKey = (scope) => `nordla.growth.goals.v1:${scope}`;
+function readGoal(key) {
+  try { const v = JSON.parse(growthStorage.getItem(key) ?? 'null'); return v && v.v === 1 && v.goals ? v.goals : null; } catch { return null; }
+}
+function goalsCard(d) {
+  const scope = (d && d.historyScope) || null;
+  const key = scope ? goalKey(scope) : null;
+  const current = key ? readGoal(key) : null;
+  const input = h('input', { type: 'number', min: '0', max: '100000000', step: '1', inputmode: 'numeric', value: current && current.weeklySalesTargetEur != null ? String(current.weeklySalesTargetEur) : '', 'aria-label': t('gr.adm.goal.label') });
+  const feedback = h('p', { class: 'gr-ag-note', role: 'status' });
+  const form = h('form', { class: 'gr-goal-form', on: { submit: (ev) => {
+    ev.preventDefault();
+    const raw = input.value.trim();
+    const n = raw === '' ? null : Number(raw);
+    if (raw !== '' && (!Number.isInteger(n) || n < 0 || n > 100000000)) { feedback.replaceChildren(t('gr.adm.goal.invalid')); return; }
+    if (!key) { feedback.replaceChildren(t('gr.adm.goal.noScope')); return; }
+    growthStorage.setItem(key, JSON.stringify({ v: 1, goals: { weeklySalesTargetEur: n, updatedAt: new Date().toISOString() } }));
+    render();
+  } } },
+  h('label', null, t('gr.adm.goal.label'), ' ', input), ' ', h('button', { type: 'submit', class: 'btn-outline' }, t('gr.adm.goal.save')), feedback);
+  const where = typeof growthHosted !== 'undefined' && growthHosted ? t('gr.adm.goal.hosted') : t('gr.adm.goal.local');
+  return h('div', { class: 'ex-card' }, cardHead('', t('gr.adm.goals')),
+    h('p', null, current && current.weeklySalesTargetEur != null ? t('gr.adm.goal.current', num(current.weeklySalesTargetEur)) : t('gr.adm.goal.none')),
+    form, h('p', { class: 'gr-muted' }, where), h('p', { class: 'gr-muted' }, t('gr.adm.goal.notUsed')));
 }

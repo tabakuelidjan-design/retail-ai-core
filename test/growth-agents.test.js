@@ -138,7 +138,7 @@ test('routes: registry and admin state are readable, the run route needs a confi
     assert.equal(st.status, 200); assert.equal(st.json.configured, false); assert.equal(st.json.agents.length, 8);
     assert.deepEqual(st.json.configuration.missing, ['GROWTH_AI_API_KEY']);
     const adm = await srv.req('/api/growth/admin');
-    assert.equal(adm.status, 200); assert.equal(adm.json.goals.stored, false);
+    assert.equal(adm.status, 200); assert.equal(adm.json.goals, undefined, "goals are read from the merchant follow-up, not from the admin payload");
     assert.ok(adm.json.sources.every((s) => ['available', 'not_connected', 'unavailable'].includes(s.status)));
     const off = await srv.req('/api/growth/agents/run', { method: 'POST', body: { agentId: 'store' } });
     assert.equal(off.status, 503); assert.equal(off.json.error.code, 'AI_NOT_CONFIGURED');

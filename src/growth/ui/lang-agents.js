@@ -569,3 +569,41 @@ const GR_PRIV = {
   }
 };
 for (const lang of ['fr', 'nl', 'en']) Object.assign(window.NORDLA_DICTS[lang], GR_PRIV[lang]);
+
+// Objective texts (Administration)
+const GR_GOAL = {
+  "fr": {
+    "gr.adm.goal.label": "Objectif de chiffre d’affaires hebdomadaire (€, entier)",
+    "gr.adm.goal.save": "Enregistrer l’objectif",
+    "gr.adm.goal.invalid": "Saisissez un montant entier entre 0 et 100 000 000 €, ou laissez le champ vide.",
+    "gr.adm.goal.noScope": "Objectif indisponible : aucun périmètre marchand sur cette page.",
+    "gr.adm.goal.current": "Objectif actuel : {0} € par semaine.",
+    "gr.adm.goal.none": "Aucun objectif défini.",
+    "gr.adm.goal.hosted": "Enregistré sur le serveur pour votre boutique (rôle rédacteur requis).",
+    "gr.adm.goal.local": "Aperçu local : objectif enregistré dans ce navigateur seulement.",
+    "gr.adm.goal.notUsed": "Les agents n’utilisent pas encore cet objectif : il sert de repère pour vous."
+  },
+  "nl": {
+    "gr.adm.goal.label": "Wekelijkse omzetdoelstelling (€, geheel getal)",
+    "gr.adm.goal.save": "Doelstelling opslaan",
+    "gr.adm.goal.invalid": "Geef een geheel bedrag tussen 0 en 100 000 000 € in, of laat het veld leeg.",
+    "gr.adm.goal.noScope": "Doelstelling niet beschikbaar: geen handelaarsscope op deze pagina.",
+    "gr.adm.goal.current": "Huidige doelstelling: {0} € per week.",
+    "gr.adm.goal.none": "Geen doelstelling ingesteld.",
+    "gr.adm.goal.hosted": "Opgeslagen op de server voor uw winkel (schrijfrol vereist).",
+    "gr.adm.goal.local": "Lokale preview: doelstelling enkel in deze browser opgeslagen.",
+    "gr.adm.goal.notUsed": "De agents gebruiken deze doelstelling nog niet: ze dient als richtpunt voor u."
+  },
+  "en": {
+    "gr.adm.goal.label": "Weekly sales target (€, whole number)",
+    "gr.adm.goal.save": "Save the target",
+    "gr.adm.goal.invalid": "Enter a whole amount between 0 and 100,000,000 €, or leave the field empty.",
+    "gr.adm.goal.noScope": "Target unavailable: no merchant scope on this page.",
+    "gr.adm.goal.current": "Current target: {0} € per week.",
+    "gr.adm.goal.none": "No target set.",
+    "gr.adm.goal.hosted": "Saved on the server for your shop (writer role required).",
+    "gr.adm.goal.local": "Local preview: the target is saved in this browser only.",
+    "gr.adm.goal.notUsed": "The agents do not use this target yet: it is a reference for you."
+  }
+};
+for (const lang of ['fr', 'nl', 'en']) Object.assign(window.NORDLA_DICTS[lang], GR_GOAL[lang]);

@@ -12,7 +12,7 @@
 
 export const MAX_ENTRY_BYTES = 256 * 1024;
 export const MAX_ENTRIES = 5000;
-const KEY = /^nordla\.growth\.(follow-up|pipeline|agent)\.v1:([0-9a-f]{64})(?::((?:[A-Za-z0-9_.:@/-]|%[0-9A-Fa-f]{2}){1,200}))?$/; // the screen writes encodeURIComponent(id): a product id "product:<uuid>" arrives as "product%3A<uuid>"
+const KEY = /^nordla\.growth\.(follow-up|pipeline|agent|goals)\.v1:([0-9a-f]{64})(?::((?:[A-Za-z0-9_.:@/-]|%[0-9A-Fa-f]{2}){1,200}))?$/; // the screen writes encodeURIComponent(id): a product id "product:<uuid>" arrives as "product%3A<uuid>"
 
 /** Is this key one of the follow-up keys of THIS merchant's scope? follow-up keys carry an opportunity id; the pipeline and agent-draft keys carry none. */
 export function followUpKeyOk(key, historyScope) {
@@ -41,6 +41,15 @@ export function followUpValueError(key, value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return 'VALUE_INVALID';
   let size; try { size = Buffer.byteLength(JSON.stringify(value)); } catch { return 'VALUE_INVALID'; }
   if (size > MAX_ENTRY_BYTES) return 'VALUE_TOO_LARGE';
+  if (key.startsWith('nordla.growth.goals.v1:')) {
+    // the merchant's objective (Administration): a weekly sales target in whole euros (null = none) and an optional short note. Nothing else.
+    const goals = value.goals;
+    const ok = value.v === 1 && goals && typeof goals === 'object' && !Array.isArray(goals)
+      && Object.keys(goals).every((k) => ['weeklySalesTargetEur', 'note', 'updatedAt'].includes(k))
+      && (goals.weeklySalesTargetEur === null || (Number.isInteger(goals.weeklySalesTargetEur) && goals.weeklySalesTargetEur >= 0 && goals.weeklySalesTargetEur <= 100000000))
+      && (goals.note === undefined || (typeof goals.note === 'string' && goals.note.length <= 200));
+    return ok ? null : 'VALUE_INVALID';
+  }
   if (key.startsWith('nordla.growth.agent.v1:')) {
     // the saved drafts of the Stratège agent: at most 10 entries, each already capped by the agent contract
     return value.v === 1 && Array.isArray(value.drafts) && value.drafts.length <= 10 && value.drafts.every(validDraft) ? null : 'VALUE_INVALID';

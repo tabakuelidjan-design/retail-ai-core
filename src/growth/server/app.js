@@ -196,7 +196,7 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
           if (typeof g !== 'function') return { key, status: 'unavailable' };
           try { return { key, status: sourceStatusOf(await g()) }; } catch { return { key, status: 'unavailable' }; }
         }));
-        return json(res, 200, { sources, agents: agents.status(), configuration: agentConfig, goals: { stored: false } });
+        return json(res, 200, { sources, agents: agents.status(), configuration: agentConfig, ...(historyScope && { historyScope }) }); // the objective itself is the merchant's own follow-up entry (the page reads it)
       }
       if (url.pathname === '/api/growth/dropoff') {
         if (!dropoff) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });

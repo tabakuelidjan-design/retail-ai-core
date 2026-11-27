@@ -46,7 +46,7 @@ test('the scope endpoints answer without inventing data: agents registry, admin 
     assert.deepEqual(ex, { state: 'NO_MEASUREMENT_SOURCE' });
     const adm = await (await fetch(`${base}/api/growth/admin`)).json();
     assert.ok(adm.sources.every((s) => ['available', 'not_connected', 'unavailable'].includes(s.status)));
-    assert.equal(adm.goals.stored, false);
+    assert.equal(adm.goals, undefined);
   } finally { server.close(); }
 });
 
