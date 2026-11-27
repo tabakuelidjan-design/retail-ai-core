@@ -2,7 +2,8 @@
 // supplied in a file. A real provider's answers are produced elsewhere (an explicit, owner-approved step) and then graded here offline.
 // It never prints a secret: provider configuration is reported by variable NAME only.
 
-import { CASES, AGENT_CASE_COUNT } from './cases.js';
+import { CASES } from './cases.js';
+import { coverageProblems } from './expectations.js';
 import { gradeAnswer } from './grade.js';
 import { createAgentGateway } from '../agents/gateway.js';
 import { AGENTS } from '../agents/registry.js';
@@ -27,10 +28,13 @@ function gettersOf(c) {
   return out;
 }
 
-/** Structural checks on the cases themselves: every agent covered, sources the agent really reads, no personal format in the synthetic data. */
-export function validateCases(cases = CASES) {
+/**
+ * Structural checks on the cases: sources the agent really reads, no personal format, the group's own rules, and - when a group name is
+ * given - the coverage declared for that group (expectations.js): no lost, duplicated, misplaced or unexpected case.
+ */
+export function validateCases(cases = CASES, groupName = null) {
   const problems = [];
-  for (const a of AGENTS) if ((AGENT_CASE_COUNT[a.id] ?? 0) < 3) problems.push(`${a.id}: fewer than 3 cases`);
+  if (groupName) problems.push(...coverageProblems(groupName, cases));
   for (const c of cases) {
     const agent = AGENTS.find((a) => a.id === c.agent);
     if (!agent) { problems.push(`${c.id}: unknown agent`); continue; }
@@ -56,11 +60,11 @@ export function validateCases(cases = CASES) {
  * Grades answers offline. `answers` maps case id -> the model's answer (JSON text or object). Without answers nothing is graded:
  * the result says so, and no quality is claimed.
  */
-export async function runEvaluation({ answers = null, env = process.env, cases = CASES } = {}) {
-  const problems = validateCases(cases);
+export async function runEvaluation({ answers = null, env = process.env, cases = CASES, group = null } = {}) {
+  const problems = validateCases(cases, group);
   const provider = providerVariableState(env);
   const configured = PROVIDER_VARS.every((k) => provider[k]);
-  const result = { casesTotal: cases.length, agents: Object.keys(AGENT_CASE_COUNT).length, validation: { ok: problems.length === 0, problems }, provider: { configured, variables: provider }, graded: [], quality: 'NOT EVALUATED: no real provider answer was graded' };
+  const result = { casesTotal: cases.length, agents: new Set(cases.map((c) => c.agent)).size, validation: { ok: problems.length === 0, problems }, provider: { configured, variables: provider }, graded: [], quality: 'NOT EVALUATED: no real provider answer was graded' };
   if (!answers) return result;
   for (const c of cases) {
     if (!(c.id in answers)) { result.graded.push({ id: c.id, agent: c.agent, missing: true }); continue; }

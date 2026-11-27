@@ -14,7 +14,8 @@
 // Provider configuration is reported by variable NAME only (never a value).
 
 import { readFile, writeFile } from 'node:fs/promises';
-import { runEvaluation, validateCases } from '../src/growth/eval/run.js';
+import { runEvaluation } from '../src/growth/eval/run.js';
+import { coverageProblems } from '../src/growth/eval/expectations.js';
 import { GROUPS, GROUP_NAMES, DEFAULT_GROUP, casesOfGroup } from '../src/growth/eval/groups.js';
 
 const HELP = `Growth agent evaluation (offline)
@@ -115,7 +116,7 @@ async function main(argv) {
     const ids = new Set(cases.map((c) => c.id));
     const groupAnswers = answers ? Object.fromEntries(Object.entries(answers).filter(([id]) => ids.has(id))) : null;
     const otherCount = answers ? Object.keys(answers).filter((id) => !ids.has(id)).length : 0;
-    const result = await runEvaluation({ answers: groupAnswers && Object.keys(groupAnswers).length ? groupAnswers : null, cases });
+    const result = await runEvaluation({ answers: groupAnswers && Object.keys(groupAnswers).length ? groupAnswers : null, cases, group: name });
     const rep = groupReport(name, result, args.group === 'all' ? 0 : otherCount, Boolean(answers));
     sections.push(rep);
     lines.push(...rep.lines, '');
@@ -123,6 +124,10 @@ async function main(argv) {
     allValid = allValid && rep.validOk;
   }
   if (args.group === 'all' || names.length > 1) {
+    // the total: every case exactly once, in its declared group, nothing lost or unexpected
+    const totalProblems = coverageProblems('all', casesOfGroup('all'));
+    for (const p of totalProblems) lines.push(`- total problem: ${p}`);
+    if (totalProblems.length) allValid = false;
     lines.push(`## Total: ${totals.cases} cases in ${names.length} group(s); graded offline: ${totals.graded}${totals.missing ? `, without an answer: ${totals.missing}` : ''}.`);
     lines.push(totals.graded ? 'Quality: graded offline for the cases above; no quality is claimed beyond these checks.' : 'Quality: NOT EVALUATED: no real provider answer was graded.');
   }
