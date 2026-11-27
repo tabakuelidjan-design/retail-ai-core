@@ -46,7 +46,8 @@ test('A5 link: a valid priority of THIS merchant starts a draft; the server sets
     assert.equal(r.status, 200); assert.deepEqual(r.json.priorityRef, { id: 'inquiry:alpha' });
     assert.equal(r.json.requiresHumanConfirmation, true);
     assert.equal(calls.length, 1); const sent = JSON.parse(calls[0]);
-    assert.equal(sent.priority.id, 'inquiry:alpha');
+    assert.match(sent.priority.id, /^ref:[0-9a-f]{16}$/, 'an account priority reaches the provider as an opaque reference, never as the account id');
+    assert.doesNotMatch(calls[0], /inquiry:alpha|"accountId"/);
     assert.doesNotMatch(calls[0], /@private-handle|message privé/, 'no handle and no message text reach the provider');
   } finally { await srv.close(); }
 });

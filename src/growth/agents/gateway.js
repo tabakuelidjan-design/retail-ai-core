@@ -86,7 +86,7 @@ export function createAgentGateway({ provider = null, getters = {}, timeoutMs = 
       if (text.length > perSource) { context[key] = { status: 'available', data_truncated: text.slice(0, perSource) }; truncated.push(key); }
       else context[key] = { status: 'available', data: JSON.parse(text) };
     }
-    const user = JSON.stringify({ period: agent.period, question: q, context, ...(focus ? { priority: focus } : {}) });
+    const user = JSON.stringify({ period: agent.period, question: q, context, ...(focus ? { priority: redactPersonalFields(focus) } : {}) });
 
     const ac = new AbortController();
     let timer;

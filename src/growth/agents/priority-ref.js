@@ -1,6 +1,9 @@
 // Nordla Growth - A5: the link between a Stratège draft and ONE priority of Opportunités.
 // The server finds the priority among the CURRENT priorities of the session's merchant (the payload the page itself shows). Never by text, never
 // from the model: the reference is the priority's own stable id, set by the server once the priority has been found. Read only.
+// A5 review hardening: the personal filter below applies to EVERY agent context (gateway.js), not only to priorities.
+
+import { createHash } from 'node:crypto';
 
 const BLOCKS = ['inbox', 'ads', 'site', 'social'];
 
@@ -13,15 +16,29 @@ export function priorityItemsById(payload) {
   return out;
 }
 
-// Fields that identify a person or carry message text: never given to the agent, at any depth of its context.
-export const PRIVATE_FIELDS = new Set(['handle', 'accountId', 'text', 'messages', 'threads', 'customer', 'email', 'phone']);
+// Keys that identify a person, carry message text, or identify a customer or a connected account. Removed at ANY depth of an agent context.
+export const PRIVATE_FIELDS = new Set([
+  'handle', 'account', 'accountId', 'account_id', 'text', 'messages', 'threads', 'customer', 'customer_key', 'customerKey',
+  'email', 'phone', 'firstName', 'lastName', 'first_name', 'last_name', 'address', 'ip', 'ipAddress',
+]);
 const PRIVATE_EVIDENCE = PRIVATE_FIELDS;
 
-/** A copy of a value without the personal fields, at any depth (arrays and objects). Used for every agent context, not only for priorities. */
+/** The provider never sees a connected account's identifier, nor a priority id built from one: those are replaced by an opaque reference. */
+const opaqueRef = (id) => `ref:${createHash('sha256').update(String(id)).digest('hex').slice(0, 16)}`;
+const isAccountPriority = (o) => o.category === 'inbox' || o.kind === 'inquiryTest';
+
+/** A copy of a value without the personal fields, at any depth (arrays and objects). Used for every agent context. */
 export function redactPersonalFields(value) {
   if (Array.isArray(value)) return value.map(redactPersonalFields);
-  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).filter(([k]) => !PRIVATE_FIELDS.has(k)).map(([k, v]) => [k, redactPersonalFields(v)]));
-  return value;
+  if (!value || typeof value !== 'object') return value;
+  const out = {};
+  for (const [k, v] of Object.entries(value)) {
+    if (PRIVATE_FIELDS.has(k)) continue;
+    if (k === 'entity' && v && typeof v === 'object' && v.type === 'socialAccount') continue; // its id is the account id and its title the handle
+    out[k] = redactPersonalFields(v);
+  }
+  if (isAccountPriority(value) && typeof value.id === 'string') out.id = opaqueRef(value.id);
+  return out;
 }
 
 /** What the agent may read about the priority: its stable id, kind, category, codes, and its evidence without personal fields. */
