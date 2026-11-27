@@ -10,6 +10,7 @@
 //   - SILENT: an accepted or a refused-by-schema event both answer 204 with no body (nothing to learn by probing); only a bad origin, a bad method or a flood answer otherwise.
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { validatePersonalizerEvent } from '../dropoff/personalizer.js';
+import { errorLabel } from './safe-log.js';
 
 export const COLLECT_PATH = '/api/growth/collect/personalizer';
 
@@ -63,7 +64,7 @@ export function createPersonalizerCollector({ store, allowedOrigins = ['https://
     const v = validatePersonalizerEvent(raw);
     if (!v.ok) return text(res, 204, cors); // refused by the schema: silent
     if (!hit(attemptHits, v.row.attempt_id, perAttempt, 3_600_000)) return text(res, 204, cors);
-    try { await store.insert({ ...v.row, provenance: channelProvenance(v.channel, channels) }); /* provenance: assigned HERE from the server's configuration */ } catch (e) { console.error('personalizer collect failed:', e?.message ?? e); return text(res, 503, cors); }
+    try { await store.insert({ ...v.row, provenance: channelProvenance(v.channel, channels) }); /* provenance: assigned HERE from the server's configuration */ } catch (e) { console.error('personalizer collect failed:', errorLabel(e)); return text(res, 503, cors); }
     return text(res, 204, cors);
   };
 }

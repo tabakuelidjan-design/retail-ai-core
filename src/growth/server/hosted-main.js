@@ -28,6 +28,7 @@ import { createIdentityService, loadIdentityServiceEnv } from '../../identity/se
 import { createHttpSecurity } from '../../security/index.js';
 import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/client.js';
 import { providerFromEnv, agentConfigFromEnv } from '../agents/provider.js';
+import { errorLabel } from './safe-log.js';
 
 /** The hosted configuration of Growth: the Sourcing checks with Growth's names (the Sourcing merchant-profile requirement does not apply). */
 export function growthHostedConfig(env = process.env) {
@@ -76,5 +77,5 @@ export async function startGrowthHosted({ env = process.env, log = console.log, 
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  startGrowthHosted().catch((e) => { console.error(`growth hosted failed to start${e.code ? ` (${e.code})` : ''}: ${e.message}`); process.exit(1); });
+  startGrowthHosted().catch((e) => { console.error(`growth hosted failed to start${e.code ? ` (${e.code})` : ''}: ${errorLabel(e)}`); process.exit(1); });
 }

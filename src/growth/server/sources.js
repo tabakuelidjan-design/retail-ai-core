@@ -20,6 +20,7 @@ import { createSupabaseClient, loadSupabaseConfigFromEnv } from '../../supabase/
 import { resolveBusinessProfile, liveTimeZone } from '../../metrics/profile.js';
 import { createGeneralService } from '../../settings-general/service.js';
 import { createSupabaseGeneralRepository } from '../../settings-general/repository.js';
+import { errorLabel } from './safe-log.js';
 
 /** @returns the sources of createGrowthApp (all null when NORDLA_MERCHANT_ID is not set: nothing is ever guessed). Throws the tenant / timezone refusals. */
 export async function buildGrowthSources(env = process.env, { log = console.log } = {}) {
@@ -32,7 +33,7 @@ export async function buildGrowthSources(env = process.env, { log = console.log 
     // The merchant's local zone (merchant_profile.timezone, else MERCHANT_TIMEZONE, reported): missing or invalid -> TIMEZONE_NOT_CONFIGURED / TIMEZONE_INVALID, nothing is served. UTC is never assumed.
     ({ timezone: timeZone } = await resolveBusinessProfile({ supabase, merchantId: tenant.merchantId, env }));
     // the four engines follow the zone set in Général without a restart (re-read at most once a minute, then their own 5-minute cache); the other sources below still use the zone read at start
-    const liveTz = liveTimeZone({ supabase, merchantId: tenant.merchantId, env, onError: (e) => log(`growth: time zone re-read failed, keeping the last one: ${e.message}`) });
+    const liveTz = liveTimeZone({ supabase, merchantId: tenant.merchantId, env, onError: (e) => log(`growth: time zone re-read failed, keeping the last one: ${errorLabel(e)}`) });
     productPotential = createProductPotentialSource({ supabase, merchantId: tenant.merchantId, timeZone: liveTz });
     audience = createAudienceSource({ supabase, merchantId: tenant.merchantId, timeZone: liveTz });
     content = createContentSource({ supabase, merchantId: tenant.merchantId, timeZone: liveTz });

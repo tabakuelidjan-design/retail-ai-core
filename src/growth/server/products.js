@@ -8,6 +8,7 @@ import { productPotentialFacts } from '../products/facts.js';
 import { buildProductPotential } from '../products/potential.js';
 import { requireTimeZone } from '../../metrics/profile.js';
 import { variantDetailsByProduct } from '../products/variants.js';
+import { errorLabel } from './safe-log.js';
 
 const DAY = 86400000;
 export const HISTORY_DAYS = 400; // same history depth as Finance's retail load: enough for the product's first-sale / age facts
@@ -29,7 +30,7 @@ export function createProductPotentialSource({ supabase, merchantId, timeZone, c
       const v = variantDetailsByProduct(data, { window: f.window, now: t, maxSnapshotAgeHours: config.gates.maxStockSnapshotAgeHours, demandConfig: config.demand, exposureByProduct });
       payload.variantWindow = v.window;
       for (const r of payload.rows) r.variants = v.byProduct.get(r.id) ?? [];
-    } catch (e) { console.error('growth products: variant detail unavailable:', e?.message ?? e); }
+    } catch (e) { console.error('growth products: variant detail unavailable:', errorLabel(e)); }
     cached = payload; cachedAt = t.getTime();
     return payload;
   };

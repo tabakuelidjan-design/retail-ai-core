@@ -28,7 +28,7 @@ async function runAgent(agentId, question) {
   if (res && res.ok && res.body && agentId === 'strategist') saveStrategistDraft(res.body); // A3: kept as a draft to validate
   render();
 }
-const AG_ERROR_CODES = ['PRIORITY_NOT_FOUND', 'AI_NOT_CONFIGURED', 'AI_QUOTA_EXCEEDED', 'AI_TIMEOUT', 'AI_PROVIDER_ERROR', 'AI_BAD_OUTPUT', 'BAD_REQUEST', 'BAD_AGENT', 'FORBIDDEN_ROLE', 'INTERNAL_ERROR'];
+const AG_ERROR_CODES = ['QUESTION_PERSONAL_DATA', 'AI_OUTPUT_BLOCKED', 'PRIORITY_NOT_FOUND', 'AI_NOT_CONFIGURED', 'AI_QUOTA_EXCEEDED', 'AI_TIMEOUT', 'AI_PROVIDER_ERROR', 'AI_BAD_OUTPUT', 'BAD_REQUEST', 'BAD_AGENT', 'FORBIDDEN_ROLE', 'INTERNAL_ERROR'];
 
 const agSourceLabel = (key) => t(`gr.ag.src.${key}`);
 const agStatusLabel = (s) => t(`gr.ag.status.${s}`);
@@ -69,7 +69,7 @@ function agentCard(a, cfg) {
     h('p', { class: 'gr-ag-meta' }, h('strong', null, t('gr.ag.periodLabel') + ' '), t(`gr.ag.period.${a.period}`)),
     h('div', { class: 'gr-ag-meta' }, h('strong', null, t('gr.ag.sourcesLabel') + ' '), ...srcs.map((s) => chip(`${agSourceLabel(s.key)}${s.available ? '' : ` · ${agStatusLabel('unavailable')}`}`, s.available ? '' : 'warn'))),
     h('div', { class: 'gr-ag-meta' }, h('strong', null, t('gr.ag.confirmLabel') + ' '), ...a.confirmations.map((c) => chip(t(`gr.ag.conf.${c}`)))),
-    note, ta, h('div', { class: 'gr-ag-actions' }, btn),
+    note, ta, h('p', { class: 'gr-ag-note' }, t('gr.ag.questionPrivacy')), h('div', { class: 'gr-ag-actions' }, btn),
     agResultBlock(a.id));
 }
 

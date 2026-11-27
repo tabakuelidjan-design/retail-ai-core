@@ -5,6 +5,7 @@
 import { readFile } from 'node:fs/promises';
 import { normalizeDropoff, buildDropoff, DROPOFF_CONFIG, DROPOFF_RULE } from '../dropoff/dropoff.js';
 import { summarizePersonalizer, splitByProvenance, PZ_RETENTION_DAYS } from '../dropoff/personalizer.js';
+import { errorLabel } from './safe-log.js';
 
 export const DROPOFF_FILE = 'data/local/marketing/shop-funnel.json';
 export const fileDropoffLoader = (path = DROPOFF_FILE) => async () => { try { return JSON.parse(await readFile(path, 'utf8')); } catch (e) { if (e?.code === 'ENOENT') return null; throw e; } };
@@ -27,14 +28,14 @@ export function createDropoffSource({ load = null, timeZone, now = () => new Dat
       const unknownAttempts = new Set(split.unknown.map((r) => r.attempt_id)).size;
       return { ...payload, collect: collectInfo, personalizer: { ...summarizePersonalizer(split.live, win), provenance }, personalizerTests: summarizePersonalizer(split.test, win), personalizerUnknown: { events: split.unknown.length, attempts: unknownAttempts } };
     }
-    catch (e) { console.error('growth personalizer events: read failed:', e?.message ?? e); return { ...payload, collect: collectInfo, personalizer: { status: 'UNAVAILABLE', provenance } }; }
+    catch (e) { console.error('growth personalizer events: read failed:', errorLabel(e)); return { ...payload, collect: collectInfo, personalizer: { status: 'UNAVAILABLE', provenance } }; }
   };
   return async function dropoff() {
     const t = now(); if (cached && t.getTime() - cachedAt < cacheMs) return withEvents(cached, t);
     const base = { rule: DROPOFF_RULE, generatedAt: t.toISOString() }; let payload;
     if (typeof load !== 'function') payload = { ...base, state: 'NOT_CONNECTED', missing: ['SHOP_ANALYTICS_SNAPSHOT'] };
     else {
-      let raw; try { raw = await load(); } catch (e) { console.error('growth dropoff: source unavailable:', e?.message ?? e); return withEvents({ ...base, state: 'UNAVAILABLE' }, t); }
+      let raw; try { raw = await load(); } catch (e) { console.error('growth dropoff: source unavailable:', errorLabel(e)); return withEvents({ ...base, state: 'UNAVAILABLE' }, t); }
       if (!raw) payload = { ...base, state: 'NOT_CONNECTED', missing: ['SHOP_ANALYTICS_SNAPSHOT'] };
       else { const { funnel, errors } = normalizeDropoff(raw); payload = funnel ? { ...base, ...buildDropoff({ funnel, now: t, timeZone, config }) } : { ...base, state: 'INVALID', errors }; }
     }

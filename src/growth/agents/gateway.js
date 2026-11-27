@@ -8,6 +8,7 @@
 
 import { AGENTS, agentById } from './registry.js';
 import { redactPersonalFields } from './priority-ref.js';
+import { detectPersonalData } from './privacy.js';
 
 export const MAX_QUESTION = 500;
 export const MAX_CONTEXT_CHARS = 60_000;
@@ -18,7 +19,7 @@ export const DEFAULT_TIMEOUT_MS = 30_000;
 export const DEFAULT_DAILY_LIMIT = 20;
 
 export class AgentError extends Error {
-  constructor(code, status = 400) { super(code); this.code = code; this.status = status; }
+  constructor(code, status = 400, details = null) { super(code); this.code = code; this.status = status; this.details = details; } // details: kind names only, never a value
 }
 
 /** Source status derived from a getter's answer: a missing or failed source is never zero. */
@@ -66,6 +67,9 @@ export function createAgentGateway({ provider = null, getters = {}, timeoutMs = 
     const agent = agentById(agentId);
     if (!agent) throw new AgentError('BAD_AGENT', 400);
     const q = validateQuestion(question);
+    // the merchant's free question: high-confidence personal formats are refused before any provider call (kinds only, no value kept)
+    const questionKinds = detectPersonalData(q);
+    if (questionKinds.length) throw new AgentError('QUESTION_PERSONAL_DATA', 400, questionKinds);
     if (!provider) throw new AgentError('AI_NOT_CONFIGURED', 503);
     const day = now().toISOString().slice(0, 10);
     const k = `${scope}|${day}`;
@@ -94,6 +98,9 @@ export function createAgentGateway({ provider = null, getters = {}, timeoutMs = 
     try {
       const text = await Promise.race([provider.complete({ system: agent.system, user, maxTokens: 1200, signal: ac.signal }), timeout]);
       const out = parseDraft(text);
+      // the model's answer: a draft that contains a high-confidence personal format is NOT kept (kinds only, no value)
+      const leaks = detectPersonalData([out.draft, out.reason, ...out.limits].join('\n'));
+      if (leaks.length) throw new AgentError('AI_OUTPUT_BLOCKED', 422, leaks);
       log(`growth agent ${agent.id} ok ${Date.now() - started}ms`);
       return {
         agent: agent.id, generatedAt: now().toISOString(), period: agent.period,

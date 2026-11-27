@@ -10,6 +10,7 @@ import { providerFromEnv, agentConfigFromEnv } from '../agents/provider.js';
 import http from 'node:http';
 import { createGrowthApp } from './app.js';
 import { buildGrowthSources } from './sources.js';
+import { errorLabel } from './safe-log.js';
 
 const port = Number(process.env.GROWTH_PORT || 4413);
 try {
@@ -20,6 +21,6 @@ try {
     console.log(`Nordla Growth running at http://127.0.0.1:${port}${sources.productPotential ? '' : ' (no NORDLA_MERCHANT_ID: Produits Potentiels, Audience, Contenu and Croissance magasin not configured)'}`);
   });
 } catch (e) {
-  console.error(`growth failed to start${e.code ? ` (${e.code})` : ''}: ${e.message}`);
+  console.error(`growth failed to start${e.code ? ` (${e.code})` : ''}: ${errorLabel(e)}`);
   process.exitCode = 1;
 }

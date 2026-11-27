@@ -8,6 +8,7 @@ import { contentFacts, WEEKS } from '../content/facts.js';
 import { buildContent } from '../content/content.js';
 import { requireTimeZone } from '../../metrics/profile.js';
 import { renderDossier } from '../../shared/corrections/dossier.js';
+import { errorLabel } from './safe-log.js';
 
 const DAY = 86400000;
 const blank = (v) => v == null || String(v).trim() === '';
@@ -118,7 +119,7 @@ export function createCorrectionsSource({ supabase, merchantId, timeZone, shop =
     const costCat = cat('purchaseCost');
     if (category === 'all' || category === 'purchaseCost') {
       let P = null;
-      try { P = productPotential ? await productPotential() : null; } catch (e) { console.error('growth corrections: products source failed:', e?.message ?? e); }
+      try { P = productPotential ? await productPotential() : null; } catch (e) { console.error('growth corrections: products source failed:', errorLabel(e)); }
       if (!P || !Array.isArray(P.rows)) {
         costCat.status = 'unavailable'; costCat.limit = 'La source Produits Potentiels est indisponible : les coûts d’achat n’ont pas pu être évalués.';
         sources.push({ module: MODULE, status: 'partial', note: 'coûts d’achat non évalués (source Produits Potentiels indisponible)' });

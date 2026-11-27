@@ -7,6 +7,7 @@ import { orientWithGeneral } from './general-orientation.js';
 import { prepareOpportunityAction } from '../priorities/actions.js';
 import { rankWeeklyActions, prerequisitesOf } from '../priorities/weekly.js';
 import { targetOf } from '../priorities/targets.js';
+import { errorLabel } from './safe-log.js';
 
 /**
  * @param {{ productPotential?: Function|null, audience?: Function|null, content?: Function|null, store?: Function|null, now?: () => Date }} p
@@ -16,7 +17,7 @@ export function createPrioritiesSource({ productPotential = null, audience = nul
   if (!productPotential && !audience && !content && !store) return null;
   const call = async (name, f) => {
     if (!f) return null;
-    try { return await f(); } catch (e) { console.error(`growth priorities: ${name} unavailable:`, e?.message ?? e); return null; }
+    try { return await f(); } catch (e) { console.error(`growth priorities: ${name} unavailable:`, errorLabel(e)); return null; }
   };
   return async () => {
     const [products, aud, ct, st] = await Promise.all([call('products', productPotential), call('audience', audience), call('content', content), call('store', store)]);

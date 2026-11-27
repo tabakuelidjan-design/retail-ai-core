@@ -14,6 +14,7 @@
 
 import { createAgentGateway, sourceStatusOf } from '../agents/gateway.js';
 import { priorityItemsById, priorityFocus } from '../agents/priority-ref.js';
+import { errorLabel } from './safe-log.js';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { readNordlaShared } from '../../shared/nordla-static.js';
@@ -100,25 +101,25 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
       if (url.pathname === '/api/growth/overview') {
         // Real figures only: Croissance magasin's store sales and the Opportunités priorities; each is null when unavailable.
         let st = null; let pr = null;
-        if (store) { try { st = await store(); } catch (e) { console.error('growth overview store failed:', e?.message ?? e); } }
-        if (priorities) { try { pr = await priorities(); } catch (e) { console.error('growth overview priorities failed:', e?.message ?? e); } }
+        if (store) { try { st = await store(); } catch (e) { console.error('growth overview store failed:', errorLabel(e)); } }
+        if (priorities) { try { pr = await priorities(); } catch (e) { console.error('growth overview priorities failed:', errorLabel(e)); } }
         return json(res, 200, buildOverview({ now: now(), store: st, priorities: pr }));
       }
       if (url.pathname === '/api/growth/opportunities') {
         if (!priorities) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });
-        try { return json(res, 200, { ...await priorities(), ...(historyScope && { historyScope }), ...(guide && { guide }) }); } catch (e) { console.error('growth opportunities failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
+        try { return json(res, 200, { ...await priorities(), ...(historyScope && { historyScope }), ...(guide && { guide }) }); } catch (e) { console.error('growth opportunities failed:', errorLabel(e)); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
       }
       if (url.pathname === '/api/growth/products') {
         if (!productPotential) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });
-        try { return json(res, 200, await productPotential()); } catch (e) { console.error('growth products failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
+        try { return json(res, 200, await productPotential()); } catch (e) { console.error('growth products failed:', errorLabel(e)); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
       }
       if (url.pathname === '/api/growth/audience') {
         if (!audience) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });
-        try { return json(res, 200, await audience()); } catch (e) { console.error('growth audience failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
+        try { return json(res, 200, await audience()); } catch (e) { console.error('growth audience failed:', errorLabel(e)); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
       }
       if (url.pathname === '/api/growth/content') {
         if (!content) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });
-        try { return json(res, 200, await content()); } catch (e) { console.error('growth content failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
+        try { return json(res, 200, await content()); } catch (e) { console.error('growth content failed:', errorLabel(e)); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
       }
       if (url.pathname === '/api/growth/corrections') {
         // The "dossier de correction": a Markdown download built from what was already read. READ ONLY, merchant = server context (no merchant parameter).
@@ -130,7 +131,7 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
           return res.end(f.markdown);
         } catch (e) {
           if (e?.code === 'BAD_CATEGORY') return json(res, 400, { error: { code: 'BAD_REQUEST' } });
-          console.error('growth corrections failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } });
+          console.error('growth corrections failed:', errorLabel(e)); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } });
         }
       }
       if (url.pathname === '/api/growth/review') {
@@ -139,7 +140,7 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
         const q = Object.fromEntries(url.searchParams);
         const date = /^\d{4}-\d{2}-\d{2}$/;
         if (!['product', 'variant', 'page', 'post', 'inbox'].includes(q.type) || !q.id || q.id.length > 200 || !date.test(q.applied ?? '') || !date.test(q.review ?? '')) return json(res, 400, { error: { code: 'BAD_REQUEST' } });
-        try { if (q.type === 'inbox') { if (!inboxReview) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } }); if (!['instagram', 'tiktok'].includes(q.network) || !q.account || q.account.length > 200 || !/^\d{1,3}$/.test(q.days ?? '') || !date.test(q.from ?? '') || (q.qualified ?? '').length > 4000 || (q.notQualified ?? '').length > 4000 || (q.declared ?? '').length > 4000) return json(res, 400, { error: { code: 'BAD_REQUEST' } }); return json(res, 200, await inboxReview({ id: q.id, network: q.network, account: q.account, days: q.days, from: q.from, type: q.type2 ?? q.requestType, qualified: q.qualified, notQualified: q.notQualified, declared: q.declared })); } if (q.type === 'post') { if (!socialReview) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } }); if (!['instagram', 'tiktok'].includes(q.network) || !q.account || q.account.length > 200 || !/^\d{1,3}$/.test(q.days ?? '')) return json(res, 400, { error: { code: 'BAD_REQUEST' } }); return json(res, 200, await socialReview({ id: q.id, network: q.network, account: q.account, days: q.days })); } if (q.type === 'page') { if (!siteReview) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } }); return json(res, 200, await siteReview({ id: q.id, applied: q.applied, review: q.review })); } return json(res, 200, await review({ type: q.type, id: q.id, applied: q.applied, review: q.review })); } catch (e) { console.error('growth review failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
+        try { if (q.type === 'inbox') { if (!inboxReview) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } }); if (!['instagram', 'tiktok'].includes(q.network) || !q.account || q.account.length > 200 || !/^\d{1,3}$/.test(q.days ?? '') || !date.test(q.from ?? '') || (q.qualified ?? '').length > 4000 || (q.notQualified ?? '').length > 4000 || (q.declared ?? '').length > 4000) return json(res, 400, { error: { code: 'BAD_REQUEST' } }); return json(res, 200, await inboxReview({ id: q.id, network: q.network, account: q.account, days: q.days, from: q.from, type: q.type2 ?? q.requestType, qualified: q.qualified, notQualified: q.notQualified, declared: q.declared })); } if (q.type === 'post') { if (!socialReview) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } }); if (!['instagram', 'tiktok'].includes(q.network) || !q.account || q.account.length > 200 || !/^\d{1,3}$/.test(q.days ?? '')) return json(res, 400, { error: { code: 'BAD_REQUEST' } }); return json(res, 200, await socialReview({ id: q.id, network: q.network, account: q.account, days: q.days })); } if (q.type === 'page') { if (!siteReview) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } }); return json(res, 200, await siteReview({ id: q.id, applied: q.applied, review: q.review })); } return json(res, 200, await review({ type: q.type, id: q.id, applied: q.applied, review: q.review })); } catch (e) { console.error('growth review failed:', errorLabel(e)); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
       }
       if (url.pathname === '/api/growth/agents') {
         // The agent registry and the configuration state. Names of missing variables only; never a key, never a prompt.
@@ -164,8 +165,8 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
           const result = await agents.run({ agentId: body.agentId, question: body.question, scope: historyScope ?? 'local', focus });
           return json(res, 200, focus ? { ...result, priorityRef: { id: focus.id } } : result);
         } catch (e) {
-          if (e?.code && Number.isInteger(e.status)) return json(res, e.status, { error: { code: e.code } });
-          console.error('growth agent failed:', e?.message ?? e); return json(res, 500, { error: { code: 'INTERNAL_ERROR' } });
+          if (e?.code && Number.isInteger(e.status)) return json(res, e.status, { error: { code: e.code, ...(Array.isArray(e.details) ? { details: e.details } : {}) } });
+          console.error('growth agent failed:', errorLabel(e)); return json(res, 500, { error: { code: 'INTERNAL_ERROR' } });
         }
       }
       if (url.pathname.startsWith('/api/growth/sources/')) {
@@ -199,11 +200,11 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
       }
       if (url.pathname === '/api/growth/dropoff') {
         if (!dropoff) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });
-        try { return json(res, 200, await dropoff()); } catch (e) { console.error('growth dropoff failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
+        try { return json(res, 200, await dropoff()); } catch (e) { console.error('growth dropoff failed:', errorLabel(e)); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
       }
       if (url.pathname === '/api/growth/store') {
         if (!store) return json(res, 503, { error: { code: 'TENANT_NOT_CONFIGURED' } });
-        try { return json(res, 200, await store()); } catch (e) { console.error('growth store failed:', e?.message ?? e); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
+        try { return json(res, 200, await store()); } catch (e) { console.error('growth store failed:', errorLabel(e)); return json(res, 503, { error: { code: 'DATA_UNAVAILABLE' } }); }
       }
       return json(res, 404, { error: { code: 'NOT_FOUND' } });
     } catch (e) {

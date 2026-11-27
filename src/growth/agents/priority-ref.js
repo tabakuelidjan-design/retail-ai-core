@@ -4,6 +4,7 @@
 // A5 review hardening: the personal filter below applies to EVERY agent context (gateway.js), not only to priorities.
 
 import { createHash } from 'node:crypto';
+import { isUrlKey, reduceUrl, maskPersonal } from './privacy.js';
 
 const BLOCKS = ['inbox', 'ads', 'site', 'social'];
 
@@ -29,12 +30,14 @@ const isAccountPriority = (o) => o.category === 'inbox' || o.kind === 'inquiryTe
 
 /** A copy of a value without the personal fields, at any depth (arrays and objects). Used for every agent context. */
 export function redactPersonalFields(value) {
+  if (typeof value === 'string') return maskPersonal(value); // free text: high-confidence personal formats are masked
   if (Array.isArray(value)) return value.map(redactPersonalFields);
   if (!value || typeof value !== 'object') return value;
   const out = {};
   for (const [k, v] of Object.entries(value)) {
     if (PRIVATE_FIELDS.has(k)) continue;
     if (k === 'entity' && v && typeof v === 'object' && v.type === 'socialAccount') continue; // its id is the account id and its title the handle
+    if (isUrlKey(k)) { out[k] = reduceUrl(v); continue; } // a web address: host and reference only (its path and query may hold an account name)
     out[k] = redactPersonalFields(v);
   }
   if (isAccountPriority(value) && typeof value.id === 'string') out.id = opaqueRef(value.id);

@@ -6,6 +6,7 @@
 import { readFile } from 'node:fs/promises';
 import { normalizeSiteFunnel, diagnoseSite, siteItems, SITE_CONFIG, SITE_RULE } from '../site/site.js';
 import { compareFormRate } from '../site/compare.js';
+import { errorLabel } from './safe-log.js';
 
 export const SITE_FILE = 'data/local/marketing/site-funnel.json';
 /** Default loader: the import file when it exists (null = no site connected). */
@@ -13,7 +14,7 @@ export const fileSiteLoader = (path = SITE_FILE) => async () => { try { return J
 
 async function read(load) {
   if (typeof load !== 'function') return { state: 'NOT_CONNECTED' };
-  let raw = null; try { raw = await load(); } catch (e) { console.error('growth site: source unavailable:', e?.message ?? e); return { state: 'UNAVAILABLE' }; }
+  let raw = null; try { raw = await load(); } catch (e) { console.error('growth site: source unavailable:', errorLabel(e)); return { state: 'UNAVAILABLE' }; }
   if (!raw) return { state: 'NOT_CONNECTED' };
   const { site, errors, issues } = normalizeSiteFunnel(raw);
   return site ? { state: 'OK', site, issues } : { state: 'INVALID', errors };

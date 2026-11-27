@@ -549,3 +549,23 @@ const GR_A5 = {
   }
 };
 for (const lang of ['fr', 'nl', 'en']) Object.assign(window.NORDLA_DICTS[lang], GR_A5[lang]);
+
+// Privacy texts (A-review)
+const GR_PRIV = {
+  "fr": {
+    "gr.ag.questionPrivacy": "Ne saisissez ni coordonnée (courriel, téléphone, IBAN) ni lien avec paramètres personnels. Les noms de clients ne sont pas détectés : ne les saisissez pas.",
+    "gr.ag.err.QUESTION_PERSONAL_DATA": "La question contient une coordonnée ou un lien personnel. Retirez-les et réessayez. Rien n’a été envoyé au fournisseur d’IA.",
+    "gr.ag.err.AI_OUTPUT_BLOCKED": "Le brouillon produit contenait une coordonnée ou un lien personnel : il n’a pas été enregistré. Réessayez ou reformulez la demande."
+  },
+  "nl": {
+    "gr.ag.questionPrivacy": "Vermeld geen contactgegeven (e-mail, telefoon, IBAN) of persoonlijke link met parameters. Namen van klanten worden niet herkend: vermeld ze niet.",
+    "gr.ag.err.QUESTION_PERSONAL_DATA": "De vraag bevat een contactgegeven of persoonlijke link. Verwijder die en probeer opnieuw. Er is niets naar de AI-aanbieder gestuurd.",
+    "gr.ag.err.AI_OUTPUT_BLOCKED": "Het concept bevatte een contactgegeven of persoonlijke link: het is niet bewaard. Probeer opnieuw of formuleer de vraag anders."
+  },
+  "en": {
+    "gr.ag.questionPrivacy": "Do not enter contact details (e-mail, phone, IBAN) or a personal link with parameters. Customer names are not detected: do not enter them.",
+    "gr.ag.err.QUESTION_PERSONAL_DATA": "The question contains a contact detail or a personal link. Remove it and try again. Nothing was sent to the AI provider.",
+    "gr.ag.err.AI_OUTPUT_BLOCKED": "The draft contained a contact detail or a personal link: it was not kept. Try again or rephrase the request."
+  }
+};
+for (const lang of ['fr', 'nl', 'en']) Object.assign(window.NORDLA_DICTS[lang], GR_PRIV[lang]);

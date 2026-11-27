@@ -6,6 +6,7 @@
 //   - otherwise state OK with every campaign's diagnosis and the items for Opportunités.
 import { normalizeAds } from '../../marketing/paid.js';
 import { diagnoseAds, adsItems, ADS_CONFIG, ADS_RULE } from '../ads/ads.js';
+import { errorLabel } from './safe-log.js';
 
 export const FIRST_CHANNEL = 'meta_ads';
 
@@ -18,7 +19,7 @@ export function createAdsSource({ load = null, timeZone, now = () => new Date(),
     let payload;
     if (typeof load !== 'function') payload = { ...base, state: 'NOT_CONNECTED', missing: 'AD_ACCOUNT_CONNECTION', campaigns: [], items: [] };
     else {
-      let raw = null; try { raw = await load(); } catch (e) { console.error('growth ads: source unavailable:', e?.message ?? e); }
+      let raw = null; try { raw = await load(); } catch (e) { console.error('growth ads: source unavailable:', errorLabel(e)); }
       if (!raw) payload = { ...base, state: 'UNAVAILABLE', campaigns: [], items: [] };
       else {
         const { ads: normalized, errors } = normalizeAds(raw);
