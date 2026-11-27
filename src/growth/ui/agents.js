@@ -143,11 +143,12 @@ const agDraftKey = (scope) => `nordla.growth.agent.v1:${scope}`;
 function readStrategistDrafts(scope) {
   try { const v = JSON.parse(growthStorage.getItem(agDraftKey(scope)) ?? 'null'); return v && v.v === 1 && Array.isArray(v.drafts) ? v.drafts : []; } catch { return []; }
 }
-/** Called only after the server returned a checked draft (never a simulated one). The draft is stored as to-validate: nothing was done. */
+/** A new draft gets its own id and starts as pending (to validate). Called only after the server returned a checked draft. */
+function newDraftId() { return `d${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`; }
 function saveStrategistDraft(res) {
   const scope = agData && agData.historyScope;
   if (!scope) return; // the local preview has no merchant scope: nothing is kept there
-  const entry = { at: new Date().toISOString(), period: res.period, draft: res.draft, reason: res.reason, limits: res.limits, sources: res.sources, confirmations: res.confirmations, state: 'to_validate' };
+  const entry = { id: newDraftId(), at: new Date().toISOString(), period: res.period, draft: res.draft, reason: res.reason, limits: res.limits, sources: res.sources, confirmations: res.confirmations, state: 'pending' };
   const drafts = [entry, ...readStrategistDrafts(scope)].slice(0, AG_DRAFTS_MAX);
   try { growthStorage.setItem(agDraftKey(scope), JSON.stringify({ v: 1, drafts })); } catch { /* storage refused: the draft is still shown on the agents page */ }
 }
@@ -163,8 +164,17 @@ async function agentStatusRequest() {
 }
 /** The « Brouillons de l'agent Stratège » block of Opportunités: stored drafts with their state; the provider state is said, not assumed. */
 /** The merchant scope comes from the Opportunités payload (always there) or from the agents payload when this page has loaded it. */
+// A4: each draft shows its decision (pending / validated / rejected). A decision records the status only: nothing the agent suggested is started.
+const AG_REVIEW_ERR = ['FORBIDDEN_ROLE', 'ALREADY_REVIEWED', 'VERSION_CONFLICT', 'DRAFT_NOT_FOUND', 'DRAFT_ID_INVALID', 'STATUS_INVALID'];
+/** The same rule as the server (follow-up-store.js draftId): a draft written before A4 has no id, its id comes from its date. */
+const agDraftIdOf = (d) => (d && typeof d.id === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(d.id) ? d.id : `a${String((d && d.at) || '').replace(/\D/g, '')}`);
+const agDraftStateOf = (d) => (d && (d.state === 'validated' || d.state === 'rejected') ? d.state : 'pending');
+const agFmtDate = (iso) => (iso ? new Date(iso).toLocaleString(NORDLA_I18N.getLang()) : '');
+
 function agentDraftsCard(d) {
   const scope = (d && d.historyScope) || (agData && agData.historyScope) || null;
+  const hosted = typeof growthHosted !== 'undefined' && Boolean(growthHosted) && typeof growthHosted.api === 'function';
+  const key = scope ? agDraftKey(scope) : null;
   const drafts = scope ? readStrategistDrafts(scope) : [];
   const stateLine = h('p', { class: 'gr-muted', role: 'status' }, t('gr.ag.draftsChecking'));
   agentStatusRequest().then((s) => {
@@ -173,15 +183,50 @@ function agentDraftsCard(d) {
         : s.missing.length ? t('gr.ag.draftsProviderOff', s.missing.join(', ')) : t('gr.ag.draftsProviderOffPlain'));
   });
   const list = drafts.length
-    ? drafts.map((d) => h('article', { class: 'gr-ag-result', 'data-draft-at': d.at },
-      h('p', { class: 'gr-ag-banner' }, t('gr.ag.draftsState.to_validate')),
-      h('p', { class: 'gr-muted' }, `${t('gr.ag.draftsAt')} ${new Date(d.at).toLocaleString(NORDLA_I18N.getLang())} · ${t(`gr.ag.period.${d.period}`)}`),
-      h('pre', { class: 'gr-ag-draft' }, d.draft),
-      h('p', null, d.reason),
-      h('ul', { class: 'gr-ag-list' }, ...(d.limits || []).map((l) => h('li', null, l))),
-      h('p', { class: 'gr-ag-confirm' }, t('gr.ag.confirmFirst', (d.confirmations || []).map((c) => t(`gr.ag.conf.${c}`)).join(' · ')))))
+    ? drafts.map((dr) => agentDraftArticle(dr, { key, hosted }))
     : [h('p', { class: 'gr-muted' }, t('gr.ag.draftsNone'), ' ', h('a', { href: '#/agents' }, t('gr.ag.draftsGoAgents')))];
   return h('div', { class: 'ex-card gr-xp-card', 'data-agent-drafts': '1' }, cardHead('', t('gr.ag.draftsTitle')), stateLine, ...list);
+}
+
+function agentDraftArticle(dr, { key, hosted }) {
+  const id = agDraftIdOf(dr);
+  const st = agDraftStateOf(dr);
+  const stateText = st === 'pending' ? t('gr.ag.draftsState.pending')
+    : st === 'validated' ? t('gr.ag.draftsState.validated', agFmtDate(dr.reviewedAt))
+      : t('gr.ag.draftsState.rejected', agFmtDate(dr.reviewedAt));
+  const feedback = h('p', { class: 'gr-ag-note', role: 'alert' });
+  const actions = st !== 'pending' ? null
+    : hosted
+      ? h('div', { class: 'gr-ag-actions' },
+        h('button', { type: 'button', class: 'btn-outline', on: { click: () => agentReviewDraft(key, id, 'validated', feedback) } }, t('gr.ag.review.validate')),
+        h('button', { type: 'button', class: 'btn-outline', on: { click: () => agentReviewDraft(key, id, 'rejected', feedback) } }, t('gr.ag.review.reject')))
+      : h('p', { class: 'gr-muted' }, t('gr.ag.review.hostedOnly'));
+  return h('article', { class: 'gr-ag-result', 'data-draft-id': id, 'data-draft-state': st },
+    h('p', { class: 'gr-ag-banner' }, stateText),
+    h('p', { class: 'gr-muted' }, `${t('gr.ag.draftsAt')} ${agFmtDate(dr.at)} · ${t(`gr.ag.period.${dr.period}`)}`),
+    dr.reviewedBy ? h('p', { class: 'gr-muted' }, t('gr.ag.review.byTeam')) : null,
+    h('pre', { class: 'gr-ag-draft' }, dr.draft),
+    h('p', null, dr.reason),
+    h('ul', { class: 'gr-ag-list' }, ...(dr.limits || []).map((l) => h('li', null, l))),
+    h('p', { class: 'gr-ag-confirm' }, t('gr.ag.confirmFirst', (dr.confirmations || []).map((c) => t(`gr.ag.conf.${c}`)).join(' · '))),
+    st === 'pending' ? h('p', { class: 'gr-muted' }, t('gr.ag.review.note')) : null,
+    actions, feedback);
+}
+
+/** Records the human decision on the server, then shows the stored status. The browser copy is updated with the server's version. */
+async function agentReviewDraft(key, id, status, feedback) {
+  feedback.replaceChildren();
+  let r = null;
+  try { r = await growthHosted.api('/api/growth/agents/review', { method: 'POST', body: JSON.stringify({ id, status }) }); } catch { r = null; }
+  if (!r || !r.ok) {
+    const code = r && r.body && r.body.error ? r.body.error.code : null;
+    feedback.replaceChildren(t(`gr.ag.review.err.${AG_REVIEW_ERR.includes(code) ? code : 'NETWORK'}`));
+    return;
+  }
+  if (r.body && r.body.value && key && typeof growthPersist !== 'undefined' && growthPersist.server) {
+    growthPersist.server.entries.set(key, { raw: JSON.stringify(r.body.value), version: r.body.version });
+  }
+  render();
 }
 
 

@@ -83,7 +83,7 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
   return async function handle(req, res) {
     try {
       const url = new URL(req.url, 'http://localhost');
-      const isAgentRun = req.method === 'POST' && url.pathname === '/api/growth/agents/run';
+      const isAgentRun = req.method === 'POST' && (url.pathname === '/api/growth/agents/run' || url.pathname === '/api/growth/agents/review');
       if (!isAgentRun && req.method !== 'GET' && req.method !== 'HEAD') return json(res, 405, { error: { code: 'METHOD_NOT_ALLOWED' } });
       // HOSTED (hosted.js): the sign-in and server-side follow-up script is in the page and served only then
       if (hosted && url.pathname === '/session.js') return send(res, 200, JS, await readFile(new URL('session.js', UI)));
@@ -144,6 +144,7 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
         // The agent registry and the configuration state. Names of missing variables only; never a key, never a prompt.
         return json(res, 200, { ...agents.status(), configuration: agentConfig, ...(historyScope && { historyScope }) }); // the merchant's scope: where the page keeps the Stratège drafts
       }
+      if (url.pathname === '/api/growth/agents/review' && req.method === 'POST') return json(res, 503, { error: { code: 'NOT_HOSTED' } }); // A4: decisions are recorded on the hosted server only
       if (url.pathname === '/api/growth/agents/run' && req.method === 'POST') {
         // A DRAFT only: the agent reads its own sources for this merchant and nothing is sent, published or changed.
         let body;

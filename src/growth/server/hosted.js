@@ -7,7 +7,7 @@
 //   - Data routes (/api/growth/*) are the Growth app's, READ ONLY, built for the server's merchant. The only writes are the merchant's own follow-up entries
 //     (/api/growth/follow-up): plans, applied actions, review results, requests and commercial follow-up - never a message, a publication or a Shopify change.
 //   - Roles: OWNER, ADMIN and COLLABORATOR may save follow-up; every other role reads (a change is refused with FORBIDDEN_ROLE).
-import { followUpKeyOk, followUpValueError } from './follow-up-store.js';
+import { followUpKeyOk, followUpValueError, agentDraftKey, draftId, isDraftId, normalizeDraftState, REVIEW_STATUSES } from './follow-up-store.js';
 import { COLLECT_PATH } from './collect-personalizer.js';
 
 const json = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
@@ -54,6 +54,33 @@ export function createHostedGrowth({ gate, merchantId, historyScope, app, store,
     return json(res, 200, { ok: true, version: r.version });
   }
 
+  // A4: the human decision on one Stratège draft: validated or rejected. It records the status, the date and the reviewer's identity (the session's
+  // user). It starts nothing: no action, no publication, no message, no Shopify change. Writers only; the draft must be in THIS merchant's scope.
+  async function reviewAgentDraft(req, res, access) {
+    if (req.method !== 'POST') return json(res, 405, { error: { code: 'METHOD_NOT_ALLOWED' } });
+    if (!GROWTH_WRITERS.has(access.role)) return json(res, 403, { error: { code: 'FORBIDDEN_ROLE' } });
+    let body;
+    try { body = await readJson(req); } catch (e) { return json(res, e.code === 'BODY_TOO_LARGE' ? 413 : 400, { error: { code: e.code ?? 'BODY_INVALID' } }); }
+    const id = body?.id; const status = body?.status;
+    if (!isDraftId(id)) return json(res, 400, { error: { code: 'DRAFT_ID_INVALID' } });
+    if (!REVIEW_STATUSES.includes(status)) return json(res, 400, { error: { code: 'STATUS_INVALID' } });
+    const key = agentDraftKey(historyScope);
+    const row = (await store.list(access.merchantId)).find((r) => r.key === key) ?? null;
+    const drafts = Array.isArray(row?.value?.drafts) ? row.value.drafts : [];
+    const idx = drafts.findIndex((d) => draftId(d) === id);
+    if (!row || idx < 0) return json(res, 404, { error: { code: 'DRAFT_NOT_FOUND' } });
+    const current = normalizeDraftState(drafts[idx].state);
+    if (current !== 'pending') {
+      if (current === status) return json(res, 200, { ok: true, unchanged: true, draft: { id, state: current } }); // the same decision twice: nothing changes
+      return json(res, 409, { error: { code: 'ALREADY_REVIEWED' } }); // a reviewed draft keeps its decision
+    }
+    const at = now().toISOString();
+    const value = { v: 1, drafts: drafts.map((d, i) => (i === idx ? { ...d, id, state: status, reviewedAt: at, reviewedBy: access.userId ?? null } : d)) };
+    const r = await store.put(access.merchantId, key, value, row.version, access.userId, now());
+    if (!r.ok) return json(res, 409, { error: { code: r.code }, current: r.current ?? null });
+    return json(res, 200, { ok: true, version: r.version, value, draft: { id, state: status, reviewedAt: at } });
+  }
+
   return async function handle(req, res) {
     try {
       const pathname = new URL(req.url, 'http://localhost').pathname;
@@ -69,6 +96,7 @@ export function createHostedGrowth({ gate, merchantId, historyScope, app, store,
       if (access.merchantId !== merchantId) return json(res, 403, { error: { code: 'TENANT_MISMATCH' } });
       if (pathname === '/api/growth/home') return json(res, 200, { url: homeUrl }); // the Nordla home address (https only, or null): the "Accueil Nordla" link of the session bar
       if (pathname === '/api/growth/follow-up') return await followUp(req, res, access);
+      if (pathname === '/api/growth/agents/review') return await reviewAgentDraft(req, res, access);
       // The agents run consumes the merchant's quota and reads its data: writers only (a viewer reads the registry and the admin page).
       if (pathname === '/api/growth/agents/run' && req.method === 'POST' && !GROWTH_WRITERS.has(access.role)) return json(res, 403, { error: { code: 'FORBIDDEN_ROLE' } });
       return app(req, res); // the Growth app's read-only data routes (it refuses any other method itself)

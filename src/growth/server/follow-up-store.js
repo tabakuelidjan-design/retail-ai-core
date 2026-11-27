@@ -22,6 +22,18 @@ export function followUpKeyOk(key, historyScope) {
   return m[1] === 'follow-up' ? Boolean(m[3]) : !m[3];
 }
 
+// A4 - the Stratège drafts (A3) and the human decision on them. The key carries NO opportunity id. Draft ids are checked here, on the server.
+export const AGENT_DRAFT_PREFIX = 'nordla.growth.agent.v1:';
+export const agentDraftKey = (scope) => AGENT_DRAFT_PREFIX + scope;
+export const REVIEW_STATUSES = Object.freeze(['validated', 'rejected']);
+export const isDraftId = (id) => typeof id === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(id);
+/** The state of a draft: 'to_validate' (A3, before A4) and a missing state both mean pending. */
+export function normalizeDraftState(state) { return state === 'validated' || state === 'rejected' ? state : 'pending'; }
+/** The id of a draft. Drafts written before A4 have none: their id is derived from their date (the same rule as the page). */
+export function draftId(d) { return typeof d?.id === 'string' && isDraftId(d.id) ? d.id : `a${String(d?.at ?? '').replace(/\D/g, '')}`; }
+const DRAFT_STATES = ['to_validate', 'pending', 'validated', 'rejected'];
+const validDraft = (d) => Boolean(d) && typeof d === 'object' && !Array.isArray(d) && (d.state === undefined || DRAFT_STATES.includes(d.state)) && (d.id === undefined || isDraftId(d.id));
+
 /** A value of the shapes the screen writes (an object, a plan history, or the pipeline store), and not larger than MAX_ENTRY_BYTES. Returns an error code or null. */
 export function followUpValueError(key, value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return 'VALUE_INVALID';
@@ -29,7 +41,7 @@ export function followUpValueError(key, value) {
   if (size > MAX_ENTRY_BYTES) return 'VALUE_TOO_LARGE';
   if (key.startsWith('nordla.growth.agent.v1:')) {
     // the saved drafts of the Stratège agent: at most 10 entries, each already capped by the agent contract
-    return value.v === 1 && Array.isArray(value.drafts) && value.drafts.length <= 10 ? null : 'VALUE_INVALID';
+    return value.v === 1 && Array.isArray(value.drafts) && value.drafts.length <= 10 && value.drafts.every(validDraft) ? null : 'VALUE_INVALID';
   }
   if (key.startsWith('nordla.growth.follow-up.v1:')) { if (!Array.isArray(value.events) || value.events.length > 2000 || !value.snapshot || typeof value.snapshot !== 'object') return 'VALUE_INVALID'; return null; }
   return value.v === 1 && value.requests && typeof value.requests === 'object' && !Array.isArray(value.requests) ? null : 'VALUE_INVALID';

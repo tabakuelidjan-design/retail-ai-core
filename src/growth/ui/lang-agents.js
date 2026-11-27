@@ -467,3 +467,59 @@ const GR_A23 = {
   }
 };
 for (const lang of ['fr', 'nl', 'en']) Object.assign(window.NORDLA_DICTS[lang], GR_A23[lang]);
+
+// A4 texts
+const GR_A4 = {
+  "fr": {
+    "gr.ag.draftsState.pending": "À valider — aucune action n’a été faite.",
+    "gr.ag.draftsState.validated": "Validé le {0} — seul ce statut est enregistré ; aucune action n’est lancée.",
+    "gr.ag.draftsState.rejected": "Écarté le {0} — aucune action n’est lancée.",
+    "gr.ag.review.validate": "Valider le brouillon",
+    "gr.ag.review.reject": "Écarter le brouillon",
+    "gr.ag.review.note": "Cette décision enregistre seulement le statut du brouillon. Elle ne lance aucune action, ne publie rien et n’envoie rien.",
+    "gr.ag.review.hostedOnly": "La validation est disponible sur l’application hébergée, connectée à votre compte.",
+    "gr.ag.review.byTeam": "Révisé par un membre de l’équipe.",
+    "gr.ag.review.err.FORBIDDEN_ROLE": "Votre rôle ne permet pas de réviser un brouillon.",
+    "gr.ag.review.err.ALREADY_REVIEWED": "Ce brouillon a déjà été révisé. Rechargez la page pour voir sa décision.",
+    "gr.ag.review.err.VERSION_CONFLICT": "Une autre modification est intervenue. Rechargez la page puis réessayez.",
+    "gr.ag.review.err.DRAFT_NOT_FOUND": "Ce brouillon n’existe plus dans votre espace.",
+    "gr.ag.review.err.DRAFT_ID_INVALID": "Identifiant de brouillon invalide.",
+    "gr.ag.review.err.STATUS_INVALID": "Décision invalide.",
+    "gr.ag.review.err.NETWORK": "Décision non enregistrée : connexion impossible. Réessayez."
+  },
+  "nl": {
+    "gr.ag.draftsState.pending": "Te valideren — er is geen actie uitgevoerd.",
+    "gr.ag.draftsState.validated": "Gevalideerd op {0} — enkel deze status wordt bewaard; er wordt geen actie gestart.",
+    "gr.ag.draftsState.rejected": "Afgewezen op {0} — er wordt geen actie gestart.",
+    "gr.ag.review.validate": "Concept valideren",
+    "gr.ag.review.reject": "Concept afwijzen",
+    "gr.ag.review.note": "Deze beslissing bewaart enkel de status van het concept. Ze start geen actie, publiceert niets en verstuurt niets.",
+    "gr.ag.review.hostedOnly": "Validatie is beschikbaar op de gehoste toepassing, gekoppeld aan uw account.",
+    "gr.ag.review.byTeam": "Beoordeeld door een teamlid.",
+    "gr.ag.review.err.FORBIDDEN_ROLE": "Uw rol laat niet toe een concept te beoordelen.",
+    "gr.ag.review.err.ALREADY_REVIEWED": "Dit concept is al beoordeeld. Laad de pagina opnieuw om de beslissing te zien.",
+    "gr.ag.review.err.VERSION_CONFLICT": "Er is een andere wijziging gebeurd. Laad de pagina opnieuw en probeer opnieuw.",
+    "gr.ag.review.err.DRAFT_NOT_FOUND": "Dit concept bestaat niet meer in uw ruimte.",
+    "gr.ag.review.err.DRAFT_ID_INVALID": "Ongeldige concept-id.",
+    "gr.ag.review.err.STATUS_INVALID": "Ongeldige beslissing.",
+    "gr.ag.review.err.NETWORK": "Beslissing niet bewaard: verbinding mislukt. Probeer opnieuw."
+  },
+  "en": {
+    "gr.ag.draftsState.pending": "To validate — no action has been taken.",
+    "gr.ag.draftsState.validated": "Validated on {0} — only this status is recorded; no action is started.",
+    "gr.ag.draftsState.rejected": "Rejected on {0} — no action is started.",
+    "gr.ag.review.validate": "Validate the draft",
+    "gr.ag.review.reject": "Reject the draft",
+    "gr.ag.review.note": "This decision records only the draft’s status. It starts no action, publishes nothing and sends nothing.",
+    "gr.ag.review.hostedOnly": "Validation is available on the hosted application, linked to your account.",
+    "gr.ag.review.byTeam": "Reviewed by a team member.",
+    "gr.ag.review.err.FORBIDDEN_ROLE": "Your role does not allow reviewing a draft.",
+    "gr.ag.review.err.ALREADY_REVIEWED": "This draft has already been reviewed. Reload the page to see its decision.",
+    "gr.ag.review.err.VERSION_CONFLICT": "Another change happened. Reload the page and try again.",
+    "gr.ag.review.err.DRAFT_NOT_FOUND": "This draft no longer exists in your space.",
+    "gr.ag.review.err.DRAFT_ID_INVALID": "Invalid draft identifier.",
+    "gr.ag.review.err.STATUS_INVALID": "Invalid decision.",
+    "gr.ag.review.err.NETWORK": "Decision not saved: connection failed. Try again."
+  }
+};
+for (const lang of ['fr', 'nl', 'en']) Object.assign(window.NORDLA_DICTS[lang], GR_A4[lang]);
