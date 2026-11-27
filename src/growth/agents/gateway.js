@@ -8,6 +8,7 @@
 
 import { AGENTS, agentById } from './registry.js';
 import { redactPersonalFields } from './priority-ref.js';
+import { compareWeeklyTarget } from '../goal/compare.js';
 import { detectPersonalData } from './privacy.js';
 
 export const MAX_QUESTION = 500;
@@ -79,24 +80,28 @@ export function createAgentGateway({ provider = null, getters = {}, timeoutMs = 
 
     const started = Date.now();
     // each source is read ONCE for this run: its status and its (truncated) data come from the same answer
-    const sources = []; const context = {}; const truncated = [];
+    const sources = []; const context = {}; const truncated = []; const payloads = {};
     const perSource = Math.floor(MAX_CONTEXT_CHARS / Math.max(1, agent.sources.length));
     for (const key of agent.sources) {
       let payload = null; let st = 'unavailable';
       if (typeof getters[key] === 'function') { try { payload = await getters[key](); st = sourceStatusOf(payload); } catch { payload = null; st = 'unavailable'; } }
       sources.push({ key, status: st });
       if (st !== 'available') { context[key] = { status: st }; continue; }
+      payloads[key] = payload;
       const text = JSON.stringify(redactPersonalFields(payload)); // personal fields never reach the provider (A5 hardening)
       if (text.length > perSource) { context[key] = { status: 'available', data_truncated: text.slice(0, perSource) }; truncated.push(key); }
       else context[key] = { status: 'available', data: JSON.parse(text) };
     }
     // the weekly target: a TARGET set by the merchant, never a realised figure; only the agents given it (registry goal: true)
-    let goalSaid = false;
+    let goalSaid = false; let goalNote = null;
     if (agent.goal) {
       // the same bounds as the stored value (follow-up-store.js): a whole number from 0 to 100 000 000 EUR, otherwise no target
       const t = goal && Number.isInteger(goal.weeklySalesTargetEur) && goal.weeklySalesTargetEur >= 0 && goal.weeklySalesTargetEur <= 100000000 ? goal.weeklySalesTargetEur : null;
       if (t !== null) {
-        context.goal = { status: 'available', data: redactPersonalFields({ kind: 'target', period: 'weekly', weeklySalesTargetEur: t, basis: 'chiffre d’affaires hebdomadaire boutique + en ligne ; cible définie par le marchand, pas un résultat', note: typeof goal.note === 'string' ? goal.note : null }) };
+        // the comparison is computed here, on the server, from the store weekly rows (no model choice of week or gap)
+        const comparison = compareWeeklyTarget({ target: t, store: payloads.store ?? null });
+        if (comparison.status !== 'computed') goalNote = comparison.reason;
+        context.goal = { status: 'available', data: redactPersonalFields({ kind: 'target', period: 'weekly', weeklySalesTargetEur: t, basis: 'chiffre d’affaires hebdomadaire boutique + en ligne ; cible définie par le marchand, pas un résultat', note: typeof goal.note === 'string' ? goal.note : null, comparison }) };
       } else {
         context.goal = { status: 'unavailable' };
         goalSaid = true;
@@ -117,7 +122,7 @@ export function createAgentGateway({ provider = null, getters = {}, timeoutMs = 
       return {
         agent: agent.id, generatedAt: now().toISOString(), period: agent.period,
         sources, truncated,
-        limits: [...out.limits, ...(goalSaid ? ["objectif hebdomadaire indisponible : aucun écart ne peut être calculé"] : []), ...sources.filter((s) => s.status !== 'available').map((s) => `source ${s.key}: ${s.status === 'not_connected' ? 'non connectée' : 'indisponible'}`)],
+        limits: [...out.limits, ...(goalSaid ? ["objectif hebdomadaire indisponible : aucun écart ne peut être calculé"] : []), ...(goalNote ? ['comparaison objectif / ventes indisponible : ' + goalNote] : []), ...sources.filter((s) => s.status !== 'available').map((s) => `source ${s.key}: ${s.status === 'not_connected' ? 'non connectée' : 'indisponible'}`)],
         reason: out.reason, draft: out.draft,
         requiresHumanConfirmation: true, confirmations: agent.confirmations,
       };

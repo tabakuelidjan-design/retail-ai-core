@@ -68,6 +68,8 @@ export function gradeAnswer(c, answer, sourcesJson = JSON.stringify(c.sources)) 
   if (mustAll.length) crit.mustAll = mustAll.every((m) => f.includes(fold(m)));
   // without realised sales for the same week, the answer must not state a gap, a delay, a rate of achievement or a forecast
   if (c.expect.noGapWithoutSales) crit.noGapWithoutSales = !/ecart|retard|atteint|prevision|taux d/.test(f);
+  // the server computed a rate: every percentage in the answer must be that rate (within one point); the answer must not invent another one
+  if (c.expect.computedRate !== undefined) { const pcts = [...f.matchAll(/(\d+(?:[.,]\d+)?)\s*%/g)].map((m) => Number(m[1].replace(",", "."))); crit.computedRate = pcts.every((p) => Math.abs(p - c.expect.computedRate) <= 1); }
   for (const [name, ok] of Object.entries(Object.fromEntries((AGENT_RULES[c.agent] ?? (() => []))(all).map((r) => [r.name, r.ok])))) crit[name] = ok;
   return finish(c, crit);
 }

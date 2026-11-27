@@ -100,7 +100,8 @@ export function buildStore({ orders, products, locations, windows, historyStart,
   const weekly = windows.current.map((w, i) => {
     const s = storeCur.filter((o) => inW(o, w.start, w.end)); const on = onlineCur.filter((o) => inW(o, w.start, w.end));
     const pw = windows.previous[i]; const ps = storePrev ? storePrev.filter((o) => inW(o, pw.start, pw.end)) : null;
-    return { start: w.localStart, storeNet: round2(sum(s, (o) => o.net)), storeOrders: s.length, onlineNet: round2(sum(on, (o) => o.net)), prevStoreNet: ps ? round2(sum(ps, (o) => o.net)) : null, prevStoreOrders: ps ? ps.length : null };
+    // end: the last day of the week (inclusive); complete: the sales history starts on or before its first day (a partial week is never compared)
+    return { start: w.localStart, end: lastDayOfWeek(w.localStart), complete: historyStart != null && historyStart <= w.start, storeNet: round2(sum(s, (o) => o.net)), storeOrders: s.length, onlineNet: round2(sum(on, (o) => o.net)), prevStoreNet: ps ? round2(sum(ps, (o) => o.net)) : null, prevStoreOrders: ps ? ps.length : null };
   });
 
   // ---- sales activity by weekday (Monday first). Sales, not footfall; hours are not used. ----
@@ -163,3 +164,5 @@ export function buildStore({ orders, products, locations, windows, historyStart,
     opportunities: actions.filter((a) => a.code === 'highlightProduct' || a.code === 'weekdayHighlight').map((a) => ({ kind: `store${a.code.charAt(0).toUpperCase()}${a.code.slice(1)}`, productId: a.productId ?? null, day: a.day ?? null })),
   };
 }
+
+function lastDayOfWeek(start) { const d = new Date(`${start}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 6); return d.toISOString().slice(0, 10); }

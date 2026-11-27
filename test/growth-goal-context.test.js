@@ -104,7 +104,7 @@ test('the target is not a realised figure: the store payload keeps its own weekl
 
 test('goal cases: the group is validated, every figure is labelled FICTIF, the other groups are unchanged', () => {
   assert.deepEqual(validateCases([...CASES, ...REMAX_CASES, ...GOAL_CASES]), []);
-  assert.equal(GOAL_CASES.length, 4);
+  assert.equal(GOAL_CASES.length, 7);
   assert.equal(CASES.length, 24);
   assert.equal(REMAX_CASES.length, 8);
   for (const c of GOAL_CASES) assert.ok(['strategist', 'store'].includes(c.agent), c.id);
