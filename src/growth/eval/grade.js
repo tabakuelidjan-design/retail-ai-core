@@ -58,6 +58,11 @@ export function gradeAnswer(c, answer, sourcesJson = JSON.stringify(c.sources)) 
   crit.statesLimits = needs.length === 0 || (a.limits.length > 0 && /non connect|indisponib|not connected|unavailable|niet gekoppeld|niet beschikbaar/.test(f));
   const mentions = c.expect.mustMention ?? [];
   crit.usesCaseTerms = mentions.length === 0 || mentions.some((m) => f.includes(fold(m)));
+  // the answer must say what is NOT available (a missing source, a missing figure): every listed term must appear
+  const missingTerms = c.expect.mustStateMissing ?? [];
+  if (missingTerms.length) crit.statesMissing = missingTerms.every((m) => f.includes(fold(m)));
+  // a case built on FICTIONAL figures: the answer must say they are fictitious (fictif / synthetique / test)
+  if (c.expect.mustLabelSynthetic) crit.labelsSynthetic = /fictif|synthetiq|donnees de test|test/.test(f);
   for (const [name, ok] of Object.entries(Object.fromEntries((AGENT_RULES[c.agent] ?? (() => []))(all).map((r) => [r.name, r.ok])))) crit[name] = ok;
   return finish(c, crit);
 }
