@@ -88,4 +88,3 @@ test('honest promise: shown on Vue d\'ensemble; no measurable growth, causality,
     for (const h of HASHES) { const { root: r } = await growthDom(h, { lang }); assert.ok(!forbidden.test(text(r)), `${lang} ${h}: forbidden promise`); }
   }
 });
-
