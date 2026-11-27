@@ -157,7 +157,8 @@ export function createGrowthApp({ now = () => new Date(), generalContext = null,
       if (url.pathname.startsWith('/api/growth/sources/')) {
         // The state of ONE source for its explained page: available / not_connected / unavailable (never a figure, never zero).
         const key = url.pathname.slice('/api/growth/sources/'.length);
-        if (key === 'pipeline') return json(res, 200, { key, status: 'browser_only' }); // the commercial follow-up lives in this browser only
+        // The commercial follow-up is saved on the server in the HOSTED app (follow-up store, per merchant); the local preview keeps it in this browser.
+        if (key === 'pipeline') return json(res, 200, { key, status: hosted ? 'server' : 'browser_only' });
         const getters = { ads, social, inbox };
         if (!Object.hasOwn(getters, key)) return json(res, 404, { error: { code: 'NOT_FOUND' } });
         const getter = getters[key];

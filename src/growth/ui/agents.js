@@ -119,7 +119,7 @@ function renderSource(key, main, safe) {
     h('p', null, t(`gr.src.${key}.what`)),
     h('p', { class: 'gr-state-text' }, t(`gr.src.status.${status}`)),
     h('p', null, t(`gr.src.${key}.need`)),
-    status === 'available' ? h('p', null, t(`gr.src.${key}.available`)) : null,
+    status === 'available' || status === 'server' ? h('p', null, t(`gr.src.${key}.available`)) : null,
     h('p', null, h('a', { class: 'btn-outline', href: '#/agents' }, t('gr.xp.agentLink'))))));
 }
 
