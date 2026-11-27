@@ -121,8 +121,7 @@ function renderSource(key, main, safe) {
     h('p', null, t(`gr.src.${key}.what`)),
     h('p', { class: 'gr-state-text' }, t(`gr.src.status.${status}`)),
     h('p', null, t(`gr.src.${key}.need`)),
-    status === 'available' || status === 'server' ? h('p', null, t(`gr.src.${key}.available`)) : null,
-    h('p', null, h('a', { class: 'btn-outline', href: '#/agents' }, t('gr.xp.agentLink'))))));
+    status === 'available' || status === 'server' ? h('p', null, t(`gr.src.${key}.available`)) : null)));
   if (key === 'pipeline') main.appendChild(safe(() => conversationLinksCard(d)));
 }
 
@@ -171,7 +170,7 @@ function agentDraftsCard(d) {
   agentStatusRequest().then((s) => {
     stateLine.replaceChildren(s === null ? t('gr.ag.draftsStatusUnknown')
       : s.configured ? t('gr.ag.draftsProviderOn')
-        : t('gr.ag.draftsProviderOff', s.missing.length ? s.missing.join(', ') : t('gr.ag.notConfigured')));
+        : s.missing.length ? t('gr.ag.draftsProviderOff', s.missing.join(', ')) : t('gr.ag.draftsProviderOffPlain'));
   });
   const list = drafts.length
     ? drafts.map((d) => h('article', { class: 'gr-ag-result', 'data-draft-at': d.at },
