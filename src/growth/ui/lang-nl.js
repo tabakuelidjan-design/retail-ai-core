@@ -1509,7 +1509,7 @@ window.NORDLA_DICTS.nl = Object.assign(window.NORDLA_DICTS.nl || {}, {
   'gr.session.failed': "Aanmelden is niet gelukt.",
   'gr.session.network': "De server antwoordt niet.",
   'gr.session.expired': "Uw sessie is niet meer geldig. Meld u opnieuw aan.",
-  'gr.session.ssoOnly': "Rechtstreeks aanmelden is hier uitgeschakeld. Open deze module vanuit uw Nordla-werkruimte.",
+  'gr.session.ssoOnly': "Meld u aan bij Nordla (Core) met uw gewone account en open daarna Growth vanuit Nordla. Growth heeft geen apart wachtwoord.",
   'gr.session.logout': "Afmelden",
   'gr.session.role': "Rol: {0}",
   'gr.session.saveError': "Opslaan niet mogelijk ({0}). Deze invoer wordt niet op de server bewaard.",

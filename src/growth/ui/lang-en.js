@@ -1509,7 +1509,7 @@ window.NORDLA_DICTS.en = Object.assign(window.NORDLA_DICTS.en || {}, {
   'gr.session.failed': "Sign-in failed.",
   'gr.session.network': "The server is not responding.",
   'gr.session.expired': "Your session is no longer valid. Sign in again.",
-  'gr.session.ssoOnly': "Direct sign-in is turned off here. Open this module from your Nordla workspace.",
+  'gr.session.ssoOnly': "Sign in to Nordla (Core) with your usual account, then open Growth from Nordla. Growth has no separate password.",
   'gr.session.logout': "Sign out",
   'gr.session.role': "Role: {0}",
   'gr.session.saveError': "Could not save ({0}). This entry is not kept on the server.",

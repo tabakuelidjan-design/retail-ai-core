@@ -211,7 +211,7 @@ test('HOS-11 SSO-only: a direct sign-in is refused with the Nordla message (not 
   const srv = await boot({ ssoOnly: true });
   try {
     const A = await browser(srv); await A.boot();
-    assert.ok(A.screen().includes('Connexion directe désactivée ici'), 'the page says where to sign in');
+    assert.ok(A.screen().includes('Connectez-vous à Nordla (Core)'), 'the page says where to sign in');
     assert.ok(!A.screen().includes('Connexion impossible.'), 'not the generic failure');
     assert.equal(all(A.root, (n) => n.attrs?.id === 'gr-login-email' || n.attrs?.id === 'gr-login-password').length, 0, 'no credential field is drawn');
     assert.equal(A.requests.filter((r) => r.includes('/api/auth/login')).length, 0, 'the page sends no sign-in request');
@@ -348,5 +348,19 @@ test('HOS-15 the SSO-only message exists in French, Dutch and English, and is no
     const sso = keyOf(text, 'gr.session.ssoOnly'); const generic = keyOf(text, 'gr.session.failed');
     assert.ok(sso && sso.trim().length > 20, `${name}: the SSO-only message is present`);
     assert.notEqual(sso, generic, `${name}: not the generic failure`);
+  }
+});
+
+test('HOS-16 the SSO-only text says: sign in to Nordla (Core) with the usual account, open Growth from Nordla, and there is no separate Growth password', async () => {
+  const load = async (name) => readFile(new URL(`../src/growth/ui/${name}`, import.meta.url), 'utf8');
+  const keyOf = (text, key) => { const m = new RegExp(`'${key.replace(/\./g, '\.')}': "([^"]*)"`).exec(text); return m ? m[1] : null; };
+  const expect = {
+    'lang-fr.js': ['Nordla (Core)', 'compte habituel', 'ouvrez Croissance depuis Nordla', "n'a pas de mot de passe distinct"],
+    'lang-nl.js': ['Nordla (Core)', 'gewone account', 'open daarna Growth vanuit Nordla', 'geen apart wachtwoord'],
+    'lang-en.js': ['Nordla (Core)', 'usual account', 'open Growth from Nordla', 'no separate password'],
+  };
+  for (const [name, parts] of Object.entries(expect)) {
+    const sso = keyOf(await load(name), 'gr.session.ssoOnly');
+    for (const p of parts) assert.ok(sso && sso.includes(p), `${name}: the text says "${p}"`);
   }
 });
