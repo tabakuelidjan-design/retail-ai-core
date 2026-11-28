@@ -355,7 +355,7 @@ test('HOS-16 the SSO-only text says: sign in to Nordla (Core) with the usual acc
   const load = async (name) => readFile(new URL(`../src/growth/ui/${name}`, import.meta.url), 'utf8');
   const keyOf = (text, key) => { const m = new RegExp(`'${key.replace(/\./g, '\.')}': "([^"]*)"`).exec(text); return m ? m[1] : null; };
   const expect = {
-    'lang-fr.js': ['Nordla (Core)', 'compte habituel', 'ouvrez Croissance depuis Nordla', "n'a pas de mot de passe distinct"],
+    'lang-fr.js': ['Nordla (Core)', 'compte habituel', 'ouvrez Développement des ventes depuis Nordla', "n'a pas de mot de passe distinct"],
     'lang-nl.js': ['Nordla (Core)', 'gewone account', 'open daarna Growth vanuit Nordla', 'geen apart wachtwoord'],
     'lang-en.js': ['Nordla (Core)', 'usual account', 'open Growth from Nordla', 'no separate password'],
   };

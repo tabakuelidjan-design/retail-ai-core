@@ -1509,7 +1509,7 @@ window.NORDLA_DICTS.fr = Object.assign(window.NORDLA_DICTS.fr || {}, {
   'gr.session.failed': "Connexion impossible.",
   'gr.session.network': "Le serveur ne répond pas.",
   'gr.session.expired': "Votre session n’est plus valide. Reconnectez-vous.",
-  'gr.session.ssoOnly': "Connectez-vous à Nordla (Core) avec votre compte habituel, puis ouvrez Croissance depuis Nordla. Croissance n'a pas de mot de passe distinct.",
+  'gr.session.ssoOnly': "Connectez-vous à Nordla (Core) avec votre compte habituel, puis ouvrez Développement des ventes depuis Nordla. Développement des ventes n'a pas de mot de passe distinct.",
   'gr.session.logout': "Se déconnecter",
   'gr.session.role': "Rôle : {0}",
   'gr.session.saveError': "Enregistrement impossible ({0}). Cette saisie n’est pas conservée sur le serveur.",
