@@ -17,10 +17,29 @@ const ANALYTICS_COOKIE = /^an_sid=/;
 const GROWTH_COOKIE = /^__Host-nordla_growth_(?:sid|csrf)=/;
 
 /** The module table. `cookies` = the only cookies a module may receive (null: none). `upstreamToken` is only ever sent upstream. */
+// Growth's sign-in shell: the page, its scripts and stylesheets, the shared Nordla design-system files it loads, the hosted sign-in
+// script (/session.js, served by Growth only in hosted mode), and its icons. They carry no data, and the sign-in form must load before
+// any session exists. Exact names only (no pattern on the page scripts), GET and HEAD only. Same lists as Growth's own server
+// (src/growth/server/app.js STATIC, src/shared/nordla-static.js), checked by test/nordla-gateway.test.js.
+const GROWTH_SHELL_FILES = new Set(['/', '/app.js', '/persist.js', '/guide.js', '/pipeline.js', '/agents.js', '/lang-agents.js', '/inbox.js', '/opportunities.js', '/potential.js', '/audience.js', '/content.js', '/store.js', '/dropoff.js', '/growth.css', '/lang-fr.js', '/lang-nl.js', '/lang-en.js', '/style.css', '/i18n.js', '/session.js']);
+const SHARED_FILES = new Set(['/nordla-ds.css', '/nordla-tokens.css', '/nordla-charts.css', '/nordla-fonts.css', '/nordla-icon.js', '/nordla-charts.js']);
+const SHARED_ASSET = /^\/nordla-assets\/((?:[A-Za-z0-9_-]+\/)*[A-Za-z0-9_-]+\.(svg|png|webp|woff2))$/;
+const GROWTH_ICON = /^\/growth-assets\/(?:icons|channels)\/[a-z0-9-]+\.(?:svg|png|webp)$/;
+
+/**
+ * The only Growth routes that pass the gateway without a Core session: the shell (GET/HEAD), the session-state read and the sign-in POST.
+ * Growth's own server still answers them as it does today. Everything else under /growth/* (its data, its SSO hand-off, any other method
+ * or path) keeps needing the Core session here, and then Growth checks its own session, role, CSRF and merchant scope.
+ */
+export function growthOpenRoute(method, upstreamPath) {
+  if (method === 'GET' || method === 'HEAD') return GROWTH_SHELL_FILES.has(upstreamPath) || SHARED_FILES.has(upstreamPath) || SHARED_ASSET.test(upstreamPath) || GROWTH_ICON.test(upstreamPath) || upstreamPath === '/api/auth/session';
+  return method === 'POST' && upstreamPath === '/api/auth/login';
+}
+
 export const MODULES = Object.freeze({
   finance: { prefix: '/finance', cookies: FINANCE_COOKIE },
   analytics: { prefix: '/analyses', cookies: ANALYTICS_COOKIE },
-  growth: { prefix: '/growth', cookies: GROWTH_COOKIE },
+  growth: { prefix: '/growth', cookies: GROWTH_COOKIE, open: growthOpenRoute },
 });
 
 /** Which module (and which upstream path) a request on the Nordla origin belongs to, or null (Core's own paths). */
@@ -77,7 +96,8 @@ export function createGateway({ publicOrigin, services, authorize, modules = MOD
     // a read-only module (services[key].readOnly): any change is refused here, before any session or upstream work
     if (svc.readOnly && !['GET', 'HEAD'].includes(req.method)) { json(res, 405, { error: 'METHOD_NOT_ALLOWED' }); return true; }
     if (url.pathname === route.prefix) { res.writeHead(301, { location: route.prefix + '/' + url.search, 'cache-control': 'no-store' }); res.end(); return true; }
-    const decision = await authorize(req, route.key);
+    // an open route (Growth's sign-in shell, see growthOpenRoute) needs no Core session here; the origin and proxy checks below still apply
+    const decision = modules[route.key].open?.(req.method, route.upstreamPath) ? { ok: true } : await authorize(req, route.key);
     if (!decision?.ok) { json(res, decision?.status ?? 401, { error: decision?.code ?? 'SESSION_REQUIRED' }); return true; }
     const od = originDecision(req.headers.origin, publicOrigin, new URL(svc.upstream).origin);
     if (!od.ok) { json(res, od.status, { error: od.code }); return true; }

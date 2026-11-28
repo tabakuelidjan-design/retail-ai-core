@@ -5,7 +5,8 @@ import http from 'node:http';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { createGateway, routeFor, filterCookies, rewriteLocation, rewriteSetCookie } from '../src/shared/nordla-gateway.js';
+import { readFileSync } from 'node:fs';
+import { createGateway, routeFor, filterCookies, rewriteLocation, rewriteSetCookie, growthOpenRoute } from '../src/shared/nordla-gateway.js';
 import { proxySecretOk, requiredProxySecret } from '../src/shared/proxy-secret.js';
 import { mkdtempSync } from 'node:fs';
 import { createAnalyticsPremiumApp } from '../src/analytics-premium/server/app.js';
@@ -273,5 +274,87 @@ test('growth: framed by the Core page itself (same-origin iframe), it may be sho
     const direct = await f.call({ path: '/growth/', headers: f.session });
     assert.equal(direct.headers['x-frame-options'], 'DENY', 'a direct load keeps DENY');
     assert.ok(String(direct.headers['content-security-policy'] ?? '').includes("frame-ancestors 'none'"), 'a direct load is not framed');
+  } finally { await f.close(); }
+});
+
+test('growth shell: the open routes are exactly the sign-in shell, the session-state read and the sign-in POST', () => {
+  assert.equal(growthOpenRoute('GET', '/'), true);
+  assert.equal(growthOpenRoute('GET', '/app.js'), true);
+  assert.equal(growthOpenRoute('HEAD', '/growth.css'), true);
+  assert.equal(growthOpenRoute('GET', '/growth-assets/icons/a-b.svg'), true);
+  assert.equal(growthOpenRoute('GET', '/nordla-ds.css'), true);
+  assert.equal(growthOpenRoute('GET', '/nordla-assets/brand/logo.svg'), true);
+  assert.equal(growthOpenRoute('GET', '/session.js'), true);
+  assert.equal(growthOpenRoute('GET', '/api/auth/session'), true);
+  assert.equal(growthOpenRoute('POST', '/api/auth/login'), true);
+  // refused: any data route, another method on a page, an unknown or traversal path, a sign-in read by POST, SSO, logout
+  for (const [m, p] of [['GET', '/api/growth/overview'], ['POST', '/api/growth/follow-up'], ['POST', '/'], ['PUT', '/app.js'], ['GET', '/unknown.js'],
+    ['GET', '/growth-assets/../x.svg'], ['GET', '/growth-assets/icons/x.html'], ['GET', '/api/auth/login'], ['POST', '/api/auth/session'], ['GET', '/sso'], ['POST', '/api/auth/logout'], ['GET', '/api/auth/logout']]) {
+    assert.equal(growthOpenRoute(m, p), false, `${m} ${p} must stay behind the Core session`);
+  }
+});
+
+test('growth shell: the open list is exactly the static files of the deployed Growth server (release/growth-staging 445af45f)', () => {
+  // Growth's STATIC map as deployed (src/growth/server/app.js on release/growth-staging). A Growth page added there must be added here too.
+  const deployed = ['/', '/app.js', '/persist.js', '/guide.js', '/pipeline.js', '/agents.js', '/lang-agents.js', '/inbox.js', '/opportunities.js', '/potential.js', '/audience.js', '/content.js', '/store.js', '/dropoff.js', '/growth.css', '/lang-fr.js', '/lang-nl.js', '/lang-en.js', '/style.css', '/i18n.js'];
+  for (const k of deployed) assert.equal(growthOpenRoute('GET', k), true, `${k} is served by Growth and must be open`);
+  assert.equal(deployed.length, 20);
+  // every file the deployed index.html loads before any session (its <link> and <script> tags), and the hosted sign-in script
+  const indexRefs = ['nordla-ds.css', 'nordla-tokens.css', 'nordla-charts.css', 'style.css', 'growth.css', 'nordla-icon.js', 'nordla-charts.js', 'i18n.js', 'lang-fr.js', 'lang-nl.js', 'lang-en.js', 'persist.js', 'guide.js', 'pipeline.js', 'inbox.js', 'opportunities.js', 'potential.js', 'audience.js', 'content.js', 'store.js', 'dropoff.js', 'lang-agents.js', 'agents.js', 'app.js', 'session.js'];
+  for (const r of indexRefs) assert.equal(growthOpenRoute('GET', '/' + r), true, `index.html loads ${r} before any session`);
+  assert.equal(growthOpenRoute('GET', '/nordla-tokens.js'), false, 'a file neither Growth nor the shared set serves is not open');
+});
+
+test('growth shell: without a Core session, the page and its files load; nothing else of Growth does', async () => {
+  const f = await gatewayFixture({ growthEnabled: true });
+  try {
+    for (const p of ['/growth/', '/growth/app.js', '/growth/growth.css', '/growth/lang-fr.js', '/growth/nordla-ds.css', '/growth/nordla-icon.js', '/growth/session.js', '/growth/growth-assets/icons/a.svg']) {
+      const r = await f.call({ path: p });
+      assert.notEqual(r.status, 401, `${p} must not be refused by the Core gateway`);
+      assert.doesNotMatch(r.text, /SESSION_REQUIRED/, `${p} answers as the module, not as a refusal`);
+    }
+    const urls = f.gro.seen.map((s) => s.url);
+    assert.deepEqual(urls, ['/', '/app.js', '/growth.css', '/lang-fr.js', '/nordla-ds.css', '/nordla-icon.js', '/session.js', '/growth-assets/icons/a.svg'], 'each file reached Growth with its own path');
+  } finally { await f.close(); }
+});
+
+test('growth shell: the sign-in read and the sign-in POST reach Growth without a Core session', async () => {
+  const f = await gatewayFixture({ growthEnabled: true });
+  try {
+    const s = await f.call({ path: '/growth/api/auth/session' });
+    assert.notEqual(s.status, 401);
+    const l = await f.call({ method: 'POST', path: '/growth/api/auth/login', headers: { 'content-type': 'application/json' }, body: '{}' });
+    assert.notEqual(l.status, 401, 'the sign-in form can post its credentials');
+    assert.deepEqual(f.gro.seen.map((x) => `${x.method} ${x.url}`), ['GET /api/auth/session', 'POST /api/auth/login']);
+  } finally { await f.close(); }
+});
+
+test('growth shell: the data API still refuses a person without a Core session, before anything reaches Growth', async () => {
+  const f = await gatewayFixture({ growthEnabled: true });
+  try {
+    for (const [method, p] of [['GET', '/growth/api/growth/overview'], ['POST', '/growth/api/growth/follow-up'], ['GET', '/growth/api/growth/agents'], ['GET', '/growth/sso']]) {
+      const r = await f.call({ method, path: p, headers: { 'content-type': 'application/json' }, body: method === 'POST' ? '{}' : null });
+      assert.equal(r.status, 401, `${method} ${p}`);
+      assert.equal(JSON.parse(r.text).error, 'SESSION_REQUIRED');
+    }
+    assert.equal(f.gro.seen.length, 0, 'nothing reached Growth');
+  } finally { await f.close(); }
+});
+
+test('growth shell: a sign-in POST from a foreign origin is still refused by the gateway, not forwarded', async () => {
+  const f = await gatewayFixture({ growthEnabled: true });
+  try {
+    const r = await f.call({ method: 'POST', path: '/growth/api/auth/login', headers: { 'content-type': 'application/json', origin: 'https://evil.test' }, body: '{}' });
+    assert.notEqual(r.status, 200);
+    assert.equal(f.gro.seen.length, 0, 'the foreign-origin POST never reaches Growth');
+  } finally { await f.close(); }
+});
+
+test('growth shell: with a Core session, the data API is forwarded as before', async () => {
+  const f = await gatewayFixture({ growthEnabled: true });
+  try {
+    await f.call({ path: '/growth/api/growth/overview', headers: f.session });
+    assert.equal(f.gro.seen.length, 1);
+    assert.equal(f.gro.seen[0].url, '/api/growth/overview');
   } finally { await f.close(); }
 });
