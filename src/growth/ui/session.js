@@ -22,7 +22,8 @@ var growthHosted = (() => {
 
   const growthPrefix = location.pathname === '/growth' || location.pathname.startsWith('/growth/') ? '/growth' : '';
   async function api(path, init = {}) {
-    if (path.startsWith('/api/growth/')) path = growthPrefix + path;
+    // Growth's own routes: the session and the sign-in too (they are Growth's, not the Core's), so under /growth/ they never reach the Core origin
+    if (path.startsWith('/api/growth/') || path.startsWith('/api/auth/')) path = growthPrefix + path;
     const method = init.method ?? 'GET';
     const headers = { accept: 'application/json', ...(init.body ? { 'content-type': 'application/json' } : {}), ...(method !== 'GET' && csrf() ? { 'x-nordla-csrf': csrf() } : {}) };
     const r = await fetch(path, { credentials: 'same-origin', ...init, headers });

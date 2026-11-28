@@ -53,7 +53,9 @@ function gateOver(sessions = SESSIONS, moduleCode = 'growth', features = {}) {
 async function boot({ merchantId = M, store = createMemoryFollowUpStore(), sessions = SESSIONS, ssoOnly = false } = {}) {
   const app = createGrowthApp({ merchantId, hosted: true });
   const handler = createHostedGrowth({ gate: gateOver(sessions, 'growth', { ssoOnly }), merchantId, historyScope: scopeOf(merchantId), app, store, ssoOnly });
-  const s = http.createServer(handler); await new Promise((r) => s.listen(0, '127.0.0.1', r)); const base = `http://127.0.0.1:${s.address().port}`;
+  // the gateway strips the /growth prefix before Growth sees a request (as in production)
+  const s = http.createServer((req, res) => { if (req.url === '/growth' || req.url.startsWith('/growth/')) req.url = req.url.slice('/growth'.length) || '/'; return handler(req, res); });
+  await new Promise((r) => s.listen(0, '127.0.0.1', r)); const base = `http://127.0.0.1:${s.address().port}`;
   const req = async (path, { token = null, method = 'GET', body = null, csrf = token ? `csrf-${token}` : null } = {}) => {
     const headers = { ...(token ? { cookie: `sid=${token}` } : {}), ...(csrf && method !== 'GET' ? { 'x-nordla-csrf': csrf } : {}), ...(body ? { 'content-type': 'application/json' } : {}) };
     const r = await fetch(base + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
@@ -174,7 +176,7 @@ test('HOS-6 hosted start: complete configuration or nothing; the gate is built f
 
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 // The browser side: session.js + persist.js in a vm, each "browser" with its own cookie jar and its own localStorage, talking to the real HTTP server above.
-async function browser(srv, { local = {}, lang = 'fr' } = {}) {
+async function browser(srv, { local = {}, lang = 'fr', pathname = '/' } = {}) {
   const jar = new Map(); const ls = new Map(Object.entries(local)); const errors = []; const requests = [];
   const cookieHeader = () => [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
   const realFetch = async (path, init = {}) => {
@@ -187,7 +189,7 @@ async function browser(srv, { local = {}, lang = 'fr' } = {}) {
   const document = { createElement: (t) => new Node(t), createTextNode: (s) => ({ nodeType: 3, data: s }), getElementById: (id) => (id === 'app' ? root : byId(id)),
     get cookie() { return [...jar].filter(([k]) => k === CSRF).map(([k, v]) => `${k}=${v}`).join('; '); } };
   const localStorage = { getItem: (k) => (ls.has(k) ? ls.get(k) : (k === 'nordla_lang' ? lang : null)), setItem: (k, v) => { ls.set(k, String(v)); }, key: (i) => [...ls.keys()][i] ?? null, get length() { return ls.size; } };
-  const ctx = { document, console: { error: (...a) => errors.push(a.join(' ')), log() {} }, localStorage, fetch: realFetch, Intl, Math, Date, JSON, Object, Array, Set, Map, Number, String, Error, Promise, setTimeout, location: { reload() { ctx.reloaded = true; }, pathname: '/', hash: '' }, reloaded: false };
+  const ctx = { document, console: { error: (...a) => errors.push(a.join(' ')), log() {} }, localStorage, fetch: realFetch, Intl, Math, Date, JSON, Object, Array, Set, Map, Number, String, Error, Promise, setTimeout, location: { reload() { ctx.reloaded = true; }, pathname, hash: '' }, reloaded: false };
   ctx.window = ctx; ctx.window.addEventListener = () => {}; ctx.window.location = ctx.location;
   vm.createContext(ctx);
   // the page's tiny element helper (app.js defines the real one): same contract for what session.js uses (class, id, on, disabled, children)
@@ -206,6 +208,18 @@ async function browser(srv, { local = {}, lang = 'fr' } = {}) {
   };
   return b;
 }
+
+test('HOS-13 under /growth/ (as in production): the sign-in asks Growth\'s session and sends NOTHING to the Core; SSO-only shows the Nordla message and no field or button', async () => {
+  const srv = await boot({ ssoOnly: true });
+  try {
+    const A = await browser(srv, { pathname: '/growth/' }); await A.boot();
+    assert.ok(A.requests.includes('GET /growth/api/auth/session'), `the session is read from Growth: ${A.requests.join(' | ')}`);
+    assert.ok(!A.requests.some((r) => /\/api\/auth\/login/.test(r)), 'no sign-in request is sent anywhere');
+    assert.ok(A.screen().includes('pas de mot de passe distinct'), 'the Nordla message is shown: ' + A.screen().slice(0, 200));
+    assert.equal(all(A.root, (n) => /^gr-login-(email|password|go)$/.test(n.attrs?.id ?? '')).length, 0, 'no e-mail, password or button');
+    assert.equal(A.routed, 0, 'the screen did not open');
+  } finally { await srv.close(); }
+});
 
 test('HOS-11 SSO-only: a direct sign-in is refused with the Nordla message (not the generic failure) and the screen does not open', async () => {
   const srv = await boot({ ssoOnly: true });
