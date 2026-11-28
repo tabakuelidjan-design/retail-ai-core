@@ -50,9 +50,9 @@ function gateOver(sessions = SESSIONS, moduleCode = 'growth') {
   return createSessionGate({ identity, security, moduleCode });
 }
 
-async function boot({ merchantId = M, store = createMemoryFollowUpStore(), sessions = SESSIONS } = {}) {
+async function boot({ merchantId = M, store = createMemoryFollowUpStore(), sessions = SESSIONS, ssoOnly = false } = {}) {
   const app = createGrowthApp({ merchantId, hosted: true });
-  const handler = createHostedGrowth({ gate: gateOver(sessions), merchantId, historyScope: scopeOf(merchantId), app, store });
+  const handler = createHostedGrowth({ gate: gateOver(sessions), merchantId, historyScope: scopeOf(merchantId), app, store, ssoOnly });
   const s = http.createServer(handler); await new Promise((r) => s.listen(0, '127.0.0.1', r)); const base = `http://127.0.0.1:${s.address().port}`;
   const req = async (path, { token = null, method = 'GET', body = null, csrf = token ? `csrf-${token}` : null } = {}) => {
     const headers = { ...(token ? { cookie: `sid=${token}` } : {}), ...(csrf && method !== 'GET' ? { 'x-nordla-csrf': csrf } : {}), ...(body ? { 'content-type': 'application/json' } : {}) };
@@ -205,6 +205,17 @@ async function browser(srv, { local = {}, lang = 'fr' } = {}) {
   };
   return b;
 }
+
+test('HOS-11 SSO-only: a direct sign-in is refused with the Nordla message (not the generic failure) and the screen does not open', async () => {
+  const srv = await boot({ ssoOnly: true });
+  try {
+    const A = await browser(srv); await A.boot();
+    await A.login('owner@nordla-test.example');
+    assert.ok(A.screen().includes('Connexion directe désactivée ici'), 'the page says where to sign in');
+    assert.ok(!A.screen().includes('Connexion impossible.'), 'not the generic failure');
+    assert.equal(A.routed, 0, 'the screen did not open');
+  } finally { await srv.close(); }
+});
 
 test('HOS-7 sign-in form, wrong password, role shown, the follow-up loads; a plan written in one browser is found in ANOTHER browser after signing in again', async () => {
   const srv = await boot();

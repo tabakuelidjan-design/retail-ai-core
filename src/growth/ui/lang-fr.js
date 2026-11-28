@@ -1509,6 +1509,7 @@ window.NORDLA_DICTS.fr = Object.assign(window.NORDLA_DICTS.fr || {}, {
   'gr.session.failed': "Connexion impossible.",
   'gr.session.network': "Le serveur ne répond pas.",
   'gr.session.expired': "Votre session n’est plus valide. Reconnectez-vous.",
+  'gr.session.ssoOnly': "Connexion directe désactivée ici. Ouvrez ce module depuis votre espace Nordla.",
   'gr.session.logout': "Se déconnecter",
   'gr.session.role': "Rôle : {0}",
   'gr.session.saveError': "Enregistrement impossible ({0}). Cette saisie n’est pas conservée sur le serveur.",

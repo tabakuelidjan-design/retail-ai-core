@@ -110,7 +110,9 @@ var growthHosted = (() => {
     try {
       const r = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: email.trim(), password }) });
       if (r.ok && r.body && r.body.ok) { state.busy = false; return boot(state.route); }
-      state.loginError = (r.body && r.body.message) || t('gr.session.failed');
+      // SSO-only (NORDLA_SSO_ONLY=1): the refusal has no message; say where to sign in instead of a generic failure
+      if (r.status === 403 && r.body && r.body.error && r.body.error.code === 'NORDLA_SESSION_REQUIRED') state.loginError = t('gr.session.ssoOnly');
+      else state.loginError = (r.body && r.body.message) || t('gr.session.failed');
     } catch { state.loginError = t('gr.session.network'); }
     state.busy = false; showLogin();
   }
