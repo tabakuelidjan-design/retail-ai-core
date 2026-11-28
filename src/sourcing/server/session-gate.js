@@ -15,7 +15,9 @@
 const json = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers }); res.end(JSON.stringify(body)); };
 const SAFE = ['GET', 'HEAD'];
 
-export function createSessionGate({ identity, security, moduleCode = 'sourcing', mfaRule = null, sessionAssurance = null }) {
+// features.ssoOnly (Growth, NORDLA_SSO_ONLY=1): the public session state says so (a boolean, no secret, no account), so the page can show
+// the single-sign-on message instead of a sign-in form. Absent by default: other servers' answers are unchanged.
+export function createSessionGate({ identity, security, moduleCode = 'sourcing', mfaRule = null, sessionAssurance = null, features = {} }) {
   if (!identity || typeof identity.authenticateAndOpenSession !== 'function' || typeof identity.resolveAccessSession !== 'function') throw new TypeError('createSessionGate needs the identity service of this server (createIdentityService)');
   if (!security || typeof security.guardMutation !== 'function') throw new TypeError('createSessionGate needs the HTTP security of this server (createHttpSecurity)');
   // the default stays 'sourcing' (this server); another hosted module (the Creator) names its own, and BOTH collaborators must be built for exactly that module
@@ -30,7 +32,8 @@ export function createSessionGate({ identity, security, moduleCode = 'sourcing',
       const g = security.guardRead(req); if (!g.ok) { json(res, g.response.status, g.response); return true; }
       const token = security.cookies.read(req.headers.cookie).session;
       const a = token ? await identity.resolveAccessSession(token) : null;
-      json(res, 200, a?.ok ? { mode: 'session', authenticated: true, role: a.role } : { mode: 'session', authenticated: false });
+      const flags = features.ssoOnly === true ? { ssoOnly: true } : {};
+      json(res, 200, a?.ok ? { mode: 'session', authenticated: true, role: a.role, ...flags } : { mode: 'session', authenticated: false, ...flags });
       return true;
     }
     if (pathname === '/api/auth/login') {

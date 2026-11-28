@@ -51,7 +51,8 @@ export function buildGrowthGate(env, hosted, services = null) {
   const security = services?.security ?? createHttpSecurity({ environment: 'hosted', proxy: 'railway', allowedHosts: hosted.allowedHosts, allowedOrigins: [hosted.origin], moduleCode: 'growth', csrfKey: env.NORDLA_CSRF_KEY });
   const mfaRule = services?.mfaRule ?? (services?.identity ? null : createMfaRule({ supabase: createSupabaseClient(loadSupabaseConfigFromEnv(env)), ttlMs: 0 }));
   const sessionAssurance = services?.sessionAssurance ?? (services?.identity ? null : createSessionAssurance({supabase:createSupabaseClient(loadSupabaseConfigFromEnv(env))}));
-  return createSessionGate({ identity, security, moduleCode: 'growth', mfaRule, sessionAssurance });
+  // SSO-only is announced to the page (a flag, no secret): the sign-in form is then replaced by the single-sign-on message.
+  return createSessionGate({ identity, security, moduleCode: 'growth', mfaRule, sessionAssurance, features: { ssoOnly: env.NORDLA_SSO_ONLY === '1' } });
 }
 
 export async function startGrowthHosted({ env = process.env, log = console.log, port = Number(env.GROWTH_PORT || env.PORT || 8788), services = null, fetchImpl } = {}) {

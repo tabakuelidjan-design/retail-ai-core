@@ -104,6 +104,8 @@ var growthHosted = (() => {
 
   // ---- sign-in ----
   async function signIn() {
+    // SSO-only: this page never sends credentials (they belong to the Nordla workspace): no POST, the single-sign-on message instead
+    if (state.ssoOnly) { state.busy = false; return showSsoOnly(); }
     const email = (document.getElementById('gr-login-email') || {}).value ?? ''; const password = (document.getElementById('gr-login-password') || {}).value ?? '';
     if (!email.trim() || !password) { state.loginError = t('gr.session.missing'); return showLogin(); }
     state.busy = true; state.loginError = ''; showLogin();
@@ -127,6 +129,15 @@ var growthHosted = (() => {
       h('button', { id: 'gr-login-go', type: 'button', class: 'btn-primary-sm', disabled: state.busy ? 'disabled' : null, on: { click: signIn } }, state.busy ? t('gr.session.busy') : t('gr.session.submit')))));
     if (state.bar) state.bar.replaceChildren();
   }
+  /** SSO-only: no form, no field, no button here. The page says where to sign in (the Nordla workspace). */
+  function showSsoOnly() {
+    growthPersist.server = null;
+    const app = document.getElementById('app');
+    app.replaceChildren(h('div', { class: 'gr-login-wrap' }, h('section', { class: 'ex-card gr-login', 'data-sso-only': 'true' },
+      h('h1', { class: 'ex-title' }, t('gr.session.title')),
+      h('p', { class: 'gr-login-error', role: 'status' }, t('gr.session.ssoOnly')))));
+    if (state.bar) state.bar.replaceChildren();
+  }
   /** The screen does not open: say why, offer a retry when it can help, and the way out. */
   function showBlocked(key, canRetry) {
     growthPersist.server = null;
@@ -144,7 +155,8 @@ var growthHosted = (() => {
     state.route = route; applyServerText();
     let s = null; try { s = (await api('/api/auth/session')).body; } catch { s = null; }
     if (!s || s.mode !== 'session') { state.loginError = t('gr.session.network'); return showLogin(); }
-    if (!s.authenticated) return showLogin();
+    state.ssoOnly = s.ssoOnly === true; // known BEFORE any sign-in form is drawn
+    if (!s.authenticated) return state.ssoOnly ? showSsoOnly() : showLogin();
     state.role = s.role ?? null;
     // The page's own data is requested now, in parallel with the follow-up (it does not depend on it); the screen still opens only after the follow-up loads.
     if (typeof prefetch === 'function') prefetch();

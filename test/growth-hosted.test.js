@@ -31,7 +31,7 @@ const LOGINS = { 'owner@nordla-test.example': 'tok-owner', 'collab@nordla-test.e
 const CSRF = '__Host-nordla_growth_csrf';
 
 /** The real session gate over a fake identity (sessions by token) and a fake HTTP security (the cookie is the token; a change needs x-nordla-csrf = 'csrf-' + token). */
-function gateOver(sessions = SESSIONS, moduleCode = 'growth') {
+function gateOver(sessions = SESSIONS, moduleCode = 'growth', features = {}) {
   const identity = { context: { module: moduleCode },
     resolveAccessSession: async (t) => (sessions[t] ? { ok: true, ...sessions[t] } : { ok: false }),
     authenticateAndOpenSession: async ({ email, password }) => (LOGINS[email] && password === 'right' ? { ok: true, token: LOGINS[email], session: { role: sessions[LOGINS[email]].role } } : { ok: false, status: 401, error: 'LOGIN_FAILED', message: 'Connexion impossible.' }),
@@ -47,12 +47,12 @@ function gateOver(sessions = SESSIONS, moduleCode = 'growth') {
       if (req.headers['x-nordla-csrf'] !== `csrf-${t}`) return { ok: false, code: 'CSRF_INVALID', response: { status: 403, error: 'CSRF_INVALID' } };
       return { ok: true, access: a, sessionToken: t };
     } };
-  return createSessionGate({ identity, security, moduleCode });
+  return createSessionGate({ identity, security, moduleCode, features });
 }
 
 async function boot({ merchantId = M, store = createMemoryFollowUpStore(), sessions = SESSIONS, ssoOnly = false } = {}) {
   const app = createGrowthApp({ merchantId, hosted: true });
-  const handler = createHostedGrowth({ gate: gateOver(sessions), merchantId, historyScope: scopeOf(merchantId), app, store, ssoOnly });
+  const handler = createHostedGrowth({ gate: gateOver(sessions, 'growth', { ssoOnly }), merchantId, historyScope: scopeOf(merchantId), app, store, ssoOnly });
   const s = http.createServer(handler); await new Promise((r) => s.listen(0, '127.0.0.1', r)); const base = `http://127.0.0.1:${s.address().port}`;
   const req = async (path, { token = null, method = 'GET', body = null, csrf = token ? `csrf-${token}` : null } = {}) => {
     const headers = { ...(token ? { cookie: `sid=${token}` } : {}), ...(csrf && method !== 'GET' ? { 'x-nordla-csrf': csrf } : {}), ...(body ? { 'content-type': 'application/json' } : {}) };
@@ -175,9 +175,10 @@ test('HOS-6 hosted start: complete configuration or nothing; the gate is built f
 // ---------------------------------------------------------------------------------------------------------------------------------------------------------------
 // The browser side: session.js + persist.js in a vm, each "browser" with its own cookie jar and its own localStorage, talking to the real HTTP server above.
 async function browser(srv, { local = {}, lang = 'fr' } = {}) {
-  const jar = new Map(); const ls = new Map(Object.entries(local)); const errors = [];
+  const jar = new Map(); const ls = new Map(Object.entries(local)); const errors = []; const requests = [];
   const cookieHeader = () => [...jar].map(([k, v]) => `${k}=${v}`).join('; ');
   const realFetch = async (path, init = {}) => {
+    requests.push(`${(init.method ?? 'GET').toUpperCase()} ${path}`); // what the page actually sent (method and path only)
     const r = await fetch(srv.base + path, { ...init, headers: { ...(init.headers ?? {}), cookie: cookieHeader() } });
     for (const sc of r.headers.getSetCookie()) { const kv = sc.split(';')[0]; const i = kv.indexOf('='); const k = kv.slice(0, i); const v = kv.slice(i + 1); if (v === '') jar.delete(k); else jar.set(k, v); }
     return r;
@@ -195,7 +196,7 @@ async function browser(srv, { local = {}, lang = 'fr' } = {}) {
   vm.runInContext('const t = NORDLA_I18N.t;', ctx); // app.js defines this one line in the page; session.js uses it when it is called
   for (const f of [new URL('../src/growth/ui/persist.js', import.meta.url), new URL('../src/growth/ui/session.js', import.meta.url)]) vm.runInContext(await readFile(f, 'utf8'), ctx, { filename: f.pathname });
   const b = {
-    ctx, root, errors, ls, jar,
+    ctx, root, errors, ls, jar, requests,
     boot: async () => { await ctx.growthHosted.boot(() => { b.routed += 1; }); },
     login: async (email, password = 'right') => { byId('gr-login-email').value = email; byId('gr-login-password').value = password; byId('gr-login-go').listeners.click[0](); for (let i = 0; i < 50 && !b.routed && !all(root, (n) => /gr-login-error/.test(n.className)).length; i += 1) await new Promise((r) => setTimeout(r, 10)); },
     flush: async () => { await Promise.all([...ctx.growthHosted.store.chain.values()]); await new Promise((r) => setTimeout(r, 5)); },
@@ -210,9 +211,10 @@ test('HOS-11 SSO-only: a direct sign-in is refused with the Nordla message (not 
   const srv = await boot({ ssoOnly: true });
   try {
     const A = await browser(srv); await A.boot();
-    await A.login('owner@nordla-test.example');
     assert.ok(A.screen().includes('Connexion directe désactivée ici'), 'the page says where to sign in');
     assert.ok(!A.screen().includes('Connexion impossible.'), 'not the generic failure');
+    assert.equal(all(A.root, (n) => n.attrs?.id === 'gr-login-email' || n.attrs?.id === 'gr-login-password').length, 0, 'no credential field is drawn');
+    assert.equal(A.requests.filter((r) => r.includes('/api/auth/login')).length, 0, 'the page sends no sign-in request');
     assert.equal(A.routed, 0, 'the screen did not open');
   } finally { await srv.close(); }
 });
@@ -302,4 +304,49 @@ test('HOS-nav the session answers /api/growth/home with the clean https Nordla h
   assert.equal((await call(mk('https://nordla.example.app'))).status, 401);
   assert.deepEqual((await call(mk('https://nordla.example.app'), 'ok')).body, { url: 'https://nordla.example.app' });
   assert.deepEqual((await call(mk(null), 'ok')).body, { url: null });
+});
+
+// ---- SSO-only (NORDLA_SSO_ONLY=1): the server refuses a direct sign-in, the session state says so, the page sends nothing ----
+test('HOS-12 SSO-only: the server refuses a direct sign-in with 403 NORDLA_SESSION_REQUIRED, even with a correct password, and sets no session', async () => {
+  const srv = await boot({ ssoOnly: true });
+  try {
+    const r = await fetch(srv.base + '/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'owner@nordla-test.example', password: 'right' }) });
+    const body = await r.json();
+    assert.equal(r.status, 403);
+    assert.equal(body.error?.code, 'NORDLA_SESSION_REQUIRED');
+    assert.ok(!r.headers.getSetCookie().some((c) => /^__Host-nordla_growth_sid=[^;]+/.test(c) && !/=;|=\s*;/.test(c)), 'no growth session cookie is issued');
+  } finally { await srv.close(); }
+});
+
+test('HOS-13 the session state tells the page about SSO-only, with or without a session; a non-SSO server does not say it', async () => {
+  const sso = await boot({ ssoOnly: true });
+  const plain = await boot({ ssoOnly: false });
+  try {
+    const a = await (await fetch(sso.base + '/api/auth/session')).json();
+    assert.equal(a.mode, 'session'); assert.equal(a.authenticated, false); assert.equal(a.ssoOnly, true, 'SSO-only is announced without a session');
+    const b = await (await fetch(plain.base + '/api/auth/session')).json();
+    assert.equal(b.authenticated, false); assert.equal('ssoOnly' in b, false, 'a non-SSO server does not add the flag');
+  } finally { await sso.close(); await plain.close(); }
+});
+
+test('HOS-14 non-SSO is unchanged: the page keeps its sign-in form and a submitted sign-in is sent to /api/auth/login', async () => {
+  const srv = await boot();
+  try {
+    const A = await browser(srv); await A.boot();
+    assert.ok(A.screen().includes('Adresse e-mail'), 'the sign-in form is drawn');
+    await A.login('owner@nordla-test.example', 'wrong');
+    assert.ok(A.screen().includes('Connexion impossible.'), 'the public refusal is shown as before');
+    assert.ok(A.requests.some((r) => r === 'POST /api/auth/login'), 'the sign-in is sent to /api/auth/login as before');
+  } finally { await srv.close(); }
+});
+
+test('HOS-15 the SSO-only message exists in French, Dutch and English, and is not the generic sign-in failure', async () => {
+  const load = async (name) => readFile(new URL(`../src/growth/ui/${name}`, import.meta.url), 'utf8');
+  const keyOf = (text, key) => { const m = new RegExp(`'${key.replace(/\./g, '\.')}': "([^"]*)"`).exec(text); return m ? m[1] : null; };
+  for (const name of ['lang-fr.js', 'lang-nl.js', 'lang-en.js']) {
+    const text = await load(name);
+    const sso = keyOf(text, 'gr.session.ssoOnly'); const generic = keyOf(text, 'gr.session.failed');
+    assert.ok(sso && sso.trim().length > 20, `${name}: the SSO-only message is present`);
+    assert.notEqual(sso, generic, `${name}: not the generic failure`);
+  }
 });
